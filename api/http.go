@@ -13,12 +13,12 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
-	"git.f4mily.net/goloom/internal/store/postgres"
+	"git.f4mily.net/goloom/internal/store"
 	"github.com/microcosm-cc/bluemonday"
 )
 
 type API struct {
-	store     *postgres.Store
+	store     store.Store
 	auth      *auth.Service
 	providers *provider.Registry
 	sanitizer *bluemonday.Policy
@@ -38,7 +38,7 @@ type destinationInfo struct {
 	MaxChars  int    `json:"max_chars"`
 }
 
-func New(store *postgres.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config) *API {
+func New(store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config) *API {
 	return &API{
 		store:     store,
 		auth:      authService,
@@ -52,6 +52,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.handleHealth)
 	mux.HandleFunc("GET /v1/providers", a.handleProviders)
+	mux.HandleFunc("GET /v1/auth/status", a.handleAuthStatus)
+	mux.HandleFunc("GET /v1/oauth/mastodon/callback", a.handleMastodonOAuthCallback)
 
 	mux.Handle("GET /v1/me", a.auth.RequireAuth(http.HandlerFunc(a.handleMe)))
 	mux.Handle("GET /v1/users", a.auth.RequireAuth(http.HandlerFunc(a.handleListUsers)))
@@ -69,6 +71,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("POST /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleAddTeamMember))))
 	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAccounts))))
+	mux.Handle("POST /v1/teams/{teamID}/accounts/oauth/mastodon/start", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleStartMastodonOAuth))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAccount))))
 	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteAccount))))
 	mux.Handle("GET /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPosts))))
@@ -87,7 +90,30 @@ func (a *API) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *API) handleProviders(w http.ResponseWriter, _ *http.Request) {
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"providers": a.providers.Supported()})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"providers": sliceOrEmpty(a.providers.Supported())})
+}
+
+func (a *API) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	users, err := a.store.ListUsers(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	hasAdminUsers := false
+	for _, user := range users {
+		if user.IsAdmin {
+			hasAdminUsers = true
+			break
+		}
+	}
+
+	auth.WriteJSON(w, http.StatusOK, map[string]any{
+		"bootstrap_enabled": a.config.BootstrapAdminToken != "",
+		"oidc_enabled":      a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
+		"has_users":         len(users) > 0,
+		"has_admin_users":   hasAdminUsers,
+	})
 }
 
 func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +137,7 @@ func (a *API) handleListTeams(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": teams})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(teams)})
 }
 
 func (a *API) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +174,7 @@ func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": users})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(users)})
 }
 
 func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +229,7 @@ func (a *API) handleListProviderInstances(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
 }
 
 func (a *API) handleGetProviderInstance(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +331,7 @@ func (a *API) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": accounts})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(accounts)})
 }
 
 func (a *API) handleListTeamMembers(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +340,7 @@ func (a *API) handleListTeamMembers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
 }
 
 func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
@@ -411,7 +437,7 @@ func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": posts})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(posts)})
 }
 
 func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
@@ -618,4 +644,11 @@ func (a *API) prepareProviderInstance(r *http.Request, input domain.CreateProvid
 		return domain.PreparedProviderInstance{}, errors.New("unsupported provider")
 	}
 	return providerImpl.PrepareProviderInstance(r.Context(), input)
+}
+
+func sliceOrEmpty[T any](items []T) []T {
+	if items == nil {
+		return []T{}
+	}
+	return items
 }

@@ -1,0 +1,9 @@
+.git
+.direnv
+.env
+.pnpm-store
+bin
+coverage.out
+data
+frontend/node_modules
+frontend/dist

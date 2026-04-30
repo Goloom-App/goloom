@@ -128,6 +128,13 @@ export interface RuntimeConfigRecord {
   }
 }
 
+export interface AuthStatusRecord {
+  bootstrapEnabled: boolean
+  oidcEnabled: boolean
+  hasUsers: boolean
+  hasAdminUsers: boolean
+}
+
 export interface SystemMetric {
   label: string
   value: string

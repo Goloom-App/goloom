@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"time"
@@ -10,6 +11,9 @@ import (
 	"git.f4mily.net/goloom/internal/security"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+//go:embed schema.sql
+var schemaSQL string
 
 type Store struct {
 	pool      *pgxpool.Pool
@@ -25,11 +29,53 @@ func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter)
 		pool.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
+	if _, err := pool.Exec(ctx, schemaSQL); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("apply postgres schema: %w", err)
+	}
 	return &Store{pool: pool, encrypter: encrypter}, nil
 }
 
 func (s *Store) Close() {
 	s.pool.Close()
+}
+
+func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	const subject = "local-admin"
+	var userID string
+	err = tx.QueryRow(ctx, `
+		insert into users (subject, email, name, is_admin)
+		values ($1, $2, $3, true)
+		on conflict (subject) do update
+		set email = excluded.email,
+		    name = excluded.name,
+		    is_admin = true,
+		    updated_at = now()
+		returning id
+	`, subject, email, name).Scan(&userID)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
+		insert into api_tokens (user_id, name, token_hash, expires_at)
+		values ($1, $2, $3, null)
+		on conflict (token_hash) do update
+		set user_id = excluded.user_id,
+		    name = excluded.name,
+		    expires_at = null
+	`, userID, "Bootstrap admin token", security.HashToken(token))
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {

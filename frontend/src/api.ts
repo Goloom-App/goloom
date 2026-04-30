@@ -5,6 +5,16 @@ export interface ApiClientOptions {
   token: string
 }
 
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 export interface BackendUser {
   id: string
   email: string
@@ -90,9 +100,22 @@ export interface BackendRuntimeConfig {
   }
 }
 
+export interface BackendAuthStatus {
+  bootstrap_enabled: boolean
+  oidc_enabled: boolean
+  has_users: boolean
+  has_admin_users: boolean
+}
+
+export interface BackendOAuthAuthorization {
+  authorization_url: string
+}
+
 function buildHeaders(token: string, withJSON = true) {
   const headers = new Headers()
-  headers.set('Authorization', `Bearer ${token}`)
+  if (token.trim()) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
   if (withJSON) {
     headers.set('Content-Type', 'application/json')
   }
@@ -100,15 +123,22 @@ function buildHeaders(token: string, withJSON = true) {
 }
 
 async function request<T>(options: ApiClientOptions, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${options.baseUrl.replace(/\/$/, '')}${path}`, init)
+  const baseUrl = options.baseUrl.trim().replace(/\/$/, '')
+  const response = await fetch(baseUrl ? `${baseUrl}${path}` : path, init)
   if (!response.ok) {
     const message = await response.text()
-    throw new Error(message || `Request failed with ${response.status}`)
+    throw new ApiError(response.status, message || `Request failed with ${response.status}`)
   }
   if (response.status === 204) {
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+export function requestAuthStatus(baseUrl: string) {
+  return request<BackendAuthStatus>({ baseUrl, token: '' }, '/v1/auth/status', {
+    headers: buildHeaders('', false),
+  })
 }
 
 export function createApiClient(options: ApiClientOptions) {
@@ -157,9 +187,9 @@ export function createApiClient(options: ApiClientOptions) {
       provider: ProviderName
       name: string
       instance_url: string
-      client_id: string
-      client_secret: string
-      scopes: string[]
+      client_id?: string
+      client_secret?: string
+      scopes?: string[]
       authorization_endpoint?: string
       token_endpoint?: string
     }) {
@@ -175,9 +205,9 @@ export function createApiClient(options: ApiClientOptions) {
         provider: ProviderName
         name: string
         instance_url: string
-        client_id: string
+        client_id?: string
         client_secret?: string
-        scopes: string[]
+        scopes?: string[]
         authorization_endpoint?: string
         token_endpoint?: string
       },
@@ -224,6 +254,13 @@ export function createApiClient(options: ApiClientOptions) {
       },
     ) {
       return request<BackendAccount>(options, `/v1/teams/${teamID}/accounts`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    startMastodonOAuth(teamID: string, payload: { provider_instance_id: string; return_to: string }) {
+      return request<BackendOAuthAuthorization>(options, `/v1/teams/${teamID}/accounts/oauth/mastodon/start`, {
         method: 'POST',
         headers: buildHeaders(options.token),
         body: JSON.stringify(payload),

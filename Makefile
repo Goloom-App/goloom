@@ -8,13 +8,13 @@ fmt:
 tidy:
 	go mod tidy
 
-build:
+build: frontend-build
 	go build -o bin/$(APP_NAME) ./cmd/server
 
 test:
 	go test ./...
 
-run:
+run: frontend-build
 	go run ./cmd/server
 
 schema:
@@ -27,6 +27,7 @@ frontend-dev:
 	pnpm --dir frontend dev
 
 frontend-build:
+	pnpm --dir frontend install --frozen-lockfile
 	pnpm --dir frontend build
 
 frontend-lint:

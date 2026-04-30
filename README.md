@@ -1,16 +1,90 @@
 # goloom
 
-`goloom` is a Go backend plus frontend workspace for scheduling and publishing social media posts across Bluesky, Friendica, and Mastodon with team-based access control.
+`goloom` is now a single Go application binary that serves both the API and the React frontend. By default it stores data in SQLite for zero-dependency deployments, and it can still use PostgreSQL when `DATABASE_URL` points at a Postgres instance.
 
-## Features
+## Highlights
 
-- Provider registry with a `SocialMediaProvider` abstraction for platform-specific behavior.
-- Multi-tenant data model for users, teams, team memberships, social accounts, API tokens, and scheduled posts.
-- Dynamic validation that computes the effective character limit from the selected destination accounts.
-- Worker-based scheduler with retry backoff for failed publishes.
-- OIDC-ready authentication flow plus opaque bearer token support for API clients.
-- React frontend with month, week, and day calendar views, drag-and-drop scheduling, settings, team management, and an administration surface.
-- PostgreSQL schema, multi-stage Docker image, Nix flake developer shell, and `Makefile` workflow.
+- Single binary deployment: one process serves the UI and the API.
+- SQLite by default: no external database required.
+- PostgreSQL supported: set `DATABASE_URL=postgres://...` or `postgresql://...`.
+- Embedded frontend assets: production builds do not need a separate Node container.
+- Optional bootstrap admin token for first startup.
+- Mastodon instance registration can auto-create app credentials from just the instance URL.
+- Existing provider registry, scheduler, team model, OIDC support, and bearer-token API auth remain available.
+
+## Quick Start
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Set at least these values:
+
+```bash
+ENCRYPTION_KEY=replace-with-a-long-random-secret
+BOOTSTRAP_ADMIN_TOKEN=replace-with-a-strong-bootstrap-token
+```
+
+Build and run:
+
+```bash
+make build
+./bin/goloom
+```
+
+Then open [http://localhost:8080](http://localhost:8080) and use the bootstrap token in the Settings screen. If you leave the API base URL empty, the frontend talks to the same server automatically.
+
+## Provider Onboarding
+
+### Mastodon
+
+Mastodon provider instances can be registered automatically from:
+
+- instance name
+- instance URL
+
+The backend will call the target instance's `/api/v1/apps` endpoint, store the returned `client_id` and `client_secret`, discover the authorization/token endpoints automatically, and use them for the browser-based OAuth authorization flow when a team connects an account.
+
+Optional backend configuration:
+
+```bash
+MASTODON_APP_NAME=goloom
+MASTODON_REDIRECT_URI=http://localhost:8080/v1/oauth/mastodon/callback
+MASTODON_WEBSITE=
+MASTODON_DEFAULT_SCOPES=read,write
+```
+
+### Friendica
+
+Friendica does not have the same portable automatic app registration flow here. If your instance provides OAuth app credentials, enter them manually in the admin provider-instance form.
+
+### Bluesky
+
+For the current onboarding flow, Bluesky does not need stored client credentials. Register the PDS endpoint and then connect accounts with an app password.
+
+## Database Configuration
+
+### Default SQLite
+
+This is the default when `DATABASE_URL` is unset:
+
+```bash
+DATABASE_URL=file:./data/goloom.db
+```
+
+The app creates the SQLite database and schema automatically at startup.
+
+### PostgreSQL
+
+To use PostgreSQL instead:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/goloom?sslmode=disable
+```
+
+The app also applies the embedded Postgres schema automatically on startup. The `make schema` target is still available if you want to apply `db/schema.sql` manually.
 
 ## Development
 
@@ -20,27 +94,60 @@ Enter the development shell:
 nix develop
 ```
 
-Apply the schema:
+Run the single app locally:
 
 ```bash
-export DATABASE_URL=postgres://postgres:postgres@localhost:5432/goloom?sslmode=disable
-make schema
-```
-
-Run the app:
-
-```bash
-cp .env.example .env
-make tidy
 make run
 ```
 
-Run the frontend:
+Run the frontend dev server separately:
 
 ```bash
-make frontend-install
 make frontend-dev
 ```
+
+The Vite dev server proxies `/v1` and `/healthz` to `http://localhost:8080`, so the browser can keep using same-origin API paths during development.
+
+## Docker
+
+Build the production image:
+
+```bash
+docker build -t goloom .
+```
+
+Run with the default SQLite setup:
+
+```bash
+docker run --rm \
+  -p 8080:8080 \
+  -e ENCRYPTION_KEY=replace-with-a-long-random-secret \
+  -e BOOTSTRAP_ADMIN_TOKEN=replace-with-a-strong-bootstrap-token \
+  -v "$(pwd)/data:/app/data" \
+  goloom
+```
+
+Use `docker compose up -d app` for the SQLite deployment.
+
+If you want PostgreSQL in Compose, start the profiled services explicitly:
+
+```bash
+docker compose --profile postgres up -d db app-postgres
+```
+
+That exposes the Postgres-backed app on [http://localhost:8081](http://localhost:8081).
+
+## Authentication Bootstrap
+
+For fresh deployments without OIDC, set:
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL=admin@localhost
+BOOTSTRAP_ADMIN_NAME=Local Administrator
+BOOTSTRAP_ADMIN_TOKEN=replace-with-a-strong-bootstrap-token
+```
+
+On startup the app ensures that an admin user and hashed API token exist for that bootstrap identity. You can later rotate away from the bootstrap token or switch to OIDC.
 
 ## REST API
 
@@ -67,6 +174,7 @@ Authorization: Bearer <oidc-id-token-or-api-token>
 - `POST /v1/teams/{teamID}/members`
 - `DELETE /v1/teams/{teamID}/members/{userID}`
 - `GET /v1/teams/{teamID}/accounts`
+- `POST /v1/teams/{teamID}/accounts/oauth/mastodon/start`
 - `POST /v1/teams/{teamID}/accounts`
 - `DELETE /v1/teams/{teamID}/accounts/{accountID}`
 - `GET /v1/teams/{teamID}/posts`
@@ -86,101 +194,11 @@ Authorization: Bearer <oidc-id-token-or-api-token>
 - `POST /v1/admin/provider-instances`
 - `PUT /v1/admin/provider-instances/{instanceID}`
 
-### Agent-oriented examples
+### OAuth callback
 
-Create a Mastodon provider instance registration:
-
-```bash
-curl -X POST http://localhost:8080/v1/admin/provider-instances \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "mastodon",
-    "name": "mastodon.de",
-    "instance_url": "https://mastodon.de",
-    "client_id": "client-id-from-app-registration",
-    "client_secret": "client-secret-from-app-registration",
-    "scopes": ["read", "write"]
-  }'
-```
-
-Response:
-
-```json
-{
-  "id": "63f4f5f9-1f73-4f33-8e85-8e6486c6f8f8",
-  "provider": "mastodon",
-  "name": "mastodon.de",
-  "instance_url": "https://mastodon.de",
-  "client_id": "client-id-from-app-registration",
-  "has_client_secret": true,
-  "scopes": ["read", "write"],
-  "authorization_endpoint": "https://mastodon.de/oauth/authorize",
-  "token_endpoint": "https://mastodon.de/oauth/token"
-}
-```
-
-Connect a team account against a registered instance:
-
-```bash
-curl -X POST http://localhost:8080/v1/teams/$TEAM_ID/accounts \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "provider": "mastodon",
-    "provider_instance_id": "63f4f5f9-1f73-4f33-8e85-8e6486c6f8f8",
-    "access_token": "user-access-token"
-  }'
-```
-
-Schedule a post:
-
-```bash
-curl -X POST http://localhost:8080/v1/teams/$TEAM_ID/posts \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Release note",
-    "content": "Scheduler retry improvements are live.",
-    "scheduled_at": "2026-05-01T10:00:00Z",
-    "target_accounts": ["account-id-1", "account-id-2"]
-  }'
-```
-
-List posts for a team:
-
-```json
-{
-  "items": [
-    {
-      "id": "post-id",
-      "team_id": "team-id",
-      "author_user_id": "user-id",
-      "title": "Release note",
-      "content": "Scheduler retry improvements are live.",
-      "scheduled_at": "2026-05-01T10:00:00Z",
-      "status": "posted",
-      "target_accounts": ["account-id-1"],
-      "published_links": {
-        "account-id-1": "https://mastodon.de/@goloom/1144"
-      }
-    }
-  ]
-}
-```
-
-## Frontend
-
-The `frontend` app is now wired to the Go API instead of relying only on mock state.
-
-- Settings includes the backend API base URL and bearer token used for requests.
-- Teams, memberships, accounts, posts, archive links, provider instances, and user roles are loaded from the backend.
-- The team account onboarding flow uses registered provider instances instead of freeform instance URLs.
-- The admin view lets administrators register and update provider instances and client credentials.
-- The settings screen shows a live runtime configuration snapshot for admin users.
+- `GET /v1/oauth/mastodon/callback`
 
 ## Notes
 
-- The provider implementations are structured for extension; production deployments should replace the current generic HTTP posting logic with platform-specific API clients and token refresh flows.
-- API tokens are stored as hashes, while third-party provider tokens are encrypted before being persisted.
-- The schema now includes `provider_instances`, `users.is_admin`, `teams.description`, `social_accounts.provider_instance_id`, and `scheduled_posts.title`. Re-run `make schema` against existing databases before starting the app.
+- Provider tokens are encrypted before persistence, while API tokens are stored as hashes.
+- The provider implementations are structured for extension; production deployments should replace the current generic HTTP posting logic with provider-specific refresh and publishing flows where needed.

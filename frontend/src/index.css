@@ -81,6 +81,57 @@ body {
   color: var(--text);
 }
 
+.auth-shell {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+}
+
+.auth-card {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.auth-card__hero,
+.auth-panel__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.auth-card__brand {
+  flex: 0 0 auto;
+}
+
+.auth-card__copy,
+.auth-panel,
+.auth-panel__content,
+.auth-form,
+.auth-badges,
+.auth-tabs {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.auth-card__copy h1,
+.auth-panel__header h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2vw, 2.4rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.auth-badges {
+  justify-items: end;
+}
+
 .nav-rail {
   display: flex;
   flex-direction: column;
@@ -821,6 +872,15 @@ textarea {
   .composer-modal__content,
   .page-grid {
     grid-template-columns: 1fr;
+  }
+
+  .auth-card__hero,
+  .auth-panel__header {
+    flex-direction: column;
+  }
+
+  .auth-badges {
+    justify-items: start;
   }
 }
 

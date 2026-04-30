@@ -13,6 +13,7 @@ import (
 type Config struct {
 	AppEnv                string
 	HTTPAddr              string
+	PublicBaseURL         string
 	DatabaseURL           string
 	EncryptionKey         string
 	AllowedOrigins        []string
@@ -23,22 +24,41 @@ type Config struct {
 	OIDCIssuerURL    string
 	OIDCClientID     string
 	OIDCClientSecret string
+
+	BootstrapAdminEmail string
+	BootstrapAdminName  string
+	BootstrapAdminToken string
+
+	MastodonAppName       string
+	MastodonRedirectURI   string
+	MastodonWebsite       string
+	MastodonDefaultScopes []string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
 		AppEnv:                getEnv("APP_ENV", "development"),
 		HTTPAddr:              getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:           getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/goloom?sslmode=disable"),
+		PublicBaseURL:         getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
+		DatabaseURL:           getEnv("DATABASE_URL", "file:./data/goloom.db"),
 		EncryptionKey:         getEnv("ENCRYPTION_KEY", ""),
-		AllowedOrigins:        splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000")),
+		AllowedOrigins:        splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
 		RateLimitPerMinute:    getInt("RATE_LIMIT_PER_MINUTE", 60),
 		SchedulerPollInterval: getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
 		SchedulerWorkers:      getInt("SCHEDULER_WORKERS", 4),
 		OIDCIssuerURL:         getEnv("OIDC_ISSUER_URL", ""),
 		OIDCClientID:          getEnv("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:      getEnv("OIDC_CLIENT_SECRET", ""),
+		BootstrapAdminEmail:   getEnv("BOOTSTRAP_ADMIN_EMAIL", "admin@localhost"),
+		BootstrapAdminName:    getEnv("BOOTSTRAP_ADMIN_NAME", "Local Administrator"),
+		BootstrapAdminToken:   getEnv("BOOTSTRAP_ADMIN_TOKEN", ""),
+		MastodonAppName:       getEnv("MASTODON_APP_NAME", "goloom"),
+		MastodonRedirectURI:   "",
+		MastodonWebsite:       getEnv("MASTODON_WEBSITE", ""),
+		MastodonDefaultScopes: splitCSV(getEnv("MASTODON_DEFAULT_SCOPES", "read,write")),
 	}
+
+	cfg.MastodonRedirectURI = getEnv("MASTODON_REDIRECT_URI", strings.TrimRight(cfg.PublicBaseURL, "/")+"/v1/oauth/mastodon/callback")
 
 	if cfg.EncryptionKey == "" {
 		sum := sha256.Sum256([]byte("development-insecure-key"))

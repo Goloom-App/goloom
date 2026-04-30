@@ -4,11 +4,13 @@ import type {
   BackendPost,
   BackendProviderInstance,
   BackendRuntimeConfig,
+  BackendAuthStatus,
   BackendTeam,
   BackendUser,
 } from './api'
 import type {
   AccountRecord,
+  AuthStatusRecord,
   PostRecord,
   ProviderInstanceRecord,
   ProviderName,
@@ -132,6 +134,15 @@ export function toRuntimeConfigRecord(runtimeConfig: BackendRuntimeConfig): Runt
       clientId: runtimeConfig.oidc.client_id,
       hasSecret: runtimeConfig.oidc.has_secret,
     },
+  }
+}
+
+export function toAuthStatusRecord(status: BackendAuthStatus): AuthStatusRecord {
+  return {
+    bootstrapEnabled: status.bootstrap_enabled,
+    oidcEnabled: status.oidc_enabled,
+    hasUsers: status.has_users,
+    hasAdminUsers: status.has_admin_users,
   }
 }
 

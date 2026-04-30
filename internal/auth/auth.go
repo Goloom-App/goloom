@@ -10,12 +10,12 @@ import (
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/security"
-	"git.f4mily.net/goloom/internal/store/postgres"
+	"git.f4mily.net/goloom/internal/store"
 	"github.com/coreos/go-oidc/v3/oidc"
 )
 
 type Service struct {
-	store    *postgres.Store
+	store    store.Store
 	verifier *oidc.IDTokenVerifier
 }
 
@@ -25,7 +25,7 @@ type oidcClaims struct {
 	Name    string `json:"name"`
 }
 
-func New(ctx context.Context, cfg config.Config, store *postgres.Store) (*Service, error) {
+func New(ctx context.Context, cfg config.Config, store store.Store) (*Service, error) {
 	service := &Service{store: store}
 	if cfg.OIDCIssuerURL == "" || cfg.OIDCClientID == "" {
 		return service, nil

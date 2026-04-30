@@ -186,7 +186,7 @@ export const initialPosts: PostRecord[] = [
 
 export const initialSettings: SettingsState = {
   general: {
-    apiBaseUrl: 'http://localhost:8080',
+    apiBaseUrl: '',
     bearerToken: '',
     timezone: 'Europe/Berlin',
     defaultCalendarView: 'month',

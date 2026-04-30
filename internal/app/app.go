@@ -14,7 +14,8 @@ import (
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/scheduler"
 	"git.f4mily.net/goloom/internal/security"
-	"git.f4mily.net/goloom/internal/store/postgres"
+	"git.f4mily.net/goloom/internal/store"
+	"git.f4mily.net/goloom/internal/webui"
 )
 
 func Run(ctx context.Context) error {
@@ -30,13 +31,19 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("build encrypter: %w", err)
 	}
 
-	store, err := postgres.New(ctx, cfg.DatabaseURL, encrypter)
+	dataStore, err := store.Open(ctx, cfg.DatabaseURL, encrypter)
 	if err != nil {
 		return err
 	}
-	defer store.Close()
+	defer dataStore.Close()
 
-	authService, err := auth.New(ctx, cfg, store)
+	if cfg.BootstrapAdminToken != "" {
+		if err := dataStore.EnsureBootstrapAdmin(ctx, cfg.BootstrapAdminEmail, cfg.BootstrapAdminName, cfg.BootstrapAdminToken); err != nil {
+			return fmt.Errorf("bootstrap admin: %w", err)
+		}
+	}
+
+	authService, err := auth.New(ctx, cfg, dataStore)
 	if err != nil {
 		return fmt.Errorf("build auth service: %w", err)
 	}
@@ -44,22 +51,32 @@ func Run(ctx context.Context) error {
 	providers := provider.NewRegistry(
 		provider.NewBlueskyProvider(),
 		provider.NewFriendicaProvider(),
-		provider.NewMastodonProvider(),
+		provider.NewMastodonProvider(provider.MastodonRegistrationConfig{
+			AppName:       cfg.MastodonAppName,
+			RedirectURI:   cfg.MastodonRedirectURI,
+			Website:       cfg.MastodonWebsite,
+			DefaultScopes: cfg.MastodonDefaultScopes,
+		}),
 	)
 
 	schedulerService := scheduler.New(
 		logger,
-		store,
+		dataStore,
 		providers,
 		cfg.SchedulerPollInterval,
 		cfg.SchedulerWorkers,
 	)
 	go schedulerService.Start(ctx)
 
-	apiHandler := api.New(store, authService, providers, cfg)
+	apiHandler := api.New(dataStore, authService, providers, cfg)
+	apiRoot := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute), cfg.AllowedOrigins)
+	rootHandler := http.NewServeMux()
+	rootHandler.Handle("/healthz", apiRoot)
+	rootHandler.Handle("/v1/", apiRoot)
+	rootHandler.Handle("/", webui.Handler())
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute), cfg.AllowedOrigins),
+		Handler:           rootHandler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

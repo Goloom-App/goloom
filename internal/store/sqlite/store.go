@@ -1,0 +1,1137 @@
+package sqlite
+
+import (
+	"context"
+	"database/sql"
+	_ "embed"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/security"
+	"github.com/google/uuid"
+	_ "modernc.org/sqlite"
+)
+
+//go:embed schema.sql
+var schemaSQL string
+
+const sqliteTimeLayout = "2006-01-02T15:04:05.000000000Z07:00"
+
+type Store struct {
+	db        *sql.DB
+	encrypter *security.Encrypter
+}
+
+func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter) (*Store, error) {
+	db, err := sql.Open("sqlite", databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+
+	pragmas := []string{
+		"pragma foreign_keys = on",
+		"pragma journal_mode = wal",
+		"pragma busy_timeout = 5000",
+	}
+	for _, pragma := range pragmas {
+		if _, err := db.ExecContext(ctx, pragma); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("configure sqlite: %w", err)
+		}
+	}
+
+	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("apply sqlite schema: %w", err)
+	}
+
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping sqlite: %w", err)
+	}
+
+	return &Store{db: db, encrypter: encrypter}, nil
+}
+
+func (s *Store) Close() {
+	_ = s.db.Close()
+}
+
+func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	const subject = "local-admin"
+	userID := uuid.NewString()
+	now := nowString()
+	_, err = tx.ExecContext(ctx, `
+		insert into users (id, subject, email, name, is_admin, created_at, updated_at)
+		values (?, ?, ?, ?, 1, ?, ?)
+		on conflict(subject) do update set
+			email = excluded.email,
+			name = excluded.name,
+			is_admin = 1,
+			updated_at = excluded.updated_at`,
+		userID, subject, email, name, now, now,
+	)
+	if err != nil {
+		return err
+	}
+	if err := tx.QueryRowContext(ctx, `select id from users where subject = ?`, subject).Scan(&userID); err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		insert into api_tokens (id, user_id, name, token_hash, expires_at, created_at)
+		values (?, ?, ?, ?, null, ?)
+		on conflict(token_hash) do update set
+			user_id = excluded.user_id,
+			name = excluded.name,
+			expires_at = null`,
+		uuid.NewString(), userID, "Bootstrap admin token", security.HashToken(token), now,
+	)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.User{}, err
+	}
+	defer tx.Rollback()
+
+	var existingID string
+	err = tx.QueryRowContext(ctx, `select id from users where subject = ?`, subject).Scan(&existingID)
+	switch {
+	case err == nil:
+		now := nowString()
+		if _, err := tx.ExecContext(ctx,
+			`update users set email = ?, name = ?, updated_at = ? where id = ?`,
+			email, name, now, existingID,
+		); err != nil {
+			return domain.User{}, err
+		}
+		user, err := queryUser(ctx, tx, `select id, email, name, subject, is_admin, created_at from users where id = ?`, existingID)
+		if err != nil {
+			return domain.User{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return domain.User{}, err
+		}
+		return user, nil
+	case !errors.Is(err, sql.ErrNoRows):
+		return domain.User{}, err
+	}
+
+	var isFirst bool
+	var count int
+	if err := tx.QueryRowContext(ctx, `select count(*) from users`).Scan(&count); err != nil {
+		return domain.User{}, err
+	}
+	isFirst = count == 0
+
+	now := nowString()
+	user := domain.User{
+		ID:        uuid.NewString(),
+		Email:     email,
+		Name:      name,
+		Subject:   subject,
+		IsAdmin:   isFirst,
+		CreatedAt: mustParseTime(now),
+	}
+	if _, err := tx.ExecContext(ctx, `
+		insert into users (id, subject, email, name, is_admin, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?)`,
+		user.ID, subject, email, name, boolToInt(isFirst), now, now,
+	); err != nil {
+		return domain.User{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.User{}, err
+	}
+	return user, nil
+}
+
+func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error) {
+	hash := security.HashToken(bearerToken)
+	principal := domain.AuthenticatedPrincipal{Kind: "api_token"}
+	now := nowString()
+
+	row := s.db.QueryRowContext(ctx, `
+		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at
+		from api_tokens t
+		join users u on u.id = t.user_id
+		where t.token_hash = ?
+		  and (t.expires_at is null or t.expires_at = '' or t.expires_at > ?)`,
+		hash, now,
+	)
+	user, err := scanUser(row)
+	if err != nil {
+		return domain.AuthenticatedPrincipal{}, err
+	}
+	principal.User = user
+
+	_, _ = s.db.ExecContext(ctx, `update api_tokens set last_used_at = ? where token_hash = ?`, now, hash)
+	return principal, nil
+}
+
+func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, email, name, subject, is_admin, created_at
+		from users
+		order by name asc, email asc`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectUsers(rows)
+}
+
+func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (domain.User, error) {
+	_, err := s.db.ExecContext(ctx, `update users set is_admin = ?, updated_at = ? where id = ?`, boolToInt(isAdmin), nowString(), userID)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return queryUser(ctx, s.db, `select id, email, name, subject, is_admin, created_at from users where id = ?`, userID)
+}
+
+func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
+	query := `
+		select id, name, description, created_at
+		from teams
+	`
+	args := []any{}
+	if !isAdmin {
+		query += ` where id in (select team_id from team_memberships where user_id = ?)`
+		args = append(args, userID)
+	}
+	query += ` order by name asc`
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectTeams(rows)
+}
+
+func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain.CreateTeamInput) (domain.Team, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Team{}, err
+	}
+	defer tx.Rollback()
+
+	now := nowString()
+	team := domain.Team{
+		ID:          uuid.NewString(),
+		Name:        input.Name,
+		Description: input.Description,
+		CreatedAt:   mustParseTime(now),
+	}
+	if _, err := tx.ExecContext(ctx, `
+		insert into teams (id, name, description, created_at)
+		values (?, ?, ?, ?)`,
+		team.ID, team.Name, team.Description, now,
+	); err != nil {
+		return domain.Team{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		insert into team_memberships (user_id, team_id, role, created_at)
+		values (?, ?, ?, ?)`,
+		ownerUserID, team.ID, domain.RoleOwner, now,
+	); err != nil {
+		return domain.Team{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.Team{}, err
+	}
+	return team, nil
+}
+
+func (s *Store) ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select user_id, team_id, role, created_at
+		from team_memberships
+		where team_id = ?
+		order by created_at asc`,
+		teamID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectMemberships(rows)
+}
+
+func (s *Store) AddTeamMember(ctx context.Context, teamID string, input domain.AddTeamMemberInput) (domain.TeamMembership, error) {
+	now := nowString()
+	_, err := s.db.ExecContext(ctx, `
+		insert into team_memberships (user_id, team_id, role, created_at)
+		values (?, ?, ?, ?)
+		on conflict(user_id, team_id) do update set role = excluded.role`,
+		input.UserID, teamID, input.Role, now,
+	)
+	if err != nil {
+		return domain.TeamMembership{}, err
+	}
+	return queryMembership(ctx, s.db, `
+		select user_id, team_id, role, created_at
+		from team_memberships
+		where user_id = ? and team_id = ?`,
+		input.UserID, teamID,
+	)
+}
+
+func (s *Store) RemoveTeamMember(ctx context.Context, teamID, userID string) error {
+	_, err := s.db.ExecContext(ctx, `delete from team_memberships where team_id = ? and user_id = ?`, teamID, userID)
+	return err
+}
+
+func (s *Store) ListProviderInstances(ctx context.Context, providerName string) ([]domain.ProviderInstance, error) {
+	query := `
+		select id, provider, name, instance_url, client_id, client_secret_ciphertext,
+		       scopes_json, authorization_endpoint, token_endpoint, created_by_user_id,
+		       created_at, updated_at
+		from provider_instances
+	`
+	args := []any{}
+	if providerName != "" {
+		query += ` where provider = ?`
+		args = append(args, providerName)
+	}
+	query += ` order by provider asc, name asc, created_at asc`
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectProviderInstances(rows)
+}
+
+func (s *Store) GetProviderInstanceByID(ctx context.Context, instanceID string) (domain.ProviderInstance, error) {
+	return queryProviderInstance(ctx, s.db, `
+		select id, provider, name, instance_url, client_id, client_secret_ciphertext,
+		       scopes_json, authorization_endpoint, token_endpoint, created_by_user_id,
+		       created_at, updated_at
+		from provider_instances
+		where id = ?`,
+		instanceID,
+	)
+}
+
+func (s *Store) CreateProviderInstance(ctx context.Context, createdByUserID string, input domain.PreparedProviderInstance) (domain.ProviderInstance, error) {
+	clientSecretCiphertext := ""
+	var err error
+	if input.ClientSecret != "" {
+		clientSecretCiphertext, err = s.encrypter.Encrypt(input.ClientSecret)
+		if err != nil {
+			return domain.ProviderInstance{}, fmt.Errorf("encrypt provider client secret: %w", err)
+		}
+	}
+
+	now := nowString()
+	instanceID := uuid.NewString()
+	scopesJSON, err := marshalScopes(input.Scopes)
+	if err != nil {
+		return domain.ProviderInstance{}, err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		insert into provider_instances (
+			id, provider, name, instance_url, client_id, client_secret_ciphertext,
+			scopes_json, authorization_endpoint, token_endpoint, created_by_user_id,
+			created_at, updated_at
+		)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		instanceID, input.Provider, input.Name, input.InstanceURL, input.ClientID, clientSecretCiphertext,
+		scopesJSON, input.AuthorizationEndpoint, input.TokenEndpoint, createdByUserID, now, now,
+	)
+	if err != nil {
+		return domain.ProviderInstance{}, err
+	}
+	return s.GetProviderInstanceByID(ctx, instanceID)
+}
+
+func (s *Store) UpdateProviderInstance(ctx context.Context, instanceID string, input domain.PreparedProviderInstance) (domain.ProviderInstance, error) {
+	clientSecretCiphertext := ""
+	var err error
+	if input.ClientSecret != "" {
+		clientSecretCiphertext, err = s.encrypter.Encrypt(input.ClientSecret)
+		if err != nil {
+			return domain.ProviderInstance{}, fmt.Errorf("encrypt provider client secret: %w", err)
+		}
+	}
+
+	scopesJSON, err := marshalScopes(input.Scopes)
+	if err != nil {
+		return domain.ProviderInstance{}, err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		update provider_instances
+		set provider = ?,
+		    name = ?,
+		    instance_url = ?,
+		    client_id = ?,
+		    client_secret_ciphertext = ?,
+		    scopes_json = ?,
+		    authorization_endpoint = ?,
+		    token_endpoint = ?,
+		    updated_at = ?
+		where id = ?`,
+		input.Provider, input.Name, input.InstanceURL, input.ClientID, clientSecretCiphertext, scopesJSON,
+		input.AuthorizationEndpoint, input.TokenEndpoint, nowString(), instanceID,
+	)
+	if err != nil {
+		return domain.ProviderInstance{}, err
+	}
+	return s.GetProviderInstanceByID(ctx, instanceID)
+}
+
+func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, roles ...domain.TeamRole) (bool, error) {
+	var role domain.TeamRole
+	if err := s.db.QueryRowContext(ctx, `select role from team_memberships where user_id = ? and team_id = ?`, userID, teamID).Scan(&role); err != nil {
+		return false, err
+	}
+	for _, allowed := range roles {
+		if role == allowed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		from social_accounts
+		where team_id = ?
+		order by created_at desc`,
+		teamID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectAccounts(rows)
+}
+
+func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.ConnectedAccount) (domain.SocialAccount, error) {
+	accessCipher, err := s.encrypter.Encrypt(input.AccessToken)
+	if err != nil {
+		return domain.SocialAccount{}, fmt.Errorf("encrypt access token: %w", err)
+	}
+
+	refreshCipher := ""
+	if input.RefreshToken != "" {
+		refreshCipher, err = s.encrypter.Encrypt(input.RefreshToken)
+		if err != nil {
+			return domain.SocialAccount{}, fmt.Errorf("encrypt refresh token: %w", err)
+		}
+	}
+
+	accountID := uuid.NewString()
+	now := nowString()
+	_, err = s.db.ExecContext(ctx, `
+		insert into social_accounts (
+			id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+			access_token_ciphertext, refresh_token_ciphertext, created_at
+		)
+		values (?, ?, ?, ?, nullif(?, ''), ?, ?, ?, ?, ?, ?)`,
+		accountID, teamID, input.Provider, input.AuthType, input.ProviderInstanceID, input.InstanceURL, input.Username,
+		input.RemoteAccountID, accessCipher, refreshCipher, now,
+	)
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	return queryAccount(ctx, s.db, `
+		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		from social_accounts
+		where id = ?`,
+		accountID,
+	)
+}
+
+func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) error {
+	_, err := s.db.ExecContext(ctx, `delete from social_accounts where id = ? and team_id = ?`, accountID, teamID)
+	return err
+}
+
+func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders, args := inClause(ids)
+	args = append([]any{teamID}, args...)
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		from social_accounts
+		where team_id = ? and id in (%s)`, placeholders),
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectAccounts(rows)
+}
+
+func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostInput) (domain.ScheduledPost, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	defer tx.Rollback()
+
+	now := nowString()
+	postID := uuid.NewString()
+	if _, err := tx.ExecContext(ctx, `
+		insert into scheduled_posts (
+			id, team_id, author_user_id, title, content, scheduled_at, status,
+			attempt_count, last_error, created_at, updated_at
+		)
+		values (?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?)`,
+		postID, teamID, principal.User.ID, input.Title, input.Content, formatTime(input.ScheduledAt), domain.PostStatusPending, now, now,
+	); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+
+	for _, accountID := range input.TargetAccounts {
+		if _, err := tx.ExecContext(ctx, `
+			insert into scheduled_post_targets (post_id, account_id, status)
+			values (?, ?, ?)`,
+			postID, accountID, domain.PostStatusPending,
+		); err != nil {
+			return domain.ScheduledPost{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	return s.GetScheduledPost(ctx, teamID, postID)
+}
+
+func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		       attempt_count, last_error, created_at, updated_at
+		from scheduled_posts
+		where team_id = ?
+		order by scheduled_at asc`,
+		teamID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	posts, err := collectPosts(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachTargetAccounts(ctx, posts); err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
+func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error) {
+	post, err := queryPost(ctx, s.db, `
+		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		       attempt_count, last_error, created_at, updated_at
+		from scheduled_posts
+		where team_id = ? and id = ?`,
+		teamID, postID,
+	)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	targetsByPostID, err := s.loadTargetAccountIDs(ctx, []string{post.ID})
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	post.TargetAccounts = targetsByPostID[post.ID]
+	return post, nil
+}
+
+func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, input domain.CreatePostInput) (domain.ScheduledPost, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `
+		update scheduled_posts
+		set title = ?, content = ?, scheduled_at = ?, updated_at = ?
+		where id = ? and team_id = ?`,
+		input.Title, input.Content, formatTime(input.ScheduledAt), nowString(), postID, teamID,
+	); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `delete from scheduled_post_targets where post_id = ?`, postID); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	for _, accountID := range input.TargetAccounts {
+		if _, err := tx.ExecContext(ctx, `
+			insert into scheduled_post_targets (post_id, account_id, status)
+			values (?, ?, ?)`,
+			postID, accountID, domain.PostStatusPending,
+		); err != nil {
+			return domain.ScheduledPost{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	return s.GetScheduledPost(ctx, teamID, postID)
+}
+
+func (s *Store) CancelScheduledPost(ctx context.Context, teamID, postID string) error {
+	_, err := s.db.ExecContext(ctx, `
+		update scheduled_posts
+		set status = ?, updated_at = ?
+		where id = ? and team_id = ?`,
+		domain.PostStatusCancelled, nowString(), postID, teamID,
+	)
+	return err
+}
+
+func (s *Store) DeleteScheduledPost(ctx context.Context, teamID, postID string) error {
+	_, err := s.db.ExecContext(ctx, `delete from scheduled_posts where id = ? and team_id = ?`, postID, teamID)
+	return err
+}
+
+func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		       attempt_count, last_error, created_at, updated_at
+		from scheduled_posts
+		where scheduled_at <= ?
+		  and status in (?, ?)
+		  and attempt_count < 5
+		order by scheduled_at asc
+		limit ?`,
+		nowString(), domain.PostStatusPending, domain.PostStatusFailed, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	posts, err := collectPosts(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachTargetAccounts(ctx, posts); err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
+func (s *Store) MarkPostProcessing(ctx context.Context, postID string) error {
+	_, err := s.db.ExecContext(ctx, `update scheduled_posts set status = ?, updated_at = ? where id = ?`, domain.PostStatusProcessing, nowString(), postID)
+	return err
+}
+
+func (s *Store) MarkPostResult(ctx context.Context, postID string, attemptCount int, status domain.PostStatus, lastError string, nextAttempt *time.Time) error {
+	if nextAttempt != nil {
+		_, err := s.db.ExecContext(ctx, `
+			update scheduled_posts
+			set attempt_count = ?, status = ?, last_error = ?, scheduled_at = ?, updated_at = ?
+			where id = ?`,
+			attemptCount, status, nullableString(lastError), formatTime(*nextAttempt), nowString(), postID,
+		)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `
+		update scheduled_posts
+		set attempt_count = ?, status = ?, last_error = ?, updated_at = ?
+		where id = ?`,
+		attemptCount, status, nullableString(lastError), nowString(), postID,
+	)
+	return err
+}
+
+func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string) error {
+	_, err := s.db.ExecContext(ctx, `
+		update scheduled_post_targets
+		set status = ?, published_url = ?, last_error = ?
+		where post_id = ? and account_id = ?`,
+		status, nullableString(publishedURL), nullableString(lastError), postID, accountID,
+	)
+	return err
+}
+
+func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.SocialAccount, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select a.id, a.team_id, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
+		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.created_at
+		from scheduled_post_targets t
+		join social_accounts a on a.id = t.account_id
+		where t.post_id = ?`,
+		postID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectAccounts(rows)
+}
+
+func (s *Store) DecryptAccessToken(account domain.SocialAccount) (string, error) {
+	return s.encrypter.Decrypt(account.AccessTokenCiphertext)
+}
+
+func (s *Store) DecryptRefreshToken(account domain.SocialAccount) (string, error) {
+	if account.RefreshTokenCiphertext == "" {
+		return "", nil
+	}
+	return s.encrypter.Decrypt(account.RefreshTokenCiphertext)
+}
+
+func (s *Store) DecryptProviderInstanceClientSecret(instance domain.ProviderInstance) (string, error) {
+	if instance.ClientSecretCiphertext == "" {
+		return "", nil
+	}
+	return s.encrypter.Decrypt(instance.ClientSecretCiphertext)
+}
+
+func (s *Store) LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error) {
+	if len(postIDs) == 0 {
+		return map[string]map[string]string{}, nil
+	}
+	placeholders, args := inClause(postIDs)
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+		select post_id, account_id, published_url
+		from scheduled_post_targets
+		where post_id in (%s)
+		  and published_url is not null
+		  and published_url <> ''`, placeholders),
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	links := make(map[string]map[string]string, len(postIDs))
+	for rows.Next() {
+		var postID, accountID, publishedURL string
+		if err := rows.Scan(&postID, &accountID, &publishedURL); err != nil {
+			return nil, err
+		}
+		if links[postID] == nil {
+			links[postID] = make(map[string]string)
+		}
+		links[postID][accountID] = publishedURL
+	}
+	return links, rows.Err()
+}
+
+func (s *Store) attachTargetAccounts(ctx context.Context, posts []domain.ScheduledPost) error {
+	if len(posts) == 0 {
+		return nil
+	}
+	postIDs := make([]string, 0, len(posts))
+	for i, post := range posts {
+		post.TargetAccounts = []string{}
+		postIDs = append(postIDs, post.ID)
+		posts[i].TargetAccounts = []string{}
+	}
+
+	targetsByPostID, err := s.loadTargetAccountIDs(ctx, postIDs)
+	if err != nil {
+		return err
+	}
+	for i := range posts {
+		posts[i].TargetAccounts = targetsByPostID[posts[i].ID]
+	}
+	return nil
+}
+
+func (s *Store) loadTargetAccountIDs(ctx context.Context, postIDs []string) (map[string][]string, error) {
+	placeholders, args := inClause(postIDs)
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+		select post_id, account_id
+		from scheduled_post_targets
+		where post_id in (%s)
+		order by rowid asc`, placeholders),
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	targetsByPostID := make(map[string][]string, len(postIDs))
+	for rows.Next() {
+		var postID, accountID string
+		if err := rows.Scan(&postID, &accountID); err != nil {
+			return nil, err
+		}
+		targetsByPostID[postID] = append(targetsByPostID[postID], accountID)
+	}
+	return targetsByPostID, rows.Err()
+}
+
+type userScanner interface {
+	Scan(dest ...any) error
+}
+
+type teamScanner interface {
+	Scan(dest ...any) error
+}
+
+type membershipScanner interface {
+	Scan(dest ...any) error
+}
+
+type accountScanner interface {
+	Scan(dest ...any) error
+}
+
+type providerInstanceScanner interface {
+	Scan(dest ...any) error
+}
+
+type postScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanUser(scanner userScanner) (domain.User, error) {
+	var (
+		user      domain.User
+		isAdmin   int
+		createdAt string
+	)
+	if err := scanner.Scan(&user.ID, &user.Email, &user.Name, &user.Subject, &isAdmin, &createdAt); err != nil {
+		return domain.User{}, err
+	}
+	user.IsAdmin = isAdmin != 0
+	var err error
+	user.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return user, nil
+}
+
+func scanTeam(scanner teamScanner) (domain.Team, error) {
+	var (
+		team      domain.Team
+		createdAt string
+	)
+	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt); err != nil {
+		return domain.Team{}, err
+	}
+	var err error
+	team.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return domain.Team{}, err
+	}
+	return team, nil
+}
+
+func scanMembership(scanner membershipScanner) (domain.TeamMembership, error) {
+	var (
+		membership domain.TeamMembership
+		createdAt  string
+	)
+	if err := scanner.Scan(&membership.UserID, &membership.TeamID, &membership.Role, &createdAt); err != nil {
+		return domain.TeamMembership{}, err
+	}
+	var err error
+	membership.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return domain.TeamMembership{}, err
+	}
+	return membership, nil
+}
+
+func scanAccount(scanner accountScanner) (domain.SocialAccount, error) {
+	var (
+		account            domain.SocialAccount
+		providerInstanceID sql.NullString
+		maxChars           sql.NullInt64
+		createdAt          string
+	)
+	if err := scanner.Scan(
+		&account.ID,
+		&account.TeamID,
+		&account.Provider,
+		&account.AuthType,
+		&providerInstanceID,
+		&account.InstanceURL,
+		&account.Username,
+		&account.RemoteAccountID,
+		&account.AccessTokenCiphertext,
+		&account.RefreshTokenCiphertext,
+		&maxChars,
+		&createdAt,
+	); err != nil {
+		return domain.SocialAccount{}, err
+	}
+	account.ProviderInstanceID = providerInstanceID.String
+	if maxChars.Valid {
+		value := int(maxChars.Int64)
+		account.MaxCharsOverride = &value
+	}
+	var err error
+	account.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	return account, nil
+}
+
+func scanProviderInstance(scanner providerInstanceScanner) (domain.ProviderInstance, error) {
+	var (
+		instance   domain.ProviderInstance
+		scopesJSON string
+		createdAt  string
+		updatedAt  string
+	)
+	if err := scanner.Scan(
+		&instance.ID,
+		&instance.Provider,
+		&instance.Name,
+		&instance.InstanceURL,
+		&instance.ClientID,
+		&instance.ClientSecretCiphertext,
+		&scopesJSON,
+		&instance.AuthorizationEndpoint,
+		&instance.TokenEndpoint,
+		&instance.CreatedByUserID,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.ProviderInstance{}, err
+	}
+	if err := json.Unmarshal([]byte(scopesJSON), &instance.Scopes); err != nil {
+		return domain.ProviderInstance{}, fmt.Errorf("decode provider scopes: %w", err)
+	}
+	instance.HasClientSecret = instance.ClientSecretCiphertext != ""
+	var err error
+	instance.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return domain.ProviderInstance{}, err
+	}
+	instance.UpdatedAt, err = parseTime(updatedAt)
+	if err != nil {
+		return domain.ProviderInstance{}, err
+	}
+	return instance, nil
+}
+
+func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
+	var (
+		post      domain.ScheduledPost
+		lastError sql.NullString
+		scheduled string
+		createdAt string
+		updatedAt string
+	)
+	if err := scanner.Scan(
+		&post.ID,
+		&post.TeamID,
+		&post.AuthorUserID,
+		&post.Title,
+		&post.Content,
+		&scheduled,
+		&post.Status,
+		&post.AttemptCount,
+		&lastError,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	post.LastError = lastError.String
+	var err error
+	post.ScheduledAt, err = parseTime(scheduled)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	post.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	post.UpdatedAt, err = parseTime(updatedAt)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	return post, nil
+}
+
+func collectUsers(rows *sql.Rows) ([]domain.User, error) {
+	var items []domain.User
+	for rows.Next() {
+		item, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func collectTeams(rows *sql.Rows) ([]domain.Team, error) {
+	var items []domain.Team
+	for rows.Next() {
+		item, err := scanTeam(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func collectMemberships(rows *sql.Rows) ([]domain.TeamMembership, error) {
+	var items []domain.TeamMembership
+	for rows.Next() {
+		item, err := scanMembership(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func collectAccounts(rows *sql.Rows) ([]domain.SocialAccount, error) {
+	var items []domain.SocialAccount
+	for rows.Next() {
+		item, err := scanAccount(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func collectProviderInstances(rows *sql.Rows) ([]domain.ProviderInstance, error) {
+	var items []domain.ProviderInstance
+	for rows.Next() {
+		item, err := scanProviderInstance(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func collectPosts(rows *sql.Rows) ([]domain.ScheduledPost, error) {
+	var items []domain.ScheduledPost
+	for rows.Next() {
+		item, err := scanPost(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func queryUser(ctx context.Context, q queryRower, query string, args ...any) (domain.User, error) {
+	return scanUser(q.QueryRowContext(ctx, query, args...))
+}
+
+func queryMembership(ctx context.Context, q queryRower, query string, args ...any) (domain.TeamMembership, error) {
+	return scanMembership(q.QueryRowContext(ctx, query, args...))
+}
+
+func queryAccount(ctx context.Context, q queryRower, query string, args ...any) (domain.SocialAccount, error) {
+	return scanAccount(q.QueryRowContext(ctx, query, args...))
+}
+
+func queryProviderInstance(ctx context.Context, q queryRower, query string, args ...any) (domain.ProviderInstance, error) {
+	return scanProviderInstance(q.QueryRowContext(ctx, query, args...))
+}
+
+func queryPost(ctx context.Context, q queryRower, query string, args ...any) (domain.ScheduledPost, error) {
+	return scanPost(q.QueryRowContext(ctx, query, args...))
+}
+
+type queryRower interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func inClause(values []string) (string, []any) {
+	parts := make([]string, len(values))
+	args := make([]any, len(values))
+	for i, value := range values {
+		parts[i] = "?"
+		args[i] = value
+	}
+	return strings.Join(parts, ", "), args
+}
+
+func nowString() string {
+	return formatTime(time.Now().UTC())
+}
+
+func formatTime(t time.Time) string {
+	return t.UTC().Format(sqliteTimeLayout)
+}
+
+func parseTime(value string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, nil
+	}
+	for _, layout := range []string{sqliteTimeLayout, time.RFC3339Nano, time.RFC3339} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("parse sqlite time %q", value)
+}
+
+func mustParseTime(value string) time.Time {
+	parsed, err := parseTime(value)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
+}
+
+func boolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func nullableString(value string) any {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return trimmed
+}
+
+func marshalScopes(scopes []string) (string, error) {
+	if len(scopes) == 0 {
+		return "[]", nil
+	}
+	payload, err := json.Marshal(scopes)
+	if err != nil {
+		return "", fmt.Errorf("encode provider scopes: %w", err)
+	}
+	return string(payload), nil
+}

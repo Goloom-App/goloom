@@ -36,6 +36,11 @@ type PublishResult struct {
 	URL      string
 }
 
+type OAuthAccountConnector interface {
+	BuildAuthorizationURL(instance domain.ProviderInstance, state, redirectURI string) (string, error)
+	ConnectAccountOAuthCallback(ctx context.Context, instance domain.ProviderInstance, clientSecret, redirectURI, code string) (domain.ConnectedAccount, error)
+}
+
 type SocialMediaProvider interface {
 	Name() string
 	Capabilities(ctx context.Context, account domain.SocialAccount) (Capabilities, error)
@@ -80,6 +85,7 @@ type GenericStatusProvider struct {
 type MastodonProvider struct {
 	defaultChars int
 	mediaTypes   []string
+	registration MastodonRegistrationConfig
 }
 
 type BlueskyProvider struct {
@@ -104,6 +110,31 @@ type mastodonAuthorizationServerMetadata struct {
 	TokenEndpoint         string `json:"token_endpoint"`
 }
 
+type mastodonTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type mastodonAppRegistrationRequest struct {
+	ClientName   string   `json:"client_name"`
+	RedirectURIs []string `json:"redirect_uris"`
+	Scopes       string   `json:"scopes,omitempty"`
+	Website      string   `json:"website,omitempty"`
+}
+
+type mastodonAppRegistrationResponse struct {
+	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	Scopes       []string `json:"scopes"`
+}
+
+type MastodonRegistrationConfig struct {
+	AppName       string
+	RedirectURI   string
+	Website       string
+	DefaultScopes []string
+}
+
 type blueskySessionResponse struct {
 	DID        string `json:"did"`
 	Handle     string `json:"handle"`
@@ -116,10 +147,20 @@ type blueskyCreateRecordResponse struct {
 	CID string `json:"cid"`
 }
 
-func NewMastodonProvider() SocialMediaProvider {
+func NewMastodonProvider(cfg MastodonRegistrationConfig) SocialMediaProvider {
+	if strings.TrimSpace(cfg.AppName) == "" {
+		cfg.AppName = "goloom"
+	}
+	if strings.TrimSpace(cfg.RedirectURI) == "" {
+		cfg.RedirectURI = "urn:ietf:wg:oauth:2.0:oob"
+	}
+	if len(cfg.DefaultScopes) == 0 {
+		cfg.DefaultScopes = []string{"read", "write"}
+	}
 	return &MastodonProvider{
 		defaultChars: 500,
 		mediaTypes:   []string{"image/jpeg", "image/png", "video/mp4"},
+		registration: cfg,
 	}
 }
 
@@ -229,12 +270,6 @@ func (p *MastodonProvider) PrepareProviderInstance(ctx context.Context, input do
 	if err != nil {
 		return domain.PreparedProviderInstance{}, err
 	}
-	if strings.TrimSpace(input.ClientID) == "" {
-		return domain.PreparedProviderInstance{}, errors.New("client_id is required for mastodon instances")
-	}
-	if strings.TrimSpace(input.ClientSecret) == "" {
-		return domain.PreparedProviderInstance{}, errors.New("client_secret is required for mastodon instances")
-	}
 
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
@@ -243,7 +278,21 @@ func (p *MastodonProvider) PrepareProviderInstance(ctx context.Context, input do
 
 	scopes := cleanScopes(input.Scopes)
 	if len(scopes) == 0 {
+		scopes = append([]string(nil), p.registration.DefaultScopes...)
+	}
+	if len(scopes) == 0 {
 		scopes = []string{"read", "write"}
+	}
+
+	clientID := strings.TrimSpace(input.ClientID)
+	clientSecret := strings.TrimSpace(input.ClientSecret)
+	if clientID == "" || clientSecret == "" {
+		registration, err := p.registerApplication(ctx, instanceURL, scopes)
+		if err != nil {
+			return domain.PreparedProviderInstance{}, err
+		}
+		clientID = registration.ClientID
+		clientSecret = registration.ClientSecret
 	}
 
 	authEndpoint := strings.TrimSpace(input.AuthorizationEndpoint)
@@ -265,8 +314,8 @@ func (p *MastodonProvider) PrepareProviderInstance(ctx context.Context, input do
 		Provider:              p.Name(),
 		Name:                  name,
 		InstanceURL:           instanceURL,
-		ClientID:              strings.TrimSpace(input.ClientID),
-		ClientSecret:          strings.TrimSpace(input.ClientSecret),
+		ClientID:              clientID,
+		ClientSecret:          clientSecret,
 		Scopes:                scopes,
 		AuthorizationEndpoint: authEndpoint,
 		TokenEndpoint:         tokenEndpoint,
@@ -287,7 +336,85 @@ func (p *MastodonProvider) ConnectAccount(ctx context.Context, input domain.Crea
 		return domain.ConnectedAccount{}, errors.New("access_token is required for mastodon")
 	}
 
-	resp, err := doJSONRequest(ctx, http.MethodGet, normalizedURL+"/api/v1/accounts/verify_credentials", strings.TrimSpace(input.AccessToken), nil)
+	return p.connectAccountWithToken(ctx, normalizedURL, providerInstanceID(instance), strings.TrimSpace(input.AccessToken), strings.TrimSpace(input.RefreshToken))
+}
+
+func (p *MastodonProvider) BuildAuthorizationURL(instance domain.ProviderInstance, state, redirectURI string) (string, error) {
+	authEndpoint := strings.TrimSpace(instance.AuthorizationEndpoint)
+	if authEndpoint == "" {
+		authEndpoint = strings.TrimRight(instance.InstanceURL, "/") + "/oauth/authorize"
+	}
+	parsed, err := url.Parse(authEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("parse mastodon authorization endpoint: %w", err)
+	}
+
+	scopes := instance.Scopes
+	if len(scopes) == 0 {
+		scopes = append([]string(nil), p.registration.DefaultScopes...)
+	}
+
+	query := parsed.Query()
+	query.Set("client_id", strings.TrimSpace(instance.ClientID))
+	query.Set("redirect_uri", strings.TrimSpace(redirectURI))
+	query.Set("response_type", "code")
+	query.Set("scope", strings.Join(scopes, " "))
+	query.Set("state", strings.TrimSpace(state))
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func (p *MastodonProvider) ConnectAccountOAuthCallback(ctx context.Context, instance domain.ProviderInstance, clientSecret, redirectURI, code string) (domain.ConnectedAccount, error) {
+	tokenEndpoint := strings.TrimSpace(instance.TokenEndpoint)
+	if tokenEndpoint == "" {
+		tokenEndpoint = strings.TrimRight(instance.InstanceURL, "/") + "/oauth/token"
+	}
+
+	bodyValues := url.Values{}
+	bodyValues.Set("grant_type", "authorization_code")
+	bodyValues.Set("code", strings.TrimSpace(code))
+	bodyValues.Set("client_id", strings.TrimSpace(instance.ClientID))
+	bodyValues.Set("client_secret", strings.TrimSpace(clientSecret))
+	bodyValues.Set("redirect_uri", strings.TrimSpace(redirectURI))
+	if len(instance.Scopes) > 0 {
+		bodyValues.Set("scope", strings.Join(instance.Scopes, " "))
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(bodyValues.Encode()))
+	if err != nil {
+		return domain.ConnectedAccount{}, fmt.Errorf("build mastodon token exchange request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := defaultHTTPClient.Do(req)
+	if err != nil {
+		return domain.ConnectedAccount{}, fmt.Errorf("exchange mastodon authorization code: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return domain.ConnectedAccount{}, fmt.Errorf("mastodon token exchange failed with status %d", resp.StatusCode)
+	}
+
+	var tokenResponse mastodonTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		return domain.ConnectedAccount{}, fmt.Errorf("decode mastodon token exchange response: %w", err)
+	}
+	if strings.TrimSpace(tokenResponse.AccessToken) == "" {
+		return domain.ConnectedAccount{}, errors.New("mastodon token exchange returned no access token")
+	}
+
+	return p.connectAccountWithToken(
+		ctx,
+		instance.InstanceURL,
+		instance.ID,
+		strings.TrimSpace(tokenResponse.AccessToken),
+		strings.TrimSpace(tokenResponse.RefreshToken),
+	)
+}
+
+func (p *MastodonProvider) connectAccountWithToken(ctx context.Context, normalizedURL, providerInstanceID, accessToken, refreshToken string) (domain.ConnectedAccount, error) {
+	resp, err := doJSONRequest(ctx, http.MethodGet, normalizedURL+"/api/v1/accounts/verify_credentials", accessToken, nil)
 	if err != nil {
 		return domain.ConnectedAccount{}, err
 	}
@@ -310,12 +437,12 @@ func (p *MastodonProvider) ConnectAccount(ctx context.Context, input domain.Crea
 	return domain.ConnectedAccount{
 		Provider:           p.Name(),
 		AuthType:           domain.AccountAuthTypeOAuthToken,
-		ProviderInstanceID: providerInstanceID(instance),
+		ProviderInstanceID: providerInstanceID,
 		InstanceURL:        normalizedURL,
 		Username:           username,
 		RemoteAccountID:    strings.TrimSpace(payload.ID),
-		AccessToken:        strings.TrimSpace(input.AccessToken),
-		RefreshToken:       strings.TrimSpace(input.RefreshToken),
+		AccessToken:        accessToken,
+		RefreshToken:       refreshToken,
 	}, nil
 }
 
@@ -619,6 +746,37 @@ func discoverMastodonOAuthMetadata(ctx context.Context, instanceURL string) (str
 
 	baseURL := strings.TrimRight(instanceURL, "/")
 	return baseURL + "/oauth/authorize", baseURL + "/oauth/token", nil
+}
+
+func (p *MastodonProvider) registerApplication(ctx context.Context, instanceURL string, scopes []string) (mastodonAppRegistrationResponse, error) {
+	body, err := marshalJSONBody(mastodonAppRegistrationRequest{
+		ClientName:   strings.TrimSpace(p.registration.AppName),
+		RedirectURIs: []string{strings.TrimSpace(p.registration.RedirectURI)},
+		Scopes:       strings.Join(scopes, " "),
+		Website:      strings.TrimSpace(p.registration.Website),
+	})
+	if err != nil {
+		return mastodonAppRegistrationResponse{}, err
+	}
+
+	resp, err := doJSONRequest(ctx, http.MethodPost, strings.TrimRight(instanceURL, "/")+"/api/v1/apps", "", body)
+	if err != nil {
+		return mastodonAppRegistrationResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return mastodonAppRegistrationResponse{}, fmt.Errorf("mastodon app registration failed with status %d", resp.StatusCode)
+	}
+
+	var payload mastodonAppRegistrationResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return mastodonAppRegistrationResponse{}, fmt.Errorf("decode mastodon app registration response: %w", err)
+	}
+	if strings.TrimSpace(payload.ClientID) == "" || strings.TrimSpace(payload.ClientSecret) == "" {
+		return mastodonAppRegistrationResponse{}, errors.New("mastodon app registration returned incomplete credentials")
+	}
+	return payload, nil
 }
 
 func cleanScopes(scopes []string) []string {

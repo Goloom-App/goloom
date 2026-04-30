@@ -9,18 +9,18 @@ import (
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
-	"git.f4mily.net/goloom/internal/store/postgres"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 type Service struct {
 	logger       *slog.Logger
-	store        *postgres.Store
+	store        store.Store
 	providers    *provider.Registry
 	pollInterval time.Duration
 	workers      int
 }
 
-func New(logger *slog.Logger, store *postgres.Store, providers *provider.Registry, pollInterval time.Duration, workers int) *Service {
+func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int) *Service {
 	if workers <= 0 {
 		workers = 1
 	}

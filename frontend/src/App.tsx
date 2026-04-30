@@ -2,14 +2,40 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { addMinutes, format, parseISO, set, startOfDay } from 'date-fns'
 
-import { createApiClient } from './api'
+import { ApiError, createApiClient, requestAuthStatus } from './api'
 import { initialSettings } from './data'
 import { Icon } from './icons'
-import { colorForProvider, toAccountRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
+import { colorForProvider, toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { postsForTeam, sharedAccountLabels, SLOT_MINUTES } from './schedule'
-import type { AccountRecord, AppSection, CalendarViewMode, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
+import type { AccountRecord, AppSection, AuthStatusRecord, CalendarViewMode, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
+
+function defaultAccountDraft(provider: ProviderName = 'mastodon', providerInstanceId = '') {
+  return {
+    provider,
+    providerInstanceId,
+    username: '',
+    identifier: '',
+    accessToken: '',
+    refreshToken: '',
+    appPassword: '',
+  }
+}
+
+function defaultProviderInstanceDraft(provider: ProviderName = 'mastodon') {
+  return {
+    id: '',
+    provider,
+    name: '',
+    instanceUrl: provider === 'bluesky' ? 'https://bsky.social' : '',
+    clientId: '',
+    clientSecret: '',
+    scopes: provider === 'mastodon' || provider === 'friendica' ? 'read,write' : '',
+    authorizationEndpoint: '',
+    tokenEndpoint: '',
+  }
+}
 
 function App() {
   const [section, setSection] = useState<AppSection>('calendar')
@@ -20,6 +46,12 @@ function App() {
     apiBaseUrl: loadStoredSettings().general.apiBaseUrl,
     bearerToken: loadStoredSettings().general.bearerToken,
   }))
+  const [authStatus, setAuthStatus] = useState<AuthStatusRecord | null>(null)
+  const [authStatusLoading, setAuthStatusLoading] = useState(true)
+  const [authView, setAuthView] = useState<'bootstrap' | 'login'>('login')
+  const [authTokenDraft, setAuthTokenDraft] = useState(() => loadStoredSettings().general.bearerToken)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authSubmitting, setAuthSubmitting] = useState(false)
   const [users, setUsers] = useState<UserRecord[]>([])
   const [teams, setTeams] = useState<TeamRecord[]>([])
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
@@ -35,26 +67,9 @@ function App() {
   const [newTeamDescription, setNewTeamDescription] = useState('')
   const [memberUserId, setMemberUserId] = useState('')
   const [memberRole, setMemberRole] = useState<TeamRole>('editor')
-  const [accountDraft, setAccountDraft] = useState({
-    provider: 'mastodon' as ProviderName,
-    providerInstanceId: '',
-    username: '',
-    identifier: '',
-    accessToken: '',
-    refreshToken: '',
-    appPassword: '',
-  })
-  const [providerInstanceDraft, setProviderInstanceDraft] = useState({
-    id: '',
-    provider: 'mastodon' as ProviderName,
-    name: '',
-    instanceUrl: '',
-    clientId: '',
-    clientSecret: '',
-    scopes: 'read,write',
-    authorizationEndpoint: '',
-    tokenEndpoint: '',
-  })
+  const [accountDraft, setAccountDraft] = useState(() => defaultAccountDraft())
+  const [providerInstanceDraft, setProviderInstanceDraft] = useState(() => defaultProviderInstanceDraft())
+  const [showProviderAdvancedSettings, setShowProviderAdvancedSettings] = useState(false)
   const [editorDraft, setEditorDraft] = useState(defaultEditorDraft(currentDate, []))
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -63,12 +78,11 @@ function App() {
   const [principalUser, setPrincipalUser] = useState<UserRecord | null>(null)
 
   const api = useMemo(() => {
-    const baseUrl = activeConnection.apiBaseUrl.trim()
     const token = activeConnection.bearerToken.trim()
-    if (!baseUrl || !token) {
+    if (!token) {
       return null
     }
-    return createApiClient({ baseUrl, token })
+    return createApiClient({ baseUrl: activeConnection.apiBaseUrl.trim(), token })
   }, [activeConnection.apiBaseUrl, activeConnection.bearerToken])
 
   useEffect(() => {
@@ -86,6 +100,135 @@ function App() {
     mediaQuery.addEventListener('change', syncTheme)
     return () => mediaQuery.removeEventListener('change', syncTheme)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    requestAuthStatus(settings.general.apiBaseUrl.trim())
+      .then((status) => {
+        if (cancelled) {
+          return
+        }
+        const mapped = toAuthStatusRecord(status)
+        setAuthStatus(mapped)
+        if (!activeConnection.bearerToken.trim()) {
+          setAuthView(mapped.bootstrapEnabled ? 'bootstrap' : 'login')
+        }
+      })
+      .catch(() => {
+        if (cancelled) {
+          return
+        }
+        setAuthStatus(null)
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthStatusLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeConnection.bearerToken, settings.general.apiBaseUrl])
+
+  useEffect(() => {
+    const teamID = new URLSearchParams(window.location.search).get('team')
+    if (teamID) {
+      setSelectedTeamId(teamID)
+    }
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const oauthStatus = params.get('oauth_status')
+    if (!oauthStatus) {
+      return
+    }
+
+    const provider = params.get('oauth_provider') || 'provider'
+    const message = params.get('oauth_message') || (oauthStatus === 'success'
+      ? `Connected ${provider} account`
+      : `${provider} oauth failed`)
+
+    if (oauthStatus === 'success') {
+      setStatusMessage(message)
+      setError(null)
+    } else {
+      setError(message)
+      setStatusMessage(null)
+    }
+
+    params.delete('oauth_status')
+    params.delete('oauth_provider')
+    params.delete('oauth_message')
+    const nextQuery = params.toString()
+    const nextURL = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
+    window.history.replaceState({}, document.title, nextURL)
+  }, [])
+
+  const clearAuthenticatedState = useCallback((message?: string) => {
+    setActiveConnection((current) => ({ ...current, bearerToken: '' }))
+    setSettings((current) => ({
+      ...current,
+      general: { ...current.general, bearerToken: '' },
+    }))
+    setAuthTokenDraft('')
+    setPrincipalUser(null)
+    setUsers([])
+    setTeams([])
+    setAccounts([])
+    setPosts([])
+    setProviderInstances([])
+    setRuntimeConfig(null)
+    setSelectedTeamId('')
+    setExpandedPostId(null)
+    setEditingPostId(null)
+    setComposerOpen(false)
+    setLoading(false)
+    if (message) {
+      setStatusMessage(message)
+    }
+  }, [])
+
+  async function authenticateWithToken(mode: 'bootstrap' | 'login') {
+    const token = authTokenDraft.trim()
+    if (!token) {
+      setAuthError(mode === 'bootstrap' ? 'Enter the bootstrap token.' : 'Enter a bearer token.')
+      return
+    }
+
+    setAuthSubmitting(true)
+    setAuthError(null)
+    setStatusMessage(null)
+
+    try {
+      const baseUrl = settings.general.apiBaseUrl.trim()
+      const meResponse = await createApiClient({ baseUrl, token }).me()
+      setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
+      setSettings((current) => ({
+        ...current,
+        general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
+      }))
+      setPrincipalUser(toUserRecord(meResponse.user))
+      setStatusMessage(mode === 'bootstrap' ? 'Bootstrap administrator signed in' : 'Signed in')
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 401) {
+        setAuthError(mode === 'bootstrap' ? 'The bootstrap token was rejected.' : 'The bearer token was rejected.')
+      } else {
+        setAuthError(cause instanceof Error ? cause.message : 'Sign-in failed')
+      }
+    } finally {
+      setAuthSubmitting(false)
+    }
+  }
+
+  function updateAPIBaseURL(value: string) {
+    setAuthStatusLoading(true)
+    setSettings((current) => ({
+      ...current,
+      general: { ...current.general, apiBaseUrl: value },
+    }))
+  }
 
   const loadDashboard = useCallback(async () => {
     if (!api) {
@@ -107,20 +250,20 @@ function App() {
         meResponse.user.is_admin ? api.runtimeConfig() : Promise.resolve(null),
       ])
 
-      const mappedUsers = usersResponse.items.map(toUserRecord)
-      const mappedProviderInstances = providerInstancesResponse.items.map(toProviderInstanceRecord)
+      const mappedUsers = (usersResponse.items ?? []).map(toUserRecord)
+      const mappedProviderInstances = (providerInstancesResponse.items ?? []).map(toProviderInstanceRecord)
 
       const teamPayloads = await Promise.all(
-        teamsResponse.items.map(async (team) => {
+        (teamsResponse.items ?? []).map(async (team) => {
           const [membersResponse, accountsResponse, postsResponse] = await Promise.all([
             api.listTeamMembers(team.id),
             api.listAccounts(team.id),
             api.listPosts(team.id),
           ])
 
-          const mappedAccounts = accountsResponse.items.map((account) => toAccountRecord(account, mappedProviderInstances))
-          const mappedPosts = postsResponse.items.map(toPostRecord)
-          const mappedMembers = membersResponse.items.map(toTeamMemberRecord)
+          const mappedAccounts = (accountsResponse.items ?? []).map((account) => toAccountRecord(account, mappedProviderInstances))
+          const mappedPosts = (postsResponse.items ?? []).map(toPostRecord)
+          const mappedMembers = (membersResponse.items ?? []).map(toTeamMemberRecord)
 
           return {
             team: toTeamRecord(team, mappedMembers, mappedAccounts.map((account) => account.id)),
@@ -138,11 +281,16 @@ function App() {
       setRuntimeConfig(runtimeConfigResponse ? toRuntimeConfigRecord(runtimeConfigResponse) : null)
       setExpandedPostId((current) => (current && teamPayloads.flatMap((payload) => payload.posts).some((post) => post.id === current) ? current : null))
     } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 401) {
+        clearAuthenticatedState('Session expired')
+        setAuthError('Session expired. Sign in again to continue.')
+        return
+      }
       setError(cause instanceof Error ? cause.message : 'Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
-  }, [api])
+  }, [api, clearAuthenticatedState])
 
   useEffect(() => {
     if (api) {
@@ -192,6 +340,65 @@ function App() {
   const selectedComposerAccounts = useMemo(() => teamAccounts.filter((account) => editorDraft.targetAccountIds.includes(account.id)), [editorDraft.targetAccountIds, teamAccounts])
   const availableUsers = useMemo(() => users.filter((user) => !selectedTeam?.members.some((member) => member.userId === user.id)), [selectedTeam, users])
   const providerInstanceOptions = useMemo(() => providerInstances.filter((instance) => instance.provider === accountDraft.provider), [accountDraft.provider, providerInstances])
+  const accountProviderHints = useMemo(() => {
+    switch (accountDraft.provider) {
+      case 'bluesky':
+        return {
+          supportsOAuthRedirect: false,
+          showUsername: false,
+          showIdentifier: true,
+          showAccessToken: false,
+          showAppPassword: true,
+          accessTokenLabel: 'Access token',
+          helperText: 'Use a Bluesky identifier and app password. The backend will derive the account handle automatically.',
+        }
+      case 'friendica':
+        return {
+          supportsOAuthRedirect: false,
+          showUsername: true,
+          showIdentifier: false,
+          showAccessToken: true,
+          showAppPassword: false,
+          accessTokenLabel: 'Access token',
+          helperText: 'Provide the Friendica username and a usable access token for that account.',
+        }
+      default:
+        return {
+          supportsOAuthRedirect: true,
+          showUsername: false,
+          showIdentifier: false,
+          showAccessToken: true,
+          showAppPassword: false,
+          accessTokenLabel: 'OAuth access token',
+          helperText: 'Use the browser OAuth flow to authorize Mastodon and return to this dashboard automatically. Manual token entry still works as a fallback.',
+        }
+    }
+  }, [accountDraft.provider])
+  const providerInstanceHints = useMemo(() => {
+    switch (providerInstanceDraft.provider) {
+      case 'bluesky':
+        return {
+          showClientCredentials: false,
+          showScopes: false,
+          helperText: 'Only a name and optional PDS URL are needed for Bluesky instance registration.',
+          supportsAdvancedOverrides: false,
+        }
+      case 'friendica':
+        return {
+          showClientCredentials: true,
+          showScopes: true,
+          helperText: 'Friendica does not support portable automatic app registration here, so enter client credentials manually if your instance provides them.',
+          supportsAdvancedOverrides: false,
+        }
+      default:
+        return {
+          showClientCredentials: false,
+          showScopes: false,
+          helperText: 'Mastodon app credentials are registered automatically from the instance URL using the backend defaults.',
+          supportsAdvancedOverrides: true,
+        }
+    }
+  }, [providerInstanceDraft.provider])
   const effectiveMemberUserId = memberUserId || availableUsers[0]?.id || ''
   const effectiveProviderInstanceId = providerInstanceOptions.some((instance) => instance.id === accountDraft.providerInstanceId)
     ? accountDraft.providerInstanceId
@@ -275,7 +482,8 @@ function App() {
       apiBaseUrl: settings.general.apiBaseUrl.trim(),
       bearerToken: settings.general.bearerToken.trim(),
     })
-    setStatusMessage('Connection updated')
+    setAuthTokenDraft(settings.general.bearerToken.trim())
+    setStatusMessage('Session settings applied')
   }
 
   async function handleSavePost() {
@@ -366,17 +574,37 @@ function App() {
     }
     await runAction(async () => {
       await api.createAccount(selectedTeam.id, payload)
-      setAccountDraft({
-        provider: accountDraft.provider,
-        providerInstanceId: providerInstanceOptions[0]?.id ?? '',
-        username: '',
-        identifier: '',
-        accessToken: '',
-        refreshToken: '',
-        appPassword: '',
-      })
+      setAccountDraft(defaultAccountDraft(accountDraft.provider, providerInstanceOptions[0]?.id ?? ''))
       await loadDashboard()
     }, 'Account connected')
+  }
+
+  async function startMastodonOAuth() {
+    if (!api || !selectedTeam || !effectiveProviderInstanceId) {
+      return
+    }
+
+    setSyncing(true)
+    setError(null)
+    setStatusMessage(null)
+
+    try {
+      const returnTo = new URL(window.location.href)
+      returnTo.hash = ''
+      returnTo.searchParams.set('team', selectedTeam.id)
+      returnTo.searchParams.delete('oauth_status')
+      returnTo.searchParams.delete('oauth_provider')
+      returnTo.searchParams.delete('oauth_message')
+
+      const response = await api.startMastodonOAuth(selectedTeam.id, {
+        provider_instance_id: effectiveProviderInstanceId,
+        return_to: returnTo.toString(),
+      })
+      window.location.assign(response.authorization_url)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Failed to start Mastodon OAuth')
+      setSyncing(false)
+    }
   }
 
   async function removeAccountFromTeam(accountID: string) {
@@ -393,15 +621,27 @@ function App() {
     if (!api || !principalUser || principalUser.globalRole !== 'admin') {
       return
     }
+    const provider = providerInstanceDraft.provider
+    const trimmedScopes = providerInstanceDraft.scopes.split(',').map((scope) => scope.trim()).filter(Boolean)
     const payload = {
-      provider: providerInstanceDraft.provider,
+      provider,
       name: providerInstanceDraft.name.trim(),
       instance_url: providerInstanceDraft.instanceUrl.trim(),
-      client_id: providerInstanceDraft.clientId.trim(),
-      client_secret: providerInstanceDraft.clientSecret.trim(),
-      scopes: providerInstanceDraft.scopes.split(',').map((scope) => scope.trim()).filter(Boolean),
-      authorization_endpoint: providerInstanceDraft.authorizationEndpoint.trim() || undefined,
-      token_endpoint: providerInstanceDraft.tokenEndpoint.trim() || undefined,
+      client_id: provider === 'friendica' || (provider === 'mastodon' && showProviderAdvancedSettings)
+        ? (providerInstanceDraft.clientId.trim() || undefined)
+        : undefined,
+      client_secret: provider === 'friendica' || (provider === 'mastodon' && showProviderAdvancedSettings)
+        ? (providerInstanceDraft.clientSecret.trim() || undefined)
+        : undefined,
+      scopes: provider === 'friendica' || (provider === 'mastodon' && showProviderAdvancedSettings)
+        ? trimmedScopes
+        : undefined,
+      authorization_endpoint: provider === 'mastodon' && showProviderAdvancedSettings
+        ? (providerInstanceDraft.authorizationEndpoint.trim() || undefined)
+        : undefined,
+      token_endpoint: provider === 'mastodon' && showProviderAdvancedSettings
+        ? (providerInstanceDraft.tokenEndpoint.trim() || undefined)
+        : undefined,
     }
     await runAction(async () => {
       if (providerInstanceDraft.id) {
@@ -409,17 +649,8 @@ function App() {
       } else {
         await api.createProviderInstance(payload)
       }
-      setProviderInstanceDraft({
-        id: '',
-        provider: 'mastodon',
-        name: '',
-        instanceUrl: '',
-        clientId: '',
-        clientSecret: '',
-        scopes: 'read,write',
-        authorizationEndpoint: '',
-        tokenEndpoint: '',
-      })
+      setProviderInstanceDraft(defaultProviderInstanceDraft())
+      setShowProviderAdvancedSettings(false)
       await loadDashboard()
     }, providerInstanceDraft.id ? 'Provider instance updated' : 'Provider instance registered')
   }
@@ -436,6 +667,44 @@ function App() {
 
   const selectedTeamName = selectedTeam?.name ?? 'No team selected'
   const connectionReady = Boolean(api)
+
+  if (authStatusLoading && !activeConnection.bearerToken.trim()) {
+    return (
+      <AuthShell theme={theme}>
+        <AuthPanel
+          view="login"
+          authStatus={null}
+          authTokenDraft={authTokenDraft}
+          authError={authError}
+          authSubmitting={true}
+          apiBaseUrl={settings.general.apiBaseUrl}
+          onViewChange={setAuthView}
+          onTokenChange={setAuthTokenDraft}
+          onAPIBaseURLChange={updateAPIBaseURL}
+          onSubmit={() => undefined}
+        />
+      </AuthShell>
+    )
+  }
+
+  if (!activeConnection.bearerToken.trim()) {
+    return (
+      <AuthShell theme={theme}>
+        <AuthPanel
+          view={authView}
+          authStatus={authStatus}
+          authTokenDraft={authTokenDraft}
+          authError={authError}
+          authSubmitting={authSubmitting}
+          apiBaseUrl={settings.general.apiBaseUrl}
+          onViewChange={setAuthView}
+          onTokenChange={setAuthTokenDraft}
+          onAPIBaseURLChange={updateAPIBaseURL}
+          onSubmit={() => void authenticateWithToken(authView)}
+        />
+      </AuthShell>
+    )
+  }
 
   return (
     <div className="app-shell" data-theme={theme}>
@@ -480,7 +749,7 @@ function App() {
             <p className="hint">
               {connectionReady
                 ? `API-connected planning space for ${selectedTeamName}.`
-                : 'Enter the backend URL and bearer token in Settings to connect the dashboard.'}
+                : 'Enter a bearer token in Settings to connect the dashboard.'}
             </p>
           </div>
 
@@ -531,7 +800,7 @@ function App() {
             {!connectionReady ? (
               <div className="empty-state">
                 <h3>Backend connection required</h3>
-                <p className="hint">Open Settings, add the API base URL and a bearer token, then connect.</p>
+                <p className="hint">Open Settings, add a bearer token, then connect. Leave the API base URL empty to use this server.</p>
               </div>
             ) : upcomingPosts.length === 0 ? (
               <div className="empty-state">
@@ -772,7 +1041,11 @@ function App() {
                 <h3>Connect account</h3>
                 <label className="field">
                   <span>Provider</span>
-                  <select value={accountDraft.provider} onChange={(event) => setAccountDraft((current) => ({ ...current, provider: event.target.value as ProviderName, providerInstanceId: providerInstances.find((instance) => instance.provider === event.target.value)?.id ?? '' }))}>
+                  <select value={accountDraft.provider} onChange={(event) => {
+                    const provider = event.target.value as ProviderName
+                    setShowProviderAdvancedSettings(false)
+                    setAccountDraft(defaultAccountDraft(provider, providerInstances.find((instance) => instance.provider === provider)?.id ?? ''))
+                  }}>
                     <option value="bluesky">Bluesky</option>
                     <option value="friendica">Friendica</option>
                     <option value="mastodon">Mastodon</option>
@@ -789,31 +1062,57 @@ function App() {
                     ))}
                   </select>
                 </label>
-                <label className="field">
-                  <span>Username</span>
-                  <input value={accountDraft.username} onChange={(event) => setAccountDraft((current) => ({ ...current, username: event.target.value }))} />
-                </label>
-                {accountDraft.provider === 'bluesky' && (
+                {accountProviderHints.supportsOAuthRedirect && (
+                  <div className="field">
+                    <span>OAuth flow</span>
+                    <button
+                      type="button"
+                      className="button button--prominent button--icon-label"
+                      onClick={() => void startMastodonOAuth()}
+                      disabled={!selectedTeam || !effectiveProviderInstanceId || syncing}
+                    >
+                      <Icon name="plus" className="inline-icon" />
+                      <span>Authorize with Mastodon</span>
+                    </button>
+                  </div>
+                )}
+                {accountProviderHints.showUsername && (
+                  <label className="field">
+                    <span>Username</span>
+                    <input value={accountDraft.username} onChange={(event) => setAccountDraft((current) => ({ ...current, username: event.target.value }))} />
+                  </label>
+                )}
+                {accountProviderHints.showIdentifier && (
                   <>
                     <label className="field">
                       <span>Identifier</span>
                       <input value={accountDraft.identifier} onChange={(event) => setAccountDraft((current) => ({ ...current, identifier: event.target.value }))} />
                     </label>
+                  </>
+                )}
+                {accountProviderHints.showAppPassword && (
+                  <>
                     <label className="field">
                       <span>App password</span>
                       <input type="password" value={accountDraft.appPassword} onChange={(event) => setAccountDraft((current) => ({ ...current, appPassword: event.target.value }))} />
                     </label>
                   </>
                 )}
-                {accountDraft.provider !== 'bluesky' && (
+                {accountProviderHints.showAccessToken && (
                   <label className="field">
-                    <span>Access token</span>
+                    <span>{accountProviderHints.accessTokenLabel}</span>
                     <input type="password" value={accountDraft.accessToken} onChange={(event) => setAccountDraft((current) => ({ ...current, accessToken: event.target.value }))} />
                   </label>
                 )}
-                <button type="button" className="button button--icon-label" onClick={() => void addAccountToTeam()} disabled={!selectedTeam || !effectiveProviderInstanceId || syncing}>
+                <p className="hint">{accountProviderHints.helperText}</p>
+                <button
+                  type="button"
+                  className="button button--icon-label"
+                  onClick={() => void addAccountToTeam()}
+                  disabled={!selectedTeam || !effectiveProviderInstanceId || syncing}
+                >
                   <Icon name="plus" className="inline-icon" />
-                  <span>Connect account</span>
+                  <span>{accountProviderHints.supportsOAuthRedirect ? 'Connect with manual token' : 'Connect account'}</span>
                 </button>
               </div>
             </aside>
@@ -826,19 +1125,23 @@ function App() {
               <div className="settings-grid">
                 <SettingsCard title="Connection">
                   <label className="field">
-                    <span>API base URL</span>
-                    <input value={settings.general.apiBaseUrl} onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, apiBaseUrl: event.target.value } }))} />
+                    <span>API base URL (optional)</span>
+                    <input value={settings.general.apiBaseUrl} onChange={(event) => updateAPIBaseURL(event.target.value)} />
                   </label>
                   <label className="field">
                     <span>Bearer token</span>
                     <input type="password" value={settings.general.bearerToken} onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, bearerToken: event.target.value } }))} />
                   </label>
+                  <p className="hint">Leave the API base URL empty to use this server. Update the token here only if you want to switch sessions manually.</p>
                   <div className="inline-cluster">
                     <button type="button" className="button button--prominent" onClick={connectBackend}>
-                      Connect
+                      Apply session
                     </button>
                     <button type="button" className="button button--secondary" onClick={() => void loadDashboard()} disabled={!api || syncing}>
                       Refresh data
+                    </button>
+                    <button type="button" className="button button--secondary" onClick={() => clearAuthenticatedState('Signed out')}>
+                      Sign out
                     </button>
                   </div>
                 </SettingsCard>
@@ -933,17 +1236,20 @@ function App() {
                             <button
                               type="button"
                               className="button button--secondary button--icon-label"
-                              onClick={() => setProviderInstanceDraft({
-                                id: instance.id,
-                                provider: instance.provider,
-                                name: instance.name,
-                                instanceUrl: instance.instanceUrl,
-                                clientId: instance.clientId,
-                                clientSecret: '',
-                                scopes: instance.scopes.join(','),
-                                authorizationEndpoint: instance.authorizationEndpoint,
-                                tokenEndpoint: instance.tokenEndpoint,
-                              })}
+                              onClick={() => {
+                                setProviderInstanceDraft({
+                                  id: instance.id,
+                                  provider: instance.provider,
+                                  name: instance.name,
+                                  instanceUrl: instance.instanceUrl,
+                                  clientId: instance.clientId,
+                                  clientSecret: '',
+                                  scopes: instance.scopes.join(','),
+                                  authorizationEndpoint: instance.authorizationEndpoint,
+                                  tokenEndpoint: instance.tokenEndpoint,
+                                })
+                                setShowProviderAdvancedSettings(instance.provider === 'mastodon')
+                              }}
                             >
                               <Icon name="edit" className="inline-icon" />
                               <span>Edit</span>
@@ -957,7 +1263,10 @@ function App() {
                       <h3>{providerInstanceDraft.id ? 'Edit provider instance' : 'Register provider instance'}</h3>
                       <label className="field">
                         <span>Provider</span>
-                        <select value={providerInstanceDraft.provider} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, provider: event.target.value as ProviderName }))}>
+                        <select value={providerInstanceDraft.provider} onChange={(event) => {
+                          setShowProviderAdvancedSettings(false)
+                          setProviderInstanceDraft(defaultProviderInstanceDraft(event.target.value as ProviderName))
+                        }}>
                           <option value="bluesky">Bluesky</option>
                           <option value="friendica">Friendica</option>
                           <option value="mastodon">Mastodon</option>
@@ -971,42 +1280,57 @@ function App() {
                         <span>Instance URL</span>
                         <input value={providerInstanceDraft.instanceUrl} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, instanceUrl: event.target.value }))} />
                       </label>
-                      <label className="field">
-                        <span>Client ID</span>
-                        <input value={providerInstanceDraft.clientId} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, clientId: event.target.value }))} />
-                      </label>
-                      <label className="field">
-                        <span>Client secret</span>
-                        <input type="password" value={providerInstanceDraft.clientSecret} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, clientSecret: event.target.value }))} />
-                      </label>
-                      <label className="field">
-                        <span>Scopes</span>
-                        <input value={providerInstanceDraft.scopes} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, scopes: event.target.value }))} />
-                      </label>
-                      <label className="field">
-                        <span>Authorization endpoint</span>
-                        <input value={providerInstanceDraft.authorizationEndpoint} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, authorizationEndpoint: event.target.value }))} />
-                      </label>
-                      <label className="field">
-                        <span>Token endpoint</span>
-                        <input value={providerInstanceDraft.tokenEndpoint} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, tokenEndpoint: event.target.value }))} />
-                      </label>
+                      {providerInstanceHints.supportsAdvancedOverrides && (
+                        <div className="inline-cluster">
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() => setShowProviderAdvancedSettings((current) => !current)}
+                          >
+                            {showProviderAdvancedSettings ? 'Hide advanced settings' : 'Show advanced settings'}
+                          </button>
+                        </div>
+                      )}
+                      {(providerInstanceHints.showClientCredentials || (providerInstanceDraft.provider === 'mastodon' && showProviderAdvancedSettings)) && (
+                        <>
+                          <label className="field">
+                            <span>Client ID</span>
+                            <input value={providerInstanceDraft.clientId} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, clientId: event.target.value }))} />
+                          </label>
+                          <label className="field">
+                            <span>Client secret</span>
+                            <input type="password" value={providerInstanceDraft.clientSecret} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, clientSecret: event.target.value }))} />
+                          </label>
+                        </>
+                      )}
+                      {(providerInstanceHints.showScopes || (providerInstanceDraft.provider === 'mastodon' && showProviderAdvancedSettings)) && (
+                        <label className="field">
+                          <span>Scopes</span>
+                          <input value={providerInstanceDraft.scopes} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, scopes: event.target.value }))} />
+                        </label>
+                      )}
+                      {providerInstanceDraft.provider === 'mastodon' && showProviderAdvancedSettings && (
+                        <>
+                          <label className="field">
+                            <span>Authorization endpoint override</span>
+                            <input value={providerInstanceDraft.authorizationEndpoint} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, authorizationEndpoint: event.target.value }))} />
+                          </label>
+                          <label className="field">
+                            <span>Token endpoint override</span>
+                            <input value={providerInstanceDraft.tokenEndpoint} onChange={(event) => setProviderInstanceDraft((current) => ({ ...current, tokenEndpoint: event.target.value }))} />
+                          </label>
+                        </>
+                      )}
+                      <p className="hint">{providerInstanceHints.helperText}</p>
                       <div className="inline-cluster">
                         <button type="button" className="button button--prominent" onClick={() => void saveProviderInstance()} disabled={syncing}>
                           {providerInstanceDraft.id ? 'Save instance' : 'Register instance'}
                         </button>
                         {providerInstanceDraft.id && (
-                          <button type="button" className="button button--secondary" onClick={() => setProviderInstanceDraft({
-                            id: '',
-                            provider: 'mastodon',
-                            name: '',
-                            instanceUrl: '',
-                            clientId: '',
-                            clientSecret: '',
-                            scopes: 'read,write',
-                            authorizationEndpoint: '',
-                            tokenEndpoint: '',
-                          })}>
+                          <button type="button" className="button button--secondary" onClick={() => {
+                            setProviderInstanceDraft(defaultProviderInstanceDraft())
+                            setShowProviderAdvancedSettings(false)
+                          }}>
                             Reset form
                           </button>
                         )}
@@ -1157,6 +1481,150 @@ function App() {
           <Icon name="settings" className="inline-icon" />
         </button>
       </nav>
+    </div>
+  )
+}
+
+function AuthShell({
+  theme,
+  children,
+}: {
+  theme: 'dark' | 'light'
+  children: ReactNode
+}) {
+  return (
+    <div className="app-shell auth-shell" data-theme={theme}>
+      <section className="auth-card">
+        <div className="auth-card__hero">
+          <div className="nav-rail__brand auth-card__brand" title="goloom">
+            <span>G</span>
+          </div>
+          <div className="auth-card__copy">
+            <p className="eyebrow">Single-binary deployment</p>
+            <h1>Welcome to goloom</h1>
+            <p className="hint">The UI and API are served by the same application. Sign in to finish setup and start scheduling posts.</p>
+          </div>
+        </div>
+        {children}
+      </section>
+    </div>
+  )
+}
+
+function AuthPanel({
+  view,
+  authStatus,
+  authTokenDraft,
+  authError,
+  authSubmitting,
+  apiBaseUrl,
+  onViewChange,
+  onTokenChange,
+  onAPIBaseURLChange,
+  onSubmit,
+}: {
+  view: 'bootstrap' | 'login'
+  authStatus: AuthStatusRecord | null
+  authTokenDraft: string
+  authError: string | null
+  authSubmitting: boolean
+  apiBaseUrl: string
+  onViewChange: (view: 'bootstrap' | 'login') => void
+  onTokenChange: (value: string) => void
+  onAPIBaseURLChange: (value: string) => void
+  onSubmit: () => void
+}) {
+  const isBootstrap = view === 'bootstrap'
+  const title = isBootstrap ? 'Bootstrap onboarding' : 'Sign in'
+  const description = isBootstrap
+    ? 'Use the bootstrap admin token configured on the server for the first administrator session.'
+    : 'Enter a bearer token to open the embedded dashboard.'
+
+  return (
+    <div className="auth-panel">
+      {authStatus?.bootstrapEnabled ? (
+        <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
+          <button
+            type="button"
+            className={view === 'bootstrap' ? 'button button--prominent' : 'button button--secondary'}
+            onClick={() => onViewChange('bootstrap')}
+          >
+            Bootstrap
+          </button>
+          <button
+            type="button"
+            className={view === 'login' ? 'button button--prominent' : 'button button--secondary'}
+            onClick={() => onViewChange('login')}
+          >
+            Login
+          </button>
+        </div>
+      ) : null}
+
+      <div className="auth-panel__content">
+        <div className="auth-panel__header">
+          <div>
+            <p className="eyebrow">{isBootstrap ? 'Initial setup' : 'Authentication'}</p>
+            <h2>{title}</h2>
+            <p className="hint">{description}</p>
+          </div>
+          <div className="auth-badges">
+            <span className="pill">API token</span>
+            {authStatus?.bootstrapEnabled ? <span className="pill">Bootstrap enabled</span> : null}
+            {authStatus?.oidcEnabled ? <span className="pill">OIDC available</span> : null}
+          </div>
+        </div>
+
+        {authStatus && !authStatus.bootstrapEnabled && isBootstrap ? (
+          <div className="empty-state">
+            <h3>Bootstrap mode is unavailable</h3>
+            <p className="hint">Set `BOOTSTRAP_ADMIN_TOKEN` on the server to enable bootstrap onboarding, or switch to the regular login screen.</p>
+          </div>
+        ) : (
+          <div className="auth-form">
+            <label className="field">
+              <span>API base URL (optional)</span>
+              <input
+                value={apiBaseUrl}
+                onChange={(event) => onAPIBaseURLChange(event.target.value)}
+                placeholder="Leave empty to use this server"
+              />
+            </label>
+            <label className="field">
+              <span>{isBootstrap ? 'Bootstrap admin token' : 'Bearer token'}</span>
+              <input
+                type="password"
+                value={authTokenDraft}
+                onChange={(event) => onTokenChange(event.target.value)}
+                placeholder={isBootstrap ? 'Enter bootstrap token' : 'Enter bearer token'}
+              />
+            </label>
+            {authError ? <div className="status-banner"><span className="status-banner__error">{authError}</span></div> : null}
+            <div className="inline-cluster">
+              <button type="button" className="button button--prominent" onClick={onSubmit} disabled={authSubmitting}>
+                {authSubmitting ? 'Signing in...' : isBootstrap ? 'Start bootstrap session' : 'Sign in'}
+              </button>
+              {authStatus?.bootstrapEnabled ? (
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  onClick={() => onViewChange(isBootstrap ? 'login' : 'bootstrap')}
+                  disabled={authSubmitting}
+                >
+                  {isBootstrap ? 'Use regular login instead' : 'Use bootstrap onboarding instead'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {authStatus && !authStatus.hasUsers && !authStatus.bootstrapEnabled ? (
+          <div className="empty-state">
+            <h3>No initial access method is configured</h3>
+            <p className="hint">Configure `BOOTSTRAP_ADMIN_TOKEN` or OIDC on the server, then reload this page.</p>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

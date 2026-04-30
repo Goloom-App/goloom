@@ -1,0 +1,93 @@
+create table if not exists users (
+    id text primary key,
+    subject text not null unique,
+    email text not null,
+    name text not null,
+    is_admin integer not null default 0,
+    created_at text not null,
+    updated_at text not null
+);
+
+create table if not exists teams (
+    id text primary key,
+    name text not null unique,
+    description text not null default '',
+    created_at text not null
+);
+
+create table if not exists team_memberships (
+    user_id text not null references users(id) on delete cascade,
+    team_id text not null references teams(id) on delete cascade,
+    role text not null check (role in ('owner', 'editor', 'viewer')),
+    created_at text not null,
+    primary key (user_id, team_id)
+);
+
+create table if not exists api_tokens (
+    id text primary key,
+    user_id text not null references users(id) on delete cascade,
+    name text not null,
+    token_hash text not null unique,
+    last_used_at text,
+    expires_at text,
+    created_at text not null
+);
+
+create table if not exists provider_instances (
+    id text primary key,
+    provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    name text not null,
+    instance_url text not null,
+    client_id text not null default '',
+    client_secret_ciphertext text not null default '',
+    scopes_json text not null default '[]',
+    authorization_endpoint text not null default '',
+    token_endpoint text not null default '',
+    created_by_user_id text not null references users(id) on delete restrict,
+    created_at text not null,
+    updated_at text not null,
+    unique (provider, instance_url)
+);
+
+create table if not exists social_accounts (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    auth_type text not null default 'oauth_token' check (auth_type in ('oauth_token', 'app_password')),
+    provider_instance_id text references provider_instances(id) on delete set null,
+    instance_url text not null,
+    username text not null,
+    remote_account_id text not null default '',
+    access_token_ciphertext text not null,
+    refresh_token_ciphertext text not null default '',
+    max_chars_override integer,
+    created_at text not null
+);
+
+create table if not exists scheduled_posts (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    author_user_id text not null references users(id) on delete restrict,
+    title text not null default '',
+    content text not null,
+    scheduled_at text not null,
+    status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
+    attempt_count integer not null default 0,
+    last_error text,
+    created_at text not null,
+    updated_at text not null
+);
+
+create table if not exists scheduled_post_targets (
+    post_id text not null references scheduled_posts(id) on delete cascade,
+    account_id text not null references social_accounts(id) on delete cascade,
+    status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
+    published_url text,
+    last_error text,
+    primary key (post_id, account_id)
+);
+
+create index if not exists idx_social_accounts_team on social_accounts(team_id);
+create index if not exists idx_provider_instances_provider on provider_instances(provider, instance_url);
+create index if not exists idx_scheduled_posts_due on scheduled_posts(status, scheduled_at);
+create index if not exists idx_post_targets_post on scheduled_post_targets(post_id);
