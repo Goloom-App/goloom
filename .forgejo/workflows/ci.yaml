@@ -7,19 +7,39 @@ on:
     branches: [ "main" ]
 
 jobs:
-  test-go:
-    name: Test Backend (Go)
+  # Matrix = two jobs from one definition; runners execute them in parallel when capacity allows.
+  test:
+    name: ${{ matrix.name }}
     runs-on: docker
-    # Pre-built toolchain (avoids actions/setup-go downloading/extracting Go each run).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Test Backend (Go)"
+            image: golang:1.26-alpine
+            suite: backend
+          - name: "Test Frontend (Node.js)"
+            image: node:22-bookworm
+            suite: frontend
     container:
-      image: golang:1.26-alpine
+      image: ${{ matrix.image }}
     steps:
-      # golang:alpine is minimal; checkout needs git in PATH.
-      - run: apk add --no-cache git
+      - name: Install git (backend image)
+        if: matrix.suite == 'backend'
+        run: apk add --no-cache git
+
+      - name: Install git (frontend image)
+        if: matrix.suite == 'frontend'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git
+          rm -rf /var/lib/apt/lists/*
 
       - uses: actions/checkout@v4
 
-      - uses: actions/cache@v4
+      - name: Go module and build cache
+        if: matrix.suite == 'backend'
+        uses: actions/cache@v4
         with:
           path: |
             /root/.cache/go-build
@@ -28,34 +48,23 @@ jobs:
           restore-keys: |
             forgejo-go-
 
-      - name: Run Tests
+      - name: Run Go tests
+        if: matrix.suite == 'backend'
         run: go test -count=1 -v ./...
 
-  test-frontend:
-    name: Test Frontend (Node.js)
-    runs-on: docker
-    steps:
-      - uses: actions/checkout@v4
+      - name: Enable pnpm (Corepack)
+        if: matrix.suite == 'frontend'
+        run: corepack enable && corepack prepare pnpm@10 --activate
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Install dependencies
-        run: pnpm --dir frontend install --frozen-lockfile
-
-      - name: Build Frontend
-        run: pnpm --dir frontend build
+      - name: Frontend install and build
+        if: matrix.suite == 'frontend'
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          pnpm --dir frontend build
 
   build-docker:
     name: Build Docker Image
-    needs: [test-go, test-frontend]
+    needs: [test]
     runs-on: docker
     steps:
       - uses: actions/checkout@v4
