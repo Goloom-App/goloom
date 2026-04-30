@@ -1,4 +1,5 @@
-FROM node:22 AS frontend-builder
+# GHCR mirror of Docker Hub (see https://github.com/psarossy/dockerhub-mirror).
+FROM ghcr.io/psarossy/node:lts AS frontend-builder
 
 WORKDIR /src
 
@@ -6,9 +7,11 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./frontend/
 COPY frontend ./frontend
 RUN mkdir -p /src/internal/webui && corepack enable && CI=true pnpm --dir frontend install --frozen-lockfile && pnpm --dir frontend build
 
-FROM golang:1.26 AS builder
+FROM ghcr.io/psarossy/golang:1.26.2-alpine3.22 AS builder
 
 WORKDIR /src
+
+RUN apk add --no-cache git ca-certificates
 
 COPY go.mod go.sum ./
 RUN go mod download
