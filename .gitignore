@@ -1,0 +1,5 @@
+/.direnv
+/.env
+/bin
+/dist
+/coverage.out
