@@ -77,9 +77,24 @@ jobs:
     name: Build Docker Image
     needs: [test]
     runs-on: docker
+    # Default job images have no `docker` binary. Use the official CLI image (via
+    # Google’s Docker Hub mirror) and attach the host daemon socket so `docker build`
+    # talks to the runner’s Docker.
+    #
+    # act_runner: allow this bind in config, e.g.
+    #   container:
+    #     valid_volumes:
+    #       - /var/run/docker.sock
+    #       - '**'   # only if you accept the security trade-offs
+    container:
+      image: mirror.gcr.io/library/docker:cli
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
     steps:
+      - name: Install git and Node (for actions/checkout)
+        run: apk add --no-cache git nodejs
+
       - uses: actions/checkout@v4
 
       - name: Build Docker Image
-        run: |
-          docker build -t goloom:latest .
+        run: docker build -t goloom:latest .
