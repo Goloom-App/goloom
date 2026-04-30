@@ -10,19 +10,26 @@ jobs:
   test-go:
     name: Test Backend (Go)
     runs-on: docker
+    # Pre-built toolchain (avoids actions/setup-go downloading/extracting Go each run).
+    container:
+      image: golang:1.26-alpine
     steps:
+      # golang:alpine is minimal; checkout needs git in PATH.
+      - run: apk add --no-cache git
+
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/cache@v4
         with:
-          go-version: '1.24' # Matching the project's Go version
-
-      - name: Install dependencies
-        run: go mod download
+          path: |
+            /root/.cache/go-build
+            /go/pkg/mod
+          key: forgejo-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            forgejo-go-
 
       - name: Run Tests
-        run: go test -v ./...
+        run: go test -count=1 -v ./...
 
   test-frontend:
     name: Test Frontend (Node.js)

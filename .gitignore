@@ -9,4 +9,7 @@
 /data/
 /goloom
 /server
-/internal/webui/dist
+# Keep internal/webui/dist/index.html tracked for go:embed; ignore Vite output
+/internal/webui/dist/assets/
+/internal/webui/dist/icons/
+/internal/webui/dist/*.svg
