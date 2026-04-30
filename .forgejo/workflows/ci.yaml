@@ -26,9 +26,12 @@ jobs:
     container:
       image: ${{ matrix.image }}
     steps:
-      - name: Install git (backend image)
+      # actions/checkout and actions/cache are JavaScript actions: act_runner exec's
+      # `node` inside the job container, so the Go image must include Node even though
+      # tests only invoke `go`.
+      - name: Install git and Node (backend image)
         if: matrix.suite == 'backend'
-        run: apk add --no-cache git
+        run: apk add --no-cache git nodejs
 
       - name: Install git (frontend image)
         if: matrix.suite == 'frontend'
