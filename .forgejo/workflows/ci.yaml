@@ -1,0 +1,58 @@
+name: CI/CD Workflow
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-go:
+    name: Test Backend (Go)
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24' # Matching the project's Go version
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run Tests
+        run: go test -v ./...
+
+  test-frontend:
+    name: Test Frontend (Node.js)
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: Build Frontend
+        run: pnpm --dir frontend build
+
+  build-docker:
+    name: Build Docker Image
+    needs: [test-go, test-frontend]
+    runs-on: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t goloom:latest .
