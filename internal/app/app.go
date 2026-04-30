@@ -56,7 +56,7 @@ func Run(ctx context.Context) error {
 	)
 	go schedulerService.Start(ctx)
 
-	apiHandler := api.New(store, authService, providers)
+	apiHandler := api.New(store, authService, providers, cfg)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute), cfg.AllowedOrigins),

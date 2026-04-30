@@ -83,6 +83,21 @@ func (s *Service) RequireTeamRole(teamIDParam string, roles ...domain.TeamRole) 
 	}
 }
 
+func (s *Service) RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := security.PrincipalFromContext[domain.AuthenticatedPrincipal](r.Context())
+		if !ok {
+			http.Error(w, "missing principal", http.StatusUnauthorized)
+			return
+		}
+		if !principal.User.IsAdmin {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Service) authenticate(ctx context.Context, token string) (domain.AuthenticatedPrincipal, error) {
 	if strings.Count(token, ".") == 2 && s.verifier != nil {
 		idToken, err := s.verifier.Verify(ctx, token)

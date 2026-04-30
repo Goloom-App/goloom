@@ -1,6 +1,6 @@
 APP_NAME := goloom
 
-.PHONY: fmt tidy build test run schema
+.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint
 
 fmt:
 	go fmt ./...
@@ -19,3 +19,15 @@ run:
 
 schema:
 	psql "$$DATABASE_URL" -f db/schema.sql
+
+frontend-install:
+	pnpm --dir frontend install
+
+frontend-dev:
+	pnpm --dir frontend dev
+
+frontend-build:
+	pnpm --dir frontend build
+
+frontend-lint:
+	pnpm --dir frontend lint

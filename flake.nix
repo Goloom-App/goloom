@@ -20,13 +20,15 @@
             delve
             just
             jq
+            nodejs_22
+            pnpm
             postgresql
           ];
 
           shellHook = ''
             export CGO_ENABLED=0
             echo "Entered goloom dev shell"
-            echo "Use: make tidy && make build"
+            echo "Use: make tidy && make build && make frontend-build"
           '';
         };
       });

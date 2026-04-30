@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
+	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
@@ -21,6 +22,7 @@ type API struct {
 	auth      *auth.Service
 	providers *provider.Registry
 	sanitizer *bluemonday.Policy
+	config    config.Config
 }
 
 type validationResponse struct {
@@ -36,12 +38,13 @@ type destinationInfo struct {
 	MaxChars  int    `json:"max_chars"`
 }
 
-func New(store *postgres.Store, authService *auth.Service, providers *provider.Registry) *API {
+func New(store *postgres.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config) *API {
 	return &API{
 		store:     store,
 		auth:      authService,
 		providers: providers,
 		sanitizer: bluemonday.UGCPolicy(),
+		config:    cfg,
 	}
 }
 
@@ -51,8 +54,23 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.HandleFunc("GET /v1/providers", a.handleProviders)
 
 	mux.Handle("GET /v1/me", a.auth.RequireAuth(http.HandlerFunc(a.handleMe)))
+	mux.Handle("GET /v1/users", a.auth.RequireAuth(http.HandlerFunc(a.handleListUsers)))
+	mux.Handle("GET /v1/teams", a.auth.RequireAuth(http.HandlerFunc(a.handleListTeams)))
+	mux.Handle("POST /v1/teams", a.auth.RequireAuth(http.HandlerFunc(a.handleCreateTeam)))
+	mux.Handle("GET /v1/admin/users", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListUsers))))
+	mux.Handle("PATCH /v1/admin/users/{userID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateUser))))
+	mux.Handle("GET /v1/admin/runtime-config", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleRuntimeConfig))))
+	mux.Handle("GET /v1/provider-instances", a.auth.RequireAuth(http.HandlerFunc(a.handleListProviderInstances)))
+	mux.Handle("GET /v1/provider-instances/{instanceID}", a.auth.RequireAuth(http.HandlerFunc(a.handleGetProviderInstance)))
+	mux.Handle("GET /v1/admin/provider-instances", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListProviderInstances))))
+	mux.Handle("POST /v1/admin/provider-instances", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleCreateProviderInstance))))
+	mux.Handle("PUT /v1/admin/provider-instances/{instanceID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateProviderInstance))))
+	mux.Handle("GET /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListTeamMembers))))
+	mux.Handle("POST /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleAddTeamMember))))
+	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAccounts))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAccount))))
+	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteAccount))))
 	mux.Handle("GET /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPosts))))
 	mux.Handle("POST /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreatePost))))
 	mux.Handle("POST /v1/teams/{teamID}/posts/validate", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleValidatePost))))
@@ -81,6 +99,206 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, principal)
 }
 
+func (a *API) handleListTeams(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	teams, err := a.store.ListTeamsForUser(r.Context(), principal.User.ID, principal.User.IsAdmin)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": teams})
+}
+
+func (a *API) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var input domain.CreateTeamInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	input.Name = strings.TrimSpace(input.Name)
+	input.Description = strings.TrimSpace(input.Description)
+	if input.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+
+	team, err := a.store.CreateTeam(r.Context(), principal.User.ID, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusCreated, team)
+}
+
+func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := a.store.ListUsers(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": users})
+}
+
+func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	var input domain.UpdateUserInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	user, err := a.store.SetUserAdmin(r.Context(), r.PathValue("userID"), input.IsAdmin)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, user)
+}
+
+func (a *API) handleRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
+	auth.WriteJSON(w, http.StatusOK, map[string]any{
+		"general": map[string]any{
+			"http_addr": a.config.HTTPAddr,
+		},
+		"security": map[string]any{
+			"allowed_origins":       a.config.AllowedOrigins,
+			"rate_limit_per_minute": a.config.RateLimitPerMinute,
+			"encryption_configured": a.config.EncryptionKey != "",
+		},
+		"scheduler": map[string]any{
+			"poll_interval": a.config.SchedulerPollInterval.String(),
+			"workers":       a.config.SchedulerWorkers,
+		},
+		"oidc": map[string]any{
+			"enabled":    a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
+			"issuer_url": a.config.OIDCIssuerURL,
+			"client_id":  a.config.OIDCClientID,
+			"has_secret": a.config.OIDCClientSecret != "",
+		},
+	})
+}
+
+func (a *API) handleListProviderInstances(w http.ResponseWriter, r *http.Request) {
+	providerName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider")))
+	if providerName != "" {
+		if _, ok := a.providers.Get(providerName); !ok {
+			http.Error(w, "unsupported provider", http.StatusBadRequest)
+			return
+		}
+	}
+
+	items, err := a.store.ListProviderInstances(r.Context(), providerName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *API) handleGetProviderInstance(w http.ResponseWriter, r *http.Request) {
+	instance, err := a.store.GetProviderInstanceByID(r.Context(), r.PathValue("instanceID"))
+	if err != nil {
+		http.Error(w, "provider instance not found", http.StatusNotFound)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, instance)
+}
+
+func (a *API) handleCreateProviderInstance(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var input domain.CreateProviderInstanceInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	prepared, err := a.prepareProviderInstance(r, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	instance, err := a.store.CreateProviderInstance(r.Context(), principal.User.ID, prepared)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusCreated, instance)
+}
+
+func (a *API) handleUpdateProviderInstance(w http.ResponseWriter, r *http.Request) {
+	existing, err := a.store.GetProviderInstanceByID(r.Context(), r.PathValue("instanceID"))
+	if err != nil {
+		http.Error(w, "provider instance not found", http.StatusNotFound)
+		return
+	}
+
+	var input domain.CreateProviderInstanceInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	if strings.TrimSpace(input.Provider) == "" {
+		input.Provider = existing.Provider
+	}
+	if strings.TrimSpace(input.Name) == "" {
+		input.Name = existing.Name
+	}
+	if strings.TrimSpace(input.InstanceURL) == "" {
+		input.InstanceURL = existing.InstanceURL
+	}
+	if strings.TrimSpace(input.ClientID) == "" {
+		input.ClientID = existing.ClientID
+	}
+	if len(input.Scopes) == 0 {
+		input.Scopes = existing.Scopes
+	}
+	if strings.TrimSpace(input.AuthorizationEndpoint) == "" {
+		input.AuthorizationEndpoint = existing.AuthorizationEndpoint
+	}
+	if strings.TrimSpace(input.TokenEndpoint) == "" {
+		input.TokenEndpoint = existing.TokenEndpoint
+	}
+	if strings.TrimSpace(input.ClientSecret) == "" && existing.HasClientSecret {
+		clientSecret, err := a.store.DecryptProviderInstanceClientSecret(existing)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		input.ClientSecret = clientSecret
+	}
+
+	prepared, err := a.prepareProviderInstance(r, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	instance, err := a.store.UpdateProviderInstance(r.Context(), existing.ID, prepared)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, instance)
+}
+
 func (a *API) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 	accounts, err := a.store.ListTeamAccounts(r.Context(), r.PathValue("teamID"))
 	if err != nil {
@@ -90,6 +308,46 @@ func (a *API) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": accounts})
 }
 
+func (a *API) handleListTeamMembers(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListTeamMembers(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
+	var input domain.AddTeamMemberInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	if input.UserID == "" {
+		http.Error(w, "user_id is required", http.StatusBadRequest)
+		return
+	}
+	if !slices.Contains([]domain.TeamRole{domain.RoleOwner, domain.RoleEditor, domain.RoleViewer}, input.Role) {
+		http.Error(w, "role must be one of owner, editor, viewer", http.StatusBadRequest)
+		return
+	}
+
+	membership, err := a.store.AddTeamMember(r.Context(), r.PathValue("teamID"), input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusCreated, membership)
+}
+
+func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
+	if err := a.store.RemoveTeamMember(r.Context(), r.PathValue("teamID"), r.PathValue("userID")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	var input domain.CreateAccountInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -97,18 +355,37 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.Provider == "" || input.InstanceURL == "" || input.Username == "" || input.AccessToken == "" {
-		http.Error(w, "provider, instance_url, username and access_token are required", http.StatusBadRequest)
+	input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
+	providerInstance, err := a.resolveProviderInstance(r, input.ProviderInstanceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if input.Provider == "" && providerInstance != nil {
+		input.Provider = providerInstance.Provider
+	}
+	if input.Provider == "" {
+		http.Error(w, "provider is required", http.StatusBadRequest)
+		return
+	}
+	if providerInstance != nil && providerInstance.Provider != input.Provider {
+		http.Error(w, "provider_instance_id does not match provider", http.StatusBadRequest)
 		return
 	}
 
-	if _, ok := a.providers.Get(strings.ToLower(input.Provider)); !ok {
+	providerImpl, ok := a.providers.Get(input.Provider)
+	if !ok {
 		http.Error(w, "unsupported provider", http.StatusBadRequest)
 		return
 	}
-	input.Provider = strings.ToLower(input.Provider)
 
-	account, err := a.store.CreateAccount(r.Context(), r.PathValue("teamID"), input)
+	connectedAccount, err := providerImpl.ConnectAccount(r.Context(), input, providerInstance)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	account, err := a.store.CreateAccount(r.Context(), r.PathValue("teamID"), connectedAccount)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -116,9 +393,21 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusCreated, account)
 }
 
+func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if err := a.store.DeleteAccount(r.Context(), r.PathValue("teamID"), r.PathValue("accountID")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request) {
 	posts, err := a.store.ListTeamPosts(r.Context(), r.PathValue("teamID"))
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := a.attachPublishedLinks(r, posts); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -130,6 +419,12 @@ func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
+	}
+	if err := a.attachPublishedLinks(r, []domain.ScheduledPost{post}); err == nil {
+		postLinks, linksErr := a.store.LoadPublishedLinksByPostIDs(r.Context(), []string{post.ID})
+		if linksErr == nil {
+			post.PublishedLinks = postLinks[post.ID]
+		}
 	}
 	auth.WriteJSON(w, http.StatusOK, post)
 }
@@ -148,6 +443,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
+	input.Title = strings.TrimSpace(input.Title)
 	if input.ScheduledAt.IsZero() {
 		input.ScheduledAt = time.Now().UTC()
 	}
@@ -178,6 +474,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
+	input.Title = strings.TrimSpace(input.Title)
 	validation, err := a.validatePostInput(r, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -279,4 +576,46 @@ func (a *API) validatePostInput(r *http.Request, input domain.CreatePostInput) (
 func sanitizeContent(policy *bluemonday.Policy, content string) string {
 	clean := policy.Sanitize(content)
 	return strings.TrimSpace(clean)
+}
+
+func (a *API) attachPublishedLinks(r *http.Request, posts []domain.ScheduledPost) error {
+	if len(posts) == 0 {
+		return nil
+	}
+	postIDs := make([]string, 0, len(posts))
+	for _, post := range posts {
+		postIDs = append(postIDs, post.ID)
+	}
+	links, err := a.store.LoadPublishedLinksByPostIDs(r.Context(), postIDs)
+	if err != nil {
+		return err
+	}
+	for idx := range posts {
+		posts[idx].PublishedLinks = links[posts[idx].ID]
+	}
+	return nil
+}
+
+func (a *API) resolveProviderInstance(r *http.Request, instanceID string) (*domain.ProviderInstance, error) {
+	if strings.TrimSpace(instanceID) == "" {
+		return nil, nil
+	}
+	instance, err := a.store.GetProviderInstanceByID(r.Context(), strings.TrimSpace(instanceID))
+	if err != nil {
+		return nil, errors.New("provider_instance_id is invalid")
+	}
+	return &instance, nil
+}
+
+func (a *API) prepareProviderInstance(r *http.Request, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error) {
+	input.Provider = strings.ToLower(strings.TrimSpace(input.Provider))
+	if input.Provider == "" {
+		return domain.PreparedProviderInstance{}, errors.New("provider is required")
+	}
+
+	providerImpl, ok := a.providers.Get(input.Provider)
+	if !ok {
+		return domain.PreparedProviderInstance{}, errors.New("unsupported provider")
+	}
+	return providerImpl.PrepareProviderInstance(r.Context(), input)
 }

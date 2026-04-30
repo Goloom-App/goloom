@@ -117,7 +117,19 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			continue
 		}
 
-		result, err := providerImpl.Publish(ctx, account, token, provider.PublishRequest{Content: post.Content})
+		refreshToken, err := s.store.DecryptRefreshToken(account)
+		if err != nil {
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error())
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+
+		result, err := providerImpl.Publish(ctx, account, provider.PublishAuth{
+			AccessToken:  token,
+			RefreshToken: refreshToken,
+		}, provider.PublishRequest{Content: post.Content})
 		if err != nil {
 			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error())
 			if firstErr == nil {

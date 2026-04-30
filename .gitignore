@@ -3,3 +3,5 @@
 /bin
 /dist
 /coverage.out
+/frontend/node_modules
+/frontend/dist

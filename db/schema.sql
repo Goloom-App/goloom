@@ -5,15 +5,43 @@ create table if not exists users (
     subject text not null unique,
     email text not null,
     name text not null,
+    is_admin boolean not null default false,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
 
+alter table if exists users
+    add column if not exists is_admin boolean default false;
+
+update users
+set is_admin = false
+where is_admin is null;
+
+alter table if exists users
+    alter column is_admin set default false;
+
+alter table if exists users
+    alter column is_admin set not null;
+
 create table if not exists teams (
     id uuid primary key default gen_random_uuid(),
     name text not null unique,
+    description text not null default '',
     created_at timestamptz not null default now()
 );
+
+alter table if exists teams
+    add column if not exists description text default '';
+
+update teams
+set description = ''
+where description is null;
+
+alter table if exists teams
+    alter column description set default '';
+
+alter table if exists teams
+    alter column description set not null;
 
 create table if not exists team_memberships (
     user_id uuid not null references users(id) on delete cascade,
@@ -33,10 +61,28 @@ create table if not exists api_tokens (
     created_at timestamptz not null default now()
 );
 
+create table if not exists provider_instances (
+    id uuid primary key default gen_random_uuid(),
+    provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    name text not null,
+    instance_url text not null,
+    client_id text not null default '',
+    client_secret_ciphertext text not null default '',
+    scopes text[] not null default '{}',
+    authorization_endpoint text not null default '',
+    token_endpoint text not null default '',
+    created_by_user_id uuid not null references users(id) on delete restrict,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (provider, instance_url)
+);
+
 create table if not exists social_accounts (
     id uuid primary key default gen_random_uuid(),
     team_id uuid not null references teams(id) on delete cascade,
     provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    auth_type text not null default 'oauth_token' check (auth_type in ('oauth_token', 'app_password')),
+    provider_instance_id uuid references provider_instances(id) on delete set null,
     instance_url text not null,
     username text not null,
     remote_account_id text not null default '',
@@ -46,10 +92,27 @@ create table if not exists social_accounts (
     created_at timestamptz not null default now()
 );
 
+alter table if exists social_accounts
+    add column if not exists auth_type text default 'oauth_token';
+
+update social_accounts
+set auth_type = 'oauth_token'
+where auth_type is null;
+
+alter table if exists social_accounts
+    alter column auth_type set default 'oauth_token';
+
+alter table if exists social_accounts
+    alter column auth_type set not null;
+
+alter table if exists social_accounts
+    add column if not exists provider_instance_id uuid references provider_instances(id) on delete set null;
+
 create table if not exists scheduled_posts (
     id uuid primary key default gen_random_uuid(),
     team_id uuid not null references teams(id) on delete cascade,
     author_user_id uuid not null references users(id) on delete restrict,
+    title text not null default '',
     content text not null,
     scheduled_at timestamptz not null,
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
@@ -58,6 +121,19 @@ create table if not exists scheduled_posts (
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+alter table if exists scheduled_posts
+    add column if not exists title text default '';
+
+update scheduled_posts
+set title = ''
+where title is null;
+
+alter table if exists scheduled_posts
+    alter column title set default '';
+
+alter table if exists scheduled_posts
+    alter column title set not null;
 
 create table if not exists scheduled_post_targets (
     post_id uuid not null references scheduled_posts(id) on delete cascade,
@@ -69,5 +145,6 @@ create table if not exists scheduled_post_targets (
 );
 
 create index if not exists idx_social_accounts_team on social_accounts(team_id);
+create index if not exists idx_provider_instances_provider on provider_instances(provider, instance_url);
 create index if not exists idx_scheduled_posts_due on scheduled_posts(status, scheduled_at);
 create index if not exists idx_post_targets_post on scheduled_post_targets(post_id);
