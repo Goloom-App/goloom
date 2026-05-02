@@ -105,6 +105,7 @@ export interface BackendRuntimeConfig {
 export interface BackendAuthStatus {
   bootstrap_enabled: boolean
   oidc_enabled: boolean
+  oidc_oauth_enabled: boolean
   has_users: boolean
   has_admin_users: boolean
 }
@@ -140,6 +141,14 @@ async function request<T>(options: ApiClientOptions, path: string, init?: Reques
 export function requestAuthStatus(baseUrl: string) {
   return request<BackendAuthStatus>({ baseUrl, token: '' }, '/v1/auth/status', {
     headers: buildHeaders('', false),
+  })
+}
+
+export function requestStartOIDCLogin(baseUrl: string, returnTo: string) {
+  return request<BackendOAuthAuthorization>({ baseUrl, token: '' }, '/v1/auth/oidc/start', {
+    method: 'POST',
+    headers: buildHeaders('', true),
+    body: JSON.stringify({ return_to: returnTo }),
   })
 }
 

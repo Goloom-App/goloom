@@ -6,7 +6,6 @@ import type {
   BackendRuntimeConfig,
   BackendAuthStatus,
   BackendTeam,
-  BackendUser,
 } from './api'
 import type {
   AccountRecord,
@@ -17,7 +16,6 @@ import type {
   RuntimeConfigRecord,
   TeamMemberRecord,
   TeamRecord,
-  UserRecord,
 } from './types'
 
 export function colorForProvider(provider: ProviderName) {
@@ -39,16 +37,6 @@ export function maxCharsForProvider(provider: ProviderName) {
       return 5000
     case 'mastodon':
       return 500
-  }
-}
-
-export function toUserRecord(user: BackendUser): UserRecord {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    globalRole: user.is_admin ? 'admin' : 'member',
-    title: user.is_admin ? 'Platform administrator' : 'Workspace member',
   }
 }
 
@@ -143,6 +131,7 @@ export function toAuthStatusRecord(status: BackendAuthStatus): AuthStatusRecord 
   return {
     bootstrapEnabled: status.bootstrap_enabled,
     oidcEnabled: status.oidc_enabled,
+    oidcOAuthEnabled: status.oidc_oauth_enabled,
     hasUsers: status.has_users,
     hasAdminUsers: status.has_admin_users,
   }

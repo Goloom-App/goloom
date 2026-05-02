@@ -4,39 +4,7 @@ import type {
   SettingsState,
   SystemMetric,
   TeamRecord,
-  UserRecord,
 } from './types'
-
-export const initialUsers: UserRecord[] = [
-  {
-    id: 'user-1',
-    name: 'Sebastian Wolf',
-    email: 'sebastian@example.com',
-    globalRole: 'admin',
-    title: 'Platform administrator',
-  },
-  {
-    id: 'user-2',
-    name: 'Mila Brandt',
-    email: 'mila@example.com',
-    globalRole: 'member',
-    title: 'Content strategist',
-  },
-  {
-    id: 'user-3',
-    name: 'Jonas Keller',
-    email: 'jonas@example.com',
-    globalRole: 'member',
-    title: 'Community manager',
-  },
-  {
-    id: 'user-4',
-    name: 'Lina Hart',
-    email: 'lina@example.com',
-    globalRole: 'member',
-    title: 'Operations lead',
-  },
-]
 
 export const initialTeams: TeamRecord[] = [
   {
