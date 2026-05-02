@@ -302,7 +302,8 @@ export function createApiClient(options: ApiClientOptions) {
       teamID: string,
       payload: {
         provider: ProviderName
-        provider_instance_id: string
+        provider_instance_id?: string
+        instance_url?: string
         username?: string
         identifier?: string
         access_token?: string

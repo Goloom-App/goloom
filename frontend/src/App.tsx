@@ -36,6 +36,30 @@ function defaultAdminProviderDraft(): AdminProviderDraft {
   }
 }
 
+type AccountConnectDraft = {
+  provider: ProviderName
+  providerInstanceId: string
+  instanceUrl: string
+  accessToken: string
+  refreshToken: string
+  identifier: string
+  appPassword: string
+  blueskyAuthMode: 'app_password' | 'access_token'
+}
+
+function defaultAccountConnectDraft(): AccountConnectDraft {
+  return {
+    provider: 'mastodon',
+    providerInstanceId: '',
+    instanceUrl: '',
+    accessToken: '',
+    refreshToken: '',
+    identifier: '',
+    appPassword: '',
+    blueskyAuthMode: 'app_password',
+  }
+}
+
 function App() {
   const [section, setSection] = useState<AppSection>('calendar')
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getSystemTheme())
@@ -82,6 +106,8 @@ function App() {
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor')
   const [adminProviderDraft, setAdminProviderDraft] = useState<AdminProviderDraft>(() => defaultAdminProviderDraft())
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
+  const [showAdminProviderAdvanced, setShowAdminProviderAdvanced] = useState(false)
+  const [accountDraft, setAccountDraft] = useState<AccountConnectDraft>(() => defaultAccountConnectDraft())
 
   const api = useMemo(() => {
     const token = activeConnection.bearerToken.trim()
@@ -167,6 +193,18 @@ function App() {
     params.delete('oauth_status')
     params.delete('oauth_provider')
     params.delete('oauth_message')
+    const nextQuery = params.toString()
+    const nextURL = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
+    window.history.replaceState({}, document.title, nextURL)
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('section') !== 'accounts') {
+      return
+    }
+    setSection('accounts')
+    params.delete('section')
     const nextQuery = params.toString()
     const nextURL = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
     window.history.replaceState({}, document.title, nextURL)
@@ -447,7 +485,10 @@ function App() {
   )
 
   const sidebarWorkspaceNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
-    () => [{ id: 'teams', label: 'Teams', icon: 'teams' }],
+    () => [
+      { id: 'teams', label: 'Teams', icon: 'teams' },
+      { id: 'accounts', label: 'Accounts', icon: 'channels' },
+    ],
     [],
   )
 
@@ -493,6 +534,13 @@ function App() {
     }
     return selectedTeam.members.find((m) => m.userId === principalUser.id)?.role ?? null
   }, [principalUser, selectedTeam])
+
+  const canEditTeamAccounts = myRoleInSelectedTeam === 'owner' || myRoleInSelectedTeam === 'editor'
+
+  const instancesForAccountConnect = useMemo(
+    () => providerInstances.filter((p) => p.provider === accountDraft.provider),
+    [accountDraft.provider, providerInstances],
+  )
 
   const selectedPost = useMemo(() => posts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, posts])
   const editTargetPost = useMemo(() => posts.find((post) => post.id === editingPostId) ?? null, [editingPostId, posts])
@@ -653,8 +701,130 @@ function App() {
         await api.createProviderInstance(payload)
       }
       setAdminProviderDraft(defaultAdminProviderDraft())
+      setShowAdminProviderAdvanced(false)
       await loadDashboard()
     }, editingProviderId ? 'Provider updated' : 'Provider registered')
+  }
+
+  async function handleDeleteTeamAccount(accountId: string) {
+    if (!api || !selectedTeam) {
+      return
+    }
+    await runAction(async () => {
+      await api.deleteAccount(selectedTeam.id, accountId)
+      await loadDashboard()
+    }, 'Account disconnected')
+  }
+
+  async function handleConnectSocialAccount() {
+    if (!api || !selectedTeam || !canEditTeamAccounts) {
+      return
+    }
+    const d = accountDraft
+    const hasInst = Boolean(d.providerInstanceId.trim())
+    const instanceUrl = d.instanceUrl.trim()
+    const basePayload = {
+      provider: d.provider,
+      ...(hasInst ? { provider_instance_id: d.providerInstanceId.trim() } : {}),
+      ...(!hasInst && instanceUrl ? { instance_url: instanceUrl } : {}),
+    }
+
+    if (d.provider === 'mastodon') {
+      if (!d.accessToken.trim()) {
+        setError('Mastodon access token is required for manual connection.')
+        return
+      }
+      if (!hasInst && !instanceUrl) {
+        setError('Select a registered instance or enter the instance URL.')
+        return
+      }
+      await runAction(async () => {
+        await api.createAccount(selectedTeam.id, {
+          ...basePayload,
+          access_token: d.accessToken.trim(),
+          refresh_token: d.refreshToken.trim() || undefined,
+        })
+        setAccountDraft(defaultAccountConnectDraft())
+        await loadDashboard()
+      }, 'Mastodon account connected')
+      return
+    }
+
+    if (d.provider === 'friendica') {
+      if (!d.accessToken.trim() || !d.identifier.trim()) {
+        setError('Friendica username and access token are required.')
+        return
+      }
+      if (!hasInst && !instanceUrl) {
+        setError('Select a registered instance or enter the Friendica base URL.')
+        return
+      }
+      await runAction(async () => {
+        await api.createAccount(selectedTeam.id, {
+          ...basePayload,
+          username: d.identifier.trim(),
+          access_token: d.accessToken.trim(),
+        })
+        setAccountDraft(defaultAccountConnectDraft())
+        await loadDashboard()
+      }, 'Friendica account connected')
+      return
+    }
+
+    if (d.provider === 'bluesky') {
+      if (d.blueskyAuthMode === 'app_password') {
+        if (!d.identifier.trim() || !d.appPassword.trim()) {
+          setError('Bluesky handle and app password are required.')
+          return
+        }
+        await runAction(async () => {
+          await api.createAccount(selectedTeam.id, {
+            ...basePayload,
+            identifier: d.identifier.trim(),
+            app_password: d.appPassword.trim(),
+          })
+          setAccountDraft(defaultAccountConnectDraft())
+          await loadDashboard()
+        }, 'Bluesky account connected')
+        return
+      }
+      if (!d.accessToken.trim()) {
+        setError('Bluesky access token (JWT) is required.')
+        return
+      }
+      await runAction(async () => {
+        await api.createAccount(selectedTeam.id, {
+          ...basePayload,
+          access_token: d.accessToken.trim(),
+          refresh_token: d.refreshToken.trim() || undefined,
+        })
+        setAccountDraft(defaultAccountConnectDraft())
+        await loadDashboard()
+      }, 'Bluesky account connected')
+    }
+  }
+
+  async function handleMastodonOAuthConnect() {
+    if (!api || !selectedTeam || !canEditTeamAccounts || !accountDraft.providerInstanceId.trim()) {
+      setError('Select a registered Mastodon instance for browser login.')
+      return
+    }
+    setSyncing(true)
+    setError(null)
+    setStatusMessage(null)
+    try {
+      const returnTo = new URL(window.location.href)
+      returnTo.hash = ''
+      returnTo.searchParams.set('section', 'accounts')
+      const res = await api.startMastodonOAuth(selectedTeam.id, {
+        provider_instance_id: accountDraft.providerInstanceId.trim(),
+        return_to: returnTo.toString(),
+      })
+      window.location.assign(res.authorization_url)
+    } catch (cause) {
+      setSyncing(false)
+      setError(cause instanceof Error ? cause.message : 'Mastodon OAuth failed to start')
+    }
   }
 
   async function handleCreateApiToken() {
@@ -1052,6 +1222,226 @@ function App() {
             </div>
           )}
 
+          {section === 'accounts' && (
+            <div className="accounts-view two-column-detail">
+              <div className="glass-panel">
+                <h2 className="section-card__title">Connected accounts</h2>
+                <p className="hint">
+                  Social accounts are attached to the workspace selected in the header — including your personal workspace. Use them as post destinations in the composer.
+                </p>
+                {teamAccounts.length === 0 ? (
+                  <p className="hint">No accounts connected for this workspace yet.</p>
+                ) : (
+                  <ul className="account-connect-list">
+                    {teamAccounts.map((account) => (
+                      <li key={account.id} className="account-connect-list__row">
+                        <div className="inline-cluster">
+                          <DestinationAvatar account={account} />
+                          <div>
+                            <strong>{account.name}</strong>
+                            <div className="hint">
+                              {account.provider} · @{account.username} · {account.instance}
+                            </div>
+                          </div>
+                        </div>
+                        {canEditTeamAccounts ? (
+                          <button type="button" className="button button--secondary" onClick={() => void handleDeleteTeamAccount(account.id)} disabled={syncing}>
+                            <Icon name="trash" className="inline-icon" />
+                            <span>Remove</span>
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {!canEditTeamAccounts && selectedTeam ? (
+                  <p className="hint">View-only members cannot connect or remove accounts.</p>
+                ) : null}
+              </div>
+
+              <div className="glass-panel">
+                <h2 className="section-card__title">Connect an account</h2>
+                {!selectedTeam ? (
+                  <p className="hint">Select or create a team first.</p>
+                ) : !canEditTeamAccounts ? (
+                  <p className="hint">You need editor or owner access on this workspace to connect accounts.</p>
+                ) : (
+                  <>
+                    <label className="field">
+                      <span>Provider</span>
+                      <select
+                        value={accountDraft.provider}
+                        onChange={(event) => {
+                          const p = event.target.value as ProviderName
+                          setAccountDraft({ ...defaultAccountConnectDraft(), provider: p })
+                        }}
+                      >
+                        <option value="mastodon">Mastodon</option>
+                        <option value="friendica">Friendica</option>
+                        <option value="bluesky">Bluesky</option>
+                      </select>
+                    </label>
+
+                    {instancesForAccountConnect.length > 0 ? (
+                      <label className="field">
+                        <span>Registered instance</span>
+                        <select
+                          value={accountDraft.providerInstanceId}
+                          onChange={(event) => setAccountDraft((c) => ({ ...c, providerInstanceId: event.target.value }))}
+                        >
+                          <option value="">— Custom URL (below) —</option>
+                          {instancesForAccountConnect.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({p.instanceUrl})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <p className="hint">No {accountDraft.provider} instance is registered yet. Ask an administrator to add one under Admin, or use the instance URL field when the provider allows it.</p>
+                    )}
+
+                    {!accountDraft.providerInstanceId.trim() ? (
+                      <label className="field">
+                        <span>{accountDraft.provider === 'bluesky' ? 'PDS URL (optional)' : 'Instance base URL'}</span>
+                        <input
+                          value={accountDraft.instanceUrl}
+                          onChange={(event) => setAccountDraft((c) => ({ ...c, instanceUrl: event.target.value }))}
+                          placeholder={accountDraft.provider === 'bluesky' ? 'https://bsky.social' : 'https://social.example'}
+                        />
+                      </label>
+                    ) : null}
+
+                    {accountDraft.provider === 'mastodon' ? (
+                      <>
+                        <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="button button--primary"
+                            onClick={() => void handleMastodonOAuthConnect()}
+                            disabled={syncing || !accountDraft.providerInstanceId.trim()}
+                          >
+                            Authorize in browser
+                          </button>
+                        </div>
+                        <p className="hint">Browser login requires a registered Mastodon instance with OAuth. Or paste an access token below.</p>
+                        <label className="field">
+                          <span>Access token (manual)</span>
+                          <input
+                            type="password"
+                            autoComplete="off"
+                            value={accountDraft.accessToken}
+                            onChange={(event) => setAccountDraft((c) => ({ ...c, accessToken: event.target.value }))}
+                            placeholder="OAuth access token"
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Refresh token (optional)</span>
+                          <input
+                            type="password"
+                            autoComplete="off"
+                            value={accountDraft.refreshToken}
+                            onChange={(event) => setAccountDraft((c) => ({ ...c, refreshToken: event.target.value }))}
+                          />
+                        </label>
+                        <button type="button" className="button button--secondary" onClick={() => void handleConnectSocialAccount()} disabled={syncing}>
+                          Connect with token
+                        </button>
+                      </>
+                    ) : null}
+
+                    {accountDraft.provider === 'friendica' ? (
+                      <>
+                        <label className="field">
+                          <span>Username</span>
+                          <input
+                            value={accountDraft.identifier}
+                            onChange={(event) => setAccountDraft((c) => ({ ...c, identifier: event.target.value }))}
+                            placeholder="Local username"
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Access token</span>
+                          <input
+                            type="password"
+                            autoComplete="off"
+                            value={accountDraft.accessToken}
+                            onChange={(event) => setAccountDraft((c) => ({ ...c, accessToken: event.target.value }))}
+                          />
+                        </label>
+                        <button type="button" className="button button--primary" onClick={() => void handleConnectSocialAccount()} disabled={syncing}>
+                          Connect Friendica
+                        </button>
+                      </>
+                    ) : null}
+
+                    {accountDraft.provider === 'bluesky' ? (
+                      <>
+                        <label className="field">
+                          <span>Sign-in method</span>
+                          <select
+                            value={accountDraft.blueskyAuthMode}
+                            onChange={(event) =>
+                              setAccountDraft((c) => ({ ...c, blueskyAuthMode: event.target.value as 'app_password' | 'access_token' }))
+                            }
+                          >
+                            <option value="app_password">App password</option>
+                            <option value="access_token">Access token (JWT)</option>
+                          </select>
+                        </label>
+                        {accountDraft.blueskyAuthMode === 'app_password' ? (
+                          <>
+                            <label className="field">
+                              <span>Handle</span>
+                              <input
+                                value={accountDraft.identifier}
+                                onChange={(event) => setAccountDraft((c) => ({ ...c, identifier: event.target.value }))}
+                                placeholder="you.bsky.social"
+                              />
+                            </label>
+                            <label className="field">
+                              <span>App password</span>
+                              <input
+                                type="password"
+                                autoComplete="off"
+                                value={accountDraft.appPassword}
+                                onChange={(event) => setAccountDraft((c) => ({ ...c, appPassword: event.target.value }))}
+                              />
+                            </label>
+                          </>
+                        ) : (
+                          <>
+                            <label className="field">
+                              <span>Access token</span>
+                              <input
+                                type="password"
+                                autoComplete="off"
+                                value={accountDraft.accessToken}
+                                onChange={(event) => setAccountDraft((c) => ({ ...c, accessToken: event.target.value }))}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>Refresh token (optional)</span>
+                              <input
+                                type="password"
+                                autoComplete="off"
+                                value={accountDraft.refreshToken}
+                                onChange={(event) => setAccountDraft((c) => ({ ...c, refreshToken: event.target.value }))}
+                              />
+                            </label>
+                          </>
+                        )}
+                        <button type="button" className="button button--primary" onClick={() => void handleConnectSocialAccount()} disabled={syncing}>
+                          Connect Bluesky
+                        </button>
+                      </>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {section === 'settings' && (
             <div className="settings-view two-column-detail">
               <div className="glass-panel">
@@ -1210,7 +1600,15 @@ function App() {
                     <option value="bluesky">Bluesky</option>
                   </select>
                   {editingProviderId ? (
-                    <button type="button" className="button button--secondary" onClick={() => { setEditingProviderId(null); setAdminProviderDraft(defaultAdminProviderDraft()) }}>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => {
+                        setEditingProviderId(null)
+                        setAdminProviderDraft(defaultAdminProviderDraft())
+                        setShowAdminProviderAdvanced(false)
+                      }}
+                    >
                       Cancel edit
                     </button>
                   ) : null}
@@ -1224,27 +1622,39 @@ function App() {
                   <span>Instance URL</span>
                   <input value={adminProviderDraft.instanceUrl} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, instanceUrl: event.target.value }))} placeholder="https://mastodon.social" />
                 </label>
-                <label className="field">
-                  <span>Client ID (optional for Mastodon auto-register)</span>
-                  <input value={adminProviderDraft.clientId} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientId: event.target.value }))} />
-                </label>
-                <label className="field">
-                  <span>Client secret</span>
-                  <input type="password" value={adminProviderDraft.clientSecret} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientSecret: event.target.value }))} placeholder="Leave blank to keep existing on update" />
-                </label>
-                <label className="field">
-                  <span>Scopes (comma-separated)</span>
-                  <input value={adminProviderDraft.scopes} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, scopes: event.target.value }))} />
-                </label>
-                <label className="field">
-                  <span>Authorization endpoint (advanced)</span>
-                  <input value={adminProviderDraft.authorizationEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, authorizationEndpoint: event.target.value }))} />
-                </label>
-                <label className="field">
-                  <span>Token endpoint (advanced)</span>
-                  <input value={adminProviderDraft.tokenEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, tokenEndpoint: event.target.value }))} />
-                </label>
-                <button type="button" className="button button--primary" onClick={() => void handleSaveAdminProvider()} disabled={syncing}>
+
+                <details
+                  className="advanced-config"
+                  open={showAdminProviderAdvanced}
+                  onToggle={(event) => setShowAdminProviderAdvanced(event.currentTarget.open)}
+                >
+                  <summary className="advanced-config__summary">Advanced configuration</summary>
+                  <p className="hint" style={{ marginTop: '0.75rem' }}>
+                    OAuth client credentials, scopes, and token endpoints. Mastodon can auto-register an app when these are left empty; set them manually for custom apps or strict instances.
+                  </p>
+                  <label className="field">
+                    <span>Client ID</span>
+                    <input value={adminProviderDraft.clientId} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientId: event.target.value }))} placeholder="Optional for Mastodon auto-register" />
+                  </label>
+                  <label className="field">
+                    <span>Client secret</span>
+                    <input type="password" value={adminProviderDraft.clientSecret} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientSecret: event.target.value }))} placeholder="Leave blank to keep existing on update" />
+                  </label>
+                  <label className="field">
+                    <span>Scopes (comma-separated)</span>
+                    <input value={adminProviderDraft.scopes} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, scopes: event.target.value }))} />
+                  </label>
+                  <label className="field">
+                    <span>Authorization endpoint</span>
+                    <input value={adminProviderDraft.authorizationEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, authorizationEndpoint: event.target.value }))} />
+                  </label>
+                  <label className="field">
+                    <span>Token endpoint</span>
+                    <input value={adminProviderDraft.tokenEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, tokenEndpoint: event.target.value }))} />
+                  </label>
+                </details>
+
+                <button type="button" className="button button--primary" onClick={() => void handleSaveAdminProvider()} disabled={syncing} style={{ marginTop: '1rem' }}>
                   {editingProviderId ? 'Update provider' : 'Register provider'}
                 </button>
 
@@ -1261,6 +1671,7 @@ function App() {
                         className="button button--secondary"
                         onClick={() => {
                           setEditingProviderId(p.id)
+                          setShowAdminProviderAdvanced(true)
                           setAdminProviderDraft({
                             provider: p.provider,
                             name: p.name,
@@ -1411,6 +1822,9 @@ function App() {
         </button>
         <button type="button" className={section === 'archive' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('archive')}>
           <Icon name="archive" className="inline-icon" />
+        </button>
+        <button type="button" className={section === 'accounts' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('accounts')}>
+          <Icon name="channels" className="inline-icon" />
         </button>
         <button type="button" className={section === 'settings' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('settings')}>
           <Icon name="settings" className="inline-icon" />

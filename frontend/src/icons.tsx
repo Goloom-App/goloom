@@ -10,6 +10,7 @@ export type IconName =
   | 'edit'
   | 'trash'
   | 'teams'
+  | 'channels'
   | 'admin'
   | 'chevron-left'
   | 'chevron-right'
@@ -62,6 +63,13 @@ const iconPaths: Record<IconName, ReactNode> = {
       <circle cx="9.5" cy="8" r="3" />
       <path d="M22 21v-2a4 4 0 0 0-3-3.9" />
       <path d="M16.5 4.1a3 3 0 0 1 0 5.8" />
+    </>
+  ),
+  channels: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.5 4.4l2.2 1.3a1 1 0 0 0 1.5-.9V6.2a1 1 0 0 0-1.5-.9l-2.2 1.3A5 5 0 0 0 10 13Z" />
+      <path d="M6 9H3v12h3" />
+      <path d="M6 15H4" />
     </>
   ),
   admin: (
