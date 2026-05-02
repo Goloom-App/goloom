@@ -342,13 +342,21 @@ function App() {
     }
   }, [api, loadDashboard])
 
-  const navigationItems = useMemo(() => {
-    const items: { id: AppSection; label: string; icon: IconName }[] = [
+  const sidebarContentNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
+    () => [
       { id: 'calendar', label: 'Schedule', icon: 'calendar' },
       { id: 'archive', label: 'Archive', icon: 'archive' },
-      { id: 'teams', label: 'Teams', icon: 'teams' },
-      { id: 'settings', label: 'Settings', icon: 'settings' },
-    ]
+    ],
+    [],
+  )
+
+  const sidebarWorkspaceNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
+    () => [{ id: 'teams', label: 'Teams', icon: 'teams' }],
+    [],
+  )
+
+  const sidebarConfigNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(() => {
+    const items: { id: AppSection; label: string; icon: IconName }[] = [{ id: 'settings', label: 'Settings', icon: 'settings' }]
     if (principalUser?.globalRole === 'admin') {
       items.push({ id: 'admin', label: 'Admin', icon: 'admin' })
     }
@@ -527,32 +535,103 @@ function App() {
 
   return (
     <div className="app-shell" data-theme={theme}>
-      <aside className="nav-rail">
-        <div className="nav-rail__brand" title="goloom">
-          <span>G</span>
+      <aside className="app-sidebar" aria-label="Main navigation">
+        <div className="app-sidebar__header">
+          <div className="app-sidebar__logo" title="goloom" aria-hidden="true">
+            <span className="app-sidebar__logo-layer app-sidebar__logo-layer--a" />
+            <span className="app-sidebar__logo-layer app-sidebar__logo-layer--b" />
+            <span className="app-sidebar__logo-layer app-sidebar__logo-layer--c" />
+          </div>
+          <span className="app-sidebar__title">goloom</span>
         </div>
 
-        <nav className="nav-rail__items">
-          {navigationItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`nav-rail__button ${section === item.id ? 'nav-rail__button--active' : ''}`}
-              onClick={() => setSection(item.id)}
-              title={item.label}
-              aria-label={item.label}
-            >
-              <Icon name={item.icon} className="inline-icon" />
-            </button>
-          ))}
+        <button
+          type="button"
+          className="app-sidebar__cta"
+          onClick={openCreateComposer}
+          disabled={!selectedTeam || syncing}
+        >
+          <span className="app-sidebar__cta-icon" aria-hidden="true">
+            <Icon name="plus" className="inline-icon" />
+          </span>
+          <span>Create post</span>
+        </button>
+
+        <nav className="app-sidebar__nav" aria-label="Sections">
+          <div className="app-sidebar__nav-group">
+            <p className="app-sidebar__nav-heading">Content</p>
+            <ul className="app-sidebar__nav-list">
+              {sidebarContentNav.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={`app-sidebar__link ${section === item.id ? 'app-sidebar__link--active' : ''}`}
+                    onClick={() => setSection(item.id)}
+                  >
+                    <Icon name={item.icon} className="app-sidebar__link-icon" />
+                    <span>{item.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="app-sidebar__divider" role="presentation" />
+
+          <div className="app-sidebar__nav-group">
+            <p className="app-sidebar__nav-heading">Workspace</p>
+            <ul className="app-sidebar__nav-list">
+              {sidebarWorkspaceNav.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={`app-sidebar__link ${section === item.id ? 'app-sidebar__link--active' : ''}`}
+                    onClick={() => setSection(item.id)}
+                  >
+                    <Icon name={item.icon} className="app-sidebar__link-icon" />
+                    <span>{item.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="app-sidebar__divider" role="presentation" />
+
+          <div className="app-sidebar__nav-group">
+            <p className="app-sidebar__nav-heading">Configuration</p>
+            <ul className="app-sidebar__nav-list">
+              {sidebarConfigNav.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={`app-sidebar__link ${section === item.id ? 'app-sidebar__link--active' : ''}`}
+                    onClick={() => setSection(item.id)}
+                  >
+                    <Icon name={item.icon} className="app-sidebar__link-icon" />
+                    <span>{item.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         </nav>
 
-        <div className="nav-rail__footer">
+        <div className="app-sidebar__footer">
+          <div className="app-sidebar__user">
+            <div className="app-sidebar__avatar" aria-hidden="true">
+              {initialsFromName(principalUser?.name ?? '')}
+            </div>
+            <div className="app-sidebar__user-text">
+              <span className="app-sidebar__user-name">{principalUser?.name ?? 'Signed in'}</span>
+              <span className="app-sidebar__user-meta">{selectedTeam?.name ?? principalUser?.email ?? '—'}</span>
+            </div>
+          </div>
           <button
             type="button"
-            className="nav-rail__button"
+            className="app-sidebar__theme"
             onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} className="inline-icon" />
@@ -560,8 +639,7 @@ function App() {
         </div>
       </aside>
 
-      <div className="main-container">
-        <main className="content-column">
+      <main className="app-main">
           <header className="page-header">
             <div>
               <p className="eyebrow">Social publishing</p>
@@ -572,11 +650,6 @@ function App() {
               <select className="team-select" value={effectiveSelectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)} disabled={teams.length === 0}>
                 {teams.length === 0 ? <option value="">No team loaded</option> : teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
               </select>
-
-              <button type="button" className="button button--primary" onClick={openCreateComposer} disabled={!selectedTeam || syncing}>
-                <Icon name="plus" className="inline-icon" />
-                <span>Create post</span>
-              </button>
             </div>
           </header>
 
@@ -682,6 +755,13 @@ function App() {
                </div>
             </div>
           )}
+
+          {section === 'admin' && (
+            <div className="glass-panel">
+              <h2>Administration</h2>
+              <p className="hint">Provider instances and advanced options are available through the REST API. A fuller admin UI will follow.</p>
+            </div>
+          )}
         </main>
 
         <aside className="preview-column">
@@ -707,7 +787,6 @@ function App() {
             )}
           </div>
         </aside>
-      </div>
 
       {composerOpen && (
         <div className="modal-backdrop" onClick={closeComposer}>
@@ -1058,6 +1137,17 @@ function groupPostsByDay(posts: PostRecord[]) {
     groups.set(key, [...(groups.get(key) ?? []), post])
   }
   return Array.from(groups.entries()).map(([key, value]) => ({ key, posts: value }))
+}
+
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) {
+    return '?'
+  }
+  if (parts.length === 1) {
+    return parts[0]!.slice(0, 2).toUpperCase()
+  }
+  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase() || '?'
 }
 
 function getSystemTheme(): 'dark' | 'light' {
