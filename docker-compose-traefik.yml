@@ -1,7 +1,19 @@
-# App joins both the external Traefik network (routing) and an internal bridge so the
-# hostname `db` resolves to the Postgres container. If `app` is only on Traefik and `db`
-# stays on the default network, they cannot reach each other and `db` may resolve via
-# public DNS to unrelated IPs (connection timeouts / wrong host).
+# Traefik must share a Docker network with `app` (same name Traefik uses, e.g. `frontend` or `proxy`).
+# Set ONE of:
+#   TRAEFIK_NETWORK=frontend   (preferred name for this file)
+#   FRONTEND_NETWORK=frontend  (alias; used if TRAEFIK_NETWORK is unset)
+# Defaults to `proxy` if neither is set (external network must already exist: docker network create proxy).
+#
+# Interpolation (${HOST}, network name, etc.) uses your shell + a .env file next to this compose file’s
+# project directory. If you see "HOST is not set" or "network proxy ... could not be found", Compose
+# did not load your .env. Fix: run from the repo root, or pass the file explicitly, e.g.:
+#   docker compose --env-file .env -f docker-compose-traefik.yml up -d
+#
+# Required for routing: HOST=your.public.domain (used in Host() rule and ALLOWED_ORIGINS)
+# Optional: TRAEFIK_ENTRYPOINTS=websecure   (or web,websecure — must match your Traefik static config)
+# Optional: TRAEFIK_TLS=true|false  (set false for HTTP-only entrypoint `web`)
+# For ACME, add a compose override with e.g. traefik.http.routers.goloom.tls.certresolver=myresolver
+
 services:
   app:
     build:
@@ -13,11 +25,12 @@ services:
       db:
         condition: service_healthy
     environment:
-      APP_ENV: development
+      APP_ENV: ${APP_ENV:-development}
       HTTP_ADDR: :8080
       DATABASE_URL: postgres://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-goloom}?sslmode=disable
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      ALLOWED_ORIGINS: https://${HOST}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://${HOST}}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://${HOST}}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
       SCHEDULER_POLL_INTERVAL: ${SCHEDULER_POLL_INTERVAL:-15s}
       SCHEDULER_WORKERS: ${SCHEDULER_WORKERS:-4}
@@ -27,11 +40,24 @@ services:
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      MASTODON_APP_NAME: ${MASTODON_APP_NAME:-goloom}
+      MASTODON_WEBSITE: ${MASTODON_WEBSITE:-}
+      MASTODON_DEFAULT_SCOPES: ${MASTODON_DEFAULT_SCOPES:-read,write}
+      MASTODON_REDIRECT_URI: ${MASTODON_REDIRECT_URI:-}
     volumes:
       - goloom_data:/app/data
     networks:
       - traefik
       - backend
+    labels:
+      - traefik.enable=true
+      # When the container is on multiple networks, Traefik must use the one it shares with the proxy.
+      - traefik.docker.network=${TRAEFIK_NETWORK:-${FRONTEND_NETWORK:-proxy}}
+      - traefik.http.services.goloom.loadbalancer.server.port=8080
+      - traefik.http.routers.goloom.service=goloom
+      - traefik.http.routers.goloom.rule=Host(`${HOST}`)
+      - traefik.http.routers.goloom.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
+      - traefik.http.routers.goloom.tls=${TRAEFIK_TLS:-true}
 
   db:
     image: postgres:16
@@ -58,7 +84,7 @@ volumes:
 
 networks:
   traefik:
-    name: ${TRAEFIK_NETWORK:-proxy}
+    name: ${TRAEFIK_NETWORK:-${FRONTEND_NETWORK:-proxy}}
     external: true
   backend:
     driver: bridge
