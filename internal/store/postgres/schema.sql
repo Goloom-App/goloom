@@ -43,6 +43,29 @@ alter table if exists teams
 alter table if exists teams
     alter column description set not null;
 
+alter table if exists teams
+    add column if not exists is_personal boolean not null default false;
+
+alter table if exists teams
+    add column if not exists personal_for_user_id uuid references users(id) on delete cascade;
+
+create unique index if not exists idx_teams_personal_user
+    on teams (personal_for_user_id)
+    where personal_for_user_id is not null;
+
+create table if not exists team_invitations (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    email text not null,
+    role text not null check (role in ('editor', 'viewer')),
+    token_hash text not null unique,
+    expires_at timestamptz not null,
+    created_by_user_id uuid not null references users(id) on delete cascade,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_team_invitations_team on team_invitations(team_id);
+
 create table if not exists team_memberships (
     user_id uuid not null references users(id) on delete cascade,
     team_id uuid not null references teams(id) on delete cascade,

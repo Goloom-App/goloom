@@ -57,6 +57,10 @@ func Run(ctx context.Context) error {
 		}
 	}
 
+	if err := dataStore.EnsurePersonalTeamsMigrated(ctx); err != nil {
+		return fmt.Errorf("personal workspace migration: %w", err)
+	}
+
 	authService, err := auth.New(ctx, cfg, dataStore)
 	if err != nil {
 		return fmt.Errorf("build auth service: %w", err)

@@ -59,6 +59,8 @@ export function toTeamRecord(team: BackendTeam, members: TeamMemberRecord[], acc
     description: team.description,
     members,
     accountIds,
+    isPersonal: Boolean(team.is_personal),
+    personalForUserId: team.personal_for_user_id,
   }
 }
 

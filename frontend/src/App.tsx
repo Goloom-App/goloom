@@ -67,6 +67,9 @@ function App() {
   const [newTeamDescription, setNewTeamDescription] = useState('')
   const [memberUserId, setMemberUserId] = useState('')
   const [memberRole, setMemberRole] = useState<TeamRole>('editor')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor')
+  const [migrateTargetTeamId, setMigrateTargetTeamId] = useState('')
   const [accountDraft, setAccountDraft] = useState(() => defaultAccountDraft())
   const [providerInstanceDraft, setProviderInstanceDraft] = useState(() => defaultProviderInstanceDraft())
   const [showProviderAdvancedSettings, setShowProviderAdvancedSettings] = useState(false)
@@ -301,6 +304,35 @@ function App() {
     }
   }, [api, loadDashboard])
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const inviteToken = params.get('invite')
+    if (!inviteToken || !api) {
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        await api.acceptTeamInvitation({ token: inviteToken })
+        if (!cancelled) {
+          setStatusMessage('Invitation accepted — you have been added to the team.')
+          setError(null)
+          params.delete('invite')
+          const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`
+          window.history.replaceState({}, document.title, next)
+          await loadDashboard()
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : 'Failed to accept invitation')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [api, loadDashboard])
+
   const navigationItems: { id: AppSection; label: string; icon: 'calendar' | 'archive' | 'teams' | 'settings' | 'admin' }[] = [
     { id: 'calendar', label: 'Schedule', icon: 'calendar' },
     { id: 'archive', label: 'Archive', icon: 'archive' },
@@ -324,6 +356,11 @@ function App() {
   )
 
   const teamPosts = useMemo(() => postsForTeam(posts, effectiveSelectedTeamId), [effectiveSelectedTeamId, posts])
+
+  const migrateTargetOptions = useMemo(
+    () => teams.filter((t) => !t.isPersonal && t.id !== selectedTeam?.id),
+    [teams, selectedTeam],
+  )
 
   const upcomingPosts = useMemo(() => {
     const baseline = startOfDay(currentDate)
@@ -557,6 +594,28 @@ function App() {
       await api.removeTeamMember(selectedTeam.id, userID)
       await loadDashboard()
     }, 'Team member removed')
+  }
+
+  async function sendTeamInvite() {
+    if (!api || !selectedTeam || !inviteEmail.trim()) {
+      return
+    }
+    await runAction(async () => {
+      const response = await api.createTeamInvitation(selectedTeam.id, { email: inviteEmail.trim(), role: inviteRole })
+      const link = `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(response.token)}`
+      setStatusMessage(`Share this link with ${inviteEmail.trim()}: ${link}`)
+      setInviteEmail('')
+    }, 'Invitation created')
+  }
+
+  async function migrateAccountToTeam(accountId: string) {
+    if (!api || !selectedTeam || !migrateTargetTeamId) {
+      return
+    }
+    await runAction(async () => {
+      await api.migrateAccount(selectedTeam.id, accountId, { target_team_id: migrateTargetTeamId })
+      await loadDashboard()
+    }, 'Account migrated to team')
   }
 
   async function addAccountToTeam() {
@@ -944,7 +1003,7 @@ function App() {
                     className={`team-card ${team.id === selectedTeamId ? 'team-card--active' : ''}`}
                     onClick={() => setSelectedTeamId(team.id)}
                   >
-                    <strong>{team.name}</strong>
+                    <strong>{team.name}{team.isPersonal ? ' · Personal' : ''}</strong>
                     <span>{team.description || 'No description'}</span>
                     <small>{team.members.length} members · {team.accountIds.length} accounts</small>
                   </button>
@@ -968,8 +1027,33 @@ function App() {
                   </button>
                 </section>
 
+                {!selectedTeam?.isPersonal ? (
+                  <section className="subpanel">
+                    <h3>Invite by email</h3>
+                    <p className="hint">Creates a one-time link (7 days). Send it to someone who already has a goloom account with that email.</p>
+                    <label className="field">
+                      <span>Email</span>
+                      <input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="colleague@example.com" />
+                    </label>
+                    <label className="field">
+                      <span>Role</span>
+                      <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as 'editor' | 'viewer')}>
+                        <option value="editor">editor</option>
+                        <option value="viewer">viewer</option>
+                      </select>
+                    </label>
+                    <button type="button" className="button button--icon-label" onClick={() => void sendTeamInvite()} disabled={!selectedTeam || !inviteEmail.trim() || syncing}>
+                      <Icon name="plus" className="inline-icon" />
+                      <span>Create invitation</span>
+                    </button>
+                  </section>
+                ) : null}
+
                 <section className="subpanel">
                   <h3>Members</h3>
+                  {selectedTeam?.isPersonal ? (
+                    <p className="hint">This is your personal workspace. Create a shared team to invite collaborators.</p>
+                  ) : null}
                   <div className="entity-list">
                       {selectedTeam?.members.map((member) => {
                       const user = users.find((candidate) => candidate.id === member.userId)
@@ -984,28 +1068,32 @@ function App() {
                           </div>
                           <div className="inline-cluster">
                             <span className="pill">{member.role}</span>
-                            <button type="button" className="icon-button" onClick={() => void removeMemberFromTeam(member.userId)} aria-label="Remove member" disabled={syncing}>
-                              <Icon name="trash" className="button__icon" />
-                            </button>
+                            {!selectedTeam?.isPersonal ? (
+                              <button type="button" className="icon-button" onClick={() => void removeMemberFromTeam(member.userId)} aria-label="Remove member" disabled={syncing}>
+                                <Icon name="trash" className="button__icon" />
+                              </button>
+                            ) : null}
                           </div>
                         </article>
                       )
                     })}
                   </div>
-                  <div className="inline-form">
-                    <select value={effectiveMemberUserId} onChange={(event) => setMemberUserId(event.target.value)} disabled={availableUsers.length === 0}>
-                      {availableUsers.length === 0 ? <option value="">No users available</option> : availableUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-                    </select>
-                    <select value={memberRole} onChange={(event) => setMemberRole(event.target.value as TeamRole)}>
-                      <option value="owner">owner</option>
-                      <option value="editor">editor</option>
-                      <option value="viewer">viewer</option>
-                    </select>
-                    <button type="button" className="button button--icon-label" onClick={() => void addMemberToTeam()} disabled={!selectedTeam || !effectiveMemberUserId || syncing}>
-                      <Icon name="plus" className="inline-icon" />
-                      <span>Add user</span>
-                    </button>
-                  </div>
+                  {!selectedTeam?.isPersonal ? (
+                    <div className="inline-form">
+                      <select value={effectiveMemberUserId} onChange={(event) => setMemberUserId(event.target.value)} disabled={availableUsers.length === 0}>
+                        {availableUsers.length === 0 ? <option value="">No users available</option> : availableUsers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+                      </select>
+                      <select value={memberRole} onChange={(event) => setMemberRole(event.target.value as TeamRole)}>
+                        <option value="owner">owner</option>
+                        <option value="editor">editor</option>
+                        <option value="viewer">viewer</option>
+                      </select>
+                      <button type="button" className="button button--icon-label" onClick={() => void addMemberToTeam()} disabled={!selectedTeam || !effectiveMemberUserId || syncing}>
+                        <Icon name="plus" className="inline-icon" />
+                        <span>Add user</span>
+                      </button>
+                    </div>
+                  ) : null}
                 </section>
               </div>
             </div>
@@ -1018,6 +1106,21 @@ function App() {
                 </div>
               </div>
 
+              {selectedTeam?.isPersonal && migrateTargetOptions.length > 0 ? (
+                <div className="field" style={{ marginBottom: '1rem' }}>
+                  <span>Move account to team</span>
+                  <div className="inline-cluster">
+                    <select value={migrateTargetTeamId} onChange={(event) => setMigrateTargetTeamId(event.target.value)}>
+                      <option value="">Select team…</option>
+                      {migrateTargetOptions.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="hint">Choose a destination, then use Move on each account. Scheduled posts that target only that account move with it.</p>
+                </div>
+              ) : null}
+
               <div className="entity-list">
                 {teamAccounts.map((account) => (
                   <article key={account.id} className="entity-card">
@@ -1028,9 +1131,16 @@ function App() {
                         <p>{account.provider} · {account.username}</p>
                       </div>
                     </div>
-                    <button type="button" className="icon-button" onClick={() => void removeAccountFromTeam(account.id)} aria-label="Remove account" disabled={syncing}>
-                      <Icon name="trash" className="button__icon" />
-                    </button>
+                    <div className="inline-cluster">
+                      {selectedTeam?.isPersonal && migrateTargetTeamId ? (
+                        <button type="button" className="button button--secondary" onClick={() => void migrateAccountToTeam(account.id)} disabled={syncing}>
+                          Move
+                        </button>
+                      ) : null}
+                      <button type="button" className="icon-button" onClick={() => void removeAccountFromTeam(account.id)} aria-label="Remove account" disabled={syncing}>
+                        <Icon name="trash" className="button__icon" />
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>

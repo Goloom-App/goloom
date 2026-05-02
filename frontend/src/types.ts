@@ -44,6 +44,8 @@ export interface TeamRecord {
   description: string
   members: TeamMemberRecord[]
   accountIds: string[]
+  isPersonal: boolean
+  personalForUserId?: string
 }
 
 export interface PostRecord {

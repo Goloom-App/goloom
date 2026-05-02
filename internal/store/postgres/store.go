@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -102,7 +103,13 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 		&user.IsAdmin,
 		&user.CreatedAt,
 	)
-	return user, err
+	if err != nil {
+		return user, err
+	}
+	if _, err := s.EnsurePersonalTeam(ctx, user.ID); err != nil {
+		return domain.User{}, err
+	}
+	return user, nil
 }
 
 func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error) {
@@ -187,7 +194,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	query := `
-		select id, name, description, created_at
+		select id, name, description, is_personal, personal_for_user_id, created_at
 		from teams
 	`
 	args := make([]any, 0, 1)
@@ -195,7 +202,7 @@ func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin boo
 		query += ` where id in (select team_id from team_memberships where user_id = $1)`
 		args = append(args, userID)
 	}
-	query += ` order by name asc`
+	query += ` order by is_personal desc, name asc`
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -206,8 +213,12 @@ func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin boo
 	var teams []domain.Team
 	for rows.Next() {
 		var team domain.Team
-		if err := rows.Scan(&team.ID, &team.Name, &team.Description, &team.CreatedAt); err != nil {
+		var personal sql.NullString
+		if err := rows.Scan(&team.ID, &team.Name, &team.Description, &team.IsPersonal, &personal, &team.CreatedAt); err != nil {
 			return nil, err
+		}
+		if personal.Valid {
+			team.PersonalForUserID = personal.String
 		}
 		teams = append(teams, team)
 	}
@@ -433,6 +444,9 @@ func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, r
 	const query = `select role from team_memberships where user_id = $1 and team_id = $2`
 	var role domain.TeamRole
 	if err := s.pool.QueryRow(ctx, query, userID, teamID).Scan(&role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
 		return false, err
 	}
 	for _, allowed := range roles {
@@ -537,8 +551,14 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 }
 
 func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) error {
-	_, err := s.pool.Exec(ctx, `delete from social_accounts where id = $1 and team_id = $2`, accountID, teamID)
-	return err
+	acc, err := s.GetAccountByID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if acc.TeamID != teamID {
+		return sql.ErrNoRows
+	}
+	return s.DeleteSocialAccount(ctx, accountID)
 }
 
 func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error) {

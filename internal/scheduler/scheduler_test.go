@@ -224,6 +224,42 @@ func (m *mockStore) LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []s
 
 func (m *mockStore) EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error { return nil }
 
+func (m *mockStore) EnsurePersonalTeam(ctx context.Context, userID string) (domain.Team, error) {
+	return domain.Team{}, nil
+}
+
+func (m *mockStore) EnsurePersonalTeamsMigrated(ctx context.Context) error { return nil }
+
+func (m *mockStore) GetTeamByID(ctx context.Context, teamID string) (domain.Team, error) {
+	return domain.Team{}, nil
+}
+
+func (m *mockStore) DeleteSocialAccount(ctx context.Context, accountID string) error { return nil }
+
+func (m *mockStore) GetAccountByID(ctx context.Context, accountID string) (domain.SocialAccount, error) {
+	return domain.SocialAccount{}, nil
+}
+
+func (m *mockStore) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]domain.SocialAccount, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error) {
+	return domain.ScheduledPost{}, nil
+}
+
+func (m *mockStore) MigrateAccountToTeam(ctx context.Context, userID string, accountID, targetTeamID string, isAdmin bool) error {
+	return nil
+}
+
+func (m *mockStore) CreateTeamInvitation(ctx context.Context, teamID, createdByUserID string, input domain.CreateTeamInvitationInput) (domain.TeamInvitation, string, error) {
+	return domain.TeamInvitation{}, "", nil
+}
+
+func (m *mockStore) AcceptTeamInvitation(ctx context.Context, userID, email, rawToken string) (domain.TeamMembership, error) {
+	return domain.TeamMembership{}, nil
+}
+
 var _ store.Store = (*mockStore)(nil)
 
 type fakeProvider struct {

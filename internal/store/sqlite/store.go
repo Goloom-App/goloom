@@ -49,6 +49,16 @@ func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter)
 		return nil, fmt.Errorf("apply sqlite schema: %w", err)
 	}
 
+	if err := applySQLiteLegacyMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("re-apply sqlite schema: %w", err)
+	}
+
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
@@ -128,6 +138,9 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 		if err := tx.Commit(); err != nil {
 			return domain.User{}, err
 		}
+		if _, err := s.EnsurePersonalTeam(ctx, user.ID); err != nil {
+			return domain.User{}, err
+		}
 		return user, nil
 	case !errors.Is(err, sql.ErrNoRows):
 		return domain.User{}, err
@@ -157,6 +170,9 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 		return domain.User{}, err
 	}
 	if err := tx.Commit(); err != nil {
+		return domain.User{}, err
+	}
+	if _, err := s.EnsurePersonalTeam(ctx, user.ID); err != nil {
 		return domain.User{}, err
 	}
 	return user, nil
@@ -208,7 +224,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	query := `
-		select id, name, description, created_at
+		select id, name, description, is_personal, personal_for_user_id, created_at
 		from teams
 	`
 	args := []any{}
@@ -216,7 +232,7 @@ func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin boo
 		query += ` where id in (select team_id from team_memberships where user_id = ?)`
 		args = append(args, userID)
 	}
-	query += ` order by name asc`
+	query += ` order by is_personal desc, name asc`
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -241,8 +257,8 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 		CreatedAt:   mustParseTime(now),
 	}
 	if _, err := tx.ExecContext(ctx, `
-		insert into teams (id, name, description, created_at)
-		values (?, ?, ?, ?)`,
+		insert into teams (id, name, description, is_personal, personal_for_user_id, created_at)
+		values (?, ?, ?, 0, null, ?)`,
 		team.ID, team.Name, team.Description, now,
 	); err != nil {
 		return domain.Team{}, err
@@ -402,6 +418,9 @@ func (s *Store) UpdateProviderInstance(ctx context.Context, instanceID string, i
 func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, roles ...domain.TeamRole) (bool, error) {
 	var role domain.TeamRole
 	if err := s.db.QueryRowContext(ctx, `select role from team_memberships where user_id = ? and team_id = ?`, userID, teamID).Scan(&role); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
 		return false, err
 	}
 	for _, allowed := range roles {
@@ -466,8 +485,14 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 }
 
 func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) error {
-	_, err := s.db.ExecContext(ctx, `delete from social_accounts where id = ? and team_id = ?`, accountID, teamID)
-	return err
+	acc, err := s.GetAccountByID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if acc.TeamID != teamID {
+		return sql.ErrNoRows
+	}
+	return s.DeleteSocialAccount(ctx, accountID)
 }
 
 func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error) {
@@ -831,12 +856,16 @@ func scanUser(scanner userScanner) (domain.User, error) {
 
 func scanTeam(scanner teamScanner) (domain.Team, error) {
 	var (
-		team      domain.Team
-		createdAt string
+		team              domain.Team
+		isPersonal        int
+		personalForUserID sql.NullString
+		createdAt         string
 	)
-	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt); err != nil {
+	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &isPersonal, &personalForUserID, &createdAt); err != nil {
 		return domain.Team{}, err
 	}
+	team.IsPersonal = isPersonal != 0
+	team.PersonalForUserID = personalForUserID.String
 	var err error
 	team.CreatedAt, err = parseTime(createdAt)
 	if err != nil {
@@ -1050,6 +1079,10 @@ func collectPosts(rows *sql.Rows) ([]domain.ScheduledPost, error) {
 
 func queryUser(ctx context.Context, q queryRower, query string, args ...any) (domain.User, error) {
 	return scanUser(q.QueryRowContext(ctx, query, args...))
+}
+
+func queryTeam(ctx context.Context, q queryRower, query string, args ...any) (domain.Team, error) {
+	return scanTeam(q.QueryRowContext(ctx, query, args...))
 }
 
 func queryMembership(ctx context.Context, q queryRower, query string, args ...any) (domain.TeamMembership, error) {

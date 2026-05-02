@@ -29,6 +29,8 @@ export interface BackendTeam {
   name: string
   description: string
   created_at: string
+  is_personal: boolean
+  personal_for_user_id?: string
 }
 
 export interface BackendMembership {
@@ -270,6 +272,31 @@ export function createApiClient(options: ApiClientOptions) {
       return request<void>(options, `/v1/teams/${teamID}/accounts/${accountID}`, {
         method: 'DELETE',
         headers: buildHeaders(options.token, false),
+      })
+    },
+    migrateAccount(teamID: string, accountID: string, payload: { target_team_id: string }) {
+      return request<BackendAccount>(options, `/v1/teams/${teamID}/accounts/${accountID}/migrate`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    createTeamInvitation(teamID: string, payload: { email: string; role: 'editor' | 'viewer' }) {
+      return request<{ invitation: { id: string; team_id: string; email: string; role: string; expires_at: string }; token: string }>(
+        options,
+        `/v1/teams/${teamID}/invitations`,
+        {
+          method: 'POST',
+          headers: buildHeaders(options.token),
+          body: JSON.stringify(payload),
+        },
+      )
+    },
+    acceptTeamInvitation(payload: { token: string }) {
+      return request<BackendMembership>(options, `/v1/invitations/accept`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
       })
     },
     listPosts(teamID: string) {

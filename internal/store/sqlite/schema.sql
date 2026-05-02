@@ -12,8 +12,26 @@ create table if not exists teams (
     id text primary key,
     name text not null unique,
     description text not null default '',
+    is_personal integer not null default 0,
+    personal_for_user_id text references users(id) on delete cascade,
     created_at text not null
 );
+
+create unique index if not exists idx_teams_personal_user on teams(personal_for_user_id)
+    where personal_for_user_id is not null;
+
+create table if not exists team_invitations (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    email text not null,
+    role text not null check (role in ('editor', 'viewer')),
+    token_hash text not null unique,
+    expires_at text not null,
+    created_by_user_id text not null references users(id) on delete cascade,
+    created_at text not null
+);
+
+create index if not exists idx_team_invitations_team on team_invitations(team_id);
 
 create table if not exists team_memberships (
     user_id text not null references users(id) on delete cascade,

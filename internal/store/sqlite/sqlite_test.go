@@ -122,8 +122,11 @@ func TestSQLite_TeamsAndMemberships(t *testing.T) {
 		t.Fatal(err)
 	}
 	teams, err := s.ListTeamsForUser(ctx, owner.ID, false)
-	if err != nil || len(teams) != 1 {
-		t.Fatalf("owner teams: %v %#v", err, teams)
+	if err != nil || len(teams) != 2 {
+		t.Fatalf("owner teams (personal + shared): %v %#v", err, teams)
+	}
+	if !teams[0].IsPersonal || teams[0].PersonalForUserID != owner.ID {
+		t.Fatalf("expected personal workspace first: %#v", teams[0])
 	}
 	allTeams, err := s.ListTeamsForUser(ctx, member.ID, true)
 	if err != nil || len(allTeams) < 1 {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -73,17 +74,20 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListTeamMembers))))
 	mux.Handle("POST /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleAddTeamMember))))
 	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
+	mux.Handle("POST /v1/teams/{teamID}/invitations", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleCreateTeamInvitation))))
+	mux.Handle("POST /v1/invitations/accept", a.auth.RequireAuth(http.HandlerFunc(a.handleAcceptTeamInvitation)))
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAccounts))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/oauth/mastodon/start", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleStartMastodonOAuth))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAccount))))
-	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteAccount))))
+	mux.Handle("POST /v1/teams/{teamID}/accounts/{accountID}/migrate", a.auth.RequireAuth(http.HandlerFunc(a.handleMigrateAccount)))
+	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeleteAccount)))
 	mux.Handle("GET /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPosts))))
-	mux.Handle("POST /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreatePost))))
-	mux.Handle("POST /v1/teams/{teamID}/posts/validate", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleValidatePost))))
-	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetPost))))
-	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdatePost))))
-	mux.Handle("DELETE /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeletePost))))
-	mux.Handle("POST /v1/teams/{teamID}/posts/{postID}/cancel", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCancelPost))))
+	mux.Handle("POST /v1/teams/{teamID}/posts", a.auth.RequireAuth(http.HandlerFunc(a.handleCreatePost)))
+	mux.Handle("POST /v1/teams/{teamID}/posts/validate", a.auth.RequireAuth(http.HandlerFunc(a.handleValidatePost)))
+	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleGetPost)))
+	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleUpdatePost)))
+	mux.Handle("DELETE /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeletePost)))
+	mux.Handle("POST /v1/teams/{teamID}/posts/{postID}/cancel", a.auth.RequireAuth(http.HandlerFunc(a.handleCancelPost)))
 
 	chain := security.CORSMiddleware(allowedOrigins)(limiter.Middleware(mux))
 	if a.log != nil {
@@ -402,6 +406,16 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if team.IsPersonal {
+		http.Error(w, "cannot add members to a personal workspace", http.StatusBadRequest)
+		return
+	}
+
 	membership, err := a.store.AddTeamMember(r.Context(), r.PathValue("teamID"), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -411,6 +425,15 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
+	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if team.IsPersonal {
+		http.Error(w, "cannot remove members from a personal workspace", http.StatusBadRequest)
+		return
+	}
 	if err := a.store.RemoveTeamMember(r.Context(), r.PathValue("teamID"), r.PathValue("userID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -464,7 +487,22 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.DeleteAccount(r.Context(), r.PathValue("teamID"), r.PathValue("accountID")); err != nil {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	acc, err := a.store.GetAccountByID(r.Context(), r.PathValue("accountID"))
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, acc.TeamID, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := a.store.DeleteSocialAccount(r.Context(), acc.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -485,9 +523,19 @@ func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
-	post, err := a.store.GetScheduledPost(r.Context(), r.PathValue("teamID"), r.PathValue("postID"))
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, post.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	if err := a.attachPublishedLinks(r, []domain.ScheduledPost{post}); err == nil {
@@ -518,7 +566,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		input.ScheduledAt = time.Now().UTC()
 	}
 
-	validation, err := a.validatePostInput(r, input)
+	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -528,7 +576,13 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := a.store.CreateScheduledPost(r.Context(), r.PathValue("teamID"), principal, input)
+	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, effectiveTeam, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	post, err := a.store.CreateScheduledPost(r.Context(), effectiveTeam, principal, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -537,6 +591,22 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	existing, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	var input domain.CreatePostInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid json body", http.StatusBadRequest)
@@ -545,7 +615,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
 	input.Title = strings.TrimSpace(input.Title)
-	validation, err := a.validatePostInput(r, input)
+	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -554,8 +624,12 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		auth.WriteJSON(w, http.StatusUnprocessableEntity, validation)
 		return
 	}
+	if effectiveTeam != existing.TeamID {
+		http.Error(w, "target accounts must stay within the same team as the post", http.StatusBadRequest)
+		return
+	}
 
-	post, err := a.store.UpdateScheduledPost(r.Context(), r.PathValue("teamID"), r.PathValue("postID"), input)
+	post, err := a.store.UpdateScheduledPost(r.Context(), existing.TeamID, r.PathValue("postID"), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -564,7 +638,22 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.DeleteScheduledPost(r.Context(), r.PathValue("teamID"), r.PathValue("postID")); err != nil {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, post.TeamID, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := a.store.DeleteScheduledPost(r.Context(), post.TeamID, r.PathValue("postID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -572,7 +661,22 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.CancelScheduledPost(r.Context(), r.PathValue("teamID"), r.PathValue("postID")); err != nil {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, post.TeamID, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := a.store.CancelScheduledPost(r.Context(), post.TeamID, r.PathValue("postID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -580,6 +684,11 @@ func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 	var input domain.CreatePostInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid json body", http.StatusBadRequest)
@@ -587,39 +696,44 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
-	validation, err := a.validatePostInput(r, input)
+	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, effectiveTeam, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, validation)
 }
 
-func (a *API) validatePostInput(r *http.Request, input domain.CreatePostInput) (validationResponse, error) {
+func (a *API) validatePostInput(ctx context.Context, input domain.CreatePostInput) (validationResponse, string, error) {
 	if err := input.Validate(); err != nil {
-		return validationResponse{}, err
+		return validationResponse{}, "", err
 	}
 
-	teamID := r.PathValue("teamID")
-	accounts, err := a.store.GetAccountsByIDs(r.Context(), teamID, input.TargetAccounts)
+	accounts, err := a.store.GetAccountsByIDsGlobal(ctx, input.TargetAccounts)
 	if err != nil {
-		return validationResponse{}, err
+		return validationResponse{}, "", err
 	}
-	if len(accounts) != len(input.TargetAccounts) {
-		return validationResponse{}, errors.New("one or more target accounts are missing")
+	if len(accounts) == 0 {
+		return validationResponse{}, "", errors.New("one or more target accounts are missing")
 	}
+	effectiveTeam := accounts[0].TeamID
 
 	destinations := make([]destinationInfo, 0, len(accounts))
 	maxChars := 0
 	for _, account := range accounts {
 		providerImpl, ok := a.providers.Get(account.Provider)
 		if !ok {
-			return validationResponse{}, errors.New("one or more target accounts use an unsupported provider")
+			return validationResponse{}, "", errors.New("one or more target accounts use an unsupported provider")
 		}
 
-		capabilities, err := providerImpl.Capabilities(r.Context(), account)
+		capabilities, err := providerImpl.Capabilities(ctx, account)
 		if err != nil {
-			return validationResponse{}, err
+			return validationResponse{}, "", err
 		}
 		destinations = append(destinations, destinationInfo{
 			AccountID: account.ID,
@@ -640,7 +754,86 @@ func (a *API) validatePostInput(r *http.Request, input domain.CreatePostInput) (
 		ContentLength: len([]rune(input.Content)),
 		Valid:         len([]rune(input.Content)) <= maxChars,
 		Destinations:  destinations,
-	}, nil
+	}, effectiveTeam, nil
+}
+
+func (a *API) handleMigrateAccount(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	var input domain.MigrateAccountInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(input.TargetTeamID) == "" {
+		http.Error(w, "target_team_id is required", http.StatusBadRequest)
+		return
+	}
+	accountID := r.PathValue("accountID")
+	if err := a.store.MigrateAccountToTeam(r.Context(), principal.User.ID, accountID, input.TargetTeamID, principal.User.IsAdmin); err != nil {
+		msg := err.Error()
+		if strings.Contains(msg, "forbidden") {
+			http.Error(w, msg, http.StatusForbidden)
+			return
+		}
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	acc, err := a.store.GetAccountByID(r.Context(), accountID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, acc)
+}
+
+func (a *API) handleCreateTeamInvitation(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	var input domain.CreateTeamInvitationInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	inv, token, err := a.store.CreateTeamInvitation(r.Context(), r.PathValue("teamID"), principal.User.ID, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	auth.WriteJSON(w, http.StatusCreated, map[string]any{
+		"invitation": inv,
+		"token":      token,
+	})
+}
+
+func (a *API) handleAcceptTeamInvitation(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	var input domain.AcceptTeamInvitationInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(input.Token) == "" {
+		http.Error(w, "token is required", http.StatusBadRequest)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(principal.User.Email))
+	membership, err := a.store.AcceptTeamInvitation(r.Context(), principal.User.ID, email, input.Token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, membership)
 }
 
 func sanitizeContent(policy *bluemonday.Policy, content string) string {

@@ -40,10 +40,35 @@ type User struct {
 }
 
 type Team struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description"`
+	IsPersonal       bool      `json:"is_personal"`
+	PersonalForUserID string   `json:"personal_for_user_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+type TeamInvitation struct {
+	ID              string    `json:"id"`
+	TeamID          string    `json:"team_id"`
+	Email           string    `json:"email"`
+	Role            TeamRole  `json:"role"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	CreatedByUserID string    `json:"created_by_user_id"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type CreateTeamInvitationInput struct {
+	Email string   `json:"email"`
+	Role  TeamRole `json:"role"`
+}
+
+type AcceptTeamInvitationInput struct {
+	Token string `json:"token"`
+}
+
+type MigrateAccountInput struct {
+	TargetTeamID string `json:"target_team_id"`
 }
 
 type TeamMembership struct {
