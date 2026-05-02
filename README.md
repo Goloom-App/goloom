@@ -86,6 +86,48 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/goloom?sslmode=disable
 
 The app also applies the embedded Postgres schema automatically on startup. The `make schema` target is still available if you want to apply `db/schema.sql` manually.
 
+## Logging
+
+The server uses Go’s structured logger (`log/slog`). Verbosity is controlled with **`LOG_LEVEL`**; output shape uses **`LOG_FORMAT`**.
+
+### Log level (`LOG_LEVEL`)
+
+Allowed values (case-insensitive):
+
+| Value | Meaning |
+|-------|---------|
+| `debug` | Most verbose (useful when troubleshooting). |
+| `info` | Normal operational messages. |
+| `warn` or `warning` | Warnings and above. |
+| `error` | Errors only. |
+
+If **`LOG_LEVEL` is unset or empty**, the effective level comes from **`APP_ENV`**:
+
+- `APP_ENV=production` → **info**
+- Otherwise (e.g. `development`) → **debug**
+
+If **`LOG_LEVEL` is set to anything else** (typo or unsupported string), the server falls back to **info**.
+
+Examples:
+
+```bash
+# Quiet production logs
+APP_ENV=production
+LOG_LEVEL=warn
+
+# Explicit debug regardless of APP_ENV
+LOG_LEVEL=debug
+```
+
+`docker-compose.yml` sets `LOG_LEVEL=debug` for the sample services so container output stays verbose during local experiments.
+
+### Log format (`LOG_FORMAT`)
+
+- **`json`** — One JSON object per line (good for log aggregation).
+- **`text`** — Human-readable key/value lines for local reading.
+
+If **`LOG_FORMAT` is unset**, the default is **JSON** when `APP_ENV=production`, and **text** otherwise.
+
 ## Development
 
 Enter the development shell:
