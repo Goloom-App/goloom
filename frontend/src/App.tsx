@@ -2,15 +2,39 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { addMinutes, format, parseISO, set, startOfDay } from 'date-fns'
 
-import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin } from './api'
+import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin, type BackendAPIToken, type BackendAdminMetrics } from './api'
 import { initialSettings } from './data'
 import { Icon } from './icons'
 import type { IconName } from './icons'
-import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
+import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { postsForTeam, sharedAccountLabels, SLOT_MINUTES } from './schedule'
-import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, SettingsState, TeamRecord, UserRecord } from './types'
+import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
+
+type AdminProviderDraft = {
+  provider: ProviderName
+  name: string
+  instanceUrl: string
+  clientId: string
+  clientSecret: string
+  scopes: string
+  authorizationEndpoint: string
+  tokenEndpoint: string
+}
+
+function defaultAdminProviderDraft(): AdminProviderDraft {
+  return {
+    provider: 'mastodon',
+    name: '',
+    instanceUrl: '',
+    clientId: '',
+    clientSecret: '',
+    scopes: 'read,write',
+    authorizationEndpoint: '',
+    tokenEndpoint: '',
+  }
+}
 
 function App() {
   const [section, setSection] = useState<AppSection>('calendar')
@@ -41,6 +65,23 @@ function App() {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
+  const [providerInstances, setProviderInstances] = useState<ProviderInstanceRecord[]>([])
+  const [adminMetrics, setAdminMetrics] = useState<BackendAdminMetrics | null>(null)
+  const [adminMetricsLoading, setAdminMetricsLoading] = useState(false)
+  const [adminRuntime, setAdminRuntime] = useState<RuntimeConfigRecord | null>(null)
+  const [apiTokens, setApiTokens] = useState<BackendAPIToken[]>([])
+  const [apiTokensLoading, setApiTokensLoading] = useState(false)
+  const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
+  const [newTeamName, setNewTeamName] = useState('')
+  const [newTeamDescription, setNewTeamDescription] = useState('')
+  const [addMemberUserId, setAddMemberUserId] = useState('')
+  const [addMemberRole, setAddMemberRole] = useState<'editor' | 'viewer'>('editor')
+  const [newApiTokenName, setNewApiTokenName] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor')
+  const [adminProviderDraft, setAdminProviderDraft] = useState<AdminProviderDraft>(() => defaultAdminProviderDraft())
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
 
   const api = useMemo(() => {
     const token = activeConnection.bearerToken.trim()
@@ -261,12 +302,15 @@ function App() {
       const meResponse = await api.me()
       setPrincipalUser(toUserRecord(meResponse.user))
 
-      const [teamsResponse, providerInstancesResponse] = await Promise.all([
+      const [usersResponse, teamsResponse, providerInstancesResponse] = await Promise.all([
+        api.listUsers(),
         api.listTeams(),
         api.listProviderInstances(),
       ])
 
+      setDirectoryUsers((usersResponse.items ?? []).map(toUserRecord))
       const mappedProviderInstances = (providerInstancesResponse.items ?? []).map(toProviderInstanceRecord)
+      setProviderInstances(mappedProviderInstances)
 
       const teamPayloads = await Promise.all(
         (teamsResponse.items ?? []).map(async (team) => {
@@ -342,6 +386,58 @@ function App() {
     }
   }, [api, loadDashboard])
 
+  useEffect(() => {
+    if (!api || section !== 'admin' || principalUser?.globalRole !== 'admin') {
+      return
+    }
+    let cancelled = false
+    setAdminMetricsLoading(true)
+    void Promise.all([api.adminMetrics(), api.runtimeConfig()])
+      .then(([m, r]) => {
+        if (!cancelled) {
+          setAdminMetrics(m)
+          setAdminRuntime(toRuntimeConfigRecord(r))
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAdminMetrics(null)
+          setAdminRuntime(null)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAdminMetricsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, section, principalUser?.globalRole])
+
+  useEffect(() => {
+    if (!api || section !== 'settings') {
+      return
+    }
+    let cancelled = false
+    setApiTokensLoading(true)
+    void api
+      .listMyApiTokens()
+      .then((r) => {
+        if (!cancelled) {
+          setApiTokens(r.items ?? [])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setApiTokensLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, section])
+
   const sidebarContentNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
     () => [
       { id: 'calendar', label: 'Schedule', icon: 'calendar' },
@@ -388,6 +484,15 @@ function App() {
     () => [...teamPosts].filter((post) => post.status === 'posted').sort((left, right) => parseISO(right.scheduledAt).getTime() - parseISO(left.scheduledAt).getTime()),
     [teamPosts],
   )
+
+  const showPreviewColumn = section === 'calendar' || section === 'archive'
+
+  const myRoleInSelectedTeam = useMemo((): TeamRole | null => {
+    if (!selectedTeam || !principalUser) {
+      return null
+    }
+    return selectedTeam.members.find((m) => m.userId === principalUser.id)?.role ?? null
+  }, [principalUser, selectedTeam])
 
   const selectedPost = useMemo(() => posts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, posts])
   const editTargetPost = useMemo(() => posts.find((post) => post.id === editingPostId) ?? null, [editingPostId, posts])
@@ -452,6 +557,128 @@ function App() {
     })
     setAuthTokenDraft(settings.general.bearerToken.trim())
     setStatusMessage('Session settings applied')
+  }
+
+  function directoryUserLabel(userId: string) {
+    const user = directoryUsers.find((u) => u.id === userId)
+    return user ? `${user.name} · ${user.email}` : userId
+  }
+
+  async function handleCreateTeam() {
+    if (!api || !newTeamName.trim()) {
+      return
+    }
+    await runAction(async () => {
+      await api.createTeam({ name: newTeamName.trim(), description: newTeamDescription.trim() })
+      setNewTeamName('')
+      setNewTeamDescription('')
+      await loadDashboard()
+    }, 'Team created')
+  }
+
+  async function handleAddTeamMember() {
+    if (!api || !selectedTeam || !addMemberUserId.trim()) {
+      return
+    }
+    await runAction(async () => {
+      await api.addTeamMember(selectedTeam.id, { user_id: addMemberUserId.trim(), role: addMemberRole })
+      setAddMemberUserId('')
+      await loadDashboard()
+    }, 'Member added')
+  }
+
+  async function handleInviteToTeam() {
+    if (!api || !selectedTeam || !inviteEmail.trim()) {
+      return
+    }
+    setSyncing(true)
+    setError(null)
+    setStatusMessage(null)
+    try {
+      const res = await api.createTeamInvitation(selectedTeam.id, { email: inviteEmail.trim(), role: inviteRole })
+      setInviteEmail('')
+      await loadDashboard()
+      setStatusMessage(`Invitation created. One-time acceptance token: ${res.token}`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Invitation failed')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  async function handleRemoveTeamMember(userId: string) {
+    if (!api || !selectedTeam) {
+      return
+    }
+    await runAction(async () => {
+      await api.removeTeamMember(selectedTeam.id, userId)
+      await loadDashboard()
+    }, 'Member removed')
+  }
+
+  async function handleSaveAdminProvider() {
+    if (!api) {
+      return
+    }
+    const d = adminProviderDraft
+    const scopes = d.scopes.split(',').map((s) => s.trim()).filter(Boolean)
+    const payload = {
+      provider: d.provider,
+      name: d.name.trim(),
+      instance_url: d.instanceUrl.trim(),
+      client_id: d.clientId.trim() || undefined,
+      client_secret: d.clientSecret.trim() || undefined,
+      scopes: scopes.length ? scopes : undefined,
+      authorization_endpoint: d.authorizationEndpoint.trim() || undefined,
+      token_endpoint: d.tokenEndpoint.trim() || undefined,
+    }
+    if (!payload.name || !payload.instance_url) {
+      setError('Provider name and instance URL are required.')
+      return
+    }
+    await runAction(async () => {
+      if (editingProviderId) {
+        await api.updateProviderInstance(editingProviderId, {
+          provider: payload.provider,
+          name: payload.name,
+          instance_url: payload.instance_url,
+          client_id: payload.client_id,
+          client_secret: payload.client_secret,
+          scopes: payload.scopes,
+          authorization_endpoint: payload.authorization_endpoint,
+          token_endpoint: payload.token_endpoint,
+        })
+        setEditingProviderId(null)
+      } else {
+        await api.createProviderInstance(payload)
+      }
+      setAdminProviderDraft(defaultAdminProviderDraft())
+      await loadDashboard()
+    }, editingProviderId ? 'Provider updated' : 'Provider registered')
+  }
+
+  async function handleCreateApiToken() {
+    if (!api || !newApiTokenName.trim()) {
+      return
+    }
+    await runAction(async () => {
+      const res = await api.createMyApiToken(newApiTokenName.trim())
+      setNewTokenPlaintext(res.token)
+      setNewApiTokenName('')
+      const list = await api.listMyApiTokens()
+      setApiTokens(list.items ?? [])
+    }, 'API token created. Copy the secret below; it is not stored in plain text.')
+  }
+
+  async function handleRevokeApiToken(tokenID: string) {
+    if (!api) {
+      return
+    }
+    await runAction(async () => {
+      await api.revokeMyApiToken(tokenID)
+      const list = await api.listMyApiTokens()
+      setApiTokens(list.items ?? [])
+    }, 'API token revoked')
   }
 
   async function handleSavePost() {
@@ -534,7 +761,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell" data-theme={theme}>
+    <div className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'}`} data-theme={theme}>
       <aside className="app-sidebar" aria-label="Main navigation">
         <div className="app-sidebar__header">
           <div className="app-sidebar__logo" title="goloom" aria-hidden="true">
@@ -709,11 +936,25 @@ function App() {
           )}
 
           {section === 'teams' && (
-            <div className="teams-view">
+            <div className="teams-view two-column-detail">
               <div className="glass-panel">
-                <div className="panel__header">
-                  <h2>{selectedTeam?.name ?? 'No team selected'}</h2>
-                </div>
+                <h2 className="section-card__title">Create team</h2>
+                <p className="hint">New teams you create are owned by you. Personal workspaces cannot receive members.</p>
+                <label className="field">
+                  <span>Name</span>
+                  <input value={newTeamName} onChange={(event) => setNewTeamName(event.target.value)} placeholder="Marketing" />
+                </label>
+                <label className="field">
+                  <span>Description</span>
+                  <input value={newTeamDescription} onChange={(event) => setNewTeamDescription(event.target.value)} placeholder="Optional" />
+                </label>
+                <button type="button" className="button button--primary" onClick={() => void handleCreateTeam()} disabled={syncing || !newTeamName.trim()}>
+                  Create team
+                </button>
+              </div>
+
+              <div className="glass-panel">
+                <h2 className="section-card__title">Your teams</h2>
                 <div className="team-grid">
                   {teams.map((team) => (
                     <button
@@ -728,42 +969,326 @@ function App() {
                   ))}
                 </div>
               </div>
+
+              {selectedTeam ? (
+                <div className="glass-panel">
+                  <h2 className="section-card__title">{selectedTeam.name}</h2>
+                  <p className="hint">{selectedTeam.description || 'No description'}</p>
+
+                  {selectedTeam.isPersonal ? (
+                    <p className="hint">This is your personal workspace. Invite other users from a shared team instead.</p>
+                  ) : myRoleInSelectedTeam === 'owner' ? (
+                    <>
+                      <h3 className="subsection-title">Members</h3>
+                      <ul className="member-list">
+                        {selectedTeam.members.map((m) => (
+                          <li key={m.userId} className="member-list__row">
+                            <div>
+                              <strong>{directoryUserLabel(m.userId)}</strong>
+                              <span className="member-list__role">{m.role}</span>
+                            </div>
+                            {m.userId !== principalUser?.id ? (
+                              <button type="button" className="button button--secondary" onClick={() => void handleRemoveTeamMember(m.userId)} disabled={syncing}>
+                                Remove
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+
+                      <h3 className="subsection-title">Add member</h3>
+                      <p className="hint">Grant access to an existing user from the directory.</p>
+                      <div className="inline-cluster" style={{ flexWrap: 'wrap' }}>
+                        <select value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
+                          <option value="">Select user…</option>
+                          {directoryUsers
+                            .filter((u) => !selectedTeam.members.some((m) => m.userId === u.id))
+                            .map((u) => (
+                              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                            ))}
+                        </select>
+                        <select value={addMemberRole} onChange={(event) => setAddMemberRole(event.target.value as 'editor' | 'viewer')}>
+                          <option value="editor">Editor</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        <button type="button" className="button button--primary" onClick={() => void handleAddTeamMember()} disabled={syncing || !addMemberUserId}>
+                          Add
+                        </button>
+                      </div>
+
+                      <h3 className="subsection-title">Invite by email</h3>
+                      <p className="hint">Generates a one-time token the invitee uses with the invitation link flow.</p>
+                      <div className="inline-cluster" style={{ flexWrap: 'wrap' }}>
+                        <input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="colleague@company.com" />
+                        <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as 'editor' | 'viewer')}>
+                          <option value="editor">Editor</option>
+                          <option value="viewer">Viewer</option>
+                        </select>
+                        <button type="button" className="button button--secondary" onClick={() => void handleInviteToTeam()} disabled={syncing || !inviteEmail.trim()}>
+                          Create invitation
+                        </button>
+                      </div>
+                    </>
+                  ) : myRoleInSelectedTeam ? (
+                    <>
+                      <h3 className="subsection-title">Members</h3>
+                      <ul className="member-list">
+                        {selectedTeam.members.map((m) => (
+                          <li key={m.userId} className="member-list__row">
+                            <div>
+                              <strong>{directoryUserLabel(m.userId)}</strong>
+                              <span className="member-list__role">{m.role}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="hint">Only the team owner can add or remove people.</p>
+                    </>
+                  ) : (
+                    <p className="hint">You do not have access to this team.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
           )}
 
           {section === 'settings' && (
-            <div className="settings-view">
-               <div className="glass-panel">
-                 <SettingsCard title="Connection">
-                    <label className="field">
-                      <span>API base URL (optional)</span>
-                      <input value={settings.general.apiBaseUrl} onChange={(event) => updateAPIBaseURL(event.target.value)} />
-                    </label>
-                    <label className="field">
-                      <span>Bearer token</span>
-                      <input type="password" value={settings.general.bearerToken} onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, bearerToken: event.target.value } }))} />
-                    </label>
-                    <div className="inline-cluster" style={{ marginTop: '1rem' }}>
-                      <button type="button" className="button button--primary" onClick={connectBackend}>
-                        Apply session
-                      </button>
-                      <button type="button" className="button button--secondary" onClick={() => void loadDashboard()} disabled={!api || syncing}>
-                        Refresh data
-                      </button>
-                    </div>
-                 </SettingsCard>
-               </div>
+            <div className="settings-view two-column-detail">
+              <div className="glass-panel">
+                <SettingsCard title="Browser session">
+                  <label className="field">
+                    <span>API base URL (optional)</span>
+                    <input value={settings.general.apiBaseUrl} onChange={(event) => updateAPIBaseURL(event.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span>Bearer token (OIDC ID token, bootstrap, or API token)</span>
+                    <input type="password" value={settings.general.bearerToken} onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, bearerToken: event.target.value } }))} />
+                  </label>
+                  <div className="inline-cluster" style={{ marginTop: '1rem' }}>
+                    <button type="button" className="button button--primary" onClick={connectBackend}>
+                      Apply session
+                    </button>
+                    <button type="button" className="button button--secondary" onClick={() => void loadDashboard()} disabled={!api || syncing}>
+                      Refresh data
+                    </button>
+                  </div>
+                </SettingsCard>
+              </div>
+
+              <div className="glass-panel">
+                <h2 className="section-card__title">API tokens</h2>
+                <p className="hint">
+                  Tokens authenticate as <strong>you</strong>, not a team. Team access follows your memberships. Use <code className="inline-code">Authorization: Bearer &lt;token&gt;</code> on every request.
+                  Create automation tokens here; each value is shown only once.
+                </p>
+                {newTokenPlaintext ? (
+                  <div className="token-reveal">
+                    <p className="hint">Copy this secret now:</p>
+                    <code className="token-reveal__value">{newTokenPlaintext}</code>
+                    <button type="button" className="button button--secondary" onClick={() => setNewTokenPlaintext(null)}>
+                      Dismiss
+                    </button>
+                  </div>
+                ) : null}
+                <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '1rem' }}>
+                  <input
+                    value={newApiTokenName}
+                    onChange={(event) => setNewApiTokenName(event.target.value)}
+                    placeholder="Token label (e.g. CI, laptop)"
+                  />
+                  <button type="button" className="button button--primary" onClick={() => void handleCreateApiToken()} disabled={syncing || !newApiTokenName.trim()}>
+                    Create token
+                  </button>
+                </div>
+                {apiTokensLoading ? <p className="hint">Loading tokens…</p> : null}
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Created</th>
+                      <th>Last used</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {apiTokens.map((t) => (
+                      <tr key={t.id}>
+                        <td>{t.name}</td>
+                        <td>{format(parseISO(t.created_at), 'PPp')}</td>
+                        <td>{t.last_used_at ? format(parseISO(t.last_used_at), 'PPp') : '—'}</td>
+                        <td>
+                          <button type="button" className="button button--secondary" onClick={() => void handleRevokeApiToken(t.id)} disabled={syncing}>
+                            Revoke
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {apiTokens.length === 0 && !apiTokensLoading ? <p className="hint">No API tokens yet.</p> : null}
+              </div>
             </div>
           )}
 
-          {section === 'admin' && (
-            <div className="glass-panel">
-              <h2>Administration</h2>
-              <p className="hint">Provider instances and advanced options are available through the REST API. A fuller admin UI will follow.</p>
+          {section === 'admin' && principalUser?.globalRole === 'admin' ? (
+            <div className="admin-view two-column-detail">
+              <div className="glass-panel">
+                <h2 className="section-card__title">Overview</h2>
+                {adminMetricsLoading ? <p className="hint">Loading metrics…</p> : null}
+                {adminMetrics ? (
+                  <div className="stat-grid">
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Users</span>
+                      <span className="stat-tile__value">{adminMetrics.users_count}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Teams</span>
+                      <span className="stat-tile__value">{adminMetrics.teams_count}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Provider instances</span>
+                      <span className="stat-tile__value">{adminMetrics.provider_instances_count}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Queued / pending</span>
+                      <span className="stat-tile__value">{adminMetrics.posts_pending}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Publishing</span>
+                      <span className="stat-tile__value">{adminMetrics.posts_processing}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Posted</span>
+                      <span className="stat-tile__value">{adminMetrics.posts_posted}</span>
+                    </div>
+                    <div className="stat-tile stat-tile--warn">
+                      <span className="stat-tile__label">Failed</span>
+                      <span className="stat-tile__value">{adminMetrics.posts_failed}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Cancelled</span>
+                      <span className="stat-tile__value">{adminMetrics.posts_cancelled}</span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {adminRuntime ? (
+                <div className="glass-panel">
+                  <h2 className="section-card__title">Scheduler &amp; server</h2>
+                  <dl className="kv-list">
+                    <dt>Worker processes</dt>
+                    <dd>{adminRuntime.scheduler.workers}</dd>
+                    <dt>Poll interval</dt>
+                    <dd>{adminRuntime.scheduler.pollInterval}</dd>
+                    <dt>HTTP listen</dt>
+                    <dd><code className="inline-code">{adminRuntime.general.httpAddr}</code></dd>
+                    <dt>Rate limit / min</dt>
+                    <dd>{adminRuntime.security.rateLimitPerMinute}</dd>
+                  </dl>
+                </div>
+              ) : null}
+
+              <div className="glass-panel">
+                <h2 className="section-card__title">Provider onboarding</h2>
+                <p className="hint">Register Mastodon, Friendica, or Bluesky instances so teams can connect accounts. Mastodon can auto-discover OAuth endpoints from the instance URL when credentials are omitted.</p>
+
+                <div className="inline-cluster" style={{ marginBottom: '1rem' }}>
+                  <select
+                    value={adminProviderDraft.provider}
+                    onChange={(event) => {
+                      const p = event.target.value as ProviderName
+                      setAdminProviderDraft((current) => ({
+                        ...current,
+                        provider: p,
+                        instanceUrl: p === 'bluesky' ? 'https://bsky.social' : current.instanceUrl,
+                      }))
+                    }}
+                  >
+                    <option value="mastodon">Mastodon</option>
+                    <option value="friendica">Friendica</option>
+                    <option value="bluesky">Bluesky</option>
+                  </select>
+                  {editingProviderId ? (
+                    <button type="button" className="button button--secondary" onClick={() => { setEditingProviderId(null); setAdminProviderDraft(defaultAdminProviderDraft()) }}>
+                      Cancel edit
+                    </button>
+                  ) : null}
+                </div>
+
+                <label className="field">
+                  <span>Display name</span>
+                  <input value={adminProviderDraft.name} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, name: event.target.value }))} placeholder="My instance" />
+                </label>
+                <label className="field">
+                  <span>Instance URL</span>
+                  <input value={adminProviderDraft.instanceUrl} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, instanceUrl: event.target.value }))} placeholder="https://mastodon.social" />
+                </label>
+                <label className="field">
+                  <span>Client ID (optional for Mastodon auto-register)</span>
+                  <input value={adminProviderDraft.clientId} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientId: event.target.value }))} />
+                </label>
+                <label className="field">
+                  <span>Client secret</span>
+                  <input type="password" value={adminProviderDraft.clientSecret} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientSecret: event.target.value }))} placeholder="Leave blank to keep existing on update" />
+                </label>
+                <label className="field">
+                  <span>Scopes (comma-separated)</span>
+                  <input value={adminProviderDraft.scopes} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, scopes: event.target.value }))} />
+                </label>
+                <label className="field">
+                  <span>Authorization endpoint (advanced)</span>
+                  <input value={adminProviderDraft.authorizationEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, authorizationEndpoint: event.target.value }))} />
+                </label>
+                <label className="field">
+                  <span>Token endpoint (advanced)</span>
+                  <input value={adminProviderDraft.tokenEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, tokenEndpoint: event.target.value }))} />
+                </label>
+                <button type="button" className="button button--primary" onClick={() => void handleSaveAdminProvider()} disabled={syncing}>
+                  {editingProviderId ? 'Update provider' : 'Register provider'}
+                </button>
+
+                <h3 className="subsection-title" style={{ marginTop: '1.5rem' }}>Registered instances</h3>
+                <ul className="provider-admin-list">
+                  {providerInstances.map((p) => (
+                    <li key={p.id}>
+                      <div>
+                        <strong>{p.name}</strong>
+                        <span className="hint"> {p.provider} · {p.instanceUrl}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="button button--secondary"
+                        onClick={() => {
+                          setEditingProviderId(p.id)
+                          setAdminProviderDraft({
+                            provider: p.provider,
+                            name: p.name,
+                            instanceUrl: p.instanceUrl,
+                            clientId: p.clientId,
+                            clientSecret: '',
+                            scopes: p.scopes.join(','),
+                            authorizationEndpoint: p.authorizationEndpoint,
+                            tokenEndpoint: p.tokenEndpoint,
+                          })
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {providerInstances.length === 0 ? <p className="hint">No provider instances yet.</p> : null}
+              </div>
             </div>
-          )}
+          ) : section === 'admin' ? (
+            <div className="glass-panel">
+              <p className="hint">Administrator access is required for this section.</p>
+            </div>
+          ) : null}
         </main>
 
+        {showPreviewColumn ? (
         <aside className="preview-column">
           <div className="preview-header">
             <p className="eyebrow">Live Preview</p>
@@ -787,6 +1312,7 @@ function App() {
             )}
           </div>
         </aside>
+        ) : null}
 
       {composerOpen && (
         <div className="modal-backdrop" onClick={closeComposer}>

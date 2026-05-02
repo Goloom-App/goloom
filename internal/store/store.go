@@ -61,6 +61,11 @@ type Store interface {
 	DecryptProviderInstanceClientSecret(instance domain.ProviderInstance) (string, error)
 	LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error)
 	EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error
+
+	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
+	CreateUserAPIToken(ctx context.Context, userID, name string) (plaintext string, meta domain.APIToken, err error)
+	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
+	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error
 }
 
 func Open(ctx context.Context, databaseURL string, encrypter *security.Encrypter) (Store, error) {

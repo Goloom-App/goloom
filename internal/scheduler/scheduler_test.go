@@ -260,6 +260,22 @@ func (m *mockStore) AcceptTeamInvitation(ctx context.Context, userID, email, raw
 	return domain.TeamMembership{}, nil
 }
 
+func (m *mockStore) AdminMetrics(ctx context.Context) (domain.AdminMetrics, error) {
+	return domain.AdminMetrics{}, nil
+}
+
+func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string) (string, domain.APIToken, error) {
+	return "", domain.APIToken{}, nil
+}
+
+func (m *mockStore) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {
+	return nil, nil
+}
+
+func (m *mockStore) RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error {
+	return nil
+}
+
 var _ store.Store = (*mockStore)(nil)
 
 type fakeProvider struct {

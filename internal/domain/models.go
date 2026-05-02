@@ -198,6 +198,18 @@ type CreateTeamInput struct {
 	Description string `json:"description"`
 }
 
+// AdminMetrics aggregates global counts for the admin dashboard.
+type AdminMetrics struct {
+	UsersCount               int   `json:"users_count"`
+	TeamsCount               int   `json:"teams_count"`
+	ProviderInstancesCount   int   `json:"provider_instances_count"`
+	PostsPending             int64 `json:"posts_pending"`
+	PostsProcessing          int64 `json:"posts_processing"`
+	PostsPosted              int64 `json:"posts_posted"`
+	PostsFailed              int64 `json:"posts_failed"`
+	PostsCancelled           int64 `json:"posts_cancelled"`
+}
+
 type AddTeamMemberInput struct {
 	UserID string   `json:"user_id"`
 	Role   TeamRole `json:"role"`

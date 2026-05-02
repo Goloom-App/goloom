@@ -84,6 +84,9 @@ export interface BackendProviderInstance {
 export interface BackendRuntimeConfig {
   general: {
     http_addr: string
+    app_env?: string
+    log_level?: string
+    log_format?: string
   }
   security: {
     allowed_origins: string[]
@@ -100,6 +103,26 @@ export interface BackendRuntimeConfig {
     client_id: string
     has_secret: boolean
   }
+}
+
+export interface BackendAdminMetrics {
+  users_count: number
+  teams_count: number
+  provider_instances_count: number
+  posts_pending: number
+  posts_processing: number
+  posts_posted: number
+  posts_failed: number
+  posts_cancelled: number
+}
+
+export interface BackendAPIToken {
+  id: string
+  user_id: string
+  name: string
+  last_used_at?: string
+  expires_at?: string
+  created_at: string
 }
 
 export interface BackendAuthStatus {
@@ -185,6 +208,29 @@ export function createApiClient(options: ApiClientOptions) {
     },
     runtimeConfig() {
       return request<BackendRuntimeConfig>(options, '/v1/admin/runtime-config', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    adminMetrics() {
+      return request<BackendAdminMetrics>(options, '/v1/admin/metrics', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listMyApiTokens() {
+      return request<{ items: BackendAPIToken[] }>(options, '/v1/me/api-tokens', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    createMyApiToken(name: string) {
+      return request<{ token: string; api_token: BackendAPIToken }>(options, '/v1/me/api-tokens', {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify({ name }),
+      })
+    },
+    revokeMyApiToken(tokenID: string) {
+      return request<void>(options, `/v1/me/api-tokens/${tokenID}`, {
+        method: 'DELETE',
         headers: buildHeaders(options.token, false),
       })
     },

@@ -208,6 +208,10 @@ Authorization: Bearer <oidc-id-token-or-api-token>
 - `POST /v1/auth/oidc/start` (JSON body `{"return_to": "<url>"}` — starts browser OIDC login when configured)
 - `GET /v1/oauth/oidc/callback` (IdP redirect; not called directly)
 - `GET /v1/me`
+- `GET /v1/me/api-tokens` — list your API tokens (metadata only)
+- `POST /v1/me/api-tokens` — create an API token (`{"name":"…"}`); response includes the secret once in `token`
+- `DELETE /v1/me/api-tokens/{tokenID}` — revoke a token
+- `GET /v1/admin/metrics` — global post/user/team counts (admin only)
 - `GET /v1/users`
 - `GET /v1/teams`
 - `POST /v1/teams`
