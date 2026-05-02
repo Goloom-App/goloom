@@ -30,6 +30,7 @@ type Config struct {
 	OIDCIssuerURL    string
 	OIDCClientID     string
 	OIDCClientSecret string
+	OIDCRedirectURI  string
 
 	BootstrapAdminEmail string
 	BootstrapAdminName  string
@@ -57,6 +58,7 @@ func Load() (Config, error) {
 		OIDCIssuerURL:         getEnv("OIDC_ISSUER_URL", ""),
 		OIDCClientID:          getEnv("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:      getEnv("OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURI:       getEnv("OIDC_REDIRECT_URI", ""),
 		BootstrapAdminEmail:   getEnv("BOOTSTRAP_ADMIN_EMAIL", "admin@localhost"),
 		BootstrapAdminName:    getEnv("BOOTSTRAP_ADMIN_NAME", "Local Administrator"),
 		BootstrapAdminToken:   getEnv("BOOTSTRAP_ADMIN_TOKEN", ""),
@@ -67,6 +69,10 @@ func Load() (Config, error) {
 	}
 
 	cfg.MastodonRedirectURI = getEnv("MASTODON_REDIRECT_URI", strings.TrimRight(cfg.PublicBaseURL, "/")+"/v1/oauth/mastodon/callback")
+
+	if cfg.OIDCRedirectURI == "" {
+		cfg.OIDCRedirectURI = strings.TrimRight(cfg.PublicBaseURL, "/") + "/v1/oauth/oidc/callback"
+	}
 
 	if cfg.EncryptionKey == "" {
 		sum := sha256.Sum256([]byte("development-insecure-key"))

@@ -5,9 +5,10 @@ import { addMinutes, format, parseISO, set, startOfDay } from 'date-fns'
 import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin } from './api'
 import { initialSettings } from './data'
 import { Icon } from './icons'
-import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toTeamMemberRecord, toTeamRecord } from './mappers'
+import type { IconName } from './icons'
+import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { postsForTeam, sharedAccountLabels, SLOT_MINUTES } from './schedule'
-import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, SettingsState, TeamRecord } from './types'
+import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, SettingsState, TeamRecord, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 
@@ -24,6 +25,7 @@ function App() {
   const [authStatusLoading, setAuthStatusLoading] = useState(true)
   const [authView, setAuthView] = useState<'bootstrap' | 'login'>('login')
   const [authTokenDraft, setAuthTokenDraft] = useState(() => loadStoredSettings().general.bearerToken)
+  const [principalUser, setPrincipalUser] = useState<UserRecord | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -151,13 +153,14 @@ function App() {
       setStatusMessage(null)
       const baseUrl = loadStoredSettings().general.apiBaseUrl.trim()
       try {
-        await createApiClient({ baseUrl, token }).me()
+        const meResponse = await createApiClient({ baseUrl, token }).me()
         setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
         setSettings((current) => ({
           ...current,
           general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
         }))
         setAuthTokenDraft(token)
+        setPrincipalUser(toUserRecord(meResponse.user))
         setStatusMessage('Signed in with OpenID Connect')
       } catch (cause) {
         if (cause instanceof ApiError && cause.status === 401) {
@@ -170,7 +173,6 @@ function App() {
       }
     })()
   }, [])
-
   const clearAuthenticatedState = useCallback((message?: string) => {
     setActiveConnection((current) => ({ ...current, bearerToken: '' }))
     setSettings((current) => ({
@@ -178,6 +180,7 @@ function App() {
       general: { ...current.general, bearerToken: '' },
     }))
     setAuthTokenDraft('')
+    setPrincipalUser(null)
     setTeams([])
     setAccounts([])
     setPosts([])
@@ -204,14 +207,16 @@ function App() {
 
     try {
       const baseUrl = settings.general.apiBaseUrl.trim()
-      await createApiClient({ baseUrl, token }).me()
+      const meResponse = await createApiClient({ baseUrl, token }).me()
       setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
       setSettings((current) => ({
         ...current,
         general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
       }))
+      setPrincipalUser(toUserRecord(meResponse.user))
       setStatusMessage(mode === 'bootstrap' ? 'Bootstrap administrator signed in' : 'Signed in')
-      } catch (cause) {      if (cause instanceof ApiError && cause.status === 401) {
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 401) {
         setAuthError(mode === 'bootstrap' ? 'The bootstrap token was rejected.' : 'The bearer token was rejected.')
       } else {
         setAuthError(cause instanceof Error ? cause.message : 'Sign-in failed')
@@ -253,7 +258,8 @@ function App() {
     setError(null)
 
     try {
-      await api.me()
+      const meResponse = await api.me()
+      setPrincipalUser(toUserRecord(meResponse.user))
 
       const [teamsResponse, providerInstancesResponse] = await Promise.all([
         api.listTeams(),
@@ -336,12 +342,18 @@ function App() {
     }
   }, [api, loadDashboard])
 
-  const navigationItems: { id: AppSection; label: string; icon: 'calendar' | 'archive' | 'teams' | 'settings' }[] = [
-    { id: 'calendar', label: 'Schedule', icon: 'calendar' },
-    { id: 'archive', label: 'Archive', icon: 'archive' },
-    { id: 'teams', label: 'Teams', icon: 'teams' },
-    { id: 'settings', label: 'Settings', icon: 'settings' },
-  ]
+  const navigationItems = useMemo(() => {
+    const items: { id: AppSection; label: string; icon: IconName }[] = [
+      { id: 'calendar', label: 'Schedule', icon: 'calendar' },
+      { id: 'archive', label: 'Archive', icon: 'archive' },
+      { id: 'teams', label: 'Teams', icon: 'teams' },
+      { id: 'settings', label: 'Settings', icon: 'settings' },
+    ]
+    if (principalUser?.globalRole === 'admin') {
+      items.push({ id: 'admin', label: 'Admin', icon: 'admin' })
+    }
+    return items
+  }, [principalUser])
 
   const effectiveSelectedTeamId = selectedTeamId || teams[0]?.id || ''
   const selectedTeam = useMemo(

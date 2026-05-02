@@ -57,6 +57,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.HandleFunc("GET /healthz", a.handleHealth)
 	mux.HandleFunc("GET /v1/providers", a.handleProviders)
 	mux.HandleFunc("GET /v1/auth/status", a.handleAuthStatus)
+	mux.HandleFunc("POST /v1/auth/oidc/start", a.handleStartOIDCLogin)
+	mux.HandleFunc("GET /v1/oauth/oidc/callback", a.handleOIDCLoginCallback)
 	mux.HandleFunc("GET /v1/oauth/mastodon/callback", a.handleMastodonOAuthCallback)
 
 	mux.Handle("GET /v1/me", a.auth.RequireAuth(http.HandlerFunc(a.handleMe)))
@@ -154,10 +156,11 @@ func (a *API) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	auth.WriteJSON(w, http.StatusOK, map[string]any{
-		"bootstrap_enabled": a.config.BootstrapAdminToken != "",
-		"oidc_enabled":      a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
-		"has_users":         len(users) > 0,
-		"has_admin_users":   hasAdminUsers,
+		"bootstrap_enabled":    a.config.BootstrapAdminToken != "",
+		"oidc_enabled":         a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
+		"oidc_oauth_enabled":   a.auth.OIDCOAuthReady(),
+		"has_users":            len(users) > 0,
+		"has_admin_users":      hasAdminUsers,
 	})
 }
 
