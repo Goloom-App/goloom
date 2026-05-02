@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { addMinutes, format, parseISO, set, startOfDay } from 'date-fns'
 
-import { ApiError, createApiClient, requestAuthStatus } from './api'
+import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin } from './api'
 import { initialSettings } from './data'
 import { Icon } from './icons'
 import { colorForProvider, toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
@@ -169,6 +169,49 @@ function App() {
     window.history.replaceState({}, document.title, nextURL)
   }, [])
 
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash.startsWith('#goloom_oidc_token=')) {
+      return
+    }
+    const encoded = hash.slice('#goloom_oidc_token='.length)
+    let token: string
+    try {
+      token = decodeURIComponent(encoded)
+    } catch {
+      setAuthError('Invalid sign-in response.')
+      window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
+      return
+    }
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
+
+    void (async () => {
+      setAuthSubmitting(true)
+      setAuthError(null)
+      setStatusMessage(null)
+      const baseUrl = loadStoredSettings().general.apiBaseUrl.trim()
+      try {
+        const meResponse = await createApiClient({ baseUrl, token }).me()
+        setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
+        setSettings((current) => ({
+          ...current,
+          general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
+        }))
+        setAuthTokenDraft(token)
+        setPrincipalUser(toUserRecord(meResponse.user))
+        setStatusMessage('Signed in with OpenID Connect')
+      } catch (cause) {
+        if (cause instanceof ApiError && cause.status === 401) {
+          setAuthError('OpenID Connect sign-in was rejected.')
+        } else {
+          setAuthError(cause instanceof Error ? cause.message : 'Sign-in failed')
+        }
+      } finally {
+        setAuthSubmitting(false)
+      }
+    })()
+  }, [])
+
   const clearAuthenticatedState = useCallback((message?: string) => {
     setActiveConnection((current) => ({ ...current, bearerToken: '' }))
     setSettings((current) => ({
@@ -222,6 +265,21 @@ function App() {
       }
     } finally {
       setAuthSubmitting(false)
+    }
+  }
+
+  async function startOIDCLogin() {
+    setAuthError(null)
+    setStatusMessage(null)
+    setAuthSubmitting(true)
+    try {
+      const baseUrl = settings.general.apiBaseUrl.trim()
+      const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`
+      const { authorization_url: authorizationUrl } = await requestStartOIDCLogin(baseUrl, returnTo)
+      window.location.href = authorizationUrl
+    } catch (cause) {
+      setAuthSubmitting(false)
+      setAuthError(cause instanceof Error ? cause.message : 'Failed to start OpenID Connect login')
     }
   }
 
@@ -741,6 +799,7 @@ function App() {
           onTokenChange={setAuthTokenDraft}
           onAPIBaseURLChange={updateAPIBaseURL}
           onSubmit={() => undefined}
+          onStartOIDCLogin={() => undefined}
         />
       </AuthShell>
     )
@@ -760,6 +819,7 @@ function App() {
           onTokenChange={setAuthTokenDraft}
           onAPIBaseURLChange={updateAPIBaseURL}
           onSubmit={() => void authenticateWithToken(authView)}
+          onStartOIDCLogin={() => void startOIDCLogin()}
         />
       </AuthShell>
     )
@@ -1632,6 +1692,7 @@ function AuthPanel({
   onTokenChange,
   onAPIBaseURLChange,
   onSubmit,
+  onStartOIDCLogin,
 }: {
   view: 'bootstrap' | 'login'
   authStatus: AuthStatusRecord | null
@@ -1643,12 +1704,15 @@ function AuthPanel({
   onTokenChange: (value: string) => void
   onAPIBaseURLChange: (value: string) => void
   onSubmit: () => void
+  onStartOIDCLogin: () => void
 }) {
   const isBootstrap = view === 'bootstrap'
   const title = isBootstrap ? 'Bootstrap onboarding' : 'Sign in'
   const description = isBootstrap
     ? 'Use the bootstrap admin token configured on the server for the first administrator session.'
-    : 'Enter a bearer token to open the embedded dashboard.'
+    : authStatus?.oidcOAuthEnabled
+      ? 'Sign in with OpenID Connect, or use an API token in the field below.'
+      : 'Enter a bearer token to open the embedded dashboard.'
 
   return (
     <div className="auth-panel">
@@ -1682,6 +1746,7 @@ function AuthPanel({
             <span className="pill">API token</span>
             {authStatus?.bootstrapEnabled ? <span className="pill">Bootstrap enabled</span> : null}
             {authStatus?.oidcEnabled ? <span className="pill">OIDC available</span> : null}
+            {authStatus?.oidcOAuthEnabled ? <span className="pill">OIDC redirect</span> : null}
           </div>
         </div>
 
@@ -1700,6 +1765,21 @@ function AuthPanel({
                 placeholder="Leave empty to use this server"
               />
             </label>
+            {authStatus?.oidcOAuthEnabled ? (
+              <div className="inline-cluster">
+                <button
+                  type="button"
+                  className="button button--prominent"
+                  onClick={onStartOIDCLogin}
+                  disabled={authSubmitting}
+                >
+                  {authSubmitting ? 'Redirecting…' : 'Sign in with OpenID Connect'}
+                </button>
+              </div>
+            ) : null}
+            {authStatus?.oidcOAuthEnabled ? (
+              <p className="hint">Manual token entry remains available if your IdP or network blocks redirects.</p>
+            ) : null}
             <label className="field">
               <span>{isBootstrap ? 'Bootstrap admin token' : 'Bearer token'}</span>
               <input

@@ -133,6 +133,7 @@ export interface RuntimeConfigRecord {
 export interface AuthStatusRecord {
   bootstrapEnabled: boolean
   oidcEnabled: boolean
+  oidcOAuthEnabled: boolean
   hasUsers: boolean
   hasAdminUsers: boolean
 }

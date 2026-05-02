@@ -143,6 +143,7 @@ export function toAuthStatusRecord(status: BackendAuthStatus): AuthStatusRecord 
   return {
     bootstrapEnabled: status.bootstrap_enabled,
     oidcEnabled: status.oidc_enabled,
+    oidcOAuthEnabled: status.oidc_oauth_enabled,
     hasUsers: status.has_users,
     hasAdminUsers: status.has_admin_users,
   }

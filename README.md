@@ -153,33 +153,30 @@ On startup the app ensures that an admin user and hashed API token exist for tha
 
 OIDC is optional. When configured, the API accepts **OIDC ID tokens** in addition to normal API tokens: requests use the same header (`Authorization: Bearer …`). The server validates JWT-shaped bearer tokens with [go-oidc](https://github.com/coreos/go-oidc) when both issuer and client ID are set.
 
+The embedded dashboard can start a **browser OAuth/OIDC authorization code flow** (with PKCE): `POST /v1/auth/oidc/start` returns an IdP authorization URL; after login the IdP redirects to **`GET /v1/oauth/oidc/callback`** on this server, which exchanges the code, verifies the ID token, provisions the user, and redirects back to the UI with the ID token in the URL fragment for local storage (same bearer token as a pasted ID token).
+
 ### Environment variables
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `OIDC_ISSUER_URL` | Yes, to enable OIDC | Issuer URL exactly as published by your IdP (OpenID Provider Configuration document). Examples: Keycloak `https://keycloak.example/realms/myrealm`, Auth0 `https://YOUR_TENANT.auth0.com/`, Entra ID `https://login.microsoftonline.com/{tenant-id}/v2.0`. |
 | `OIDC_CLIENT_ID` | Yes, to enable OIDC | OAuth client ID. Must match the audience the IdP puts on ID tokens (what go-oidc verifies against). |
-| `OIDC_CLIENT_SECRET` | No | Not used for token verification. If set, `GET /v1/admin/runtime-config` reports `oidc.has_secret: true` so operators know a secret is configured (for example if you use the same env file for other tools). |
+| `OIDC_CLIENT_SECRET` | Recommended | Used for the authorization code **token exchange** when you register a confidential client. Browser login uses PKCE; with a confidential client the secret is sent to the token endpoint together with the PKCE verifier. If set, `GET /v1/admin/runtime-config` reports `oidc.has_secret: true`. |
+| `OIDC_REDIRECT_URI` | No | Must match the redirect URI registered on the IdP. Defaults to `{PUBLIC_BASE_URL}/v1/oauth/oidc/callback` (same pattern as Mastodon’s `MASTODON_REDIRECT_URI`). |
 
-OIDC is **enabled** when both `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` are non-empty.
+OIDC is **enabled** when both `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` are non-empty. **`GET /v1/auth/status`** reports `oidc_oauth_enabled` when the server can run the browser redirect flow (issuer, client ID, and redirect URL are configured).
 
 Copy from [`.env.example`](.env.example) or set the same keys in Docker Compose (see `docker-compose.yml` / `docker-compose-traefik.yml`).
 
 ### Identity provider configuration
 
-Create an OAuth/OIDC **confidential** or **public** client as appropriate for how you obtain ID tokens. The goloom server only needs to **verify** ID tokens; it does not implement an OIDC authorization redirect endpoint (unlike Mastodon account linking, which uses `MASTODON_REDIRECT_URI`, typically `{PUBLIC_BASE_URL}/v1/oauth/mastodon/callback`).
+Create an OAuth/OIDC client on your IdP. For the **embedded UI login**, register the callback URL (see `OIDC_REDIRECT_URI` above) as an allowed redirect URI. Use scopes that yield an **ID token** with at least `openid`, and include `profile` / `email` when possible so `sub`, `name`, and `email` map into the local user record.
+
+You can still paste a raw ID token or use CLI tools against other redirect URIs; that path is unchanged.
 
 ### Redirect URIs on the IdP
 
-Your IdP will require **allowed redirect URI(s)** (names vary: “Valid redirect URIs”, “Redirect URLs”, etc.). The value must **exactly** match the `redirect_uri` your OAuth client sends in the authorize request—same scheme, host, port, and path (including trailing slash if the client sends one).
-
-goloom does **not** define a built-in OIDC callback path. Register URIs for **whatever actually receives the authorization response** and exchanges the code for tokens—for example:
-
-- A **CLI or desktop tool** listening on `http://127.0.0.1:<port>/callback` (or the tool’s documented loopback URL).
-- **API client tools** (Postman, Insomnia, etc.) using their OAuth callback URL.
-- A **small helper page** you host at a URL under your public site, e.g. `https://app.example.com/oauth/callback`, aligned with `PUBLIC_BASE_URL` / your Traefik `HOST`.
-
-If you later add a first-party browser login on the same host as the app, a common pattern is to allow `https://<your-public-host>/` or a dedicated path such as `https://<your-public-host>/auth/callback`; register only what your client implementation uses.
+Your IdP will require **allowed redirect URI(s)** (names vary: “Valid redirect URIs”, “Redirect URLs”, etc.). The value must **exactly** match the `redirect_uri` goloom sends—same scheme, host, port, and path (including a trailing slash if present). For first-party browser login this is typically `https://<your-public-host>/v1/oauth/oidc/callback` (or `http://localhost:8080/v1/oauth/oidc/callback` in development), aligned with `PUBLIC_BASE_URL` / your Traefik `HOST`.
 
 Request ID tokens that include at least `sub` plus the standard `email` and `name` claims where possible—those map into the local user record.
 
@@ -189,7 +186,7 @@ On first successful sign-in for a given `sub`, the user is created. If the datab
 
 ### Signing in from the UI
 
-After OIDC is enabled on the server, the welcome screen shows **OIDC available**. Paste a valid **ID token** from your IdP into the bearer token field (same as an API token). Obtain the ID token using your IdP’s login flow or tooling; the embedded UI does not host the full OAuth redirect flow by itself.
+When OIDC is configured, the welcome screen shows **OIDC available** and, when the redirect flow is ready, **OIDC redirect**. Use **Sign in with OpenID Connect** to complete the OAuth authorization code flow in the browser. You can still paste a valid **ID token** or API token into the bearer token field if you prefer.
 
 ### Bearer tokens and the API
 
@@ -207,6 +204,9 @@ Authorization: Bearer <oidc-id-token-or-api-token>
 
 - `GET /healthz`
 - `GET /v1/providers`
+- `GET /v1/auth/status`
+- `POST /v1/auth/oidc/start` (JSON body `{"return_to": "<url>"}` — starts browser OIDC login when configured)
+- `GET /v1/oauth/oidc/callback` (IdP redirect; not called directly)
 - `GET /v1/me`
 - `GET /v1/users`
 - `GET /v1/teams`
@@ -242,6 +242,7 @@ Authorization: Bearer <oidc-id-token-or-api-token>
 
 ### OAuth callback
 
+- `GET /v1/oauth/oidc/callback` (browser OIDC login)
 - `GET /v1/oauth/mastodon/callback`
 
 ## Notes

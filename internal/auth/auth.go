@@ -12,11 +12,13 @@ import (
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store"
 	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2"
 )
 
 type Service struct {
-	store    store.Store
-	verifier *oidc.IDTokenVerifier
+	store     store.Store
+	verifier  *oidc.IDTokenVerifier
+	oauth2Cfg oauth2.Config
 }
 
 type oidcClaims struct {
@@ -36,7 +38,62 @@ func New(ctx context.Context, cfg config.Config, store store.Store) (*Service, e
 		return nil, err
 	}
 	service.verifier = provider.Verifier(&oidc.Config{ClientID: cfg.OIDCClientID})
+	service.oauth2Cfg = oauth2.Config{
+		ClientID:     cfg.OIDCClientID,
+		ClientSecret: cfg.OIDCClientSecret,
+		RedirectURL:  cfg.OIDCRedirectURI,
+		Endpoint:     provider.Endpoint(),
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+	}
 	return service, nil
+}
+
+// OIDCOAuthReady reports whether browser-based OIDC authorization (authorization code + PKCE) can run.
+func (s *Service) OIDCOAuthReady() bool {
+	if s == nil || s.verifier == nil {
+		return false
+	}
+	return strings.TrimSpace(s.oauth2Cfg.ClientID) != "" && strings.TrimSpace(s.oauth2Cfg.RedirectURL) != ""
+}
+
+// OIDCAuthCodeURL builds the IdP authorization URL for the OIDC login redirect flow.
+func (s *Service) OIDCAuthCodeURL(state, nonce, pkceVerifier string) (string, error) {
+	if !s.OIDCOAuthReady() {
+		return "", errors.New("oidc oauth is not configured")
+	}
+	return s.oauth2Cfg.AuthCodeURL(state, oauth2.AccessTypeOffline, oidc.Nonce(nonce), oauth2.S256ChallengeOption(pkceVerifier)), nil
+}
+
+// OIDCExchangeCode completes the authorization code flow, verifies the ID token (including nonce),
+// upserts the user, and returns the raw ID token JWT for use as an API bearer token.
+func (s *Service) OIDCExchangeCode(ctx context.Context, code, nonce, pkceVerifier string) (rawIDToken string, principal domain.AuthenticatedPrincipal, err error) {
+	if !s.OIDCOAuthReady() {
+		return "", domain.AuthenticatedPrincipal{}, errors.New("oidc oauth is not configured")
+	}
+	tok, err := s.oauth2Cfg.Exchange(ctx, code, oauth2.VerifierOption(pkceVerifier))
+	if err != nil {
+		return "", domain.AuthenticatedPrincipal{}, err
+	}
+	raw, ok := tok.Extra("id_token").(string)
+	if !ok || raw == "" {
+		return "", domain.AuthenticatedPrincipal{}, errors.New("token response did not include id_token")
+	}
+	idToken, err := s.verifier.Verify(ctx, raw)
+	if err != nil {
+		return "", domain.AuthenticatedPrincipal{}, err
+	}
+	if nonce != "" && idToken.Nonce != nonce {
+		return "", domain.AuthenticatedPrincipal{}, errors.New("id token nonce mismatch")
+	}
+	var claims oidcClaims
+	if err := idToken.Claims(&claims); err != nil {
+		return "", domain.AuthenticatedPrincipal{}, err
+	}
+	user, err := s.store.UpsertOIDCUser(ctx, claims.Subject, claims.Email, claims.Name)
+	if err != nil {
+		return "", domain.AuthenticatedPrincipal{}, err
+	}
+	return raw, domain.AuthenticatedPrincipal{User: user, Kind: "oidc"}, nil
 }
 
 func (s *Service) RequireAuth(next http.Handler) http.Handler {
