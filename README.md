@@ -149,6 +149,38 @@ BOOTSTRAP_ADMIN_TOKEN=replace-with-a-strong-bootstrap-token
 
 On startup the app ensures that an admin user and hashed API token exist for that bootstrap identity. You can later rotate away from the bootstrap token or switch to OIDC.
 
+## OIDC (OpenID Connect)
+
+OIDC is optional. When configured, the API accepts **OIDC ID tokens** in addition to normal API tokens: requests use the same header (`Authorization: Bearer …`). The server validates JWT-shaped bearer tokens with [go-oidc](https://github.com/coreos/go-oidc) when both issuer and client ID are set.
+
+### Environment variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `OIDC_ISSUER_URL` | Yes, to enable OIDC | Issuer URL exactly as published by your IdP (OpenID Provider Configuration document). Examples: Keycloak `https://keycloak.example/realms/myrealm`, Auth0 `https://YOUR_TENANT.auth0.com/`, Entra ID `https://login.microsoftonline.com/{tenant-id}/v2.0`. |
+| `OIDC_CLIENT_ID` | Yes, to enable OIDC | OAuth client ID. Must match the audience the IdP puts on ID tokens (what go-oidc verifies against). |
+| `OIDC_CLIENT_SECRET` | No | Not used for token verification. If set, `GET /v1/admin/runtime-config` reports `oidc.has_secret: true` so operators know a secret is configured (for example if you use the same env file for other tools). |
+
+OIDC is **enabled** when both `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` are non-empty.
+
+Copy from [`.env.example`](.env.example) or set the same keys in Docker Compose (see `docker-compose.yml` / `docker-compose-traefik.yml`).
+
+### Identity provider configuration
+
+Create an OAuth/OIDC **confidential** or **public** client as appropriate for how you obtain ID tokens. The goloom server only needs to **verify** ID tokens; it does not run the browser authorization redirect itself. Register whatever **redirect URI** your login flow uses (for example a local script or another app) with your IdP. Request ID tokens that include at least `sub` plus the standard `email` and `name` claims where possible—those map into the local user record.
+
+### Users and roles
+
+On first successful sign-in for a given `sub`, the user is created. If the database had **no users** yet, that first OIDC user becomes an **administrator**; later users are created as non-admin unless you promote them via admin APIs. Returning users are matched by `sub` and get `email` / `name` refreshed from the token.
+
+### Signing in from the UI
+
+After OIDC is enabled on the server, the welcome screen shows **OIDC available**. Paste a valid **ID token** from your IdP into the bearer token field (same as an API token). Obtain the ID token using your IdP’s login flow or tooling; the embedded UI does not host the full OAuth redirect flow by itself.
+
+### Bearer tokens and the API
+
+Programmatic access is unchanged: send `Authorization: Bearer <id-token>` for interactive identity, or `Authorization: Bearer <api-token>` for issued API tokens.
+
 ## REST API
 
 All authenticated endpoints expect:
