@@ -19,6 +19,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		`alter table teams add column is_personal integer not null default 0`,
 		`alter table teams add column personal_for_user_id text references users(id) on delete cascade`,
+		`alter table social_accounts add column avatar_url text not null default ''`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)
@@ -117,6 +118,7 @@ func (s *Store) GetTeamByID(ctx context.Context, teamID string) (domain.Team, er
 func (s *Store) GetAccountByID(ctx context.Context, accountID string) (domain.SocialAccount, error) {
 	return queryAccount(ctx, s.db, `
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where id = ?`, accountID)
@@ -129,6 +131,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 	placeholders, args := inClause(ids)
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where id in (%s)`, placeholders),

@@ -109,6 +109,7 @@ create table if not exists social_accounts (
     instance_url text not null,
     username text not null,
     remote_account_id text not null default '',
+    avatar_url text not null default '',
     access_token_ciphertext text not null,
     refresh_token_ciphertext text not null default '',
     max_chars_override integer,
@@ -130,6 +131,9 @@ alter table if exists social_accounts
 
 alter table if exists social_accounts
     add column if not exists provider_instance_id uuid references provider_instances(id) on delete set null;
+
+alter table if exists social_accounts
+    add column if not exists avatar_url text not null default '';
 
 create table if not exists scheduled_posts (
     id uuid primary key default gen_random_uuid(),

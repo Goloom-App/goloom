@@ -17,6 +17,37 @@ import (
 
 var defaultHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+func fetchMastodonCompatibleAvatar(ctx context.Context, instanceURL, accessToken string) string {
+	accessToken = strings.TrimSpace(accessToken)
+	if accessToken == "" {
+		return ""
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(instanceURL, "/")+"/api/v1/accounts/verify_credentials", nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := defaultHTTPClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return ""
+	}
+	var payload struct {
+		AvatarStatic string `json:"avatar_static"`
+		Avatar       string `json:"avatar"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return ""
+	}
+	if s := strings.TrimSpace(payload.AvatarStatic); s != "" {
+		return s
+	}
+	return strings.TrimSpace(payload.Avatar)
+}
+
 type Capabilities struct {
 	MaxChars   int      `json:"max_chars"`
 	MediaTypes []string `json:"media_types"`
@@ -94,10 +125,12 @@ type BlueskyProvider struct {
 }
 
 type mastodonAccountResponse struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Acct     string `json:"acct"`
-	URL      string `json:"url"`
+	ID           string `json:"id"`
+	Username     string `json:"username"`
+	Acct         string `json:"acct"`
+	URL          string `json:"url"`
+	AvatarStatic string `json:"avatar_static"`
+	Avatar       string `json:"avatar"`
 }
 
 type mastodonStatusResponse struct {
@@ -221,7 +254,7 @@ func (p *GenericStatusProvider) ConnectAccount(_ context.Context, input domain.C
 	if strings.TrimSpace(input.Username) == "" || strings.TrimSpace(input.AccessToken) == "" {
 		return domain.ConnectedAccount{}, errors.New("username and access_token are required")
 	}
-	return domain.ConnectedAccount{
+	acc := domain.ConnectedAccount{
 		Provider:           p.name,
 		AuthType:           domain.AccountAuthTypeOAuthToken,
 		ProviderInstanceID: providerInstanceID(instance),
@@ -230,7 +263,9 @@ func (p *GenericStatusProvider) ConnectAccount(_ context.Context, input domain.C
 		RemoteAccountID:    strings.TrimSpace(input.RemoteAccountID),
 		AccessToken:        strings.TrimSpace(input.AccessToken),
 		RefreshToken:       strings.TrimSpace(input.RefreshToken),
-	}, nil
+	}
+	acc.AvatarURL = fetchMastodonCompatibleAvatar(ctx, normalizedURL, acc.AccessToken)
+	return acc, nil
 }
 
 func (p *GenericStatusProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {
@@ -434,6 +469,11 @@ func (p *MastodonProvider) connectAccountWithToken(ctx context.Context, normaliz
 		username = strings.TrimSpace(payload.Username)
 	}
 
+	avatarURL := strings.TrimSpace(payload.AvatarStatic)
+	if avatarURL == "" {
+		avatarURL = strings.TrimSpace(payload.Avatar)
+	}
+
 	return domain.ConnectedAccount{
 		Provider:           p.Name(),
 		AuthType:           domain.AccountAuthTypeOAuthToken,
@@ -441,6 +481,7 @@ func (p *MastodonProvider) connectAccountWithToken(ctx context.Context, normaliz
 		InstanceURL:        normalizedURL,
 		Username:           username,
 		RemoteAccountID:    strings.TrimSpace(payload.ID),
+		AvatarURL:          avatarURL,
 		AccessToken:        accessToken,
 		RefreshToken:       refreshToken,
 	}, nil
@@ -537,6 +578,11 @@ func (p *BlueskyProvider) ConnectAccount(ctx context.Context, input domain.Creat
 			return domain.ConnectedAccount{}, err
 		}
 
+		avatar := p.fetchBlueskyActorAvatar(ctx, normalizedURL, session.AccessJWT, session.Handle)
+		if avatar == "" {
+			avatar = p.fetchBlueskyActorAvatar(ctx, normalizedURL, session.AccessJWT, session.DID)
+		}
+
 		return domain.ConnectedAccount{
 			Provider:           p.Name(),
 			AuthType:           domain.AccountAuthTypeAppPassword,
@@ -544,6 +590,7 @@ func (p *BlueskyProvider) ConnectAccount(ctx context.Context, input domain.Creat
 			InstanceURL:        normalizedURL,
 			Username:           session.Handle,
 			RemoteAccountID:    session.DID,
+			AvatarURL:          avatar,
 			AccessToken:        strings.TrimSpace(input.AppPassword),
 		}, nil
 	}
@@ -567,6 +614,12 @@ func (p *BlueskyProvider) ConnectAccount(ctx context.Context, input domain.Creat
 		return domain.ConnectedAccount{}, fmt.Errorf("decode bluesky session response: %w", err)
 	}
 
+	token := strings.TrimSpace(input.AccessToken)
+	avatar := p.fetchBlueskyActorAvatar(ctx, normalizedURL, token, session.Handle)
+	if avatar == "" {
+		avatar = p.fetchBlueskyActorAvatar(ctx, normalizedURL, token, session.DID)
+	}
+
 	return domain.ConnectedAccount{
 		Provider:           p.Name(),
 		AuthType:           domain.AccountAuthTypeOAuthToken,
@@ -574,9 +627,42 @@ func (p *BlueskyProvider) ConnectAccount(ctx context.Context, input domain.Creat
 		InstanceURL:        normalizedURL,
 		Username:           session.Handle,
 		RemoteAccountID:    session.DID,
-		AccessToken:        strings.TrimSpace(input.AccessToken),
+		AvatarURL:          avatar,
+		AccessToken:        token,
 		RefreshToken:       strings.TrimSpace(input.RefreshToken),
 	}, nil
+}
+
+func (p *BlueskyProvider) fetchBlueskyActorAvatar(ctx context.Context, instanceURL, bearerJWT, actor string) string {
+	bearerJWT = strings.TrimSpace(bearerJWT)
+	actor = strings.TrimSpace(actor)
+	if bearerJWT == "" || actor == "" {
+		return ""
+	}
+	endpoint := strings.TrimRight(instanceURL, "/") + "/xrpc/app.bsky.actor.getProfile?actor=" + url.QueryEscape(actor)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+bearerJWT)
+	resp, err := defaultHTTPClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return ""
+	}
+	var out struct {
+		Avatar *string `json:"avatar"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return ""
+	}
+	if out.Avatar == nil {
+		return ""
+	}
+	return strings.TrimSpace(*out.Avatar)
 }
 
 func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {

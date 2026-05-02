@@ -434,6 +434,7 @@ func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, r
 func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where team_id = ?
@@ -466,17 +467,19 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 	_, err = s.db.ExecContext(ctx, `
 		insert into social_accounts (
 			id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+			avatar_url,
 			access_token_ciphertext, refresh_token_ciphertext, created_at
 		)
-		values (?, ?, ?, ?, nullif(?, ''), ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, nullif(?, ''), ?, ?, ?, ?, ?, ?, ?)`,
 		accountID, teamID, input.Provider, input.AuthType, input.ProviderInstanceID, input.InstanceURL, input.Username,
-		input.RemoteAccountID, accessCipher, refreshCipher, now,
+		input.RemoteAccountID, strings.TrimSpace(input.AvatarURL), accessCipher, refreshCipher, now,
 	)
 	if err != nil {
 		return domain.SocialAccount{}, err
 	}
 	return queryAccount(ctx, s.db, `
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where id = ?`,
@@ -503,6 +506,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 	args = append([]any{teamID}, args...)
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where team_id = ? and id in (%s)`, placeholders),
@@ -703,6 +707,7 @@ func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID stri
 func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.SocialAccount, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select a.id, a.team_id, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
+		       a.avatar_url,
 		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.created_at
 		from scheduled_post_targets t
 		join social_accounts a on a.id = t.account_id
@@ -906,6 +911,7 @@ func scanAccount(scanner accountScanner) (domain.SocialAccount, error) {
 		&account.InstanceURL,
 		&account.Username,
 		&account.RemoteAccountID,
+		&account.AvatarURL,
 		&account.AccessTokenCiphertext,
 		&account.RefreshTokenCiphertext,
 		&maxChars,

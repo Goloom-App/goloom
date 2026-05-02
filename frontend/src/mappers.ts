@@ -83,6 +83,7 @@ export function toAccountRecord(account: BackendAccount, instances: ProviderInst
     providerInstanceId: account.provider_instance_id,
     username: account.username,
     authType: account.auth_type,
+    avatarUrl: account.avatar_url?.trim() || undefined,
     color: colorForProvider(account.provider),
     maxChars: account.max_chars_override ?? maxCharsForProvider(account.provider),
   }

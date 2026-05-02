@@ -109,6 +109,7 @@ create table if not exists social_accounts (
     instance_url text not null,
     username text not null,
     remote_account_id text not null default '',
+    avatar_url text not null default '',
     access_token_ciphertext text not null,
     refresh_token_ciphertext text not null default '',
     max_chars_override integer,
@@ -171,3 +172,5 @@ create index if not exists idx_social_accounts_team on social_accounts(team_id);
 create index if not exists idx_provider_instances_provider on provider_instances(provider, instance_url);
 create index if not exists idx_scheduled_posts_due on scheduled_posts(status, scheduled_at);
 create index if not exists idx_post_targets_post on scheduled_post_targets(post_id);
+
+alter table social_accounts add column if not exists avatar_url text not null default '';

@@ -44,7 +44,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppEnv:                getEnv("APP_ENV", "development"),
+		AppEnv:                strings.TrimSpace(getEnv("APP_ENV", "development")),
 		HTTPAddr:              getEnv("HTTP_ADDR", ":8080"),
 		PublicBaseURL:         getEnv("PUBLIC_BASE_URL", "http://localhost:8080"),
 		DatabaseURL:           getEnv("DATABASE_URL", "file:./data/goloom.db"),
@@ -53,8 +53,8 @@ func Load() (Config, error) {
 		RateLimitPerMinute:    getInt("RATE_LIMIT_PER_MINUTE", 60),
 		SchedulerPollInterval: getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
 		SchedulerWorkers:      getInt("SCHEDULER_WORKERS", 4),
-		LogLevel:              getEnv("LOG_LEVEL", ""),
-		LogFormat:             getEnv("LOG_FORMAT", ""),
+		LogLevel:              strings.TrimSpace(getEnv("LOG_LEVEL", "")),
+		LogFormat:             strings.TrimSpace(getEnv("LOG_FORMAT", "")),
 		OIDCIssuerURL:         getEnv("OIDC_ISSUER_URL", ""),
 		OIDCClientID:          getEnv("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:      getEnv("OIDC_CLIENT_SECRET", ""),
@@ -88,14 +88,15 @@ func Load() (Config, error) {
 
 // SlogLevel returns the effective slog level for LOG_LEVEL / APP_ENV.
 func (c Config) SlogLevel() slog.Level {
-	switch strings.ToLower(strings.TrimSpace(c.LogLevel)) {
+	l := strings.ToLower(strings.Trim(c.LogLevel, "\" '"))
+	switch l {
 	case "debug":
 		return slog.LevelDebug
 	case "info":
 		return slog.LevelInfo
 	case "warn", "warning":
 		return slog.LevelWarn
-	case "error":
+	case "error", "err":
 		return slog.LevelError
 	case "":
 		if strings.EqualFold(c.AppEnv, "production") {
@@ -109,7 +110,8 @@ func (c Config) SlogLevel() slog.Level {
 
 // LogFormatJSON selects JSON logs (good for Docker log drivers / aggregators) vs text (easier local reading).
 func (c Config) LogFormatJSON() bool {
-	switch strings.ToLower(strings.TrimSpace(c.LogFormat)) {
+	f := strings.ToLower(strings.Trim(c.LogFormat, "\" '"))
+	switch f {
 	case "json":
 		return true
 	case "text":

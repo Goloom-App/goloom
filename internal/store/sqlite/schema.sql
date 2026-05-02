@@ -76,6 +76,7 @@ create table if not exists social_accounts (
     instance_url text not null,
     username text not null,
     remote_account_id text not null default '',
+    avatar_url text not null default '',
     access_token_ciphertext text not null,
     refresh_token_ciphertext text not null default '',
     max_chars_override integer,

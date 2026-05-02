@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
@@ -460,6 +461,7 @@ func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, r
 func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error) {
 	const query = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where team_id = $1
@@ -484,6 +486,7 @@ func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.S
 			&account.InstanceURL,
 			&account.Username,
 			&account.RemoteAccountID,
+			&account.AvatarURL,
 			&account.AccessTokenCiphertext,
 			&account.RefreshTokenCiphertext,
 			&account.MaxCharsOverride,
@@ -513,10 +516,12 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 	const query = `
 		insert into social_accounts (
 			team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+			avatar_url,
 			access_token_ciphertext, refresh_token_ciphertext
 		)
-		values ($1, $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9)
+		values ($1, $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9, $10)
 		returning id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		          avatar_url,
 		          access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 	`
 
@@ -531,6 +536,7 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 		input.InstanceURL,
 		input.Username,
 		input.RemoteAccountID,
+		strings.TrimSpace(input.AvatarURL),
 		accessCipher,
 		refreshCipher,
 	).Scan(
@@ -542,6 +548,7 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 		&account.InstanceURL,
 		&account.Username,
 		&account.RemoteAccountID,
+		&account.AvatarURL,
 		&account.AccessTokenCiphertext,
 		&account.RefreshTokenCiphertext,
 		&account.MaxCharsOverride,
@@ -564,6 +571,7 @@ func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) err
 func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error) {
 	const query = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where team_id = $1 and id = any($2)
@@ -587,6 +595,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 			&account.InstanceURL,
 			&account.Username,
 			&account.RemoteAccountID,
+			&account.AvatarURL,
 			&account.AccessTokenCiphertext,
 			&account.RefreshTokenCiphertext,
 			&account.MaxCharsOverride,
@@ -793,6 +802,7 @@ func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID stri
 func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.SocialAccount, error) {
 	const query = `
 		select a.id, a.team_id, a.provider, a.auth_type, coalesce(a.provider_instance_id::text, ''), a.instance_url, a.username, a.remote_account_id,
+		       a.avatar_url,
 		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.created_at
 		from scheduled_post_targets t
 		join social_accounts a on a.id = t.account_id
@@ -817,6 +827,7 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 			&account.InstanceURL,
 			&account.Username,
 			&account.RemoteAccountID,
+			&account.AvatarURL,
 			&account.AccessTokenCiphertext,
 			&account.RefreshTokenCiphertext,
 			&account.MaxCharsOverride,

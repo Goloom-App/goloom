@@ -34,6 +34,8 @@ export interface AccountRecord {
   providerInstanceId?: string
   username: string
   authType?: AccountAuthType
+  /** Profile image URL from the provider when onboarding fetched it */
+  avatarUrl?: string
   color: string
   maxChars: number
 }

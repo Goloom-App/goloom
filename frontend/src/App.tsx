@@ -2008,12 +2008,23 @@ function SettingsCard({ title, children }: { title: string; children: ReactNode 
 }
 
 function DestinationAvatar({ account, compact = false }: { account: AccountRecord; compact?: boolean }) {
+  const initials = account.username.replace('@', '').slice(0, 2).toUpperCase()
   return (
     <div className={`destination-avatar ${compact ? 'destination-avatar--compact' : ''}`}>
-      <div className="destination-avatar__image" style={{ background: avatarBackground(account.color) }} aria-hidden="true">
-        {account.username.replace('@', '').slice(0, 2).toUpperCase()}
+      <div className="destination-avatar__disk">
+        <div className="destination-avatar__inner">
+          {account.avatarUrl ? (
+            <img className="destination-avatar__photo" src={account.avatarUrl} alt="" referrerPolicy="no-referrer" />
+          ) : (
+            <div className="destination-avatar__fallback" style={{ background: avatarBackground(account.color) }} aria-hidden="true">
+              {initials}
+            </div>
+          )}
+        </div>
+        <span className="destination-avatar__badge" title={account.provider}>
+          <img src={`/icons/platforms/${account.provider}.svg`} alt="" />
+        </span>
       </div>
-      <img className="destination-avatar__platform" src={`/icons/platforms/${account.provider}.svg`} alt={account.provider} />
     </div>
   )
 }
@@ -2185,16 +2196,13 @@ function SocialPreview({
   return (
     <div className={`social-preview ${theme === 'dark' ? 'social-preview--dark' : ''}`}>
       <div className="social-preview__header">
-        <div className="social-preview__avatar" style={{ background: avatarBackground(account.color) }} />
+        <div className="social-preview__avatar-wrap">
+          <DestinationAvatar account={account} />
+        </div>
         <div className="social-preview__meta">
           <span className="social-preview__name">{account.name}</span>
           <span className="social-preview__handle">{account.username}</span>
         </div>
-        <img
-          src={`/icons/platforms/${account.provider}.svg`}
-          alt={account.provider}
-          style={{ marginLeft: 'auto', width: '20px', height: '20px' }}
-        />
       </div>
       <div className="social-preview__body">
         {content || <span className="hint">Post content will appear here...</span>}

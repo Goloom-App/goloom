@@ -101,12 +101,14 @@ func (s *Store) GetTeamByID(ctx context.Context, teamID string) (domain.Team, er
 func (s *Store) GetAccountByID(ctx context.Context, accountID string) (domain.SocialAccount, error) {
 	const q = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts where id = $1`
 	var account domain.SocialAccount
 	err := s.pool.QueryRow(ctx, q, accountID).Scan(
 		&account.ID, &account.TeamID, &account.Provider, &account.AuthType, &account.ProviderInstanceID,
 		&account.InstanceURL, &account.Username, &account.RemoteAccountID,
+		&account.AvatarURL,
 		&account.AccessTokenCiphertext, &account.RefreshTokenCiphertext, &account.MaxCharsOverride, &account.CreatedAt,
 	)
 	return account, err
@@ -118,6 +120,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 	}
 	const q = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
 		from social_accounts
 		where id = any($1)`
@@ -132,6 +135,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 		if err := rows.Scan(
 			&account.ID, &account.TeamID, &account.Provider, &account.AuthType, &account.ProviderInstanceID,
 			&account.InstanceURL, &account.Username, &account.RemoteAccountID,
+			&account.AvatarURL,
 			&account.AccessTokenCiphertext, &account.RefreshTokenCiphertext, &account.MaxCharsOverride, &account.CreatedAt,
 		); err != nil {
 			return nil, err

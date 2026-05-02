@@ -87,6 +87,7 @@ type SocialAccount struct {
 	InstanceURL            string          `json:"instance_url"`
 	Username               string          `json:"username"`
 	RemoteAccountID        string          `json:"remote_account_id"`
+	AvatarURL              string          `json:"avatar_url,omitempty"`
 	AccessTokenCiphertext  string          `json:"-"`
 	RefreshTokenCiphertext string          `json:"-"`
 	MaxCharsOverride       *int            `json:"max_chars_override,omitempty"`
@@ -151,6 +152,7 @@ type ConnectedAccount struct {
 	InstanceURL        string
 	Username           string
 	RemoteAccountID    string
+	AvatarURL          string
 	AccessToken        string
 	RefreshToken       string
 }
