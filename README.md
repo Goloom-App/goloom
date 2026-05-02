@@ -236,6 +236,8 @@ Programmatic access is unchanged: send `Authorization: Bearer <id-token>` for in
 
 ## REST API
 
+The API is implemented in the **same Go binary** as the dashboard—there is no separate backend service to proxy to. All routes live under **`/v1/...`**. For tools that default to an `/api/v1` prefix, the server also accepts **`/api/v1/...`** as an alias (for example `GET /api/v1/me` is the same as `GET /v1/me`).
+
 All authenticated endpoints expect:
 
 ```http

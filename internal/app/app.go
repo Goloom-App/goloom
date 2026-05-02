@@ -87,10 +87,12 @@ func Run(ctx context.Context) error {
 	go schedulerService.Start(ctx)
 
 	apiHandler := api.New(logger, dataStore, authService, providers, cfg)
-	apiRoot := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute), cfg.AllowedOrigins)
+	apiChain := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute), cfg.AllowedOrigins)
 	rootHandler := http.NewServeMux()
-	rootHandler.Handle("/healthz", apiRoot)
-	rootHandler.Handle("/v1/", apiRoot)
+	rootHandler.Handle("/healthz", apiChain)
+	rootHandler.Handle("/v1/", apiChain)
+	// External clients often use /api/v1/... ; routes are registered as /v1/... on the inner mux.
+	rootHandler.Handle("/api/v1/", http.StripPrefix("/api", apiChain))
 	rootHandler.Handle("/", webui.Handler())
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
