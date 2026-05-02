@@ -556,6 +556,58 @@ body {
   gap: 1.5rem;
 }
 
+.composer-destination-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.composer-destination-toggle {
+  margin: 0;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+}
+
+.composer-destination-toggle .destination-avatar {
+  width: 44px;
+  height: 44px;
+}
+
+.composer-destination-toggle:not(.composer-destination-toggle--selected) .destination-avatar {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+
+.composer-destination-toggle--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.composer-destination-toggle--selected .destination-avatar {
+  filter: none;
+  opacity: 1;
+}
+
+.composer-destination-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.composer-destination-toggle:focus-visible.composer-destination-toggle--selected {
+  box-shadow:
+    0 0 0 1px var(--accent-soft),
+    0 0 0 3px var(--accent-soft);
+}
+
 /* Inputs & Buttons */
 input, select, textarea {
   background: var(--surface-soft);

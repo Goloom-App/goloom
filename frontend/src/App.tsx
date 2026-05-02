@@ -1770,31 +1770,34 @@ function App() {
 
             <aside className="composer-sidebar">
               <p className="eyebrow">Destinations</p>
-              <div className="checkbox-grid">
-                {teamAccounts.map((account) => (
-                  <label key={account.id} className="checkbox-card glass-panel" style={{ padding: '0.75rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={editorDraft.targetAccountIds.includes(account.id)}
-                      onChange={(event) =>
-                        setEditorDraft((current) => ({
-                          ...current,
-                          targetAccountIds: event.target.checked
-                            ? [...current.targetAccountIds, account.id]
-                            : current.targetAccountIds.filter((id) => id !== account.id),
-                        }))
+              <div className="composer-destination-grid" role="group" aria-label="Post destinations">
+                {teamAccounts.map((account) => {
+                  const selected = editorDraft.targetAccountIds.includes(account.id)
+                  return (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''}`}
+                      aria-pressed={selected}
+                      title={`${account.name} · ${account.provider}`}
+                      onClick={() =>
+                        setEditorDraft((current) => {
+                          const has = current.targetAccountIds.includes(account.id)
+                          return {
+                            ...current,
+                            targetAccountIds: has
+                              ? current.targetAccountIds.filter((id) => id !== account.id)
+                              : [...current.targetAccountIds, account.id],
+                          }
+                        })
                       }
-                    />
-                    <div className="inline-cluster">
+                    >
                       <DestinationAvatar account={account} />
-                      <div>
-                        <strong>{account.name}</strong>
-                        <small>{account.provider}</small>
-                      </div>
-                    </div>
-                  </label>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
+              {teamAccounts.length === 0 ? <p className="hint">No accounts for this workspace.</p> : null}
 
               <div className="divider" />
               <p className="eyebrow">Preview</p>
