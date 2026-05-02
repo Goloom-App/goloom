@@ -1,3 +1,7 @@
+# App joins both the external Traefik network (routing) and an internal bridge so the
+# hostname `db` resolves to the Postgres container. If `app` is only on Traefik and `db`
+# stays on the default network, they cannot reach each other and `db` may resolve via
+# public DNS to unrelated IPs (connection timeouts / wrong host).
 services:
   app:
     build:
@@ -5,10 +9,13 @@ services:
       dockerfile: Dockerfile
     container_name: goloom-app
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       APP_ENV: development
       HTTP_ADDR: :8080
-      DATABASE_URL: postgres://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/goloom?sslmode=disable
+      DATABASE_URL: postgres://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-goloom}?sslmode=disable
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       ALLOWED_ORIGINS: https://${HOST}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
@@ -24,7 +31,8 @@ services:
       - goloom_data:/app/data
     networks:
       - traefik
-  
+      - backend
+
   db:
     image: postgres:16
     container_name: goloom-db
@@ -37,10 +45,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d goloom"]
+      test: ["CMD-SHELL", "pg_isready -U \"${DATABASE_USER:-postgres}\" -d \"${DATABASE_NAME:-goloom}\""]
       interval: 5s
       timeout: 5s
       retries: 10
+    networks:
+      - backend
 
 volumes:
   goloom_data:
@@ -50,3 +60,5 @@ networks:
   traefik:
     name: ${TRAEFIK_NETWORK:-proxy}
     external: true
+  backend:
+    driver: bridge
