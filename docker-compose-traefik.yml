@@ -29,7 +29,6 @@ services:
     image: postgres:16
     container_name: goloom-db
     restart: unless-stopped
-    profiles: ["postgres"]
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-goloom}
       POSTGRES_USER: ${DATABASE_USER:-postgres}
