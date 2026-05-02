@@ -242,7 +242,7 @@ func (p *GenericStatusProvider) PrepareProviderInstance(_ context.Context, input
 	}, nil
 }
 
-func (p *GenericStatusProvider) ConnectAccount(_ context.Context, input domain.CreateAccountInput, instance *domain.ProviderInstance) (domain.ConnectedAccount, error) {
+func (p *GenericStatusProvider) ConnectAccount(ctx context.Context, input domain.CreateAccountInput, instance *domain.ProviderInstance) (domain.ConnectedAccount, error) {
 	instanceURL := strings.TrimSpace(input.InstanceURL)
 	if instance != nil {
 		instanceURL = instance.InstanceURL
