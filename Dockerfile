@@ -26,6 +26,9 @@ WORKDIR /app
 
 COPY --from=builder /out/goloom /app/goloom
 
+# Defaults for container deployments (override in compose / k8s as needed).
+ENV APP_ENV=production
+
 EXPOSE 8080
 
 ENTRYPOINT ["/app/goloom"]

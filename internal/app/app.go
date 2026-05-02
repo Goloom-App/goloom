@@ -3,14 +3,14 @@ package app
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"os"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/api"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
+	"git.f4mily.net/goloom/internal/logging"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/scheduler"
 	"git.f4mily.net/goloom/internal/security"
@@ -24,7 +24,21 @@ func Run(ctx context.Context) error {
 		return err
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := logging.New(cfg)
+	level := cfg.SlogLevel()
+	logger.Info("goloom starting",
+		"app_env", cfg.AppEnv,
+		"log_level", level.String(),
+		"log_format", cfg.LogFormatName(),
+		"http_addr", cfg.HTTPAddr,
+		"public_base_url", cfg.PublicBaseURL,
+		"database_backend", databaseBackend(cfg.DatabaseURL),
+		"scheduler_poll_interval", cfg.SchedulerPollInterval.String(),
+		"scheduler_workers", cfg.SchedulerWorkers,
+		"rate_limit_per_minute", cfg.RateLimitPerMinute,
+		"oidc_enabled", cfg.OIDCIssuerURL != "" && cfg.OIDCClientID != "",
+		"bootstrap_admin_configured", cfg.BootstrapAdminToken != "",
+	)
 
 	encrypter, err := security.NewEncrypter(cfg.EncryptionKey)
 	if err != nil {
@@ -68,7 +82,7 @@ func Run(ctx context.Context) error {
 	)
 	go schedulerService.Start(ctx)
 
-	apiHandler := api.New(dataStore, authService, providers, cfg)
+	apiHandler := api.New(logger, dataStore, authService, providers, cfg)
 	apiRoot := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute), cfg.AllowedOrigins)
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/healthz", apiRoot)
@@ -80,7 +94,7 @@ func Run(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	logger.Info("starting server", "addr", cfg.HTTPAddr, "env", cfg.AppEnv)
+	logger.Info("http server listening", "addr", cfg.HTTPAddr)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -89,13 +103,27 @@ func Run(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
+		logger.Info("shutdown signal received, stopping http server")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		return server.Shutdown(shutdownCtx)
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			logger.Warn("http server shutdown error", "error", err)
+			return err
+		}
+		logger.Info("http server stopped")
+		return nil
 	case err := <-errCh:
 		if err == http.ErrServerClosed {
 			return nil
 		}
 		return err
 	}
+}
+
+func databaseBackend(raw string) string {
+	u := strings.TrimSpace(strings.ToLower(raw))
+	if strings.HasPrefix(u, "postgres://") || strings.HasPrefix(u, "postgresql://") {
+		return "postgres"
+	}
+	return "sqlite"
 }

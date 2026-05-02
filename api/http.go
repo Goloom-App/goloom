@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ import (
 )
 
 type API struct {
+	log       *slog.Logger
 	store     store.Store
 	auth      *auth.Service
 	providers *provider.Registry
@@ -38,8 +40,9 @@ type destinationInfo struct {
 	MaxChars  int    `json:"max_chars"`
 }
 
-func New(store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config) *API {
+func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config) *API {
 	return &API{
+		log:       logger,
 		store:     store,
 		auth:      authService,
 		providers: providers,
@@ -82,7 +85,45 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("DELETE /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeletePost))))
 	mux.Handle("POST /v1/teams/{teamID}/posts/{postID}/cancel", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCancelPost))))
 
-	return security.CORSMiddleware(allowedOrigins)(limiter.Middleware(mux))
+	chain := security.CORSMiddleware(allowedOrigins)(limiter.Middleware(mux))
+	if a.log != nil {
+		chain = httpDebugRequestLogger(a.log, chain)
+	}
+	return chain
+}
+
+// httpDebugRequestLogger logs each request at Debug when enabled (skip noisy health checks).
+func httpDebugRequestLogger(log *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !log.Enabled(r.Context(), slog.LevelDebug) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		log.Debug("http request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rec.status,
+			"duration_ms", time.Since(start).Milliseconds(),
+			"remote_addr", r.RemoteAddr,
+		)
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusRecorder) WriteHeader(code int) {
+	s.status = code
+	s.ResponseWriter.WriteHeader(code)
 }
 
 func (a *API) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -195,7 +236,10 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, map[string]any{
 		"general": map[string]any{
-			"http_addr": a.config.HTTPAddr,
+			"http_addr":   a.config.HTTPAddr,
+			"app_env":     a.config.AppEnv,
+			"log_level":   a.config.SlogLevel().String(),
+			"log_format":  a.config.LogFormatName(),
 		},
 		"security": map[string]any{
 			"allowed_origins":       a.config.AllowedOrigins,

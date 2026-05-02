@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,11 @@ type Config struct {
 	RateLimitPerMinute    int
 	SchedulerPollInterval time.Duration
 	SchedulerWorkers      int
+
+	// LogLevel: debug, info, warn, error — empty means derive from AppEnv (development=debug, production=info).
+	LogLevel string
+	// LogFormat: json (machine-friendly, default in production) or text (human-friendly, default in development).
+	LogFormat string
 
 	OIDCIssuerURL    string
 	OIDCClientID     string
@@ -46,6 +52,8 @@ func Load() (Config, error) {
 		RateLimitPerMinute:    getInt("RATE_LIMIT_PER_MINUTE", 60),
 		SchedulerPollInterval: getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
 		SchedulerWorkers:      getInt("SCHEDULER_WORKERS", 4),
+		LogLevel:              getEnv("LOG_LEVEL", ""),
+		LogFormat:             getEnv("LOG_FORMAT", ""),
 		OIDCIssuerURL:         getEnv("OIDC_ISSUER_URL", ""),
 		OIDCClientID:          getEnv("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:      getEnv("OIDC_CLIENT_SECRET", ""),
@@ -70,6 +78,49 @@ func Load() (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// SlogLevel returns the effective slog level for LOG_LEVEL / APP_ENV.
+func (c Config) SlogLevel() slog.Level {
+	switch strings.ToLower(strings.TrimSpace(c.LogLevel)) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	case "":
+		if strings.EqualFold(c.AppEnv, "production") {
+			return slog.LevelInfo
+		}
+		return slog.LevelDebug
+	default:
+		return slog.LevelInfo
+	}
+}
+
+// LogFormatJSON selects JSON logs (good for Docker log drivers / aggregators) vs text (easier local reading).
+func (c Config) LogFormatJSON() bool {
+	switch strings.ToLower(strings.TrimSpace(c.LogFormat)) {
+	case "json":
+		return true
+	case "text":
+		return false
+	case "":
+		return strings.EqualFold(c.AppEnv, "production")
+	default:
+		return true
+	}
+}
+
+// LogFormatName returns "json" or "text" for diagnostics.
+func (c Config) LogFormatName() string {
+	if c.LogFormatJSON() {
+		return "json"
+	}
+	return "text"
 }
 
 func getEnv(key, fallback string) string {
