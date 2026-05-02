@@ -167,7 +167,21 @@ Copy from [`.env.example`](.env.example) or set the same keys in Docker Compose 
 
 ### Identity provider configuration
 
-Create an OAuth/OIDC **confidential** or **public** client as appropriate for how you obtain ID tokens. The goloom server only needs to **verify** ID tokens; it does not run the browser authorization redirect itself. Register whatever **redirect URI** your login flow uses (for example a local script or another app) with your IdP. Request ID tokens that include at least `sub` plus the standard `email` and `name` claims where possible—those map into the local user record.
+Create an OAuth/OIDC **confidential** or **public** client as appropriate for how you obtain ID tokens. The goloom server only needs to **verify** ID tokens; it does not implement an OIDC authorization redirect endpoint (unlike Mastodon account linking, which uses `MASTODON_REDIRECT_URI`, typically `{PUBLIC_BASE_URL}/v1/oauth/mastodon/callback`).
+
+### Redirect URIs on the IdP
+
+Your IdP will require **allowed redirect URI(s)** (names vary: “Valid redirect URIs”, “Redirect URLs”, etc.). The value must **exactly** match the `redirect_uri` your OAuth client sends in the authorize request—same scheme, host, port, and path (including trailing slash if the client sends one).
+
+goloom does **not** define a built-in OIDC callback path. Register URIs for **whatever actually receives the authorization response** and exchanges the code for tokens—for example:
+
+- A **CLI or desktop tool** listening on `http://127.0.0.1:<port>/callback` (or the tool’s documented loopback URL).
+- **API client tools** (Postman, Insomnia, etc.) using their OAuth callback URL.
+- A **small helper page** you host at a URL under your public site, e.g. `https://app.example.com/oauth/callback`, aligned with `PUBLIC_BASE_URL` / your Traefik `HOST`.
+
+If you later add a first-party browser login on the same host as the app, a common pattern is to allow `https://<your-public-host>/` or a dedicated path such as `https://<your-public-host>/auth/callback`; register only what your client implementation uses.
+
+Request ID tokens that include at least `sub` plus the standard `email` and `name` claims where possible—those map into the local user record.
 
 ### Users and roles
 
