@@ -381,8 +381,12 @@ func (s *Store) CreateProviderInstance(ctx context.Context, createdByUserID stri
 }
 
 func (s *Store) UpdateProviderInstance(ctx context.Context, instanceID string, input domain.PreparedProviderInstance) (domain.ProviderInstance, error) {
-	clientSecretCiphertext := ""
-	var err error
+	existing, err := s.GetProviderInstanceByID(ctx, instanceID)
+	if err != nil {
+		return domain.ProviderInstance{}, err
+	}
+
+	clientSecretCiphertext := existing.ClientSecretCiphertext
 	if input.ClientSecret != "" {
 		clientSecretCiphertext, err = s.encrypter.Encrypt(input.ClientSecret)
 		if err != nil {

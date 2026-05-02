@@ -215,6 +215,10 @@ func TestSQLite_ProviderInstances(t *testing.T) {
 	if err != nil || updated.Name != "renamed" || updated.ClientID != "cid2" {
 		t.Fatalf("update: %+v %v", updated, err)
 	}
+	plainAfter, err := s.DecryptProviderInstanceClientSecret(updated)
+	if err != nil || plainAfter != "secret" {
+		t.Fatalf("oauth client secret must be preserved when update omits ClientSecret: %q %v", plainAfter, err)
+	}
 }
 
 func TestSQLite_SocialAccounts(t *testing.T) {

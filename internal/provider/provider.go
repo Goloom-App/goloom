@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -374,6 +375,17 @@ func (p *MastodonProvider) ConnectAccount(ctx context.Context, input domain.Crea
 	return p.connectAccountWithToken(ctx, normalizedURL, providerInstanceID(instance), strings.TrimSpace(input.AccessToken), strings.TrimSpace(input.RefreshToken))
 }
 
+func (p *MastodonProvider) oauthScopesForInstance(instance domain.ProviderInstance) []string {
+	scopes := append([]string(nil), instance.Scopes...)
+	if len(scopes) == 0 {
+		scopes = append([]string(nil), p.registration.DefaultScopes...)
+	}
+	if len(scopes) == 0 {
+		scopes = []string{"read", "write"}
+	}
+	return scopes
+}
+
 func (p *MastodonProvider) BuildAuthorizationURL(instance domain.ProviderInstance, state, redirectURI string) (string, error) {
 	authEndpoint := strings.TrimSpace(instance.AuthorizationEndpoint)
 	if authEndpoint == "" {
@@ -384,10 +396,7 @@ func (p *MastodonProvider) BuildAuthorizationURL(instance domain.ProviderInstanc
 		return "", fmt.Errorf("parse mastodon authorization endpoint: %w", err)
 	}
 
-	scopes := instance.Scopes
-	if len(scopes) == 0 {
-		scopes = append([]string(nil), p.registration.DefaultScopes...)
-	}
+	scopes := p.oauthScopesForInstance(instance)
 
 	query := parsed.Query()
 	query.Set("client_id", strings.TrimSpace(instance.ClientID))
@@ -411,8 +420,9 @@ func (p *MastodonProvider) ConnectAccountOAuthCallback(ctx context.Context, inst
 	bodyValues.Set("client_id", strings.TrimSpace(instance.ClientID))
 	bodyValues.Set("client_secret", strings.TrimSpace(clientSecret))
 	bodyValues.Set("redirect_uri", strings.TrimSpace(redirectURI))
-	if len(instance.Scopes) > 0 {
-		bodyValues.Set("scope", strings.Join(instance.Scopes, " "))
+	scopes := p.oauthScopesForInstance(instance)
+	if len(scopes) > 0 {
+		bodyValues.Set("scope", strings.Join(scopes, " "))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(bodyValues.Encode()))
@@ -428,7 +438,12 @@ func (p *MastodonProvider) ConnectAccountOAuthCallback(ctx context.Context, inst
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return domain.ConnectedAccount{}, fmt.Errorf("mastodon token exchange failed with status %d", resp.StatusCode)
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		msg := strings.TrimSpace(string(errBody))
+		if msg == "" {
+			return domain.ConnectedAccount{}, fmt.Errorf("mastodon token exchange failed with status %d", resp.StatusCode)
+		}
+		return domain.ConnectedAccount{}, fmt.Errorf("mastodon token exchange failed with status %d: %s", resp.StatusCode, msg)
 	}
 
 	var tokenResponse mastodonTokenResponse
