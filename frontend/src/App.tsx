@@ -22,7 +22,7 @@ import { initialSettings } from './data'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
-import { postsForTeam, sharedAccountLabels, SLOT_MINUTES } from './schedule'
+import { postsForTeam, resolveScheduleChange, sharedAccountLabels, SLOT_MINUTES } from './schedule'
 import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
@@ -92,6 +92,7 @@ function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getSystemTheme())
   const [currentDate] = useState<Date>(new Date())
   const [contentCalendarMonth, setContentCalendarMonth] = useState(() => startOfMonth(new Date()))
+  const [calendarDragOverKey, setCalendarDragOverKey] = useState<string | null>(null)
   const prevSectionRef = useRef<AppSection | null>(null)
   const [settings, setSettings] = useState<SettingsState>(() => loadStoredSettings())
   const [activeConnection, setActiveConnection] = useState(() => ({
@@ -602,6 +603,7 @@ function App() {
   }, [principalUser, selectedTeam])
 
   const canEditTeamAccounts = myRoleInSelectedTeam === 'owner' || myRoleInSelectedTeam === 'editor'
+  const canEditScheduledPosts = canEditTeamAccounts
 
   const instancesForAccountConnect = useMemo(
     () => providerInstances.filter((p) => p.provider === accountDraft.provider),
@@ -981,6 +983,55 @@ function App() {
     }, 'Post deleted')
   }
 
+  async function handleCalendarPostDrop(postId: string, targetDay: Date) {
+    if (!api || !selectedTeam || !canEditScheduledPosts) {
+      return
+    }
+    const post = posts.find((p) => p.id === postId)
+    if (!post || post.status !== 'scheduled' || post.teamId !== selectedTeam.id) {
+      return
+    }
+
+    const prev = parseISO(post.scheduledAt)
+    const newScheduled = set(targetDay, {
+      hours: prev.getHours(),
+      minutes: prev.getMinutes(),
+      seconds: 0,
+      milliseconds: 0,
+    })
+    if (newScheduled.getTime() === prev.getTime()) {
+      return
+    }
+
+    const scheduledForTeam = teamPosts.filter((p) => p.status === 'scheduled')
+    const updated: PostRecord = { ...post, scheduledAt: newScheduled.toISOString() }
+    const resolved = resolveScheduleChange(scheduledForTeam, updated)
+
+    const changed = resolved.filter((p) => {
+      const original = posts.find((x) => x.id === p.id)
+      return original && original.status === 'scheduled' && original.scheduledAt !== p.scheduledAt
+    })
+    if (changed.length === 0) {
+      return
+    }
+
+    await runAction(async () => {
+      for (const p of changed) {
+        const original = posts.find((x) => x.id === p.id)
+        if (!original) {
+          continue
+        }
+        await api.updatePost(selectedTeam.id, p.id, {
+          title: original.title.trim(),
+          content: original.content.trim(),
+          scheduled_at: p.scheduledAt,
+          target_accounts: original.targetAccountIds,
+        })
+      }
+      await loadDashboard()
+    }, changed.length > 1 ? 'Posts rescheduled to avoid overlap' : 'Post moved on calendar')
+  }
+
   if (authStatusLoading && !activeConnection.bearerToken.trim()) {
     return (
       <AuthShell theme={theme}>
@@ -1209,28 +1260,83 @@ function App() {
                   ))}
                 </div>
                 <div className="content-calendar__cells">
-                  {contentCalendarCells.map(({ day, posts: dayPosts, inMonth }) => (
-                    <div
-                      key={day.toISOString()}
-                      className={`content-calendar__cell ${inMonth ? '' : 'content-calendar__cell--muted'}`}
-                      role="gridcell"
-                    >
-                      <span className="content-calendar__day-num">{format(day, 'd')}</span>
-                      <div className="content-calendar__post-chips">
-                        {dayPosts.map((post) => (
-                          <button
-                            key={post.id}
-                            type="button"
-                            className="content-calendar__post-chip"
-                            onClick={() => setExpandedPostId(post.id)}
-                          >
-                            <span className="content-calendar__post-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
-                            <span className="content-calendar__post-title">{post.title || 'Untitled'}</span>
-                          </button>
-                        ))}
+                  {contentCalendarCells.map(({ day, posts: dayPosts, inMonth }) => {
+                    const dayKey = format(day, 'yyyy-MM-dd')
+                    const isDropTarget = calendarDragOverKey === dayKey
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        className={`content-calendar__cell ${inMonth ? '' : 'content-calendar__cell--muted'} ${isDropTarget ? 'content-calendar__cell--drop-target' : ''}`}
+                        role="gridcell"
+                        onDragOver={(event) => {
+                          if (!canEditScheduledPosts) {
+                            return
+                          }
+                          event.preventDefault()
+                          event.dataTransfer.dropEffect = 'move'
+                          setCalendarDragOverKey(dayKey)
+                        }}
+                        onDragLeave={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                            setCalendarDragOverKey((current) => (current === dayKey ? null : current))
+                          }
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault()
+                          setCalendarDragOverKey(null)
+                          const id = event.dataTransfer.getData('application/x-goloom-post-id')
+                          if (id) {
+                            void handleCalendarPostDrop(id, day)
+                          }
+                        }}
+                      >
+                        <span className="content-calendar__day-num">{format(day, 'd')}</span>
+                        <div className="content-calendar__post-chips">
+                          {dayPosts.map((post) => (
+                            <div key={post.id} className="content-calendar__post-chip-row">
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                className={`content-calendar__post-chip ${canEditScheduledPosts ? 'content-calendar__post-chip--draggable' : ''}`}
+                                draggable={canEditScheduledPosts}
+                                onDragStart={(event) => {
+                                  if (!canEditScheduledPosts) {
+                                    return
+                                  }
+                                  event.dataTransfer.setData('application/x-goloom-post-id', post.id)
+                                  event.dataTransfer.effectAllowed = 'move'
+                                }}
+                                onDragEnd={() => setCalendarDragOverKey(null)}
+                                onClick={() => setExpandedPostId(post.id)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    setExpandedPostId(post.id)
+                                  }
+                                }}
+                              >
+                                <span className="content-calendar__post-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
+                                <span className="content-calendar__post-title">{post.title || 'Untitled'}</span>
+                              </div>
+                              {canEditScheduledPosts ? (
+                                <button
+                                  type="button"
+                                  className="content-calendar__chip-edit"
+                                  aria-label="Edit post"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    openEditor(post.id)
+                                  }}
+                                >
+                                  <Icon name="edit" className="inline-icon" />
+                                </button>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
               {plannedPostsForContentCalendar.length === 0 ? (
@@ -1906,8 +2012,18 @@ function App() {
         {showPreviewColumn ? (
         <aside className="preview-column">
           <div className="preview-header">
-            <p className="eyebrow">Live Preview</p>
-            <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
+            <div className="preview-header__top">
+              <div>
+                <p className="eyebrow">Live Preview</p>
+                <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
+              </div>
+              {selectedPost && selectedPost.status === 'scheduled' && canEditScheduledPosts ? (
+                <button type="button" className="button button--secondary preview-header__edit" onClick={() => openEditor(selectedPost.id)}>
+                  <Icon name="edit" className="inline-icon" />
+                  <span>Edit</span>
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="preview-content">
             {selectedPost ? (
