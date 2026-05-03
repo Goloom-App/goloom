@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// ErrProviderInstanceInUse is returned when deleting a provider instance that still has social accounts linked.
+var ErrProviderInstanceInUse = errors.New("provider instance still has connected social accounts")
+
+// ErrProviderInstanceNotFound is returned when deleting a provider instance that does not exist.
+var ErrProviderInstanceNotFound = errors.New("provider instance not found")
+
 type TeamRole string
 
 const (

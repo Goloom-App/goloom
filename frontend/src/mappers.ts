@@ -49,6 +49,7 @@ export function toUserRecord(user: BackendUser): UserRecord {
     email: user.email,
     globalRole: user.is_admin ? 'admin' : 'member',
     title: user.is_admin ? 'Administrator' : 'Team Member',
+    createdAt: user.created_at ?? '',
   }
 }
 

@@ -77,6 +77,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/admin/provider-instances", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListProviderInstances))))
 	mux.Handle("POST /v1/admin/provider-instances", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleCreateProviderInstance))))
 	mux.Handle("PUT /v1/admin/provider-instances/{instanceID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateProviderInstance))))
+	mux.Handle("DELETE /v1/admin/provider-instances/{instanceID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleDeleteProviderInstance))))
 	mux.Handle("GET /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListTeamMembers))))
 	mux.Handle("POST /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleAddTeamMember))))
 	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
@@ -378,6 +379,21 @@ func (a *API) handleUpdateProviderInstance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, instance)
+}
+
+func (a *API) handleDeleteProviderInstance(w http.ResponseWriter, r *http.Request) {
+	if err := a.store.DeleteProviderInstance(r.Context(), r.PathValue("instanceID")); err != nil {
+		switch {
+		case errors.Is(err, domain.ErrProviderInstanceInUse):
+			http.Error(w, err.Error(), http.StatusConflict)
+		case errors.Is(err, domain.ErrProviderInstanceNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) handleListAccounts(w http.ResponseWriter, r *http.Request) {

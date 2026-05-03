@@ -101,6 +101,10 @@ func (m *mockStore) UpdateProviderInstance(ctx context.Context, instanceID strin
 	return domain.ProviderInstance{}, nil
 }
 
+func (m *mockStore) DeleteProviderInstance(ctx context.Context, instanceID string) error {
+	return nil
+}
+
 func (m *mockStore) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, roles ...domain.TeamRole) (bool, error) {
 	return false, nil
 }

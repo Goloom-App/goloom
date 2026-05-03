@@ -1,6 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { addMinutes, format, parseISO, set, startOfDay } from 'date-fns'
+import {
+  addMinutes,
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameMonth,
+  isValid,
+  parseISO,
+  set,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from 'date-fns'
 
 import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin, type BackendAPIToken, type BackendAdminMetrics } from './api'
 import { initialSettings } from './data'
@@ -11,6 +26,18 @@ import { postsForTeam, sharedAccountLabels, SLOT_MINUTES } from './schedule'
 import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
+
+const SECTION_HEADINGS: Record<AppSection, string> = {
+  calendar: 'Schedule',
+  contentCalendar: 'Content calendar',
+  archive: 'Archive',
+  teams: 'Teams',
+  accounts: 'Accounts',
+  settings: 'Settings',
+  admin: 'Admin',
+}
+
+const CONTENT_REFRESH_SECTIONS: AppSection[] = ['calendar', 'archive', 'contentCalendar']
 
 type AdminProviderDraft = {
   provider: ProviderName
@@ -64,6 +91,8 @@ function App() {
   const [section, setSection] = useState<AppSection>('calendar')
   const [theme, setTheme] = useState<'dark' | 'light'>(() => getSystemTheme())
   const [currentDate] = useState<Date>(new Date())
+  const [contentCalendarMonth, setContentCalendarMonth] = useState(() => startOfMonth(new Date()))
+  const prevSectionRef = useRef<AppSection | null>(null)
   const [settings, setSettings] = useState<SettingsState>(() => loadStoredSettings())
   const [activeConnection, setActiveConnection] = useState(() => ({
     apiBaseUrl: loadStoredSettings().general.apiBaseUrl,
@@ -396,6 +425,32 @@ function App() {
   }, [api, loadDashboard])
 
   useEffect(() => {
+    if (!api) {
+      return
+    }
+    if (prevSectionRef.current === null) {
+      prevSectionRef.current = section
+      return
+    }
+    if (prevSectionRef.current !== section && CONTENT_REFRESH_SECTIONS.includes(section)) {
+      void loadDashboard()
+    }
+    prevSectionRef.current = section
+  }, [api, section, loadDashboard])
+
+  useEffect(() => {
+    if (!api || !CONTENT_REFRESH_SECTIONS.includes(section)) {
+      return
+    }
+    const seconds = settings.scheduler.pollIntervalSeconds ?? 15
+    const intervalMs = Math.min(60_000, Math.max(5_000, seconds * 1000))
+    const id = window.setInterval(() => {
+      void loadDashboard()
+    }, intervalMs)
+    return () => window.clearInterval(id)
+  }, [api, section, loadDashboard, settings.scheduler.pollIntervalSeconds])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const inviteToken = params.get('invite')
     if (!inviteToken || !api) {
@@ -479,6 +534,7 @@ function App() {
   const sidebarContentNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
     () => [
       { id: 'calendar', label: 'Schedule', icon: 'calendar' },
+      { id: 'contentCalendar', label: 'Calendar', icon: 'calendarGrid' },
       { id: 'archive', label: 'Archive', icon: 'archive' },
     ],
     [],
@@ -526,7 +582,17 @@ function App() {
     [teamPosts],
   )
 
-  const showPreviewColumn = section === 'calendar' || section === 'archive'
+  const plannedPostsForContentCalendar = useMemo(
+    () => teamPosts.filter((post) => post.status === 'scheduled'),
+    [teamPosts],
+  )
+
+  const contentCalendarCells = useMemo(
+    () => calendarCellsForMonth(contentCalendarMonth, plannedPostsForContentCalendar),
+    [contentCalendarMonth, plannedPostsForContentCalendar],
+  )
+
+  const showPreviewColumn = section === 'calendar' || section === 'archive' || section === 'contentCalendar'
 
   const myRoleInSelectedTeam = useMemo((): TeamRole | null => {
     if (!selectedTeam || !principalUser) {
@@ -591,7 +657,9 @@ function App() {
     setEditingPostId(postId)
     setExpandedPostId(postId)
     setComposerOpen(true)
-    setSection(targetPost.status === 'posted' ? 'archive' : 'calendar')
+    setSection(
+      targetPost.status === 'posted' ? 'archive' : section === 'contentCalendar' ? 'contentCalendar' : 'calendar',
+    )
   }
 
   function closeComposer() {
@@ -704,6 +772,29 @@ function App() {
       setShowAdminProviderAdvanced(false)
       await loadDashboard()
     }, editingProviderId ? 'Provider updated' : 'Provider registered')
+  }
+
+  async function handleDeleteProviderInstance(instanceId: string) {
+    if (!api) {
+      return
+    }
+    const linked = accounts.filter((a) => a.providerInstanceId === instanceId).length
+    if (linked > 0) {
+      setError('Disconnect all social accounts that use this instance before removing it.')
+      return
+    }
+    if (!window.confirm('Remove this provider instance? It will no longer appear when teams connect accounts.')) {
+      return
+    }
+    await runAction(async () => {
+      await api.deleteProviderInstance(instanceId)
+      if (editingProviderId === instanceId) {
+        setEditingProviderId(null)
+        setAdminProviderDraft(defaultAdminProviderDraft())
+        setShowAdminProviderAdvanced(false)
+      }
+      await loadDashboard()
+    }, 'Provider instance removed')
   }
 
   async function handleDeleteTeamAccount(accountId: string) {
@@ -1040,7 +1131,7 @@ function App() {
           <header className="page-header">
             <div>
               <p className="eyebrow">Social publishing</p>
-              <h1>{section.charAt(0).toUpperCase() + section.slice(1)}</h1>
+              <h1>{SECTION_HEADINGS[section]}</h1>
             </div>
 
             <div className="inline-cluster">
@@ -1088,6 +1179,68 @@ function App() {
             </div>
           )}
 
+          {section === 'contentCalendar' && (
+            <div className="content-calendar-view">
+              <div className="content-calendar__toolbar glass-panel">
+                <button
+                  type="button"
+                  className="button button--secondary content-calendar__nav-btn"
+                  onClick={() => setContentCalendarMonth((m) => startOfMonth(subMonths(m, 1)))}
+                  aria-label="Previous month"
+                >
+                  <Icon name="chevron-left" className="inline-icon" />
+                </button>
+                <h2 className="content-calendar__month-title">{format(contentCalendarMonth, 'MMMM yyyy')}</h2>
+                <button
+                  type="button"
+                  className="button button--secondary content-calendar__nav-btn"
+                  onClick={() => setContentCalendarMonth((m) => startOfMonth(addMonths(m, 1)))}
+                  aria-label="Next month"
+                >
+                  <Icon name="chevron-right" className="inline-icon" />
+                </button>
+              </div>
+              <div className="content-calendar__grid glass-panel" role="grid" aria-label="Scheduled posts by day">
+                <div className="content-calendar__weekdays" role="row">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                    <div key={d} className="content-calendar__weekday" role="columnheader">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+                <div className="content-calendar__cells">
+                  {contentCalendarCells.map(({ day, posts: dayPosts, inMonth }) => (
+                    <div
+                      key={day.toISOString()}
+                      className={`content-calendar__cell ${inMonth ? '' : 'content-calendar__cell--muted'}`}
+                      role="gridcell"
+                    >
+                      <span className="content-calendar__day-num">{format(day, 'd')}</span>
+                      <div className="content-calendar__post-chips">
+                        {dayPosts.map((post) => (
+                          <button
+                            key={post.id}
+                            type="button"
+                            className="content-calendar__post-chip"
+                            onClick={() => setExpandedPostId(post.id)}
+                          >
+                            <span className="content-calendar__post-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
+                            <span className="content-calendar__post-title">{post.title || 'Untitled'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {plannedPostsForContentCalendar.length === 0 ? (
+                <p className="hint" style={{ marginTop: '1rem' }}>
+                  No scheduled posts for this workspace. Create a post from the schedule view or the composer.
+                </p>
+              ) : null}
+            </div>
+          )}
+
           {section === 'archive' && (
             <div className="archive-view">
               {archivedPosts.map((post) => (
@@ -1100,6 +1253,7 @@ function App() {
                   onDelete={() => void deletePost(post.id)}
                   accounts={accounts}
                   isArchived
+                  publishedLinks={post.publishedLinks}
                 />
               ))}
             </div>
@@ -1563,6 +1717,38 @@ function App() {
                 ) : null}
               </div>
 
+              <div className="glass-panel">
+                <h2 className="section-card__title">Registered users</h2>
+                <p className="hint">Everyone who can sign in to this deployment.</p>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Access</th>
+                      <th>Registered</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...directoryUsers]
+                      .sort((left, right) => left.name.localeCompare(right.name))
+                      .map((user) => (
+                        <tr key={user.id}>
+                          <td>{user.name}</td>
+                          <td>{user.email}</td>
+                          <td>{user.globalRole === 'admin' ? 'Administrator' : 'Member'}</td>
+                          <td>
+                            {user.createdAt && isValid(parseISO(user.createdAt))
+                              ? format(parseISO(user.createdAt), 'PP')
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                {directoryUsers.length === 0 ? <p className="hint">No users returned from the directory.</p> : null}
+              </div>
+
               {adminRuntime ? (
                 <div className="glass-panel">
                   <h2 className="section-card__title">Scheduler &amp; server</h2>
@@ -1660,34 +1846,52 @@ function App() {
 
                 <h3 className="subsection-title" style={{ marginTop: '1.5rem' }}>Registered instances</h3>
                 <ul className="provider-admin-list">
-                  {providerInstances.map((p) => (
-                    <li key={p.id}>
-                      <div>
-                        <strong>{p.name}</strong>
-                        <span className="hint"> {p.provider} · {p.instanceUrl}</span>
-                      </div>
-                      <button
-                        type="button"
-                        className="button button--secondary"
-                        onClick={() => {
-                          setEditingProviderId(p.id)
-                          setShowAdminProviderAdvanced(true)
-                          setAdminProviderDraft({
-                            provider: p.provider,
-                            name: p.name,
-                            instanceUrl: p.instanceUrl,
-                            clientId: p.clientId,
-                            clientSecret: '',
-                            scopes: p.scopes.join(','),
-                            authorizationEndpoint: p.authorizationEndpoint,
-                            tokenEndpoint: p.tokenEndpoint,
-                          })
-                        }}
-                      >
-                        Edit
-                      </button>
-                    </li>
-                  ))}
+                  {providerInstances.map((p) => {
+                    const onboarded = accounts.filter((a) => a.providerInstanceId === p.id).length
+                    return (
+                      <li key={p.id}>
+                        <div>
+                          <strong>{p.name}</strong>
+                          <span className="hint"> {p.provider} · {p.instanceUrl}</span>
+                          <span className="provider-admin-list__count">
+                            {onboarded} account{onboarded === 1 ? '' : 's'} onboarded
+                          </span>
+                        </div>
+                        <div className="inline-cluster" style={{ flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() => {
+                              setEditingProviderId(p.id)
+                              setShowAdminProviderAdvanced(true)
+                              setAdminProviderDraft({
+                                provider: p.provider,
+                                name: p.name,
+                                instanceUrl: p.instanceUrl,
+                                clientId: p.clientId,
+                                clientSecret: '',
+                                scopes: p.scopes.join(','),
+                                authorizationEndpoint: p.authorizationEndpoint,
+                                tokenEndpoint: p.tokenEndpoint,
+                              })
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() => void handleDeleteProviderInstance(p.id)}
+                            disabled={syncing || onboarded > 0}
+                            title={onboarded > 0 ? 'Disconnect every account using this instance first' : 'Remove provider instance'}
+                          >
+                            <Icon name="trash" className="inline-icon" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
                 {providerInstances.length === 0 ? <p className="hint">No provider instances yet.</p> : null}
               </div>
@@ -1714,6 +1918,9 @@ function App() {
                   content={selectedPost.content}
                   scheduledAt={selectedPost.scheduledAt}
                   theme={theme}
+                  publishedPostUrl={
+                    selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
+                  }
                 />
               ))
             ) : (
@@ -1819,6 +2026,14 @@ function App() {
       <nav className="mobile-nav">
         <button type="button" className={section === 'calendar' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('calendar')}>
           <Icon name="calendar" className="inline-icon" />
+        </button>
+        <button
+          type="button"
+          className={section === 'contentCalendar' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
+          onClick={() => setSection('contentCalendar')}
+          aria-label="Content calendar"
+        >
+          <Icon name="calendarGrid" className="inline-icon" />
         </button>
         <button type="button" className="mobile-nav__item mobile-nav__item--primary" onClick={openCreateComposer}>
           <Icon name="edit" className="inline-icon" />
@@ -2010,8 +2225,22 @@ function SettingsCard({ title, children }: { title: string; children: ReactNode 
   )
 }
 
-function DestinationAvatar({ account, compact = false }: { account: AccountRecord; compact?: boolean }) {
+function DestinationAvatar({
+  account,
+  compact = false,
+  publishedPostUrl,
+}: {
+  account: AccountRecord
+  compact?: boolean
+  /** When set, the platform badge links to the published post (e.g. archive). */
+  publishedPostUrl?: string
+}) {
   const initials = account.username.replace('@', '').slice(0, 2).toUpperCase()
+  const badge = (
+    <span className="destination-avatar__badge" title={publishedPostUrl ? `Open on ${account.provider}` : account.provider}>
+      <img src={`/icons/platforms/${account.provider}.svg`} alt="" />
+    </span>
+  )
   return (
     <div className={`destination-avatar ${compact ? 'destination-avatar--compact' : ''}`}>
       <div className="destination-avatar__disk">
@@ -2024,19 +2253,40 @@ function DestinationAvatar({ account, compact = false }: { account: AccountRecor
             </div>
           )}
         </div>
-        <span className="destination-avatar__badge" title={account.provider}>
-          <img src={`/icons/platforms/${account.provider}.svg`} alt="" />
-        </span>
+        {publishedPostUrl ? (
+          <a
+            href={publishedPostUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="destination-avatar__badge-link"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {badge}
+          </a>
+        ) : (
+          badge
+        )}
       </div>
     </div>
   )
 }
 
-function DestinationStack({ accounts }: { accounts: AccountRecord[] }) {
+function DestinationStack({
+  accounts,
+  publishedLinks,
+}: {
+  accounts: AccountRecord[]
+  publishedLinks?: Record<string, string>
+}) {
   return (
     <div className="destination-stack">
       {accounts.map((account) => (
-        <DestinationAvatar key={account.id} account={account} compact />
+        <DestinationAvatar
+          key={account.id}
+          account={account}
+          compact
+          publishedPostUrl={publishedLinks?.[account.id]}
+        />
       ))}
     </div>
   )
@@ -2091,6 +2341,27 @@ function groupPostsByDay(posts: PostRecord[]) {
     groups.set(key, [...(groups.get(key) ?? []), post])
   }
   return Array.from(groups.entries()).map(([key, value]) => ({ key, posts: value }))
+}
+
+function calendarCellsForMonth(month: Date, posts: PostRecord[]) {
+  const rangeStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 })
+  const rangeEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 1 })
+  const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
+  const byDay = new Map<string, PostRecord[]>()
+  for (const post of posts) {
+    const key = format(parseISO(post.scheduledAt), 'yyyy-MM-dd')
+    const list = byDay.get(key) ?? []
+    list.push(post)
+    byDay.set(key, list)
+  }
+  for (const [, list] of byDay) {
+    list.sort((a, b) => parseISO(a.scheduledAt).getTime() - parseISO(b.scheduledAt).getTime())
+  }
+  return days.map((day) => ({
+    day,
+    posts: byDay.get(format(day, 'yyyy-MM-dd')) ?? [],
+    inMonth: isSameMonth(day, month),
+  }))
 }
 
 function initialsFromName(name: string): string {
@@ -2150,6 +2421,7 @@ function PostCard({
   onDelete,
   accounts,
   isArchived = false,
+  publishedLinks,
 }: {
   post: PostRecord
   active: boolean
@@ -2158,12 +2430,13 @@ function PostCard({
   onDelete: () => void
   accounts: AccountRecord[]
   isArchived?: boolean
+  publishedLinks?: Record<string, string>
 }) {
   return (
     <article className={`post-card ${active ? 'post-card--active' : ''}`} onClick={onClick}>
       <div className="post-card__header">
         <span className="post-card__meta">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
-        <DestinationStack accounts={sharedAccountLabels(post, accounts)} />
+        <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
       </div>
       <h3 className="post-card__title">{post.title || 'Untitled Post'}</h3>
       <p className="post-card__content">{post.content}</p>
@@ -2190,17 +2463,19 @@ function SocialPreview({
   content,
   scheduledAt,
   theme,
+  publishedPostUrl,
 }: {
   account: AccountRecord
   content: string
   scheduledAt: string
   theme: 'dark' | 'light'
+  publishedPostUrl?: string
 }) {
   return (
     <div className={`social-preview ${theme === 'dark' ? 'social-preview--dark' : ''}`}>
       <div className="social-preview__header">
         <div className="social-preview__avatar-wrap">
-          <DestinationAvatar account={account} />
+          <DestinationAvatar account={account} publishedPostUrl={publishedPostUrl} />
         </div>
         <div className="social-preview__meta">
           <span className="social-preview__name">{account.name}</span>

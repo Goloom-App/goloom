@@ -1,4 +1,4 @@
-export type AppSection = 'calendar' | 'archive' | 'teams' | 'accounts' | 'settings' | 'admin'
+export type AppSection = 'calendar' | 'contentCalendar' | 'archive' | 'teams' | 'accounts' | 'settings' | 'admin'
 
 export type CalendarViewMode = 'month' | 'week' | 'day'
 
@@ -18,6 +18,8 @@ export interface UserRecord {
   email: string
   globalRole: GlobalRole
   title: string
+  /** ISO timestamp from the server */
+  createdAt: string
 }
 
 export interface TeamMemberRecord {

@@ -419,6 +419,28 @@ func (s *Store) UpdateProviderInstance(ctx context.Context, instanceID string, i
 	return s.GetProviderInstanceByID(ctx, instanceID)
 }
 
+func (s *Store) DeleteProviderInstance(ctx context.Context, instanceID string) error {
+	var linked int
+	if err := s.db.QueryRowContext(ctx, `select count(*) from social_accounts where provider_instance_id = ?`, instanceID).Scan(&linked); err != nil {
+		return err
+	}
+	if linked > 0 {
+		return fmt.Errorf("%w", domain.ErrProviderInstanceInUse)
+	}
+	res, err := s.db.ExecContext(ctx, `delete from provider_instances where id = ?`, instanceID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%w", domain.ErrProviderInstanceNotFound)
+	}
+	return nil
+}
+
 func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, roles ...domain.TeamRole) (bool, error) {
 	var role domain.TeamRole
 	if err := s.db.QueryRowContext(ctx, `select role from team_memberships where user_id = ? and team_id = ?`, userID, teamID).Scan(&role); err != nil {

@@ -4,6 +4,7 @@ export type IconName =
   | 'sun'
   | 'moon'
   | 'calendar'
+  | 'calendarGrid'
   | 'archive'
   | 'plus'
   | 'settings'
@@ -27,6 +28,12 @@ const iconPaths: Record<IconName, ReactNode> = {
     <>
       <rect x="3" y="5" width="18" height="16" rx="3" />
       <path d="M8 3v4M16 3v4M3 9h18" />
+    </>
+  ),
+  calendarGrid: (
+    <>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M3 9h18M9 4v17M15 4v17M3 14h18" />
     </>
   ),
   archive: (

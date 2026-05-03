@@ -33,6 +33,7 @@ type Store interface {
 	GetProviderInstanceByID(ctx context.Context, instanceID string) (domain.ProviderInstance, error)
 	CreateProviderInstance(ctx context.Context, createdByUserID string, input domain.PreparedProviderInstance) (domain.ProviderInstance, error)
 	UpdateProviderInstance(ctx context.Context, instanceID string, input domain.PreparedProviderInstance) (domain.ProviderInstance, error)
+	DeleteProviderInstance(ctx context.Context, instanceID string) error
 	UserHasAnyTeamRole(ctx context.Context, userID, teamID string, roles ...domain.TeamRole) (bool, error)
 	ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error)
 	CreateAccount(ctx context.Context, teamID string, input domain.ConnectedAccount) (domain.SocialAccount, error)

@@ -276,6 +276,12 @@ export function createApiClient(options: ApiClientOptions) {
         body: JSON.stringify(payload),
       })
     },
+    deleteProviderInstance(instanceID: string) {
+      return request<void>(options, `/v1/admin/provider-instances/${instanceID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
     listTeamMembers(teamID: string) {
       return request<{ items: BackendMembership[] }>(options, `/v1/teams/${teamID}/members`, {
         headers: buildHeaders(options.token, false),
