@@ -26,13 +26,13 @@ The goal is to transform Goloom from a basic social media scheduler into a robus
 ## Phase 2: Enhanced Social Integrations & Publishing
 *Goal: Support media uploads, platform-specific overrides, and robust publishing workflows.*
 
-- [ ] **Provider Interface Refactor**
+- [x] **Provider Interface Refactor**
     - Update `SocialMediaProvider` to support media uploads and expanded `PublishRequest`/`PublishResult`.
     - [Reference: docs/plan-social-integration-technical.md](docs/plan-social-integration-technical.md)
     - [Reference: docs/social-integration-technical.md](docs/social-integration-technical.md)
-- [ ] **Mastodon Media Support**
+- [x] **Mastodon Media Support**
     - Implement two-step publishing (Upload -> Attach) for Mastodon.
-- [ ] **Multi-Platform Composer Backend**
+- [x] **Multi-Platform Composer Backend**
     - Support `PostVersion` model to allow different content per platform.
     - [Reference: docs/plan-feature-implementation.md (Section 1.1)](docs/plan-feature-implementation.md)
 
