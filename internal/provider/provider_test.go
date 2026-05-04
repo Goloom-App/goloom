@@ -221,3 +221,80 @@ func TestMastodonProvider_Publish_Error(t *testing.T) {
 		t.Errorf("expected error to contain 'status 401', got: %v", err)
 	}
 }
+
+func TestMastodonProvider_GetMetrics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/statuses/999" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			t.Errorf("expected Bearer tok, got %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"favourites_count": 7,
+			"reblogs_count":    2,
+			"replies_count":    1,
+		})
+	}))
+	defer server.Close()
+
+	p := NewMastodonProvider(MastodonRegistrationConfig{})
+	account := domain.SocialAccount{InstanceURL: server.URL}
+	out, err := p.GetMetrics(context.Background(), account, PublishAuth{AccessToken: "tok"}, "https://social.example/@x/999")
+	if err != nil {
+		t.Fatalf("GetMetrics: %v", err)
+	}
+	m := map[string]int64{}
+	for _, x := range out {
+		m[x.Name] = x.Value
+	}
+	if m["likes"] != 7 || m["reposts"] != 2 || m["replies"] != 1 {
+		t.Fatalf("metrics: %#v", m)
+	}
+}
+
+func TestBlueskyProvider_GetMetrics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/xrpc/app.bsky.feed.getPosts" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		want := "at://did:plc:123/app.bsky.feed.post/abc"
+		if r.URL.Query().Get("uris") != want {
+			t.Errorf("uris=%q want %q", r.URL.Query().Get("uris"), want)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"posts": []any{
+				map[string]any{
+					"post": map[string]any{
+						"likeCount":   3,
+						"repostCount": 4,
+						"replyCount":  5,
+						"quoteCount":  6,
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	p := NewBlueskyProvider()
+	account := domain.SocialAccount{
+		InstanceURL:     server.URL,
+		RemoteAccountID: "did:plc:123",
+		Username:        "user.bsky.social",
+		AuthType:        domain.AccountAuthTypeOAuthToken,
+	}
+	out, err := p.GetMetrics(context.Background(), account, PublishAuth{AccessToken: "jwt"}, "https://bsky.app/profile/user.bsky.social/post/abc")
+	if err != nil {
+		t.Fatalf("GetMetrics: %v", err)
+	}
+	m := map[string]int64{}
+	for _, x := range out {
+		m[x.Name] = x.Value
+	}
+	if m["likes"] != 3 || m["reposts"] != 4 || m["replies"] != 5 || m["quotes"] != 6 {
+		t.Fatalf("metrics: %#v", m)
+	}
+}

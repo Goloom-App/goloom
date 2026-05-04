@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,23 +14,25 @@ import (
 )
 
 type Service struct {
-	logger       *slog.Logger
-	store        store.Store
-	providers    *provider.Registry
-	pollInterval time.Duration
-	workers      int
+	logger               *slog.Logger
+	store                store.Store
+	providers            *provider.Registry
+	pollInterval         time.Duration
+	metricSyncInterval   time.Duration
+	workers              int
 }
 
-func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int) *Service {
+func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration) *Service {
 	if workers <= 0 {
 		workers = 1
 	}
 	return &Service{
-		logger:       logger,
-		store:        store,
-		providers:    providers,
-		pollInterval: pollInterval,
-		workers:      workers,
+		logger:             logger,
+		store:              store,
+		providers:          providers,
+		pollInterval:       pollInterval,
+		metricSyncInterval: metricSyncInterval,
+		workers:            workers,
 	}
 }
 
@@ -52,6 +55,14 @@ func (s *Service) Start(ctx context.Context) {
 					s.processPost(ctx, post)
 				}
 			}
+		}()
+	}
+
+	if s.metricSyncInterval > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.runMetricSyncLoop(ctx)
 		}()
 	}
 
@@ -150,6 +161,63 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 	if err := s.store.MarkPostResult(ctx, post.ID, post.AttemptCount+1, domain.PostStatusPosted, "", nil); err != nil {
 		s.logger.Error("failed to mark post as posted", "post_id", post.ID, "error", err)
+	}
+}
+
+func (s *Service) runMetricSyncLoop(ctx context.Context) {
+	ticker := time.NewTicker(s.metricSyncInterval)
+	defer ticker.Stop()
+	for {
+		s.syncPostedMetrics(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Service) syncPostedMetrics(ctx context.Context) {
+	since := time.Now().Add(-30 * 24 * time.Hour)
+	rows, err := s.store.ListPostedTargetsForMetricSync(ctx, since, 500)
+	if err != nil {
+		s.logger.Error("metric sync list failed", "error", err)
+		return
+	}
+	for _, row := range rows {
+		pImpl, ok := s.providers.Get(row.Account.Provider)
+		if !ok {
+			continue
+		}
+		token, err := s.store.DecryptAccessToken(row.Account)
+		if err != nil {
+			s.logger.Warn("metric sync decrypt access failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
+			continue
+		}
+		refreshToken, err := s.store.DecryptRefreshToken(row.Account)
+		if err != nil {
+			s.logger.Warn("metric sync decrypt refresh failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
+			continue
+		}
+		readings, err := pImpl.GetMetrics(ctx, row.Account, provider.PublishAuth{
+			AccessToken:  token,
+			RefreshToken: refreshToken,
+		}, row.PublishedURL)
+		if err != nil {
+			s.logger.Warn("metric sync fetch failed", "post_id", row.PostID, "account_id", row.Account.ID, "provider", row.Account.Provider, "error", err)
+			continue
+		}
+		m := make(map[string]int64, len(readings))
+		for _, x := range readings {
+			name := strings.TrimSpace(x.Name)
+			if name == "" {
+				continue
+			}
+			m[name] = x.Value
+		}
+		if err := s.store.UpsertPostMetrics(ctx, row.PostID, row.Account.ID, m); err != nil {
+			s.logger.Warn("metric sync upsert failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
+		}
 	}
 }
 

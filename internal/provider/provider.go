@@ -31,6 +31,12 @@ type PublishResult struct {
 	URL      string
 }
 
+// EngagementMetric is one normalized metric from a provider before persistence.
+type EngagementMetric struct {
+	Name  string
+	Value int64
+}
+
 // OAuthAccountConnector is implemented by providers that support browser OAuth for account linking.
 type OAuthAccountConnector interface {
 	BuildAuthorizationURL(instance domain.ProviderInstance, state, redirectURI string) (string, error)
@@ -44,6 +50,7 @@ type SocialMediaProvider interface {
 	PrepareProviderInstance(ctx context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error)
 	ConnectAccount(ctx context.Context, input domain.CreateAccountInput, instance *domain.ProviderInstance) (domain.ConnectedAccount, error)
 	Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error)
+	GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error)
 }
 
 // Registry resolves a provider implementation by canonical name.

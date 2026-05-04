@@ -19,8 +19,9 @@ type Config struct {
 	EncryptionKey         string
 	AllowedOrigins        []string
 	RateLimitPerMinute    int
-	SchedulerPollInterval time.Duration
-	SchedulerWorkers      int
+	SchedulerPollInterval          time.Duration
+	SchedulerMetricsSyncInterval   time.Duration
+	SchedulerWorkers               int
 
 	// LogLevel: debug, info, warn, error — empty means derive from AppEnv (development=debug, production=info).
 	LogLevel string
@@ -53,8 +54,9 @@ func Load() (Config, error) {
 		EncryptionKey:         getEnv("ENCRYPTION_KEY", ""),
 		AllowedOrigins:        splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
 		RateLimitPerMinute:    getInt("RATE_LIMIT_PER_MINUTE", 60),
-		SchedulerPollInterval: getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
-		SchedulerWorkers:      getInt("SCHEDULER_WORKERS", 4),
+		SchedulerPollInterval:        getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
+		SchedulerMetricsSyncInterval: getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", time.Hour),
+		SchedulerWorkers:             getInt("SCHEDULER_WORKERS", 4),
 		LogLevel:              strings.TrimSpace(getEnv("LOG_LEVEL", "")),
 		LogFormat:             strings.TrimSpace(getEnv("LOG_FORMAT", "")),
 		OIDCIssuerURL:         getEnv("OIDC_ISSUER_URL", ""),

@@ -238,6 +238,98 @@ func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAcco
 	}, nil
 }
 
+func blueskyRKeyFromWebURL(raw string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
+	}
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	for i := 0; i < len(segs)-1; i++ {
+		if strings.EqualFold(segs[i], "post") {
+			rk := strings.TrimSpace(segs[i+1])
+			if rk != "" {
+				return rk, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("bluesky web url rkey not found")
+}
+
+func blueskyAtURIForMetrics(account domain.SocialAccount, publishedURL string) (string, error) {
+	raw := strings.TrimSpace(publishedURL)
+	if raw == "" {
+		return "", errors.New("published url is required for bluesky metrics")
+	}
+	if strings.HasPrefix(raw, "at://") {
+		return raw, nil
+	}
+	rkey, err := blueskyRKeyFromWebURL(raw)
+	if err != nil {
+		return "", err
+	}
+	did := strings.TrimSpace(account.RemoteAccountID)
+	if did == "" {
+		return "", errors.New("bluesky account missing remote id (did)")
+	}
+	return fmt.Sprintf("at://%s/app.bsky.feed.post/%s", did, rkey), nil
+}
+
+func (p *BlueskyProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error) {
+	atURI, err := blueskyAtURIForMetrics(account, publishedURL)
+	if err != nil {
+		return nil, err
+	}
+
+	token := strings.TrimSpace(auth.AccessToken)
+	if token == "" {
+		return nil, errors.New("missing bluesky credential")
+	}
+	if account.AuthType == domain.AccountAuthTypeAppPassword {
+		session, err := p.createSession(ctx, account.InstanceURL, account.Username, token)
+		if err != nil {
+			return nil, err
+		}
+		token = session.AccessJWT
+	}
+
+	q := url.Values{}
+	q.Set("uris", atURI)
+	endpoint := strings.TrimRight(account.InstanceURL, "/") + "/xrpc/app.bsky.feed.getPosts?" + q.Encode()
+	resp, err := doJSONRequest(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("bluesky getPosts failed with status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		Posts []struct {
+			Post *struct {
+				LikeCount    int64 `json:"likeCount"`
+				RepostCount  int64 `json:"repostCount"`
+				ReplyCount   int64 `json:"replyCount"`
+				QuoteCount   int64 `json:"quoteCount"`
+			} `json:"post"`
+		} `json:"posts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode getPosts: %w", err)
+	}
+	if len(payload.Posts) == 0 || payload.Posts[0].Post == nil {
+		return nil, fmt.Errorf("getPosts returned no post")
+	}
+	post := payload.Posts[0].Post
+	return []EngagementMetric{
+		{Name: "likes", Value: post.LikeCount},
+		{Name: "reposts", Value: post.RepostCount},
+		{Name: "replies", Value: post.ReplyCount},
+		{Name: "quotes", Value: post.QuoteCount},
+	}, nil
+}
+
 func (p *BlueskyProvider) createSession(ctx context.Context, instanceURL, identifier, password string) (blueskySessionResponse, error) {
 	body, err := marshalJSONBody(map[string]any{
 		"identifier": identifier,

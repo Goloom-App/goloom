@@ -146,3 +146,11 @@ func (p *GenericStatusProvider) Publish(ctx context.Context, account domain.Soci
 
 	return PublishResult{RemoteID: payload.ID, URL: payload.URL}, nil
 }
+
+func (p *GenericStatusProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error) {
+	path := strings.TrimSpace(p.postPath)
+	if path == "" {
+		path = "/api/v1/statuses"
+	}
+	return fetchMastodonCompatibleMetrics(ctx, account.InstanceURL, auth.AccessToken, path, publishedURL)
+}

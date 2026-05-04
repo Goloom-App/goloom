@@ -385,3 +385,55 @@ func TestSQLite_GetScheduledPost_notFound(t *testing.T) {
 		t.Fatalf("want ErrNoRows, got %v", err)
 	}
 }
+
+func TestSQLite_AnalyticsAndPostVersions(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "an", "an@x", "An")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "an-" + uuid.NewString(), Description: ""})
+	acc, _ := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://x", Username: "x", AccessToken: "t",
+	})
+	principal := domain.AuthenticatedPrincipal{User: u}
+	post, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+		Content: "c", ScheduledAt: time.Now().UTC(), TargetAccounts: []string{acc.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 3, "reposts": 1}); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := s.GetTeamAnalytics(ctx, team.ID, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.MetricsTotal["likes"] != 3 || sum.MetricsTotal["reposts"] != 1 {
+		t.Fatalf("totals: %#v", sum.MetricsTotal)
+	}
+	if len(sum.TopPosts) != 1 || sum.TopPosts[0].Score != 4 {
+		t.Fatalf("top: %#v", sum.TopPosts)
+	}
+	metrics, err := s.ListPostMetricsForTeamPost(ctx, team.ID, post.ID)
+	if err != nil || len(metrics) < 2 {
+		t.Fatalf("metrics: %v %#v", err, metrics)
+	}
+	if err := s.ApplyPostVersionsPatch(ctx, team.ID, post.ID, []domain.PostVersion{{PostID: post.ID, AccountID: acc.ID, Content: "override"}}); err != nil {
+		t.Fatal(err)
+	}
+	vers, err := s.ListPostVersionsForTeamPost(ctx, team.ID, post.ID)
+	if err != nil || len(vers) != 1 || vers[0].Content != "override" {
+		t.Fatalf("versions: %v %#v", err, vers)
+	}
+	if err := s.ApplyPostVersionsPatch(ctx, team.ID, post.ID, []domain.PostVersion{{PostID: post.ID, AccountID: acc.ID, Content: ""}}); err != nil {
+		t.Fatal(err)
+	}
+	vers2, err := s.ListPostVersionsForTeamPost(ctx, team.ID, post.ID)
+	if err != nil || len(vers2) != 0 {
+		t.Fatalf("after clear: %#v %v", vers2, err)
+	}
+}

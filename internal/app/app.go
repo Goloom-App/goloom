@@ -37,6 +37,7 @@ func Run(ctx context.Context) error {
 		"public_base_url", cfg.PublicBaseURL,
 		"database_backend", databaseBackend(cfg.DatabaseURL),
 		"scheduler_poll_interval", cfg.SchedulerPollInterval.String(),
+		"scheduler_metrics_sync_interval", cfg.SchedulerMetricsSyncInterval.String(),
 		"scheduler_workers", cfg.SchedulerWorkers,
 		"rate_limit_per_minute", cfg.RateLimitPerMinute,
 		"oidc_enabled", cfg.OIDCIssuerURL != "" && cfg.OIDCClientID != "",
@@ -107,6 +108,7 @@ func Run(ctx context.Context) error {
 		providers,
 		cfg.SchedulerPollInterval,
 		cfg.SchedulerWorkers,
+		cfg.SchedulerMetricsSyncInterval,
 	)
 	go schedulerService.Start(ctx)
 

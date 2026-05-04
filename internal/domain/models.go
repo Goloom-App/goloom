@@ -127,6 +127,42 @@ type ScheduledPostTarget struct {
 	PublishedURL string     `json:"published_url,omitempty"`
 }
 
+// PostMetric stores aggregated engagement for one post, account, and metric name.
+type PostMetric struct {
+	PostID    string    `json:"post_id"`
+	AccountID string    `json:"account_id"`
+	Metric    string    `json:"metric"`
+	Value     int64     `json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// PostVersion holds per-account content override for a scheduled post.
+type PostVersion struct {
+	PostID    string `json:"post_id"`
+	AccountID string `json:"account_id"`
+	Content   string `json:"content"`
+}
+
+// PostedTargetForMetricSync is a posted target row with the linked social account for metric polling.
+type PostedTargetForMetricSync struct {
+	PostID       string
+	PublishedURL string
+	Account      SocialAccount
+}
+
+// PostEngagementSummary ranks a posted scheduled post by summed metrics.
+type PostEngagementSummary struct {
+	PostID string `json:"post_id"`
+	Title  string `json:"title"`
+	Score  int64  `json:"score"`
+}
+
+// TeamAnalyticsSummary aggregates stored metrics for posted content in a team.
+type TeamAnalyticsSummary struct {
+	MetricsTotal map[string]int64        `json:"metrics_total"`
+	TopPosts     []PostEngagementSummary `json:"top_posts"`
+}
+
 type APIToken struct {
 	ID         string     `json:"id"`
 	UserID     string     `json:"user_id"`

@@ -174,3 +174,21 @@ create index if not exists idx_scheduled_posts_due on scheduled_posts(status, sc
 create index if not exists idx_post_targets_post on scheduled_post_targets(post_id);
 
 alter table social_accounts add column if not exists avatar_url text not null default '';
+
+create table if not exists post_metrics (
+    post_id uuid not null references scheduled_posts(id) on delete cascade,
+    account_id uuid not null references social_accounts(id) on delete cascade,
+    metric text not null,
+    value bigint not null default 0,
+    updated_at timestamptz not null default now(),
+    primary key (post_id, account_id, metric)
+);
+
+create index if not exists idx_post_metrics_post on post_metrics(post_id);
+
+create table if not exists post_versions (
+    post_id uuid not null references scheduled_posts(id) on delete cascade,
+    account_id uuid not null references social_accounts(id) on delete cascade,
+    content text not null default '',
+    primary key (post_id, account_id)
+);

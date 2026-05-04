@@ -319,6 +319,10 @@ func (p *MastodonProvider) Publish(ctx context.Context, account domain.SocialAcc
 	}, nil
 }
 
+func (p *MastodonProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error) {
+	return fetchMastodonCompatibleMetrics(ctx, account.InstanceURL, auth.AccessToken, "/api/v1/statuses", publishedURL)
+}
+
 func discoverMastodonOAuthMetadata(ctx context.Context, instanceURL string) (string, string, error) {
 	resp, err := doJSONRequest(ctx, http.MethodGet, strings.TrimRight(instanceURL, "/")+"/.well-known/oauth-authorization-server", "", nil)
 	if err == nil {
