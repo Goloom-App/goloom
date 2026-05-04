@@ -298,3 +298,57 @@ func TestBlueskyProvider_GetMetrics(t *testing.T) {
 		t.Fatalf("metrics: %#v", m)
 	}
 }
+
+func TestFriendicaProvider_GetMetrics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/statuses/42" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer fc" {
+			t.Errorf("expected Bearer fc, got %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"favourites_count": 1,
+			"reblogs_count":    2,
+			"replies_count":    3,
+		})
+	}))
+	defer server.Close()
+
+	p := NewFriendicaProvider()
+	account := domain.SocialAccount{InstanceURL: server.URL}
+	out, err := p.GetMetrics(context.Background(), account, PublishAuth{AccessToken: "fc"}, "https://friendica.example/statuses/42")
+	if err != nil {
+		t.Fatalf("GetMetrics: %v", err)
+	}
+	m := map[string]int64{}
+	for _, x := range out {
+		m[x.Name] = x.Value
+	}
+	if m["likes"] != 1 || m["reposts"] != 2 || m["replies"] != 3 {
+		t.Fatalf("metrics: %#v", m)
+	}
+}
+
+func TestMastodonProvider_GetMetrics_requiresPublishedURL(t *testing.T) {
+	p := NewMastodonProvider(MastodonRegistrationConfig{})
+	_, err := p.GetMetrics(context.Background(), domain.SocialAccount{InstanceURL: "https://x"}, PublishAuth{AccessToken: "t"}, "")
+	if err == nil {
+		t.Fatal("expected error for empty published URL")
+	}
+}
+
+func TestBlueskyProvider_GetMetrics_invalidPublishedURL(t *testing.T) {
+	p := NewBlueskyProvider()
+	account := domain.SocialAccount{
+		InstanceURL:     "https://bsky.example",
+		RemoteAccountID: "did:plc:1",
+		Username:        "u.bsky.social",
+		AuthType:        domain.AccountAuthTypeOAuthToken,
+	}
+	_, err := p.GetMetrics(context.Background(), account, PublishAuth{AccessToken: "jwt"}, "https://example.com/not-a-post")
+	if err == nil {
+		t.Fatal("expected error for URL without post rkey")
+	}
+}
