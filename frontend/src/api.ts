@@ -81,6 +81,30 @@ export interface BackendTeamAnalytics {
   top_posts: BackendPostEngagementSummary[]
 }
 
+export interface BackendTeamMetricDelta {
+  metric: string
+  total: number
+  delta_vs_prev_day: number
+  delta_percent?: number
+}
+
+export interface BackendTeamAnalyticsReport {
+  metrics: BackendTeamMetricDelta[]
+  top_posts: BackendPostEngagementSummary[]
+}
+
+export interface BackendPostAnalyticsListRow {
+  post_id: string
+  title: string
+  scheduled_at: string
+  score: number
+}
+
+export interface BackendMetricHistoryPoint {
+  date: string
+  value: number
+}
+
 export interface BackendPostMetric {
   post_id: string
   account_id: string
@@ -431,6 +455,49 @@ export function createApiClient(options: ApiClientOptions) {
       return request<BackendTeamAnalytics>(options, `/v1/teams/${teamID}/analytics${q}`, {
         headers: buildHeaders(options.token, false),
       })
+    },
+    getTeamAnalyticsSummary(teamID: string, opts?: { top_posts?: number }) {
+      const q =
+        opts?.top_posts != null && opts.top_posts > 0
+          ? `?top_posts=${encodeURIComponent(String(opts.top_posts))}`
+          : ''
+      return request<BackendTeamAnalyticsReport>(options, `/v1/teams/${teamID}/analytics/summary${q}`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    getTeamAnalyticsPosts(teamID: string, opts?: { sort?: string; limit?: number; offset?: number }) {
+      const params = new URLSearchParams()
+      if (opts?.sort) {
+        params.set('sort', opts.sort)
+      }
+      if (opts?.limit != null && opts.limit > 0) {
+        params.set('limit', String(opts.limit))
+      }
+      if (opts?.offset != null && opts.offset > 0) {
+        params.set('offset', String(opts.offset))
+      }
+      const q = params.toString()
+      return request<{ items: BackendPostAnalyticsListRow[] }>(
+        options,
+        `/v1/teams/${teamID}/analytics/posts${q ? `?${q}` : ''}`,
+        {
+          headers: buildHeaders(options.token, false),
+        },
+      )
+    },
+    getTeamAnalyticsChart(teamID: string, opts: { metric: string; days?: number }) {
+      const params = new URLSearchParams()
+      params.set('metric', opts.metric)
+      if (opts.days != null && opts.days > 0) {
+        params.set('days', String(opts.days))
+      }
+      return request<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>(
+        options,
+        `/v1/teams/${teamID}/analytics/chart?${params.toString()}`,
+        {
+          headers: buildHeaders(options.token, false),
+        },
+      )
     },
     getPostAnalytics(teamID: string, postID: string) {
       return request<{ items: BackendPostMetric[] }>(options, `/v1/teams/${teamID}/posts/${postID}/analytics`, {

@@ -60,16 +60,16 @@ The goal is to transform Goloom from a basic social media scheduler into a robus
 ## Phase 5: Frontend Modularization & UI Implementation
 *Goal: Deliver a modern, interactive UI for all new features.*
 
-- [ ] **Modular UI Refactor**
+- [x] **Modular UI Refactor**
     - Split `App.tsx` into views and layout components.
     - [Reference: docs/ui-views-catalog.md](docs/ui-views-catalog.md)
-- [ ] **Advanced Composer**
+- [x] **Advanced Composer**
     - Build the multi-platform tabs, real-time preview, and media gallery.
     - [Reference: docs/ui-views-catalog.md (Section 3)](docs/ui-views-catalog.md)
-- [ ] **Analytics Dashboard**
+- [x] **Analytics Dashboard**
     - Implement charts (using Recharts) and summary tiles.
     - [Reference: docs/plan-analytics-implementation.md (Section 3)](docs/plan-analytics-implementation.md)
-- [ ] **Media Library View**
+- [x] **Media Library View**
     - Implement the workspace-scoped media explorer with Unsplash/Giphy integration.
     - [Reference: docs/ui-views-catalog.md (Section 4)](docs/ui-views-catalog.md)
 

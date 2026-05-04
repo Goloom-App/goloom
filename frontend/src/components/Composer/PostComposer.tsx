@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../icons'
 import type { AccountRecord } from '../../types'
@@ -31,16 +32,19 @@ export function PostComposer({
   syncing,
   onSave,
   onClose,
+  onIntegrationNotice,
 }: {
   open: boolean
   mode: 'create' | 'edit'
   theme: 'dark' | 'light'
   teamAccounts: AccountRecord[]
   draft: EditorDraftState
-  setDraft: React.Dispatch<React.SetStateAction<EditorDraftState>>
+  setDraft: Dispatch<SetStateAction<EditorDraftState>>
   syncing: boolean
   onSave: () => void | Promise<void>
   onClose: () => void
+  /** Optional toast-style hook when user taps Unsplash/Giphy (until server search exists). */
+  onIntegrationNotice?: (message: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
 
@@ -217,8 +221,18 @@ export function PostComposer({
           <MediaLibraryPanel
             selectedLabel={activeTab === 'default' ? 'default message' : selectedAccounts.find((a) => a.id === activeTab)?.username ?? 'account'}
             integrations={{
-              onRequestUnsplash: undefined,
-              onRequestGiphy: undefined,
+              onRequestUnsplash: onIntegrationNotice
+                ? () =>
+                    onIntegrationNotice(
+                      'Unsplash search is not enabled on the server yet. Use Mastodon media upload from the API when available, or attach files locally once upload is wired.',
+                    )
+                : undefined,
+              onRequestGiphy: onIntegrationNotice
+                ? () =>
+                    onIntegrationNotice(
+                      'Giphy search is not enabled on the server yet. GIF pickers require backend keys and a search proxy.',
+                    )
+                : undefined,
             }}
           />
 

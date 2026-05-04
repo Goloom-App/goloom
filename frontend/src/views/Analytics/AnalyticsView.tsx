@@ -1,15 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { BackendTeamAnalytics } from '../../api'
+import { format, parseISO } from 'date-fns'
+import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import type { BackendMetricHistoryPoint, BackendPostAnalyticsListRow, BackendTeamAnalyticsReport } from '../../api'
+
+function formatDeltaPct(n: number | undefined): string {
+  if (n == null || Number.isNaN(n)) {
+    return ''
+  }
+  const rounded = Math.round(n * 10) / 10
+  const sign = rounded > 0 ? '+' : ''
+  return `${sign}${rounded}%`
+}
 
 export function AnalyticsView({
   teamId,
-  fetchAnalytics,
+  fetchSummary,
+  fetchPosts,
+  fetchChart,
 }: {
   teamId: string
-  fetchAnalytics: (opts?: { top_posts?: number }) => Promise<BackendTeamAnalytics>
+  fetchSummary: (opts?: { top_posts?: number }) => Promise<BackendTeamAnalyticsReport>
+  fetchPosts: (opts?: { sort?: string; limit?: number; offset?: number }) => Promise<{ items: BackendPostAnalyticsListRow[] }>
+  fetchChart: (opts: { metric: string; days?: number }) => Promise<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>
 }) {
-  const [data, setData] = useState<BackendTeamAnalytics | null>(null)
+  const [summary, setSummary] = useState<BackendTeamAnalyticsReport | null>(null)
+  const [posts, setPosts] = useState<BackendPostAnalyticsListRow[]>([])
+  const [series, setSeries] = useState<BackendMetricHistoryPoint[]>([])
+  const [chartMetric, setChartMetric] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -20,35 +37,72 @@ export function AnalyticsView({
     setLoading(true)
     setError(null)
     try {
-      const res = await fetchAnalytics({ top_posts: 12 })
-      setData(res)
+      const [sum, postRows] = await Promise.all([
+        fetchSummary({ top_posts: 12 }),
+        fetchPosts({ sort: 'score', limit: 50, offset: 0 }),
+      ])
+      setSummary(sum)
+      setPosts(postRows.items ?? [])
+      const firstMetric = sum.metrics?.[0]?.metric ?? ''
+      setChartMetric((prev) => {
+        if (prev && sum.metrics?.some((m) => m.metric === prev)) {
+          return prev
+        }
+        return firstMetric
+      })
     } catch (e) {
-      setData(null)
+      setSummary(null)
+      setPosts([])
+      setSeries([])
       setError(e instanceof Error ? e.message : 'Failed to load analytics')
     } finally {
       setLoading(false)
     }
-  }, [fetchAnalytics, teamId])
+  }, [fetchPosts, fetchSummary, teamId])
 
   useEffect(() => {
     void load()
   }, [load])
 
+  useEffect(() => {
+    if (!teamId || !chartMetric.trim()) {
+      setSeries([])
+      return
+    }
+    let cancelled = false
+    void fetchChart({ metric: chartMetric, days: 30 })
+      .then((res) => {
+        if (!cancelled) {
+          setSeries(res.series ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSeries([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [chartMetric, fetchChart, teamId])
+
   const barData = useMemo(() => {
-    if (!data?.metrics_total) {
+    if (!summary?.metrics?.length) {
       return []
     }
-    return Object.entries(data.metrics_total)
-      .map(([name, value]) => ({ name, value }))
+    return [...summary.metrics]
+      .map((m) => ({ name: m.metric, value: m.total }))
       .sort((a, b) => b.value - a.value)
-  }, [data])
+  }, [summary])
 
   const totalEngagement = useMemo(() => {
-    if (!data?.metrics_total) {
+    if (!summary?.metrics?.length) {
       return 0
     }
-    return Object.values(data.metrics_total).reduce((a, b) => a + b, 0)
-  }, [data])
+    return summary.metrics.reduce((a, m) => a + m.total, 0)
+  }, [summary])
+
+  const lineData = useMemo(() => series.map((p) => ({ date: p.date, value: p.value })), [series])
 
   if (!teamId) {
     return <p className="hint">Select a team to view analytics.</p>
@@ -62,27 +116,51 @@ export function AnalyticsView({
         </button>
       </div>
       {error ? <p className="status-banner__error">{error}</p> : null}
-      {loading && !data ? <p className="hint">Loading analytics…</p> : null}
+      {loading && !summary ? <p className="hint">Loading analytics…</p> : null}
 
-      {data ? (
+      {summary ? (
         <>
           <div className="analytics-cards">
             <section className="glass-panel analytics-card">
               <p className="eyebrow">Total engagement</p>
               <p className="analytics-card__value">{totalEngagement.toLocaleString()}</p>
-              <p className="hint">Sum of stored metrics on published posts in this workspace.</p>
+              <p className="hint">Sum of live metric totals on published posts in this workspace.</p>
             </section>
             <section className="glass-panel analytics-card">
               <p className="eyebrow">Metric types</p>
-              <p className="analytics-card__value">{Object.keys(data.metrics_total).length}</p>
+              <p className="analytics-card__value">{summary.metrics.length}</p>
               <p className="hint">Distinct metric names (likes, reposts, …).</p>
             </section>
             <section className="glass-panel analytics-card">
-              <p className="eyebrow">Top posts tracked</p>
-              <p className="analytics-card__value">{data.top_posts?.length ?? 0}</p>
-              <p className="hint">Ranked by summed metrics after publish.</p>
+              <p className="eyebrow">Posts ranked</p>
+              <p className="analytics-card__value">{posts.length}</p>
+              <p className="hint">Published posts returned for the performance table.</p>
             </section>
           </div>
+
+          {summary.metrics.length > 0 ? (
+            <section className="glass-panel analytics-deltas-panel">
+              <h3 className="subsection-title">Totals and day-over-day</h3>
+              <p className="hint">Delta compares the latest and previous calendar day in metric history (requires two days of snapshots).</p>
+              <ul className="analytics-delta-grid">
+                {summary.metrics.map((m) => (
+                  <li key={m.metric} className="analytics-delta-card">
+                    <span className="analytics-delta-card__metric">{m.metric}</span>
+                    <span className="analytics-delta-card__total">{m.total.toLocaleString()}</span>
+                    <span
+                      className={`analytics-delta-card__delta ${
+                        m.delta_vs_prev_day > 0 ? 'analytics-delta-card__delta--up' : m.delta_vs_prev_day < 0 ? 'analytics-delta-card__delta--down' : ''
+                      }`}
+                    >
+                      {m.delta_vs_prev_day > 0 ? '+' : ''}
+                      {m.delta_vs_prev_day.toLocaleString()}
+                      {m.delta_percent != null ? ` · ${formatDeltaPct(m.delta_percent)}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <section className="glass-panel analytics-chart-panel">
             <h3 className="subsection-title">Metrics breakdown</h3>
@@ -110,13 +188,93 @@ export function AnalyticsView({
             )}
           </section>
 
+          {summary.metrics.length > 0 ? (
+            <section className="glass-panel analytics-chart-panel">
+              <div className="analytics-chart-panel__head">
+                <h3 className="subsection-title">Trend (30 days)</h3>
+                <label className="analytics-metric-select">
+                  <span className="hint">Metric</span>
+                  <select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
+                    {summary.metrics.map((m) => (
+                      <option key={m.metric} value={m.metric}>
+                        {m.metric}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {lineData.length === 0 ? (
+                <p className="hint">No history points for this metric in the selected window yet.</p>
+              ) : (
+                <div className="analytics-chart-wrap">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={lineData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 11 }} />
+                      <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          background: 'var(--surface-raised)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          color: 'var(--text)',
+                        }}
+                      />
+                      <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </section>
+          ) : null}
+
           <section className="glass-panel analytics-top-posts">
-            <h3 className="subsection-title">Top posts</h3>
-            {data.top_posts.length === 0 ? (
+            <h3 className="subsection-title">Post performance</h3>
+            {posts.length === 0 ? (
+              <p className="hint">No published posts with metrics in this workspace yet.</p>
+            ) : (
+              <div className="analytics-posts-table-wrap">
+                <table className="data-table analytics-posts-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Scheduled</th>
+                      <th>Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {posts.map((row) => (
+                      <tr key={row.post_id}>
+                        <td>
+                          <strong>{row.title || 'Untitled'}</strong>
+                          <div className="hint mono">{row.post_id}</div>
+                        </td>
+                        <td>
+                          {(() => {
+                            try {
+                              const d = parseISO(row.scheduled_at)
+                              return format(d, 'PPp')
+                            } catch {
+                              return row.scheduled_at
+                            }
+                          })()}
+                        </td>
+                        <td className="analytics-posts-table__score">{row.score.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="glass-panel analytics-top-posts">
+            <h3 className="subsection-title">Top posts (summary)</h3>
+            {summary.top_posts.length === 0 ? (
               <p className="hint">No ranked posts yet.</p>
             ) : (
               <ul className="analytics-top-list">
-                {data.top_posts.map((row) => (
+                {summary.top_posts.map((row) => (
                   <li key={row.post_id} className="analytics-top-list__row">
                     <div>
                       <strong>{row.title || 'Untitled'}</strong>

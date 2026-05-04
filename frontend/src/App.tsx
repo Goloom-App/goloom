@@ -1,25 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
-import { addDays, format, isValid, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
+import { addDays, format, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
 
+import { AuthPanel, AuthShell } from './components/auth/AuthViews'
+import { PostComposer } from './components/Composer/PostComposer'
+import { defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
+import type { EditorDraftState } from './components/Composer/types'
+import { SocialPreview } from './components/post/SocialPreview'
+import { AppSidebar } from './components/Sidebar/AppSidebar'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
 import { calendarCellsForMonth } from './views/calendar/calendarUtils'
 import { ContentCalendarView } from './views/calendar/ContentCalendarView'
 import { ScheduleView } from './views/calendar/ScheduleView'
+import { AccountsView } from './views/accounts/AccountsView'
+import { defaultAccountConnectDraft, type AccountConnectDraft } from './views/accounts/accountConnectTypes'
+import { AdminView } from './views/admin/AdminView'
+import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admin/adminTypes'
+import { MediaLibraryView } from './views/media/MediaLibraryView'
+import { SettingsView } from './views/settings/SettingsView'
+import { TeamsView } from './views/teams/TeamsView'
 import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin, type BackendAPIToken, type BackendAdminMetrics } from './api'
 import { initialSettings } from './data'
-import { AppSidebar } from './components/Sidebar/AppSidebar'
-import { defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
-import type { EditorDraftState } from './components/Composer/types'
-import { DestinationAvatar } from './components/post/DestinationAvatar'
-import { SocialPreview } from './components/post/SocialPreview'
-import { PostComposer } from './components/Composer/PostComposer'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
-import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
+import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 /** Survives React Strict Mode remounts: hash is promoted here, then one reload applies the session. */
@@ -30,6 +36,7 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
   contentCalendar: 'Content calendar',
   archive: 'Archive',
   analytics: 'Analytics',
+  mediaLibrary: 'Media library',
   teams: 'Teams',
   accounts: 'Accounts',
   settings: 'Settings',
@@ -37,54 +44,6 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
 }
 
 const CONTENT_REFRESH_SECTIONS: AppSection[] = ['calendar', 'archive', 'contentCalendar', 'analytics']
-
-type AdminProviderDraft = {
-  provider: ProviderName
-  name: string
-  instanceUrl: string
-  clientId: string
-  clientSecret: string
-  scopes: string
-  authorizationEndpoint: string
-  tokenEndpoint: string
-}
-
-function defaultAdminProviderDraft(): AdminProviderDraft {
-  return {
-    provider: 'mastodon',
-    name: '',
-    instanceUrl: '',
-    clientId: '',
-    clientSecret: '',
-    scopes: 'read,write',
-    authorizationEndpoint: '',
-    tokenEndpoint: '',
-  }
-}
-
-type AccountConnectDraft = {
-  provider: ProviderName
-  providerInstanceId: string
-  instanceUrl: string
-  accessToken: string
-  refreshToken: string
-  identifier: string
-  appPassword: string
-  blueskyAuthMode: 'app_password' | 'access_token'
-}
-
-function defaultAccountConnectDraft(): AccountConnectDraft {
-  return {
-    provider: 'mastodon',
-    providerInstanceId: '',
-    instanceUrl: '',
-    accessToken: '',
-    refreshToken: '',
-    identifier: '',
-    appPassword: '',
-    blueskyAuthMode: 'app_password',
-  }
-}
 
 function App() {
   const [section, setSection] = useState<AppSection>('calendar')
@@ -602,6 +561,7 @@ function App() {
       { id: 'contentCalendar', label: 'Calendar', icon: 'calendarGrid' },
       { id: 'archive', label: 'Archive', icon: 'archive' },
       { id: 'analytics', label: 'Analytics', icon: 'chart' },
+      { id: 'mediaLibrary', label: 'Media', icon: 'image' },
     ],
     [],
   )
@@ -1278,611 +1238,95 @@ function App() {
           )}
 
           {section === 'analytics' && api && effectiveSelectedTeamId ? (
-            <AnalyticsView teamId={effectiveSelectedTeamId} fetchAnalytics={(opts) => api.getTeamAnalytics(effectiveSelectedTeamId, opts)} />
+            <AnalyticsView
+              teamId={effectiveSelectedTeamId}
+              fetchSummary={(opts) => api.getTeamAnalyticsSummary(effectiveSelectedTeamId, opts)}
+              fetchPosts={(opts) => api.getTeamAnalyticsPosts(effectiveSelectedTeamId, opts)}
+              fetchChart={(opts) => api.getTeamAnalyticsChart(effectiveSelectedTeamId, opts)}
+            />
           ) : section === 'analytics' ? (
             <p className="hint">Connect to the API and select a team to view analytics.</p>
           ) : null}
 
-          {section === 'teams' && (
-            <div className="teams-view two-column-detail">
-              <div className="glass-panel">
-                <h2 className="section-card__title">Your teams</h2>
-                <p className="hint">Each card shows members, connected accounts, and post activity for that workspace.</p>
-                <div className="team-grid">
-                  {teams.map((team) => {
-                    const teamPosts = posts.filter((p) => p.teamId === team.id)
-                    const plannedCount = teamPosts.filter((p) => p.status === 'scheduled').length
-                    const publishedCount = teamPosts.filter((p) => p.status === 'posted').length
-                    return (
-                      <button
-                        key={team.id}
-                        type="button"
-                        className={`team-card ${team.id === effectiveSelectedTeamId ? 'team-card--active' : ''}`}
-                        onClick={() => setSelectedTeamId(team.id)}
-                      >
-                        <strong>{team.name}{team.isPersonal ? ' · Personal' : ''}</strong>
-                        <small>{team.members.length} members · {team.accountIds.length} accounts</small>
-                        <div className="team-card__stats">
-                          <span>{plannedCount} planned</span>
-                          <span>{publishedCount} published</span>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+          {section === 'mediaLibrary' && selectedTeam ? (
+            <MediaLibraryView
+              teamName={selectedTeam.name}
+              onRequestUnsplash={() =>
+                setStatusMessage('Unsplash is not wired to the API yet. Configure search keys on the server to enable stock photos.')
+              }
+              onRequestGiphy={() =>
+                setStatusMessage('Giphy is not wired to the API yet. Configure search keys on the server to enable GIF search.')
+              }
+            />
+          ) : section === 'mediaLibrary' ? (
+            <p className="hint">Select a team to browse the media workspace.</p>
+          ) : null}
 
-              {selectedTeam ? (
-                <div className="glass-panel">
-                  <h2 className="section-card__title">{selectedTeam.name}</h2>
-                  <p className="hint">{selectedTeam.description || 'No description'}</p>
-                  {(() => {
-                    const teamPosts = posts.filter((p) => p.teamId === selectedTeam.id)
-                    const plannedCount = teamPosts.filter((p) => p.status === 'scheduled').length
-                    const publishedCount = teamPosts.filter((p) => p.status === 'posted').length
-                    return (
-                      <div className="stat-grid" style={{ marginTop: '1rem' }}>
-                        <div className="stat-tile">
-                          <span className="stat-tile__label">Planned posts</span>
-                          <span className="stat-tile__value">{plannedCount}</span>
-                        </div>
-                        <div className="stat-tile">
-                          <span className="stat-tile__label">Published</span>
-                          <span className="stat-tile__value">{publishedCount}</span>
-                        </div>
-                        <div className="stat-tile">
-                          <span className="stat-tile__label">Members</span>
-                          <span className="stat-tile__value">{selectedTeam.members.length}</span>
-                        </div>
-                        <div className="stat-tile">
-                          <span className="stat-tile__label">Accounts</span>
-                          <span className="stat-tile__value">{selectedTeam.accountIds.length}</span>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                  {selectedTeam.isPersonal ? (
-                    <p className="hint" style={{ marginTop: '1rem' }}>This is your personal workspace. Invite other users from a shared team instead.</p>
-                  ) : (
-                    <p className="hint" style={{ marginTop: '1rem' }}>
-                      Use the <strong>+</strong> button next to the team selector to create a shared team or manage members and invitations.
-                    </p>
-                  )}
-                </div>
-              ) : null}
-            </div>
+          {section === 'teams' && (
+            <TeamsView
+              teams={teams}
+              posts={posts}
+              effectiveSelectedTeamId={effectiveSelectedTeamId}
+              selectedTeam={selectedTeam}
+              onSelectTeam={setSelectedTeamId}
+            />
           )}
 
           {section === 'accounts' && (
-            <div className="accounts-view two-column-detail">
-              <div className="glass-panel">
-                <h2 className="section-card__title">Connected accounts</h2>
-                <p className="hint">
-                  Social accounts are attached to the workspace selected in the header — including your personal workspace. Use them as post destinations in the composer.
-                </p>
-                {teamAccounts.length === 0 ? (
-                  <p className="hint">No accounts connected for this workspace yet.</p>
-                ) : (
-                  <ul className="account-connect-list">
-                    {teamAccounts.map((account) => (
-                      <li key={account.id} className="account-connect-list__row">
-                        <div className="inline-cluster">
-                          <DestinationAvatar account={account} />
-                          <div>
-                            <strong>{account.name}</strong>
-                            <div className="hint">
-                              {account.provider} · @{account.username} · {account.instance}
-                            </div>
-                          </div>
-                        </div>
-                        {canEditTeamAccounts ? (
-                          <button type="button" className="button button--secondary" onClick={() => void handleDeleteTeamAccount(account.id)} disabled={syncing}>
-                            <Icon name="trash" className="inline-icon" />
-                            <span>Remove</span>
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {!canEditTeamAccounts && selectedTeam ? (
-                  <p className="hint">View-only members cannot connect or remove accounts.</p>
-                ) : null}
-              </div>
-
-              <div className="glass-panel">
-                <h2 className="section-card__title">Connect an account</h2>
-                {!selectedTeam ? (
-                  <p className="hint">Select or create a team first.</p>
-                ) : !canEditTeamAccounts ? (
-                  <p className="hint">You need editor or owner access on this workspace to connect accounts.</p>
-                ) : (
-                  <>
-                    <label className="field">
-                      <span>Provider</span>
-                      <select
-                        value={accountDraft.provider}
-                        onChange={(event) => {
-                          const p = event.target.value as ProviderName
-                          setAccountDraft({ ...defaultAccountConnectDraft(), provider: p })
-                        }}
-                      >
-                        <option value="mastodon">Mastodon</option>
-                        <option value="friendica">Friendica</option>
-                        <option value="bluesky">Bluesky</option>
-                      </select>
-                    </label>
-
-                    {instancesForAccountConnect.length > 0 ? (
-                      <label className="field">
-                        <span>Registered instance</span>
-                        <select
-                          value={accountDraft.providerInstanceId}
-                          onChange={(event) => setAccountDraft((c) => ({ ...c, providerInstanceId: event.target.value }))}
-                        >
-                          <option value="">— Custom URL (below) —</option>
-                          {instancesForAccountConnect.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.instanceUrl})
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : (
-                      <p className="hint">No {accountDraft.provider} instance is registered yet. Ask an administrator to add one under Admin, or use the instance URL field when the provider allows it.</p>
-                    )}
-
-                    {!accountDraft.providerInstanceId.trim() ? (
-                      <label className="field">
-                        <span>{accountDraft.provider === 'bluesky' ? 'PDS URL (optional)' : 'Instance base URL'}</span>
-                        <input
-                          value={accountDraft.instanceUrl}
-                          onChange={(event) => setAccountDraft((c) => ({ ...c, instanceUrl: event.target.value }))}
-                          placeholder={accountDraft.provider === 'bluesky' ? 'https://bsky.social' : 'https://social.example'}
-                        />
-                      </label>
-                    ) : null}
-
-                    {accountDraft.provider === 'mastodon' ? (
-                      <>
-                        <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                          <button
-                            type="button"
-                            className="button button--primary"
-                            onClick={() => void handleMastodonOAuthConnect()}
-                            disabled={syncing || !accountDraft.providerInstanceId.trim()}
-                          >
-                            Authorize in browser
-                          </button>
-                        </div>
-                        <p className="hint">Browser login requires a registered Mastodon instance with OAuth. Or paste an access token below.</p>
-                        <label className="field">
-                          <span>Access token (manual)</span>
-                          <input
-                            type="password"
-                            autoComplete="off"
-                            value={accountDraft.accessToken}
-                            onChange={(event) => setAccountDraft((c) => ({ ...c, accessToken: event.target.value }))}
-                            placeholder="OAuth access token"
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Refresh token (optional)</span>
-                          <input
-                            type="password"
-                            autoComplete="off"
-                            value={accountDraft.refreshToken}
-                            onChange={(event) => setAccountDraft((c) => ({ ...c, refreshToken: event.target.value }))}
-                          />
-                        </label>
-                        <button type="button" className="button button--secondary" onClick={() => void handleConnectSocialAccount()} disabled={syncing}>
-                          Connect with token
-                        </button>
-                      </>
-                    ) : null}
-
-                    {accountDraft.provider === 'friendica' ? (
-                      <>
-                        <label className="field">
-                          <span>Username</span>
-                          <input
-                            value={accountDraft.identifier}
-                            onChange={(event) => setAccountDraft((c) => ({ ...c, identifier: event.target.value }))}
-                            placeholder="Local username"
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Access token</span>
-                          <input
-                            type="password"
-                            autoComplete="off"
-                            value={accountDraft.accessToken}
-                            onChange={(event) => setAccountDraft((c) => ({ ...c, accessToken: event.target.value }))}
-                          />
-                        </label>
-                        <button type="button" className="button button--primary" onClick={() => void handleConnectSocialAccount()} disabled={syncing}>
-                          Connect Friendica
-                        </button>
-                      </>
-                    ) : null}
-
-                    {accountDraft.provider === 'bluesky' ? (
-                      <>
-                        <label className="field">
-                          <span>Sign-in method</span>
-                          <select
-                            value={accountDraft.blueskyAuthMode}
-                            onChange={(event) =>
-                              setAccountDraft((c) => ({ ...c, blueskyAuthMode: event.target.value as 'app_password' | 'access_token' }))
-                            }
-                          >
-                            <option value="app_password">App password</option>
-                            <option value="access_token">Access token (JWT)</option>
-                          </select>
-                        </label>
-                        {accountDraft.blueskyAuthMode === 'app_password' ? (
-                          <>
-                            <label className="field">
-                              <span>Handle</span>
-                              <input
-                                value={accountDraft.identifier}
-                                onChange={(event) => setAccountDraft((c) => ({ ...c, identifier: event.target.value }))}
-                                placeholder="you.bsky.social"
-                              />
-                            </label>
-                            <label className="field">
-                              <span>App password</span>
-                              <input
-                                type="password"
-                                autoComplete="off"
-                                value={accountDraft.appPassword}
-                                onChange={(event) => setAccountDraft((c) => ({ ...c, appPassword: event.target.value }))}
-                              />
-                            </label>
-                          </>
-                        ) : (
-                          <>
-                            <label className="field">
-                              <span>Access token</span>
-                              <input
-                                type="password"
-                                autoComplete="off"
-                                value={accountDraft.accessToken}
-                                onChange={(event) => setAccountDraft((c) => ({ ...c, accessToken: event.target.value }))}
-                              />
-                            </label>
-                            <label className="field">
-                              <span>Refresh token (optional)</span>
-                              <input
-                                type="password"
-                                autoComplete="off"
-                                value={accountDraft.refreshToken}
-                                onChange={(event) => setAccountDraft((c) => ({ ...c, refreshToken: event.target.value }))}
-                              />
-                            </label>
-                          </>
-                        )}
-                        <button type="button" className="button button--primary" onClick={() => void handleConnectSocialAccount()} disabled={syncing}>
-                          Connect Bluesky
-                        </button>
-                      </>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
+            <AccountsView
+              selectedTeam={selectedTeam}
+              teamAccounts={teamAccounts}
+              canEditTeamAccounts={canEditTeamAccounts}
+              syncing={syncing}
+              accountDraft={accountDraft}
+              setAccountDraft={setAccountDraft}
+              instancesForAccountConnect={instancesForAccountConnect}
+              onDeleteTeamAccount={handleDeleteTeamAccount}
+              onConnectSocialAccount={handleConnectSocialAccount}
+              onMastodonOAuthConnect={handleMastodonOAuthConnect}
+            />
           )}
 
           {section === 'settings' && (
-            <div className="settings-view two-column-detail">
-              <div className="glass-panel">
-                <SettingsCard title="Browser session">
-                  <label className="field">
-                    <span>API base URL (optional)</span>
-                    <input value={settings.general.apiBaseUrl} onChange={(event) => updateAPIBaseURL(event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>Bearer token (OIDC ID token, bootstrap, or API token)</span>
-                    <input type="password" value={settings.general.bearerToken} onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, bearerToken: event.target.value } }))} />
-                  </label>
-                  <div className="inline-cluster" style={{ marginTop: '1rem' }}>
-                    <button type="button" className="button button--primary" onClick={connectBackend}>
-                      Apply session
-                    </button>
-                    <button type="button" className="button button--secondary" onClick={() => void loadDashboard()} disabled={!api || syncing}>
-                      Refresh data
-                    </button>
-                  </div>
-                </SettingsCard>
-              </div>
-
-              <div className="glass-panel">
-                <h2 className="section-card__title">API tokens</h2>
-                <p className="hint">
-                  Tokens authenticate as <strong>you</strong>, not a team. Team access follows your memberships. Use <code className="inline-code">Authorization: Bearer &lt;token&gt;</code> on every request.
-                  Create automation tokens here; each value is shown only once.
-                </p>
-                {newTokenPlaintext ? (
-                  <div className="token-reveal">
-                    <p className="hint">Copy this secret now:</p>
-                    <code className="token-reveal__value">{newTokenPlaintext}</code>
-                    <button type="button" className="button button--secondary" onClick={() => setNewTokenPlaintext(null)}>
-                      Dismiss
-                    </button>
-                  </div>
-                ) : null}
-                <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '1rem', alignItems: 'flex-end' }}>
-                  <label className="field" style={{ minWidth: '12rem' }}>
-                    <span>Label</span>
-                    <input
-                      value={newApiTokenName}
-                      onChange={(event) => setNewApiTokenName(event.target.value)}
-                      placeholder="e.g. CI, laptop"
-                    />
-                  </label>
-                  <label className="field" style={{ minWidth: '11rem' }}>
-                    <span>Expires (UTC end of day)</span>
-                    <input type="date" value={newApiTokenExpiresYmd} onChange={(event) => setNewApiTokenExpiresYmd(event.target.value)} />
-                  </label>
-                  <button type="button" className="button button--primary" onClick={() => void handleCreateApiToken()} disabled={syncing || !newApiTokenName.trim()}>
-                    Create token
-                  </button>
-                </div>
-                <p className="hint">Expiry uses end of the selected calendar day in UTC (default picker value is 90 days ahead).</p>
-                {apiTokensLoading ? <p className="hint">Loading tokens…</p> : null}
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Created</th>
-                      <th>Expires</th>
-                      <th>Last used</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {apiTokens.map((t) => (
-                      <tr key={t.id}>
-                        <td>{t.name}</td>
-                        <td>{format(parseISO(t.created_at), 'PPp')}</td>
-                        <td>{t.expires_at && isValid(parseISO(t.expires_at)) ? format(parseISO(t.expires_at), 'PPp') : '—'}</td>
-                        <td>{t.last_used_at ? format(parseISO(t.last_used_at), 'PPp') : '—'}</td>
-                        <td>
-                          <button type="button" className="button button--secondary" onClick={() => void handleRevokeApiToken(t.id)} disabled={syncing}>
-                            Revoke
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {apiTokens.length === 0 && !apiTokensLoading ? <p className="hint">No API tokens yet.</p> : null}
-              </div>
-            </div>
+            <SettingsView
+              settings={settings}
+              setSettings={setSettings}
+              updateAPIBaseURL={updateAPIBaseURL}
+              connectBackend={connectBackend}
+              loadDashboard={loadDashboard}
+              apiPresent={Boolean(api)}
+              syncing={syncing}
+              newTokenPlaintext={newTokenPlaintext}
+              setNewTokenPlaintext={setNewTokenPlaintext}
+              newApiTokenName={newApiTokenName}
+              setNewApiTokenName={setNewApiTokenName}
+              newApiTokenExpiresYmd={newApiTokenExpiresYmd}
+              setNewApiTokenExpiresYmd={setNewApiTokenExpiresYmd}
+              onCreateApiToken={handleCreateApiToken}
+              onRevokeApiToken={handleRevokeApiToken}
+              apiTokens={apiTokens}
+              apiTokensLoading={apiTokensLoading}
+            />
           )}
 
           {section === 'admin' && principalUser?.globalRole === 'admin' ? (
-            <div className="admin-view two-column-detail">
-              <div className="glass-panel">
-                <h2 className="section-card__title">Overview</h2>
-                {adminMetricsLoading ? <p className="hint">Loading metrics…</p> : null}
-                {adminMetrics ? (
-                  <div className="stat-grid">
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Users</span>
-                      <span className="stat-tile__value">{adminMetrics.users_count}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Teams</span>
-                      <span className="stat-tile__value">{adminMetrics.teams_count}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Provider instances</span>
-                      <span className="stat-tile__value">{adminMetrics.provider_instances_count}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Queued / pending</span>
-                      <span className="stat-tile__value">{adminMetrics.posts_pending}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Publishing</span>
-                      <span className="stat-tile__value">{adminMetrics.posts_processing}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Posted</span>
-                      <span className="stat-tile__value">{adminMetrics.posts_posted}</span>
-                    </div>
-                    <div className="stat-tile stat-tile--warn">
-                      <span className="stat-tile__label">Failed</span>
-                      <span className="stat-tile__value">{adminMetrics.posts_failed}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Cancelled</span>
-                      <span className="stat-tile__value">{adminMetrics.posts_cancelled}</span>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="glass-panel">
-                <h2 className="section-card__title">Registered users</h2>
-                <p className="hint">Everyone who can sign in to this deployment.</p>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Email</th>
-                      <th>Access</th>
-                      <th>Registered</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...directoryUsers]
-                      .sort((left, right) => left.name.localeCompare(right.name))
-                      .map((user) => (
-                        <tr key={user.id}>
-                          <td>{user.name}</td>
-                          <td>{user.email}</td>
-                          <td>{user.globalRole === 'admin' ? 'Administrator' : 'Member'}</td>
-                          <td>
-                            {user.createdAt && isValid(parseISO(user.createdAt))
-                              ? format(parseISO(user.createdAt), 'PP')
-                              : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-                {directoryUsers.length === 0 ? <p className="hint">No users returned from the directory.</p> : null}
-              </div>
-
-              {adminRuntime ? (
-                <div className="glass-panel">
-                  <h2 className="section-card__title">Scheduler &amp; server</h2>
-                  <dl className="kv-list">
-                    <dt>Worker processes</dt>
-                    <dd>{adminRuntime.scheduler.workers}</dd>
-                    <dt>Poll interval</dt>
-                    <dd>{adminRuntime.scheduler.pollInterval}</dd>
-                    <dt>HTTP listen</dt>
-                    <dd><code className="inline-code">{adminRuntime.general.httpAddr}</code></dd>
-                    <dt>Rate limit / min</dt>
-                    <dd>{adminRuntime.security.rateLimitPerMinute}</dd>
-                  </dl>
-                </div>
-              ) : null}
-
-              <div className="glass-panel">
-                <h2 className="section-card__title">Provider onboarding</h2>
-                <p className="hint">Register Mastodon, Friendica, or Bluesky instances so teams can connect accounts. Mastodon can auto-discover OAuth endpoints from the instance URL when credentials are omitted.</p>
-
-                <div className="inline-cluster" style={{ marginBottom: '1rem' }}>
-                  <select
-                    value={adminProviderDraft.provider}
-                    onChange={(event) => {
-                      const p = event.target.value as ProviderName
-                      setAdminProviderDraft((current) => ({
-                        ...current,
-                        provider: p,
-                        instanceUrl: p === 'bluesky' ? 'https://bsky.social' : current.instanceUrl,
-                      }))
-                    }}
-                  >
-                    <option value="mastodon">Mastodon</option>
-                    <option value="friendica">Friendica</option>
-                    <option value="bluesky">Bluesky</option>
-                  </select>
-                  {editingProviderId ? (
-                    <button
-                      type="button"
-                      className="button button--secondary"
-                      onClick={() => {
-                        setEditingProviderId(null)
-                        setAdminProviderDraft(defaultAdminProviderDraft())
-                        setShowAdminProviderAdvanced(false)
-                      }}
-                    >
-                      Cancel edit
-                    </button>
-                  ) : null}
-                </div>
-
-                <label className="field">
-                  <span>Display name</span>
-                  <input value={adminProviderDraft.name} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, name: event.target.value }))} placeholder="My instance" />
-                </label>
-                <label className="field">
-                  <span>Instance URL</span>
-                  <input value={adminProviderDraft.instanceUrl} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, instanceUrl: event.target.value }))} placeholder="https://mastodon.social" />
-                </label>
-
-                <details
-                  className="advanced-config"
-                  open={showAdminProviderAdvanced}
-                  onToggle={(event) => setShowAdminProviderAdvanced(event.currentTarget.open)}
-                >
-                  <summary className="advanced-config__summary">Advanced configuration</summary>
-                  <p className="hint" style={{ marginTop: '0.75rem' }}>
-                    OAuth client credentials, scopes, and token endpoints. Mastodon can auto-register an app when these are left empty; set them manually for custom apps or strict instances.
-                  </p>
-                  <label className="field">
-                    <span>Client ID</span>
-                    <input value={adminProviderDraft.clientId} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientId: event.target.value }))} placeholder="Optional for Mastodon auto-register" />
-                  </label>
-                  <label className="field">
-                    <span>Client secret</span>
-                    <input type="password" value={adminProviderDraft.clientSecret} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientSecret: event.target.value }))} placeholder="Leave blank to keep existing on update" />
-                  </label>
-                  <label className="field">
-                    <span>Scopes (comma-separated)</span>
-                    <input value={adminProviderDraft.scopes} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, scopes: event.target.value }))} />
-                  </label>
-                  <label className="field">
-                    <span>Authorization endpoint</span>
-                    <input value={adminProviderDraft.authorizationEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, authorizationEndpoint: event.target.value }))} />
-                  </label>
-                  <label className="field">
-                    <span>Token endpoint</span>
-                    <input value={adminProviderDraft.tokenEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, tokenEndpoint: event.target.value }))} />
-                  </label>
-                </details>
-
-                <button type="button" className="button button--primary" onClick={() => void handleSaveAdminProvider()} disabled={syncing} style={{ marginTop: '1rem' }}>
-                  {editingProviderId ? 'Update provider' : 'Register provider'}
-                </button>
-
-                <h3 className="subsection-title" style={{ marginTop: '1.5rem' }}>Registered instances</h3>
-                <ul className="provider-admin-list">
-                  {providerInstances.map((p) => {
-                    const onboarded = accounts.filter((a) => a.providerInstanceId === p.id).length
-                    return (
-                      <li key={p.id}>
-                        <div>
-                          <strong>{p.name}</strong>
-                          <span className="hint"> {p.provider} · {p.instanceUrl}</span>
-                          <span className="provider-admin-list__count">
-                            {onboarded} account{onboarded === 1 ? '' : 's'} onboarded
-                          </span>
-                        </div>
-                        <div className="inline-cluster" style={{ flexShrink: 0 }}>
-                          <button
-                            type="button"
-                            className="button button--secondary"
-                            onClick={() => {
-                              setEditingProviderId(p.id)
-                              setShowAdminProviderAdvanced(true)
-                              setAdminProviderDraft({
-                                provider: p.provider,
-                                name: p.name,
-                                instanceUrl: p.instanceUrl,
-                                clientId: p.clientId,
-                                clientSecret: '',
-                                scopes: p.scopes.join(','),
-                                authorizationEndpoint: p.authorizationEndpoint,
-                                tokenEndpoint: p.tokenEndpoint,
-                              })
-                            }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="button button--secondary"
-                            onClick={() => void handleDeleteProviderInstance(p.id)}
-                            disabled={syncing || onboarded > 0}
-                            title={onboarded > 0 ? 'Disconnect every account using this instance first' : 'Remove provider instance'}
-                          >
-                            <Icon name="trash" className="inline-icon" />
-                            <span>Remove</span>
-                          </button>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-                {providerInstances.length === 0 ? <p className="hint">No provider instances yet.</p> : null}
-              </div>
-            </div>
+            <AdminView
+              adminMetrics={adminMetrics}
+              adminMetricsLoading={adminMetricsLoading}
+              adminRuntime={adminRuntime}
+              directoryUsers={directoryUsers}
+              providerInstances={providerInstances}
+              accounts={accounts}
+              adminProviderDraft={adminProviderDraft}
+              setAdminProviderDraft={setAdminProviderDraft}
+              editingProviderId={editingProviderId}
+              setEditingProviderId={setEditingProviderId}
+              showAdminProviderAdvanced={showAdminProviderAdvanced}
+              setShowAdminProviderAdvanced={setShowAdminProviderAdvanced}
+              syncing={syncing}
+              onSaveAdminProvider={handleSaveAdminProvider}
+              onDeleteProviderInstance={handleDeleteProviderInstance}
+            />
           ) : section === 'admin' ? (
             <div className="glass-panel">
               <p className="hint">Administrator access is required for this section.</p>
@@ -2047,6 +1491,9 @@ function App() {
         syncing={syncing}
         onSave={() => void handleSavePost()}
         onClose={closeComposer}
+        onIntegrationNotice={(msg) => {
+          setStatusMessage(msg)
+        }}
       />
 
       <nav className="mobile-nav">
@@ -2075,6 +1522,14 @@ function App() {
         >
           <Icon name="chart" className="inline-icon" />
         </button>
+        <button
+          type="button"
+          className={section === 'mediaLibrary' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
+          onClick={() => setSection('mediaLibrary')}
+          aria-label="Media library"
+        >
+          <Icon name="image" className="inline-icon" />
+        </button>
         <button type="button" className={section === 'accounts' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('accounts')}>
           <Icon name="channels" className="inline-icon" />
         </button>
@@ -2083,180 +1538,6 @@ function App() {
         </button>
       </nav>
     </div>
-  )
-}
-
-function AuthShell({
-  theme,
-  children,
-}: {
-  theme: 'dark' | 'light'
-  children: ReactNode
-}) {
-  return (
-    <div className="app-shell auth-shell" data-theme={theme}>
-      <div className="auth-screen-center">
-        <section className="auth-card">
-          <div className="auth-card__hero auth-card__hero--compact">
-            <div className="nav-rail__brand auth-card__brand" title="goloom">
-              <span>G</span>
-            </div>
-            <div className="auth-card__copy">
-              <h1>goloom</h1>
-              <p className="hint auth-card__tagline">Social scheduling for teams</p>
-            </div>
-          </div>
-          {children}
-        </section>
-      </div>
-    </div>
-  )
-}
-
-function AuthPanel({
-  view,
-  authStatus,
-  authTokenDraft,
-  authError,
-  authSubmitting,
-  onViewChange,
-  onTokenChange,
-  onSubmit,
-  onStartOIDCLogin,
-}: {
-  view: 'bootstrap' | 'login'
-  authStatus: AuthStatusRecord | null
-  authTokenDraft: string
-  authError: string | null
-  authSubmitting: boolean
-  onViewChange: (view: 'bootstrap' | 'login') => void
-  onTokenChange: (value: string) => void
-  onSubmit: (mode: 'bootstrap' | 'login') => void
-  onStartOIDCLogin: () => void
-}) {
-  const initial = Boolean(authStatus?.initialSetupRequired)
-  const recovery = Boolean(authStatus?.bootstrapRecoveryEnabled && !initial)
-  const isBootstrap = view === 'bootstrap'
-  const showDevHints = authStatus?.appEnv !== 'production'
-
-  if (!authStatus && !authSubmitting) {
-    return (
-      <div className="auth-panel">
-        <p className="hint auth-panel__solo">Could not reach the server. Check that the app is running and try again.</p>
-      </div>
-    )
-  }
-
-  if (!authStatus) {
-    return (
-      <div className="auth-panel">
-        <p className="hint auth-panel__solo">Connecting…</p>
-      </div>
-    )
-  }
-
-  const submitMode: 'bootstrap' | 'login' = initial || isBootstrap ? 'bootstrap' : 'login'
-  const tokenLabel = initial || isBootstrap ? 'Administrator token' : 'Access token'
-  const tokenHint = initial
-    ? 'On first start the server prints a one-time token to stdout (for example container logs). Paste it here.'
-    : isBootstrap
-      ? 'Paste the bootstrap token from BOOTSTRAP_ADMIN_TOKEN (recovery mode).'
-      : 'Paste an API token, OIDC ID token, or other bearer token issued for your account.'
-
-  return (
-    <div className="auth-panel">
-      {recovery ? (
-        <div className="auth-tabs" role="tablist" aria-label="Sign-in mode">
-          <button
-            type="button"
-            className={view === 'login' ? 'button button--prominent' : 'button button--secondary'}
-            onClick={() => onViewChange('login')}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className={view === 'bootstrap' ? 'button button--prominent' : 'button button--secondary'}
-            onClick={() => onViewChange('bootstrap')}
-          >
-            Bootstrap recovery
-          </button>
-        </div>
-      ) : null}
-
-      <div className="auth-panel__content">
-        <div className="auth-panel__header auth-panel__header--solo">
-          <div>
-            <p className="eyebrow">{initial ? 'First start' : isBootstrap ? 'Recovery' : 'Sign in'}</p>
-            <h2>{initial ? 'Welcome' : isBootstrap ? 'Bootstrap recovery' : 'Sign in'}</h2>
-            <p className="hint">
-              {initial
-                ? 'Complete setup with OpenID Connect or the administrator token from your server log.'
-                : authStatus.oidcOAuthEnabled && !isBootstrap
-                  ? 'Use your identity provider, or sign in with a token.'
-                  : tokenHint}
-            </p>
-          </div>
-        </div>
-
-        {authStatus.hasUsers || authStatus.oidcOAuthEnabled || initial ? (
-          <div className="auth-form">
-            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? (
-              <div className="inline-cluster">
-                <button type="button" className="button button--prominent" onClick={onStartOIDCLogin} disabled={authSubmitting}>
-                  {authSubmitting ? 'Redirecting…' : 'Continue with OpenID Connect'}
-                </button>
-              </div>
-            ) : null}
-
-            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? (
-              <p className="hint auth-form__divider-label">or use a token</p>
-            ) : null}
-
-            <label className="field">
-              <span>{tokenLabel}</span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={authTokenDraft}
-                onChange={(event) => onTokenChange(event.target.value)}
-                placeholder={initial ? 'Paste token from server log' : isBootstrap ? 'Bootstrap token' : 'Bearer token'}
-              />
-            </label>
-            <p className="hint">{tokenHint}</p>
-
-            {authError ? (
-              <div className="status-banner">
-                <span className="status-banner__error">{authError}</span>
-              </div>
-            ) : null}
-
-            <div className="inline-cluster">
-              <button type="button" className="button button--prominent" onClick={() => onSubmit(submitMode)} disabled={authSubmitting}>
-                {authSubmitting ? 'Signing in…' : 'Sign in with token'}
-              </button>
-            </div>
-
-            {showDevHints ? (
-              <p className="hint">API base URL can be changed later under Settings if this UI is not served from the same host as the API.</p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {authStatus.hasUsers && !authStatus.oidcOAuthEnabled && !authStatus.bootstrapRecoveryEnabled ? (
-          <p className="hint">OIDC browser login is not configured. Use an API token or ask an admin to set OIDC_ISSUER_URL, OIDC_CLIENT_ID, OIDC_REDIRECT_URI, and PUBLIC_BASE_URL.</p>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-function SettingsCard({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="subpanel">
-      <h3>{title}</h3>
-      {children}
-    </section>
   )
 }
 
