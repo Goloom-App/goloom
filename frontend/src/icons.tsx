@@ -15,6 +15,7 @@ export type IconName =
   | 'teams'
   | 'channels'
   | 'admin'
+  | 'chart'
   | 'chevron-left'
   | 'chevron-right'
 
@@ -97,6 +98,14 @@ const iconPaths: Record<IconName, ReactNode> = {
     <>
       <path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z" />
       <path d="m9.5 12 1.7 1.7 3.8-3.8" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M4 19h16" />
+      <path d="M7 16V10" />
+      <path d="M12 16V6" />
+      <path d="M17 16v-5" />
     </>
   ),
   'chevron-left': <path d="m14.5 5-7 7 7 7" />,

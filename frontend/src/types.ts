@@ -1,4 +1,4 @@
-export type AppSection = 'calendar' | 'contentCalendar' | 'archive' | 'teams' | 'accounts' | 'settings' | 'admin'
+export type AppSection = 'calendar' | 'contentCalendar' | 'archive' | 'analytics' | 'teams' | 'accounts' | 'settings' | 'admin'
 
 export type CalendarViewMode = 'month' | 'week' | 'day'
 

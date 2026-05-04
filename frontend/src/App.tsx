@@ -1,29 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import {
-  addDays,
-  addMinutes,
-  addMonths,
-  eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
-  format,
-  isSameMonth,
-  isValid,
-  parseISO,
-  set,
-  startOfDay,
-  startOfMonth,
-  startOfWeek,
-  subMonths,
-} from 'date-fns'
+import { addDays, format, isValid, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
 
+import { AnalyticsView } from './views/Analytics/AnalyticsView'
+import { ArchiveView } from './views/calendar/ArchiveView'
+import { calendarCellsForMonth } from './views/calendar/calendarUtils'
+import { ContentCalendarView } from './views/calendar/ContentCalendarView'
+import { ScheduleView } from './views/calendar/ScheduleView'
 import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin, type BackendAPIToken, type BackendAdminMetrics } from './api'
 import { initialSettings } from './data'
+import { AppSidebar } from './components/Sidebar/AppSidebar'
+import { defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
+import type { EditorDraftState } from './components/Composer/types'
+import { DestinationAvatar } from './components/post/DestinationAvatar'
+import { SocialPreview } from './components/post/SocialPreview'
+import { PostComposer } from './components/Composer/PostComposer'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
-import { postsForTeam, resolveScheduleChange, sharedAccountLabels, SLOT_MINUTES } from './schedule'
+import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
 import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
@@ -34,13 +29,14 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
   calendar: 'Schedule',
   contentCalendar: 'Content calendar',
   archive: 'Archive',
+  analytics: 'Analytics',
   teams: 'Teams',
   accounts: 'Accounts',
   settings: 'Settings',
   admin: 'Admin',
 }
 
-const CONTENT_REFRESH_SECTIONS: AppSection[] = ['calendar', 'archive', 'contentCalendar']
+const CONTENT_REFRESH_SECTIONS: AppSection[] = ['calendar', 'archive', 'contentCalendar', 'analytics']
 
 type AdminProviderDraft = {
   provider: ProviderName
@@ -121,7 +117,7 @@ function App() {
   const [editingPostId, setEditingPostId] = useState<string | null>(null)
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
   const [composerOpen, setComposerOpen] = useState(false)
-  const [editorDraft, setEditorDraft] = useState(defaultEditorDraft(currentDate, []))
+  const [editorDraft, setEditorDraft] = useState<EditorDraftState>(() => defaultEditorDraft(currentDate, []))
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -605,6 +601,7 @@ function App() {
       { id: 'calendar', label: 'Schedule', icon: 'calendar' },
       { id: 'contentCalendar', label: 'Calendar', icon: 'calendarGrid' },
       { id: 'archive', label: 'Archive', icon: 'archive' },
+      { id: 'analytics', label: 'Analytics', icon: 'chart' },
     ],
     [],
   )
@@ -680,15 +677,6 @@ function App() {
 
   const selectedPost = useMemo(() => posts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, posts])
   const editTargetPost = useMemo(() => posts.find((post) => post.id === editingPostId) ?? null, [editingPostId, posts])
-  const selectedComposerAccounts = useMemo(() => teamAccounts.filter((account) => editorDraft.targetAccountIds.includes(account.id)), [editorDraft.targetAccountIds, teamAccounts])
-
-  const maxChars = useMemo(() => {
-    if (selectedComposerAccounts.length === 0) {
-      return 0
-    }
-    return selectedComposerAccounts.reduce((lowest, account) => Math.min(lowest, account.maxChars), selectedComposerAccounts[0].maxChars)
-  }, [selectedComposerAccounts])
-
   async function runAction(work: () => Promise<void>, successMessage: string) {
     setSyncing(true)
     setError(null)
@@ -711,10 +699,21 @@ function App() {
     setSection('calendar')
   }
 
-  function openEditor(postId: string) {
+  async function openEditor(postId: string) {
     const targetPost = posts.find((post) => post.id === postId)
     if (!targetPost) {
       return
+    }
+    let accountContentOverride: Record<string, string> = {}
+    if (api) {
+      try {
+        const res = await api.listPostVersions(targetPost.teamId, postId)
+        for (const row of res.items ?? []) {
+          accountContentOverride[row.account_id] = row.content
+        }
+      } catch {
+        accountContentOverride = {}
+      }
     }
     setEditorDraft({
       title: targetPost.title,
@@ -722,6 +721,7 @@ function App() {
       scheduledAt: toInputDateTime(parseISO(targetPost.scheduledAt)),
       targetAccountIds: targetPost.targetAccountIds,
       status: targetPost.status,
+      accountContentOverride,
     })
     setComposerMode('edit')
     setEditingPostId(postId)
@@ -1024,23 +1024,45 @@ function App() {
     if (!api || !selectedTeam) {
       return
     }
-    if (editorDraft.targetAccountIds.length === 0 || !editorDraft.scheduledAt || editorDraft.content.trim().length === 0 || (maxChars > 0 && editorDraft.content.length > maxChars)) {
+    const defaultContent = editorDraft.content.trim()
+    if (editorDraft.targetAccountIds.length === 0 || !editorDraft.scheduledAt || defaultContent.length === 0) {
       return
+    }
+    for (const id of editorDraft.targetAccountIds) {
+      const acc = teamAccounts.find((a) => a.id === id)
+      if (!acc) {
+        continue
+      }
+      const body = (editorDraft.accountContentOverride[id] ?? editorDraft.content).trim()
+      if (acc.maxChars > 0 && body.length > acc.maxChars) {
+        return
+      }
     }
 
     await runAction(async () => {
       const payload = {
         title: editorDraft.title.trim(),
-        content: editorDraft.content.trim(),
+        content: defaultContent,
         scheduled_at: new Date(editorDraft.scheduledAt).toISOString(),
         target_accounts: editorDraft.targetAccountIds,
       }
 
+      let savedPostId: string
       if (composerMode === 'edit' && editTargetPost) {
         await api.updatePost(selectedTeam.id, editTargetPost.id, payload)
+        savedPostId = editTargetPost.id
       } else {
-        await api.createPost(selectedTeam.id, payload)
+        const created = await api.createPost(selectedTeam.id, payload)
+        savedPostId = created.id
       }
+
+      const versions = editorDraft.targetAccountIds.map((aid) => {
+        const override = (editorDraft.accountContentOverride[aid] ?? '').trim()
+        const content = override && override !== defaultContent ? override : ''
+        return { account_id: aid, content }
+      })
+      await api.patchPostVersions(selectedTeam.id, savedPostId, { versions })
+
       setComposerOpen(false)
       await loadDashboard({ silent: true })
     }, composerMode === 'edit' ? 'Post updated' : 'Post scheduled')
@@ -1146,109 +1168,19 @@ function App() {
 
   return (
     <div className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'}`} data-theme={resolvedTheme}>
-      <aside className="app-sidebar" aria-label="Main navigation">
-        <div className="app-sidebar__header">
-          <div className="app-sidebar__logo" title="goloom" aria-hidden="true">
-            <span className="app-sidebar__logo-layer app-sidebar__logo-layer--a" />
-            <span className="app-sidebar__logo-layer app-sidebar__logo-layer--b" />
-            <span className="app-sidebar__logo-layer app-sidebar__logo-layer--c" />
-          </div>
-          <span className="app-sidebar__title">goloom</span>
-        </div>
-
-        <button
-          type="button"
-          className="app-sidebar__cta"
-          onClick={openCreateComposer}
-          disabled={!selectedTeam || syncing}
-        >
-          <span className="app-sidebar__cta-icon" aria-hidden="true">
-            <Icon name="plus" className="inline-icon" />
-          </span>
-          <span>Create post</span>
-        </button>
-
-        <nav className="app-sidebar__nav" aria-label="Sections">
-          <div className="app-sidebar__nav-group">
-            <p className="app-sidebar__nav-heading">Content</p>
-            <ul className="app-sidebar__nav-list">
-              {sidebarContentNav.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={`app-sidebar__link ${section === item.id ? 'app-sidebar__link--active' : ''}`}
-                    onClick={() => setSection(item.id)}
-                  >
-                    <Icon name={item.icon} className="app-sidebar__link-icon" />
-                    <span>{item.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="app-sidebar__divider" role="presentation" />
-
-          <div className="app-sidebar__nav-group">
-            <p className="app-sidebar__nav-heading">Workspace</p>
-            <ul className="app-sidebar__nav-list">
-              {sidebarWorkspaceNav.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={`app-sidebar__link ${section === item.id ? 'app-sidebar__link--active' : ''}`}
-                    onClick={() => setSection(item.id)}
-                  >
-                    <Icon name={item.icon} className="app-sidebar__link-icon" />
-                    <span>{item.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="app-sidebar__divider" role="presentation" />
-
-          <div className="app-sidebar__nav-group">
-            <p className="app-sidebar__nav-heading">Configuration</p>
-            <ul className="app-sidebar__nav-list">
-              {sidebarConfigNav.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={`app-sidebar__link ${section === item.id ? 'app-sidebar__link--active' : ''}`}
-                    onClick={() => setSection(item.id)}
-                  >
-                    <Icon name={item.icon} className="app-sidebar__link-icon" />
-                    <span>{item.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </nav>
-
-        <div className="app-sidebar__footer">
-          <div className="app-sidebar__user">
-            <div className="app-sidebar__avatar" aria-hidden="true">
-              {initialsFromName(principalUser?.name ?? '')}
-            </div>
-            <div className="app-sidebar__user-text">
-              <span className="app-sidebar__user-name">{principalUser?.name ?? 'Signed in'}</span>
-              <span className="app-sidebar__user-meta">{selectedTeam?.name ?? principalUser?.email ?? '—'}</span>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="app-sidebar__theme"
-            onClick={() => clearAuthenticatedState('Signed out')}
-            title="Sign out"
-            aria-label="Sign out"
-          >
-            <Icon name="lock" className="inline-icon" />
-          </button>
-        </div>
-      </aside>
+      <AppSidebar
+        section={section}
+        setSection={setSection}
+        sidebarContentNav={sidebarContentNav}
+        sidebarWorkspaceNav={sidebarWorkspaceNav}
+        sidebarConfigNav={sidebarConfigNav}
+        principalUser={principalUser}
+        selectedTeam={selectedTeam}
+        syncing={syncing}
+        selectedTeamPresent={Boolean(selectedTeam)}
+        onCreatePost={openCreateComposer}
+        onSignOut={() => clearAuthenticatedState('Signed out')}
+      />
 
       <main className="app-main">
           <button
@@ -1309,183 +1241,47 @@ function App() {
           ) : null}
 
           {section === 'calendar' && (
-            <div className="timeline-view">
-              {upcomingPosts.length === 0 ? (
-                <div className="empty-state">
-                  <h3>No upcoming posts</h3>
-                  <p className="hint">Create a post to start building your publishing timeline.</p>
-                </div>
-              ) : (
-                groupUpcomingIntoMonths(upcomingPosts).map((month) => (
-                  <div key={month.monthKey} className="timeline-month-block">
-                    <h2 className="timeline-month-heading">{month.monthLabel}</h2>
-                    {month.days.map((group) => (
-                      <section key={group.key} className="timeline-day-section">
-                        <p
-                          className="eyebrow"
-                          style={{
-                            marginBottom: '1rem',
-                            fontWeight: group.posts.length > 1 ? 700 : 500,
-                          }}
-                        >
-                          {format(parseISO(group.posts[0].scheduledAt), 'EEEE, d MMMM')}
-                          {group.posts.length > 1 ? ` · ${group.posts.length} posts` : null}
-                        </p>
-                        <div className="posts-grid">
-                          {group.posts.map((post) => (
-                            <PostCard
-                              key={post.id}
-                              post={post}
-                              active={expandedPostId === post.id}
-                              onClick={() => setExpandedPostId(post.id)}
-                              onEdit={() => openEditor(post.id)}
-                              onDelete={() => void deletePost(post.id)}
-                              accounts={accounts}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    ))}
-                  </div>
-                ))
-              )}
-            </div>
+            <ScheduleView
+              upcomingPosts={upcomingPosts}
+              expandedPostId={expandedPostId}
+              setExpandedPostId={setExpandedPostId}
+              openEditor={(id) => void openEditor(id)}
+              deletePost={deletePost}
+              accounts={accounts}
+            />
           )}
 
           {section === 'contentCalendar' && (
-            <div className="content-calendar-view">
-              <div className="content-calendar__toolbar glass-panel">
-                <button
-                  type="button"
-                  className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
-                  onClick={() => setContentCalendarMonth((m) => startOfMonth(subMonths(m, 1)))}
-                  aria-label="Previous month"
-                >
-                  &lt;
-                </button>
-                <h2 className="content-calendar__month-title">{format(contentCalendarMonth, 'MMMM yyyy')}</h2>
-                <button
-                  type="button"
-                  className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
-                  onClick={() => setContentCalendarMonth((m) => startOfMonth(addMonths(m, 1)))}
-                  aria-label="Next month"
-                >
-                  &gt;
-                </button>
-              </div>
-              <div className="content-calendar__grid glass-panel" role="grid" aria-label="Scheduled posts by day">
-                <div className="content-calendar__weekdays" role="row">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-                    <div key={d} className="content-calendar__weekday" role="columnheader">
-                      {d}
-                    </div>
-                  ))}
-                </div>
-                <div className="content-calendar__cells">
-                  {contentCalendarCells.map(({ day, posts: dayPosts, inMonth }) => {
-                    const dayKey = format(day, 'yyyy-MM-dd')
-                    const isDropTarget = calendarDragOverKey === dayKey
-                    return (
-                      <div
-                        key={day.toISOString()}
-                        className={`content-calendar__cell ${inMonth ? '' : 'content-calendar__cell--muted'} ${isDropTarget ? 'content-calendar__cell--drop-target' : ''}`}
-                        role="gridcell"
-                        onDragOver={(event) => {
-                          if (!canEditScheduledPosts) {
-                            return
-                          }
-                          event.preventDefault()
-                          event.dataTransfer.dropEffect = 'move'
-                          setCalendarDragOverKey(dayKey)
-                        }}
-                        onDragLeave={(event) => {
-                          if (!event.currentTarget.contains(event.relatedTarget as Node)) {
-                            setCalendarDragOverKey((current) => (current === dayKey ? null : current))
-                          }
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault()
-                          setCalendarDragOverKey(null)
-                          const id = event.dataTransfer.getData('application/x-goloom-post-id')
-                          if (id) {
-                            void handleCalendarPostDrop(id, day)
-                          }
-                        }}
-                      >
-                        <span className="content-calendar__day-num">{format(day, 'd')}</span>
-                        <div className="content-calendar__post-chips">
-                          {dayPosts.map((post) => (
-                            <div key={post.id} className="content-calendar__post-chip-row">
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                className={`content-calendar__post-chip ${canEditScheduledPosts ? 'content-calendar__post-chip--draggable' : ''}`}
-                                draggable={canEditScheduledPosts}
-                                onDragStart={(event) => {
-                                  if (!canEditScheduledPosts) {
-                                    return
-                                  }
-                                  event.dataTransfer.setData('application/x-goloom-post-id', post.id)
-                                  event.dataTransfer.effectAllowed = 'move'
-                                }}
-                                onDragEnd={() => setCalendarDragOverKey(null)}
-                                onClick={() => setExpandedPostId(post.id)}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault()
-                                    setExpandedPostId(post.id)
-                                  }
-                                }}
-                              >
-                                <span className="content-calendar__post-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
-                                <span className="content-calendar__post-title">{post.title || 'Untitled'}</span>
-                              </div>
-                              {canEditScheduledPosts ? (
-                                <button
-                                  type="button"
-                                  className="content-calendar__chip-edit"
-                                  aria-label="Edit post"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    openEditor(post.id)
-                                  }}
-                                >
-                                  <Icon name="edit" className="inline-icon" />
-                                </button>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-              {plannedPostsForContentCalendar.length === 0 ? (
-                <p className="hint" style={{ marginTop: '1rem' }}>
-                  No scheduled posts for this workspace. Create a post from the schedule view or the composer.
-                </p>
-              ) : null}
-            </div>
+            <ContentCalendarView
+              contentCalendarMonth={contentCalendarMonth}
+              setContentCalendarMonth={setContentCalendarMonth}
+              contentCalendarCells={contentCalendarCells}
+              plannedPostsForContentCalendar={plannedPostsForContentCalendar}
+              canEditScheduledPosts={canEditScheduledPosts}
+              calendarDragOverKey={calendarDragOverKey}
+              setCalendarDragOverKey={setCalendarDragOverKey}
+              setExpandedPostId={setExpandedPostId}
+              openEditor={(id) => void openEditor(id)}
+              handleCalendarPostDrop={handleCalendarPostDrop}
+            />
           )}
 
           {section === 'archive' && (
-            <div className="archive-view">
-              {archivedPosts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  active={expandedPostId === post.id}
-                  onClick={() => setExpandedPostId(post.id)}
-                  onEdit={() => openEditor(post.id)}
-                  onDelete={() => void deletePost(post.id)}
-                  accounts={accounts}
-                  isArchived
-                  publishedLinks={post.publishedLinks}
-                />
-              ))}
-            </div>
+            <ArchiveView
+              archivedPosts={archivedPosts}
+              expandedPostId={expandedPostId}
+              setExpandedPostId={setExpandedPostId}
+              openEditor={(id) => void openEditor(id)}
+              deletePost={deletePost}
+              accounts={accounts}
+            />
           )}
+
+          {section === 'analytics' && api && effectiveSelectedTeamId ? (
+            <AnalyticsView teamId={effectiveSelectedTeamId} fetchAnalytics={(opts) => api.getTeamAnalytics(effectiveSelectedTeamId, opts)} />
+          ) : section === 'analytics' ? (
+            <p className="hint">Connect to the API and select a team to view analytics.</p>
+          ) : null}
 
           {section === 'teams' && (
             <div className="teams-view two-column-detail">
@@ -2241,96 +2037,17 @@ function App() {
         </div>
       ) : null}
 
-      {composerOpen && (
-        <div className="modal-backdrop" onClick={closeComposer}>
-          <div className="composer-container" onClick={(event) => event.stopPropagation()}>
-            <div className="composer-main">
-              <header>
-                <p className="eyebrow">Composer</p>
-                <h2>{composerMode === 'edit' ? 'Edit post' : 'Create post'}</h2>
-              </header>
-
-              <label className="field">
-                <span>Title</span>
-                <input value={editorDraft.title} onChange={(event) => setEditorDraft((current) => ({ ...current, title: event.target.value }))} placeholder="Post title for internal reference" />
-              </label>
-
-              <label className="field">
-                <span>Message</span>
-                <textarea rows={10} value={editorDraft.content} onChange={(event) => setEditorDraft((current) => ({ ...current, content: event.target.value }))} placeholder="What's on your mind?" />
-              </label>
-
-              <div className="inline-cluster">
-                 <div className={`char-counter ${charCounterClass(editorDraft.content.length, maxChars)}`}>
-                    <strong>{editorDraft.content.length}</strong>
-                    <span>/ {maxChars || '—'}</span>
-                  </div>
-                  <DestinationStack accounts={selectedComposerAccounts} />
-              </div>
-
-              <label className="field">
-                <span>Scheduled at</span>
-                <input type="datetime-local" value={editorDraft.scheduledAt} onChange={(event) => setEditorDraft((current) => ({ ...current, scheduledAt: event.target.value }))} />
-              </label>
-
-              <footer className="inline-cluster" style={{ marginTop: 'auto', paddingTop: '2rem' }}>
-                <button type="button" className="button button--primary" disabled={syncing || editorDraft.targetAccountIds.length === 0 || (maxChars > 0 && editorDraft.content.length > maxChars)} onClick={() => void handleSavePost()}>
-                  <Icon name="calendar" className="inline-icon" />
-                  <span>{composerMode === 'edit' ? 'Save changes' : 'Schedule post'}</span>
-                </button>
-                <button type="button" className="button button--secondary" onClick={closeComposer}>
-                  Cancel
-                </button>
-              </footer>
-            </div>
-
-            <aside className="composer-sidebar">
-              <p className="eyebrow">Destinations</p>
-              <div className="composer-destination-grid" role="group" aria-label="Post destinations">
-                {teamAccounts.map((account) => {
-                  const selected = editorDraft.targetAccountIds.includes(account.id)
-                  return (
-                    <button
-                      key={account.id}
-                      type="button"
-                      className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''}`}
-                      aria-pressed={selected}
-                      title={`${account.name} · ${account.provider}`}
-                      onClick={() =>
-                        setEditorDraft((current) => {
-                          const has = current.targetAccountIds.includes(account.id)
-                          return {
-                            ...current,
-                            targetAccountIds: has
-                              ? current.targetAccountIds.filter((id) => id !== account.id)
-                              : [...current.targetAccountIds, account.id],
-                          }
-                        })
-                      }
-                    >
-                      <DestinationAvatar account={account} />
-                    </button>
-                  )
-                })}
-              </div>
-              {teamAccounts.length === 0 ? <p className="hint">No accounts for this workspace.</p> : null}
-
-              <div className="divider" />
-              <p className="eyebrow">Preview</p>
-              {selectedComposerAccounts.length > 0 ? (
-                <SocialPreview
-                  account={selectedComposerAccounts[0]}
-                  content={editorDraft.content}
-                  scheduledAt={editorDraft.scheduledAt}
-                  theme={resolvedTheme}
-                />
-              ) : (
-                <p className="hint">Select a destination to see a preview.</p>
-              )}
-            </aside>
-          </div>
-        </div>
-      )}
+      <PostComposer
+        open={composerOpen}
+        mode={composerMode}
+        theme={resolvedTheme}
+        teamAccounts={teamAccounts}
+        draft={editorDraft}
+        setDraft={setEditorDraft}
+        syncing={syncing}
+        onSave={() => void handleSavePost()}
+        onClose={closeComposer}
+      />
 
       <nav className="mobile-nav">
         <button type="button" className={section === 'calendar' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('calendar')}>
@@ -2349,6 +2066,14 @@ function App() {
         </button>
         <button type="button" className={section === 'archive' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('archive')}>
           <Icon name="archive" className="inline-icon" />
+        </button>
+        <button
+          type="button"
+          className={section === 'analytics' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
+          onClick={() => setSection('analytics')}
+          aria-label="Analytics"
+        >
+          <Icon name="chart" className="inline-icon" />
         </button>
         <button type="button" className={section === 'accounts' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('accounts')}>
           <Icon name="channels" className="inline-icon" />
@@ -2535,178 +2260,6 @@ function SettingsCard({ title, children }: { title: string; children: ReactNode 
   )
 }
 
-function DestinationAvatar({
-  account,
-  compact = false,
-  publishedPostUrl,
-}: {
-  account: AccountRecord
-  compact?: boolean
-  /** When set, the platform badge links to the published post (e.g. archive). */
-  publishedPostUrl?: string
-}) {
-  const initials = account.username.replace('@', '').slice(0, 2).toUpperCase()
-  const badge = (
-    <span className="destination-avatar__badge" title={publishedPostUrl ? `Open on ${account.provider}` : account.provider}>
-      <img src={`/icons/platforms/${account.provider}.svg`} alt="" />
-    </span>
-  )
-  return (
-    <div className={`destination-avatar ${compact ? 'destination-avatar--compact' : ''}`}>
-      <div className="destination-avatar__disk">
-        <div className="destination-avatar__inner">
-          {account.avatarUrl ? (
-            <img className="destination-avatar__photo" src={account.avatarUrl} alt="" referrerPolicy="no-referrer" />
-          ) : (
-            <div className="destination-avatar__fallback" style={{ background: avatarBackground(account.color) }} aria-hidden="true">
-              {initials}
-            </div>
-          )}
-        </div>
-        {publishedPostUrl ? (
-          <a
-            href={publishedPostUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="destination-avatar__badge-link"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {badge}
-          </a>
-        ) : (
-          badge
-        )}
-      </div>
-    </div>
-  )
-}
-
-function DestinationStack({
-  accounts,
-  publishedLinks,
-}: {
-  accounts: AccountRecord[]
-  publishedLinks?: Record<string, string>
-}) {
-  return (
-    <div className="destination-stack">
-      {accounts.map((account) => (
-        <DestinationAvatar
-          key={account.id}
-          account={account}
-          compact
-          publishedPostUrl={publishedLinks?.[account.id]}
-        />
-      ))}
-    </div>
-  )
-}
-
-function defaultEditorDraft(date: Date, teamAccounts: AccountRecord[]) {
-  const roundedDate = roundToNextSlot(date)
-  return {
-    title: '',
-    content: '',
-    scheduledAt: toInputDateTime(roundedDate),
-    targetAccountIds: teamAccounts[0] ? [teamAccounts[0].id] : [],
-    status: 'scheduled' as PostRecord['status'],
-  }
-}
-
-function roundToNextSlot(date: Date) {
-  const minutes = date.getMinutes()
-  const remainder = minutes % SLOT_MINUTES
-  if (remainder === 0) {
-    return set(date, { seconds: 0, milliseconds: 0 })
-  }
-  return set(addMinutes(date, SLOT_MINUTES - remainder), { seconds: 0, milliseconds: 0 })
-}
-
-function toInputDateTime(date: Date) {
-  return format(date, "yyyy-MM-dd'T'HH:mm")
-}
-
-function avatarBackground(color: string) {
-  return `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 40%, white))`
-}
-
-function charCounterClass(length: number, maxChars: number) {
-  if (maxChars === 0) {
-    return 'char-counter--idle'
-  }
-  const usage = length / maxChars
-  if (usage >= 1) {
-    return 'char-counter--danger'
-  }
-  if (usage >= 0.85) {
-    return 'char-counter--warning'
-  }
-  return 'char-counter--good'
-}
-
-function groupPostsByDay(posts: PostRecord[]) {
-  const groups = new Map<string, PostRecord[]>()
-  for (const post of posts) {
-    const key = format(parseISO(post.scheduledAt), 'yyyy-MM-dd')
-    groups.set(key, [...(groups.get(key) ?? []), post])
-  }
-  for (const [, list] of groups) {
-    list.sort((a, b) => parseISO(a.scheduledAt).getTime() - parseISO(b.scheduledAt).getTime())
-  }
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => ({ key, posts: value }))
-}
-
-function groupUpcomingIntoMonths(posts: PostRecord[]) {
-  const byDay = groupPostsByDay(posts)
-  const out: { monthKey: string; monthLabel: string; days: { key: string; posts: PostRecord[] }[] }[] = []
-  for (const g of byDay) {
-    const first = parseISO(g.posts[0]!.scheduledAt)
-    const monthKey = format(first, 'yyyy-MM')
-    const monthLabel = format(first, 'MMMM yyyy')
-    const last = out[out.length - 1]
-    if (!last || last.monthKey !== monthKey) {
-      out.push({ monthKey, monthLabel, days: [g] })
-    } else {
-      last.days.push(g)
-    }
-  }
-  return out
-}
-
-function calendarCellsForMonth(month: Date, posts: PostRecord[]) {
-  const rangeStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 })
-  const rangeEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 1 })
-  const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd })
-  const byDay = new Map<string, PostRecord[]>()
-  for (const post of posts) {
-    const key = format(parseISO(post.scheduledAt), 'yyyy-MM-dd')
-    const list = byDay.get(key) ?? []
-    list.push(post)
-    byDay.set(key, list)
-  }
-  for (const [, list] of byDay) {
-    list.sort((a, b) => parseISO(a.scheduledAt).getTime() - parseISO(b.scheduledAt).getTime())
-  }
-  return days.map((day) => ({
-    day,
-    posts: byDay.get(format(day, 'yyyy-MM-dd')) ?? [],
-    inMonth: isSameMonth(day, month),
-  }))
-}
-
-function initialsFromName(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) {
-    return '?'
-  }
-  if (parts.length === 1) {
-    return parts[0]!.slice(0, 2).toUpperCase()
-  }
-  return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase() || '?'
-}
-
 function loadStoredSettings(): SettingsState {
   if (typeof window === 'undefined') {
     return initialSettings
@@ -2737,85 +2290,6 @@ function writeStoredSettings(settings: SettingsState) {
     return
   }
   window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-}
-
-function PostCard({
-  post,
-  active,
-  onClick,
-  onEdit,
-  onDelete,
-  accounts,
-  isArchived = false,
-  publishedLinks,
-}: {
-  post: PostRecord
-  active: boolean
-  onClick: () => void
-  onEdit: () => void
-  onDelete: () => void
-  accounts: AccountRecord[]
-  isArchived?: boolean
-  publishedLinks?: Record<string, string>
-}) {
-  return (
-    <article className={`post-card ${active ? 'post-card--active' : ''}`} onClick={onClick}>
-      <div className="post-card__header">
-        <span className="post-card__meta">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
-        <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
-      </div>
-      <h3 className="post-card__title">{post.title || 'Untitled Post'}</h3>
-      <p className="post-card__content">{post.content}</p>
-      {active && (
-        <div className="inline-cluster" style={{ marginTop: '1rem' }}>
-          <button type="button" className="button button--secondary" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-            <Icon name="edit" className="inline-icon" />
-            <span>Edit</span>
-          </button>
-          {!isArchived && (
-            <button type="button" className="button button--secondary" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
-              <Icon name="trash" className="inline-icon" />
-              <span>Delete</span>
-            </button>
-          )}
-        </div>
-      )}
-    </article>
-  )
-}
-
-function SocialPreview({
-  account,
-  content,
-  scheduledAt,
-  theme,
-  publishedPostUrl,
-}: {
-  account: AccountRecord
-  content: string
-  scheduledAt: string
-  theme: 'dark' | 'light'
-  publishedPostUrl?: string
-}) {
-  return (
-    <div className={`social-preview ${theme === 'dark' ? 'social-preview--dark' : ''}`}>
-      <div className="social-preview__header">
-        <div className="social-preview__avatar-wrap">
-          <DestinationAvatar account={account} publishedPostUrl={publishedPostUrl} />
-        </div>
-        <div className="social-preview__meta">
-          <span className="social-preview__name">{account.name}</span>
-          <span className="social-preview__handle">{account.username}</span>
-        </div>
-      </div>
-      <div className="social-preview__body">
-        {content || <span className="hint">Post content will appear here...</span>}
-      </div>
-      <div style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-        {scheduledAt ? format(parseISO(scheduledAt), 'PPpp') : 'Not scheduled'}
-      </div>
-    </div>
-  )
 }
 
 export default App
