@@ -27,6 +27,8 @@ import { postsForTeam, resolveScheduleChange, sharedAccountLabels, SLOT_MINUTES 
 import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
+/** Survives React Strict Mode remounts: hash is promoted here, then one reload applies the session. */
+const OIDC_PENDING_SESSION_KEY = 'goloom.oidc.pending_session_v1'
 
 const SECTION_HEADINGS: Record<AppSection, string> = {
   calendar: 'Schedule',
@@ -267,6 +269,52 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const raw = sessionStorage.getItem(OIDC_PENDING_SESSION_KEY)
+    if (!raw) {
+      return
+    }
+    sessionStorage.removeItem(OIDC_PENDING_SESSION_KEY)
+    let payload: { token: string; baseUrl: string }
+    try {
+      payload = JSON.parse(raw) as { token: string; baseUrl: string }
+    } catch {
+      setAuthError('Invalid OpenID Connect hand-off data.')
+      return
+    }
+    const token = typeof payload.token === 'string' ? payload.token.trim() : ''
+    const baseUrl = typeof payload.baseUrl === 'string' ? payload.baseUrl.trim() : ''
+    if (!token) {
+      setAuthError('OpenID Connect returned an empty token.')
+      return
+    }
+    const apiBase = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '')
+    void (async () => {
+      setAuthSubmitting(true)
+      setAuthError(null)
+      setStatusMessage(null)
+      try {
+        const meResponse = await createApiClient({ baseUrl: apiBase, token }).me()
+        setActiveConnection({ apiBaseUrl: apiBase, bearerToken: token })
+        setSettings((current) => ({
+          ...current,
+          general: { ...current.general, apiBaseUrl: apiBase, bearerToken: token },
+        }))
+        setAuthTokenDraft(token)
+        setPrincipalUser(toUserRecord(meResponse.user))
+        setStatusMessage('Signed in with OpenID Connect')
+      } catch (cause) {
+        if (cause instanceof ApiError && cause.status === 401) {
+          setAuthError('OpenID Connect sign-in was rejected (check server time, IdP audience, and PUBLIC_BASE_URL / ALLOWED_ORIGINS).')
+        } else {
+          setAuthError(cause instanceof Error ? cause.message : 'Sign-in failed')
+        }
+      } finally {
+        setAuthSubmitting(false)
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
     const hash = window.location.hash
     if (!hash.startsWith('#goloom_oidc_token=')) {
       return
@@ -280,33 +328,20 @@ function App() {
       window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
       return
     }
+    if (!token.trim()) {
+      setAuthError('Invalid sign-in response.')
+      window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
+      return
+    }
+    const baseUrl = loadStoredSettings().general.apiBaseUrl.trim() || window.location.origin
+    try {
+      sessionStorage.setItem(OIDC_PENDING_SESSION_KEY, JSON.stringify({ token, baseUrl }))
+    } catch {
+      setAuthError('Could not store sign-in data (private browsing?).')
+      return
+    }
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
-
-    void (async () => {
-      setAuthSubmitting(true)
-      setAuthError(null)
-      setStatusMessage(null)
-      const baseUrl = loadStoredSettings().general.apiBaseUrl.trim() || (typeof window !== 'undefined' ? window.location.origin : '')
-      try {
-        const meResponse = await createApiClient({ baseUrl, token }).me()
-        setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
-        setSettings((current) => ({
-          ...current,
-          general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
-        }))
-        setAuthTokenDraft(token)
-        setPrincipalUser(toUserRecord(meResponse.user))
-        setStatusMessage('Signed in with OpenID Connect')
-      } catch (cause) {
-        if (cause instanceof ApiError && cause.status === 401) {
-          setAuthError('OpenID Connect sign-in was rejected.')
-        } else {
-          setAuthError(cause instanceof Error ? cause.message : 'Sign-in failed')
-        }
-      } finally {
-        setAuthSubmitting(false)
-      }
-    })()
+    window.location.reload()
   }, [])
   const clearAuthenticatedState = useCallback((message?: string) => {
     setActiveConnection((current) => ({ ...current, bearerToken: '' }))
