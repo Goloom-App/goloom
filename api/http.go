@@ -95,6 +95,10 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleUpdatePost)))
 	mux.Handle("DELETE /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeletePost)))
 	mux.Handle("POST /v1/teams/{teamID}/posts/{postID}/cancel", a.auth.RequireAuth(http.HandlerFunc(a.handleCancelPost)))
+	mux.Handle("GET /v1/teams/{teamID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalytics))))
+	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePostAnalytics))))
+	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostVersions))))
+	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePatchPostVersions))))
 
 	chain := security.CORSMiddleware(allowedOrigins)(limiter.Middleware(mux))
 	if a.log != nil {
@@ -265,8 +269,9 @@ func (a *API) handleRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
 			"encryption_configured": a.config.EncryptionKey != "",
 		},
 		"scheduler": map[string]any{
-			"poll_interval": a.config.SchedulerPollInterval.String(),
-			"workers":       a.config.SchedulerWorkers,
+			"poll_interval":            a.config.SchedulerPollInterval.String(),
+			"metrics_sync_interval":    a.config.SchedulerMetricsSyncInterval.String(),
+			"workers":                  a.config.SchedulerWorkers,
 		},
 		"oidc": map[string]any{
 			"enabled":    a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
