@@ -606,13 +606,18 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		input.ScheduledAt = time.Now().UTC()
 	}
 
-	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
+	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
+	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if !validation.Valid {
 		auth.WriteJSON(w, http.StatusUnprocessableEntity, validation)
+		return
+	}
+	if pathTeamID != "" && effectiveTeam != pathTeamID {
+		http.Error(w, "team mismatch between URL and destinations", http.StatusBadRequest)
 		return
 	}
 
@@ -657,13 +662,18 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
-	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
+	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
+	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if !validation.Valid {
 		auth.WriteJSON(w, http.StatusUnprocessableEntity, validation)
+		return
+	}
+	if pathTeamID != "" && effectiveTeam != pathTeamID {
+		http.Error(w, "team mismatch between URL and destinations", http.StatusBadRequest)
 		return
 	}
 	if effectiveTeam != existing.TeamID {
@@ -740,9 +750,14 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
-	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
+	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
+	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if pathTeamID != "" && effectiveTeam != pathTeamID {
+		http.Error(w, "team mismatch between URL and destinations", http.StatusBadRequest)
 		return
 	}
 	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, effectiveTeam, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
@@ -753,7 +768,33 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, validation)
 }
 
-func (a *API) validatePostInput(ctx context.Context, input domain.CreatePostInput) (validationResponse, string, error) {
+func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input domain.CreatePostInput) (validationResponse, string, error) {
+	if input.Draft {
+		if strings.TrimSpace(pathTeamID) == "" {
+			return validationResponse{}, "", errors.New("team id required")
+		}
+		if len(input.TargetAccounts) > 0 {
+			accounts, err := a.store.GetAccountsByIDsGlobal(ctx, input.TargetAccounts)
+			if err != nil {
+				return validationResponse{}, "", err
+			}
+			if len(accounts) != len(input.TargetAccounts) {
+				return validationResponse{}, "", errors.New("one or more target accounts are missing")
+			}
+			for _, acc := range accounts {
+				if acc.TeamID != pathTeamID {
+					return validationResponse{}, "", errors.New("target accounts must belong to the team in the URL")
+				}
+			}
+		}
+		return validationResponse{
+			Valid:         true,
+			MaxChars:      0,
+			ContentLength: len([]rune(input.Content)),
+			Destinations:  nil,
+		}, pathTeamID, nil
+	}
+
 	if err := input.Validate(); err != nil {
 		return validationResponse{}, "", err
 	}
@@ -770,6 +811,12 @@ func (a *API) validatePostInput(ctx context.Context, input domain.CreatePostInpu
 	destinations := make([]destinationInfo, 0, len(accounts))
 	maxChars := 0
 	for _, account := range accounts {
+		if account.TeamID != effectiveTeam {
+			return validationResponse{}, "", errors.New("target accounts must belong to one team")
+		}
+		if strings.TrimSpace(pathTeamID) != "" && account.TeamID != pathTeamID {
+			return validationResponse{}, "", errors.New("target accounts must belong to the team in the URL")
+		}
 		providerImpl, ok := a.providers.Get(account.Provider)
 		if !ok {
 			return validationResponse{}, "", errors.New("one or more target accounts use an unsupported provider")

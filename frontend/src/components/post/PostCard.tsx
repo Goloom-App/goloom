@@ -29,7 +29,10 @@ export function PostCard({
         <span className="post-card__meta">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
         <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
       </div>
-      <h3 className="post-card__title">{post.title || 'Untitled Post'}</h3>
+      <h3 className="post-card__title">
+        {post.status === 'draft' ? <span className="post-card__badge">Draft</span> : null}
+        {post.title || 'Untitled Post'}
+      </h3>
       <p className="post-card__content">{post.content}</p>
       {active && (
         <div className="inline-cluster" style={{ marginTop: '1rem' }}>

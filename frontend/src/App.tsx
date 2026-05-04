@@ -19,11 +19,20 @@ import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admi
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { SettingsView } from './views/settings/SettingsView'
 import { TeamsView } from './views/teams/TeamsView'
-import { ApiError, createApiClient, requestAuthStatus, requestStartOIDCLogin, type BackendAPIToken, type BackendAdminMetrics } from './api'
+import {
+  ApiError,
+  createApiClient,
+  requestAuthStatus,
+  requestStartOIDCLogin,
+  type BackendAPIToken,
+  type BackendAdminMetrics,
+  type BackendPostMetric,
+} from './api'
 import { initialSettings } from './data'
 import { Icon } from './icons'
 import type { IconName } from './icons'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
+import { engagementForAccount } from './postMetrics'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
 import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
@@ -73,6 +82,7 @@ function App() {
   const [posts, setPosts] = useState<PostRecord[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
+  const [archivePreviewMetrics, setArchivePreviewMetrics] = useState<BackendPostMetric[]>([])
   const [editingPostId, setEditingPostId] = useState<string | null>(null)
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
   const [composerOpen, setComposerOpen] = useState(false)
@@ -600,7 +610,10 @@ function App() {
 
   const upcomingPosts = useMemo(() => {
     const baseline = startOfDay(currentDate)
-    return teamPosts.filter((post) => post.status === 'scheduled' && parseISO(post.scheduledAt) >= baseline)
+    return teamPosts.filter(
+      (post) =>
+        (post.status === 'scheduled' || post.status === 'draft') && parseISO(post.scheduledAt) >= baseline,
+    )
   }, [currentDate, teamPosts])
 
   const archivedPosts = useMemo(
@@ -609,7 +622,7 @@ function App() {
   )
 
   const plannedPostsForContentCalendar = useMemo(
-    () => teamPosts.filter((post) => post.status === 'scheduled'),
+    () => teamPosts.filter((post) => post.status === 'scheduled' || post.status === 'draft'),
     [teamPosts],
   )
 
@@ -637,6 +650,30 @@ function App() {
 
   const selectedPost = useMemo(() => posts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, posts])
   const editTargetPost = useMemo(() => posts.find((post) => post.id === editingPostId) ?? null, [editingPostId, posts])
+
+  useEffect(() => {
+    if (!api || !selectedPost || selectedPost.status !== 'posted' || section !== 'archive') {
+      setArchivePreviewMetrics([])
+      return
+    }
+    let cancelled = false
+    void api
+      .getPostAnalytics(selectedPost.teamId, selectedPost.id)
+      .then((r) => {
+        if (!cancelled) {
+          setArchivePreviewMetrics(r.items ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setArchivePreviewMetrics([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api, section, selectedPost])
+
   async function runAction(work: () => Promise<void>, successMessage: string) {
     setSyncing(true)
     setError(null)
@@ -682,6 +719,7 @@ function App() {
       targetAccountIds: targetPost.targetAccountIds,
       status: targetPost.status,
       accountContentOverride,
+      mediaIds: targetPost.mediaIds ? [...targetPost.mediaIds] : [],
     })
     setComposerMode('edit')
     setEditingPostId(postId)
@@ -1005,6 +1043,8 @@ function App() {
         content: defaultContent,
         scheduled_at: new Date(editorDraft.scheduledAt).toISOString(),
         target_accounts: editorDraft.targetAccountIds,
+        media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
+        draft: false,
       }
 
       let savedPostId: string
@@ -1026,6 +1066,44 @@ function App() {
       setComposerOpen(false)
       await loadDashboard({ silent: true })
     }, composerMode === 'edit' ? 'Post updated' : 'Post scheduled')
+  }
+
+  async function handleSaveDraft() {
+    if (!api || !selectedTeam) {
+      return
+    }
+    await runAction(async () => {
+      const defaultContent = editorDraft.content
+      const payload = {
+        title: editorDraft.title.trim(),
+        content: defaultContent.trim(),
+        scheduled_at: new Date(editorDraft.scheduledAt || Date.now()).toISOString(),
+        target_accounts: editorDraft.targetAccountIds,
+        media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
+        draft: true,
+      }
+
+      let savedPostId: string
+      if (composerMode === 'edit' && editTargetPost) {
+        await api.updatePost(selectedTeam.id, editTargetPost.id, payload)
+        savedPostId = editTargetPost.id
+      } else {
+        const created = await api.createPost(selectedTeam.id, payload)
+        savedPostId = created.id
+      }
+
+      const versions = editorDraft.targetAccountIds.map((aid) => {
+        const override = (editorDraft.accountContentOverride[aid] ?? '').trim()
+        const content = override && override !== defaultContent.trim() ? override : ''
+        return { account_id: aid, content }
+      })
+      if (versions.some((v) => v.content.length > 0)) {
+        await api.patchPostVersions(selectedTeam.id, savedPostId, { versions })
+      }
+
+      setComposerOpen(false)
+      await loadDashboard({ silent: true })
+    }, 'Draft saved')
   }
 
   async function deletePost(postId: string) {
@@ -1248,15 +1326,13 @@ function App() {
             <p className="hint">Connect to the API and select a team to view analytics.</p>
           ) : null}
 
-          {section === 'mediaLibrary' && selectedTeam ? (
+          {section === 'mediaLibrary' && selectedTeam && api ? (
             <MediaLibraryView
+              teamId={selectedTeam.id}
               teamName={selectedTeam.name}
-              onRequestUnsplash={() =>
-                setStatusMessage('Unsplash is not wired to the API yet. Configure search keys on the server to enable stock photos.')
-              }
-              onRequestGiphy={() =>
-                setStatusMessage('Giphy is not wired to the API yet. Configure search keys on the server to enable GIF search.')
-              }
+              teamAccounts={teamAccounts}
+              api={api}
+              onError={(msg) => setError(msg)}
             />
           ) : section === 'mediaLibrary' ? (
             <p className="hint">Select a team to browse the media workspace.</p>
@@ -1342,7 +1418,9 @@ function App() {
                 <p className="eyebrow">Live Preview</p>
                 <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
               </div>
-              {selectedPost && selectedPost.status === 'scheduled' && canEditScheduledPosts ? (
+              {selectedPost &&
+              (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
+              canEditScheduledPosts ? (
                 <button type="button" className="button button--secondary preview-header__edit" onClick={() => openEditor(selectedPost.id)}>
                   <Icon name="edit" className="inline-icon" />
                   <span>Edit</span>
@@ -1361,6 +1439,11 @@ function App() {
                   theme={resolvedTheme}
                   publishedPostUrl={
                     selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
+                  }
+                  engagement={
+                    section === 'archive' && selectedPost.status === 'posted'
+                      ? engagementForAccount(archivePreviewMetrics, account.id)
+                      : null
                   }
                 />
               ))
@@ -1490,10 +1573,20 @@ function App() {
         setDraft={setEditorDraft}
         syncing={syncing}
         onSave={() => void handleSavePost()}
+        onSaveDraft={() => void handleSaveDraft()}
         onClose={closeComposer}
-        onIntegrationNotice={(msg) => {
-          setStatusMessage(msg)
-        }}
+        onMediaUpload={
+          api && selectedTeam
+            ? async (file) => {
+                const accountId = editorDraft.targetAccountIds[0] ?? teamAccounts[0]?.id
+                if (!accountId) {
+                  throw new Error('Select at least one destination account to upload media.')
+                }
+                const r = await api.uploadTeamMedia(selectedTeam.id, accountId, file)
+                return r.media_id
+              }
+            : undefined
+        }
       />
 
       <nav className="mobile-nav">

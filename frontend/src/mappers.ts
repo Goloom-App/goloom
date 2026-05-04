@@ -101,6 +101,7 @@ export function toPostRecord(post: BackendPost): PostRecord {
     targetAccountIds: post.target_accounts,
     status: mapStatus(post.status),
     publishedLinks: post.published_links,
+    mediaIds: post.media_ids?.length ? post.media_ids : undefined,
   }
 }
 
@@ -160,6 +161,8 @@ function mapStatus(status: BackendPost['status']): PostRecord['status'] {
       return 'posted'
     case 'failed':
       return 'failed'
+    case 'draft':
+      return 'draft'
     default:
       return 'scheduled'
   }

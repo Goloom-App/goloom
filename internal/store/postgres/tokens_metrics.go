@@ -48,6 +48,8 @@ func (s *Store) AdminMetrics(ctx context.Context) (domain.AdminMetrics, error) {
 		switch domain.PostStatus(status) {
 		case domain.PostStatusPending:
 			m.PostsPending = n
+		case domain.PostStatusDraft:
+			m.PostsDraft = n
 		case domain.PostStatusProcessing:
 			m.PostsProcessing = n
 		case domain.PostStatusPosted:

@@ -562,13 +562,17 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
+	st := domain.PostStatusPending
+	if input.Draft {
+		st = domain.PostStatusDraft
+	}
 	if _, err := tx.ExecContext(ctx, `
 		insert into scheduled_posts (
 			id, team_id, author_user_id, title, content, scheduled_at, status,
 			attempt_count, last_error, visibility, media_ids, created_at, updated_at
 		)
 		values (?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?)`,
-		postID, teamID, principal.User.ID, input.Title, input.Content, formatTime(input.ScheduledAt), domain.PostStatusPending,
+		postID, teamID, principal.User.ID, input.Title, input.Content, formatTime(input.ScheduledAt), st,
 		visibility, mediaJSON, now, now,
 	); err != nil {
 		return domain.ScheduledPost{}, err
@@ -632,6 +636,10 @@ func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (do
 }
 
 func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, input domain.CreatePostInput) (domain.ScheduledPost, error) {
+	existing, err := s.GetScheduledPost(ctx, teamID, postID)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return domain.ScheduledPost{}, err
@@ -643,11 +651,12 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
+	newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, input)
 	if _, err := tx.ExecContext(ctx, `
 		update scheduled_posts
-		set title = ?, content = ?, scheduled_at = ?, visibility = ?, media_ids = ?, updated_at = ?
+		set title = ?, content = ?, scheduled_at = ?, visibility = ?, media_ids = ?, status = ?, updated_at = ?
 		where id = ? and team_id = ?`,
-		input.Title, input.Content, formatTime(input.ScheduledAt), visibility, mediaJSON, nowString(), postID, teamID,
+		input.Title, input.Content, formatTime(input.ScheduledAt), visibility, mediaJSON, string(newStatus), nowString(), postID, teamID,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}

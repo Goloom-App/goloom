@@ -17,7 +17,7 @@ export type GlobalRole = 'admin' | 'member'
 
 export type ProviderName = 'bluesky' | 'friendica' | 'mastodon'
 
-export type PostStatus = 'scheduled' | 'posted' | 'failed'
+export type PostStatus = 'scheduled' | 'posted' | 'failed' | 'draft'
 
 export type AccountAuthType = 'oauth_token' | 'app_password'
 
@@ -71,6 +71,8 @@ export interface PostRecord {
   targetAccountIds: string[]
   status: PostStatus
   publishedLinks?: Record<string, string>
+  /** Platform media attachment IDs (Mastodon media IDs, Bluesky-encoded payloads, etc.) */
+  mediaIds?: string[]
 }
 
 /** Normalized engagement row for UI (maps from BackendPostMetric). */

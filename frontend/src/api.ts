@@ -61,13 +61,14 @@ export interface BackendPost {
   title: string
   content: string
   scheduled_at: string
-  status: 'pending' | 'processing' | 'posted' | 'failed' | 'cancelled'
+  status: 'pending' | 'processing' | 'posted' | 'failed' | 'cancelled' | 'draft'
   attempt_count: number
   last_error?: string
   created_at: string
   updated_at: string
   target_accounts: string[]
   published_links?: Record<string, string>
+  media_ids?: string[]
 }
 
 export interface BackendPostEngagementSummary {
@@ -161,6 +162,7 @@ export interface BackendAdminMetrics {
   teams_count: number
   provider_instances_count: number
   posts_pending: number
+  posts_draft?: number
   posts_processing: number
   posts_posted: number
   posts_failed: number
@@ -422,7 +424,14 @@ export function createApiClient(options: ApiClientOptions) {
     },
     createPost(
       teamID: string,
-      payload: { title: string; content: string; scheduled_at: string; target_accounts: string[] },
+      payload: {
+        title: string
+        content: string
+        scheduled_at: string
+        target_accounts: string[]
+        media_ids?: string[]
+        draft?: boolean
+      },
     ) {
       return request<BackendPost>(options, `/v1/teams/${teamID}/posts`, {
         method: 'POST',
@@ -433,12 +442,36 @@ export function createApiClient(options: ApiClientOptions) {
     updatePost(
       teamID: string,
       postID: string,
-      payload: { title: string; content: string; scheduled_at: string; target_accounts: string[] },
+      payload: {
+        title: string
+        content: string
+        scheduled_at: string
+        target_accounts: string[]
+        media_ids?: string[]
+        draft?: boolean
+      },
     ) {
       return request<BackendPost>(options, `/v1/teams/${teamID}/posts/${postID}`, {
         method: 'PATCH',
         headers: buildHeaders(options.token),
         body: JSON.stringify(payload),
+      })
+    },
+    uploadTeamMedia(teamID: string, accountID: string, file: File, altText?: string) {
+      const form = new FormData()
+      form.set('account_id', accountID)
+      form.set('file', file)
+      if (altText?.trim()) {
+        form.set('alt_text', altText.trim())
+      }
+      const headers = new Headers()
+      if (options.token.trim()) {
+        headers.set('Authorization', `Bearer ${options.token}`)
+      }
+      return request<{ media_id: string }>(options, `/v1/teams/${teamID}/media/upload`, {
+        method: 'POST',
+        headers,
+        body: form,
       })
     },
     deletePost(teamID: string, postID: string) {

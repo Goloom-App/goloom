@@ -2,10 +2,10 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../icons'
 import type { AccountRecord } from '../../types'
-import { DestinationAvatar, DestinationStack } from '../post/DestinationAvatar'
+import { DestinationAvatar } from '../post/DestinationAvatar'
 import { SocialPreview } from '../post/SocialPreview'
-import { MediaLibraryPanel } from '../Media/MediaLibraryPanel'
 import { charCounterClass } from './editorDraft'
+import { ComposerMedia } from './ComposerMedia'
 import type { EditorDraftState } from './types'
 
 function effectiveBody(draft: EditorDraftState, accountId: string | null) {
@@ -31,8 +31,9 @@ export function PostComposer({
   setDraft,
   syncing,
   onSave,
+  onSaveDraft,
   onClose,
-  onIntegrationNotice,
+  onMediaUpload,
 }: {
   open: boolean
   mode: 'create' | 'edit'
@@ -42,9 +43,10 @@ export function PostComposer({
   setDraft: Dispatch<SetStateAction<EditorDraftState>>
   syncing: boolean
   onSave: () => void | Promise<void>
+  onSaveDraft: () => void | Promise<void>
   onClose: () => void
-  /** Optional toast-style hook when user taps Unsplash/Giphy (until server search exists). */
-  onIntegrationNotice?: (message: string) => void
+  /** Upload via POST /teams/:id/media/upload; returns provider media id. */
+  onMediaUpload?: (file: File) => Promise<string>
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
 
@@ -154,13 +156,23 @@ export function PostComposer({
             />
           </label>
 
-          <div className="inline-cluster">
-            <div className={`char-counter ${charCounterClass(bodyLen, maxChars)}`}>
-              <strong>{bodyLen}</strong>
-              <span>/ {maxChars || '—'}</span>
-            </div>
-            <DestinationStack accounts={selectedAccounts} />
+          <div className={`char-counter ${charCounterClass(bodyLen, maxChars)}`}>
+            <strong>{bodyLen}</strong>
+            <span>/ {maxChars || '—'}</span>
           </div>
+
+          <ComposerMedia
+            mediaIds={draft.mediaIds}
+            onAdd={(id) =>
+              setDraft((current) =>
+                current.mediaIds.includes(id) ? current : { ...current, mediaIds: [...current.mediaIds, id] },
+              )
+            }
+            onRemove={(id) => setDraft((current) => ({ ...current, mediaIds: current.mediaIds.filter((x) => x !== id) }))}
+            onUpload={onMediaUpload}
+            uploadLabel={teamAccounts.length === 0 ? 'Add a social account to this team to upload media.' : undefined}
+            disabled={syncing}
+          />
 
           <label className="field">
             <span>Scheduled at</span>
@@ -171,7 +183,7 @@ export function PostComposer({
             />
           </label>
 
-          <footer className="inline-cluster" style={{ marginTop: 'auto', paddingTop: '2rem' }}>
+          <footer className="composer-footer-actions">
             <button
               type="button"
               className="button button--primary"
@@ -181,6 +193,9 @@ export function PostComposer({
               <Icon name="calendar" className="inline-icon" />
               <span>{mode === 'edit' ? 'Save changes' : 'Schedule post'}</span>
             </button>
+            <button type="button" className="button button--secondary" disabled={syncing} onClick={() => void onSaveDraft()}>
+              Save draft
+            </button>
             <button type="button" className="button button--secondary" onClick={onClose}>
               Cancel
             </button>
@@ -189,7 +204,7 @@ export function PostComposer({
 
         <aside className="composer-sidebar composer-sidebar--stack">
           <p className="eyebrow">Destinations</p>
-          <div className="composer-destination-grid" role="group" aria-label="Post destinations">
+          <div className="composer-destination-row" role="group" aria-label="Post destinations">
             {teamAccounts.map((account) => {
               const selected = draft.targetAccountIds.includes(account.id)
               return (
@@ -215,26 +230,6 @@ export function PostComposer({
             })}
           </div>
           {teamAccounts.length === 0 ? <p className="hint">No accounts for this workspace.</p> : null}
-
-          <div className="divider" />
-
-          <MediaLibraryPanel
-            selectedLabel={activeTab === 'default' ? 'default message' : selectedAccounts.find((a) => a.id === activeTab)?.username ?? 'account'}
-            integrations={{
-              onRequestUnsplash: onIntegrationNotice
-                ? () =>
-                    onIntegrationNotice(
-                      'Unsplash search is not enabled on the server yet. Use Mastodon media upload from the API when available, or attach files locally once upload is wired.',
-                    )
-                : undefined,
-              onRequestGiphy: onIntegrationNotice
-                ? () =>
-                    onIntegrationNotice(
-                      'Giphy search is not enabled on the server yet. GIF pickers require backend keys and a search proxy.',
-                    )
-                : undefined,
-            }}
-          />
 
           <div className="divider" />
 

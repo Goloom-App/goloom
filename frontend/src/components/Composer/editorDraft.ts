@@ -25,6 +25,7 @@ export function defaultEditorDraft(date: Date, teamAccounts: AccountRecord[]): E
     targetAccountIds: teamAccounts[0] ? [teamAccounts[0].id] : [],
     status: 'scheduled',
     accountContentOverride: {},
+    mediaIds: [],
   }
 }
 

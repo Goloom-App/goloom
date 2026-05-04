@@ -38,6 +38,7 @@ const (
 	PostStatusPosted     PostStatus = "posted"
 	PostStatusFailed     PostStatus = "failed"
 	PostStatusCancelled  PostStatus = "cancelled"
+	PostStatusDraft      PostStatus = "draft"
 )
 
 // Post visibility values aligned with Mastodon API.
@@ -324,6 +325,7 @@ type AdminMetrics struct {
 	TeamsCount             int   `json:"teams_count"`
 	ProviderInstancesCount int   `json:"provider_instances_count"`
 	PostsPending           int64 `json:"posts_pending"`
+	PostsDraft             int64 `json:"posts_draft"`
 	PostsProcessing        int64 `json:"posts_processing"`
 	PostsPosted            int64 `json:"posts_posted"`
 	PostsFailed            int64 `json:"posts_failed"`
@@ -346,9 +348,13 @@ type CreatePostInput struct {
 	TargetAccounts []string  `json:"target_accounts"`
 	Visibility     string    `json:"visibility,omitempty"`
 	MediaIDs       []string  `json:"media_ids,omitempty"`
+	Draft          bool      `json:"draft,omitempty"`
 }
 
 func (in CreatePostInput) Validate() error {
+	if in.Draft {
+		return nil
+	}
 	if in.Content == "" {
 		return errors.New("content is required")
 	}
@@ -356,4 +362,20 @@ func (in CreatePostInput) Validate() error {
 		return errors.New("target_accounts is required")
 	}
 	return nil
+}
+
+// ResolvePostStatusOnUpdate returns the post row status after an update from CreatePostInput.
+func ResolvePostStatusOnUpdate(was PostStatus, in CreatePostInput) PostStatus {
+	if in.Draft {
+		switch was {
+		case PostStatusPosted, PostStatusProcessing, PostStatusCancelled:
+			return was
+		default:
+			return PostStatusDraft
+		}
+	}
+	if was == PostStatusDraft {
+		return PostStatusPending
+	}
+	return was
 }

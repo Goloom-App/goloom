@@ -693,7 +693,11 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 
 	post := domain.ScheduledPost{}
 	var mediaRaw string
-	err = tx.QueryRow(ctx, insertPost, teamID, principal.User.ID, input.Title, input.Content, input.ScheduledAt, domain.PostStatusPending, visibility, mediaJSON).Scan(
+	st := domain.PostStatusPending
+	if input.Draft {
+		st = domain.PostStatusDraft
+	}
+	err = tx.QueryRow(ctx, insertPost, teamID, principal.User.ID, input.Title, input.Content, input.ScheduledAt, st, visibility, mediaJSON).Scan(
 		&post.ID,
 		&post.TeamID,
 		&post.AuthorUserID,
@@ -773,6 +777,10 @@ func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (do
 }
 
 func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, input domain.CreatePostInput) (domain.ScheduledPost, error) {
+	existing, err := s.GetScheduledPost(ctx, teamID, postID)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return domain.ScheduledPost{}, err
@@ -784,10 +792,11 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
+	newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, input)
 	_, err = tx.Exec(
 		ctx,
-		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, updated_at = now() where id = $6 and team_id = $7`,
-		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, postID, teamID,
+		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, status = $6, updated_at = now() where id = $7 and team_id = $8`,
+		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, newStatus, postID, teamID,
 	)
 	if err != nil {
 		return domain.ScheduledPost{}, err

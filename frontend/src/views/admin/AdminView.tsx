@@ -63,6 +63,10 @@ export function AdminView({
               <span className="stat-tile__value">{adminMetrics.posts_pending}</span>
             </div>
             <div className="stat-tile">
+              <span className="stat-tile__label">Drafts</span>
+              <span className="stat-tile__value">{adminMetrics.posts_draft ?? 0}</span>
+            </div>
+            <div className="stat-tile">
               <span className="stat-tile__label">Publishing</span>
               <span className="stat-tile__value">{adminMetrics.posts_processing}</span>
             </div>

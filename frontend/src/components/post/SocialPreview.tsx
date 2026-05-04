@@ -27,6 +27,12 @@ function resolveLayout(provider: AccountRecord['provider']): PreviewLayout {
   return 'mastodon'
 }
 
+export type PreviewEngagement = {
+  likes: number
+  reposts: number
+  replies: number
+}
+
 export function SocialPreview({
   account,
   content,
@@ -34,6 +40,7 @@ export function SocialPreview({
   theme,
   publishedPostUrl,
   layout,
+  engagement,
 }: {
   account: AccountRecord
   content: string
@@ -42,6 +49,8 @@ export function SocialPreview({
   publishedPostUrl?: string
   /** When omitted, layout follows account provider. */
   layout?: PreviewLayout
+  /** When set (e.g. archive), show interaction counts similar to native posts. */
+  engagement?: PreviewEngagement | null
 }) {
   const resolved = layout ?? resolveLayout(account.provider)
   return (
@@ -61,6 +70,22 @@ export function SocialPreview({
       <div className="social-preview__body">
         {content || <span className="hint">Post content will appear here...</span>}
       </div>
+      {engagement ? (
+        <div className="social-preview__stats" aria-label="Engagement">
+          <span title="Likes">
+            <span className="social-preview__stat-value">{engagement.likes}</span>
+            <span className="social-preview__stat-label">likes</span>
+          </span>
+          <span title="Reposts / shares">
+            <span className="social-preview__stat-value">{engagement.reposts}</span>
+            <span className="social-preview__stat-label">shares</span>
+          </span>
+          <span title="Replies">
+            <span className="social-preview__stat-value">{engagement.replies}</span>
+            <span className="social-preview__stat-label">replies</span>
+          </span>
+        </div>
+      ) : null}
       <div className="social-preview__footer">
         {scheduledAt ? format(parseISO(scheduledAt), 'PPpp') : 'Not scheduled'}
       </div>

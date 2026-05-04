@@ -91,7 +91,7 @@ create table if not exists scheduled_posts (
     title text not null default '',
     content text not null,
     scheduled_at text not null,
-    status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
+    status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft')),
     attempt_count integer not null default 0,
     last_error text,
     visibility text not null default 'public',

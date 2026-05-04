@@ -35,6 +35,48 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `create unique index if not exists idx_teams_personal_user on teams(personal_for_user_id) where personal_for_user_id is not null`); err != nil {
 		return fmt.Errorf("sqlite migrate index: %w", err)
 	}
+	if err := migrateSQLiteScheduledPostsDraftStatus(ctx, db); err != nil {
+		return err
+	}
+	return nil
+}
+
+func migrateSQLiteScheduledPostsDraftStatus(ctx context.Context, db *sql.DB) error {
+	var createSQL sql.NullString
+	err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='scheduled_posts'`).Scan(&createSQL)
+	if err != nil || !createSQL.Valid || createSQL.String == "" {
+		return nil
+	}
+	if strings.Contains(createSQL.String, "'draft'") {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `
+PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE scheduled_posts_new (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    author_user_id text not null references users(id) on delete restrict,
+    title text not null default '',
+    content text not null,
+    scheduled_at text not null,
+    status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft')),
+    attempt_count integer not null default 0,
+    last_error text,
+    visibility text not null default 'public',
+    media_ids text not null default '[]',
+    created_at text not null,
+    updated_at text not null
+);
+INSERT INTO scheduled_posts_new SELECT * FROM scheduled_posts;
+DROP TABLE scheduled_posts;
+ALTER TABLE scheduled_posts_new RENAME TO scheduled_posts;
+CREATE INDEX IF NOT EXISTS idx_scheduled_posts_due ON scheduled_posts(status, scheduled_at);
+COMMIT;
+PRAGMA foreign_keys=ON;
+`); err != nil {
+		return fmt.Errorf("sqlite migrate scheduled_posts draft status: %w", err)
+	}
 	return nil
 }
 
