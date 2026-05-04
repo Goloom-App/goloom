@@ -97,7 +97,7 @@ func (p *MastodonProvider) Capabilities(_ context.Context, account domain.Social
 }
 
 func (p *MastodonProvider) PrepareProviderInstance(ctx context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error) {
-	instanceURL, err := normalizeInstanceURL(input.InstanceURL)
+	instanceURL, err := normalizeInstanceURL(ctx, input.InstanceURL)
 	if err != nil {
 		return domain.PreparedProviderInstance{}, err
 	}
@@ -159,7 +159,7 @@ func (p *MastodonProvider) ConnectAccount(ctx context.Context, input domain.Crea
 		instanceURL = instance.InstanceURL
 	}
 
-	normalizedURL, err := normalizeInstanceURL(instanceURL)
+	normalizedURL, err := normalizeInstanceURL(ctx, instanceURL)
 	if err != nil {
 		return domain.ConnectedAccount{}, err
 	}

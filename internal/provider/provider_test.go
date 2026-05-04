@@ -87,7 +87,7 @@ func TestBlueskyProvider_Publish(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("failed to decode request body: %v", err)
 		}
-		
+
 		record := body["record"].(map[string]any)
 		if record["text"] != "hello bluesky" {
 			t.Errorf("expected text 'hello bluesky', got %v", record["text"])
@@ -150,7 +150,8 @@ func TestMastodonProvider_ConnectAccount(t *testing.T) {
 		AccessToken: "valid-token",
 	}
 
-	account, err := p.ConnectAccount(context.Background(), input, nil)
+	ctx := WithOutboundInstancePolicy(context.Background(), OutboundPolicy{AllowPrivateLAN: true})
+	account, err := p.ConnectAccount(ctx, input, nil)
 	if err != nil {
 		t.Fatalf("ConnectAccount failed: %v", err)
 	}
@@ -191,7 +192,8 @@ func TestBlueskyProvider_ConnectAccount_AppPassword(t *testing.T) {
 		AppPassword: "app-pass",
 	}
 
-	account, err := p.ConnectAccount(context.Background(), input, nil)
+	ctx := WithOutboundInstancePolicy(context.Background(), OutboundPolicy{AllowPrivateLAN: true})
+	account, err := p.ConnectAccount(ctx, input, nil)
 	if err != nil {
 		t.Fatalf("ConnectAccount failed: %v", err)
 	}

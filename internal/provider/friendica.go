@@ -78,8 +78,8 @@ func (p *GenericStatusProvider) Capabilities(_ context.Context, account domain.S
 	return capabilitiesForAccount(account, p.defaultChars, p.mediaTypes), nil
 }
 
-func (p *GenericStatusProvider) PrepareProviderInstance(_ context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error) {
-	instanceURL, err := normalizeInstanceURL(input.InstanceURL)
+func (p *GenericStatusProvider) PrepareProviderInstance(ctx context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error) {
+	instanceURL, err := normalizeInstanceURL(ctx, input.InstanceURL)
 	if err != nil {
 		return domain.PreparedProviderInstance{}, err
 	}
@@ -104,7 +104,7 @@ func (p *GenericStatusProvider) ConnectAccount(ctx context.Context, input domain
 	if instance != nil {
 		instanceURL = instance.InstanceURL
 	}
-	normalizedURL, err := normalizeInstanceURL(instanceURL)
+	normalizedURL, err := normalizeInstanceURL(ctx, instanceURL)
 	if err != nil {
 		return domain.ConnectedAccount{}, err
 	}

@@ -165,7 +165,7 @@ func (a *API) handleMastodonOAuthCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	accountInput, err := connector.ConnectAccountOAuthCallback(r.Context(), instance, clientSecret, a.config.MastodonRedirectURI, code)
+	accountInput, err := connector.ConnectAccountOAuthCallback(a.providerContext(r.Context()), instance, clientSecret, a.config.MastodonRedirectURI, code)
 	if err != nil {
 		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, err.Error())
 		return

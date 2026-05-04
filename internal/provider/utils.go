@@ -17,7 +17,10 @@ import (
 
 var defaultHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
-func normalizeInstanceURL(raw string) (string, error) {
+func normalizeInstanceURL(ctx context.Context, raw string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	value := strings.TrimSpace(raw)
 	if value == "" {
 		return "", errors.New("instance_url is required")
@@ -34,6 +37,9 @@ func normalizeInstanceURL(raw string) (string, error) {
 	}
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
+	if err := validateInstanceOutboundURL(ctx, parsed); err != nil {
+		return "", err
+	}
 	return strings.TrimRight(parsed.String(), "/"), nil
 }
 

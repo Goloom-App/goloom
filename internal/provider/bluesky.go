@@ -48,13 +48,13 @@ func (p *BlueskyProvider) Capabilities(_ context.Context, account domain.SocialA
 	return capabilitiesForAccount(account, p.defaultChars, p.mediaTypes), nil
 }
 
-func (p *BlueskyProvider) PrepareProviderInstance(_ context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error) {
+func (p *BlueskyProvider) PrepareProviderInstance(ctx context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error) {
 	instanceURL := strings.TrimSpace(input.InstanceURL)
 	if instanceURL == "" {
 		instanceURL = "https://bsky.social"
 	}
 
-	normalizedURL, err := normalizeInstanceURL(instanceURL)
+	normalizedURL, err := normalizeInstanceURL(ctx, instanceURL)
 	if err != nil {
 		return domain.PreparedProviderInstance{}, err
 	}
@@ -85,7 +85,7 @@ func (p *BlueskyProvider) ConnectAccount(ctx context.Context, input domain.Creat
 		instanceURL = "https://bsky.social"
 	}
 
-	normalizedURL, err := normalizeInstanceURL(instanceURL)
+	normalizedURL, err := normalizeInstanceURL(ctx, instanceURL)
 	if err != nil {
 		return domain.ConnectedAccount{}, err
 	}
@@ -317,10 +317,10 @@ func (p *BlueskyProvider) GetMetrics(ctx context.Context, account domain.SocialA
 	var payload struct {
 		Posts []struct {
 			Post *struct {
-				LikeCount    int64 `json:"likeCount"`
-				RepostCount  int64 `json:"repostCount"`
-				ReplyCount   int64 `json:"replyCount"`
-				QuoteCount   int64 `json:"quoteCount"`
+				LikeCount   int64 `json:"likeCount"`
+				RepostCount int64 `json:"repostCount"`
+				ReplyCount  int64 `json:"replyCount"`
+				QuoteCount  int64 `json:"quoteCount"`
 			} `json:"post"`
 		} `json:"posts"`
 	}

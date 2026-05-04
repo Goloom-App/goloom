@@ -169,14 +169,14 @@ func (a *API) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	bootstrapRecovery := a.config.BootstrapEnabled && strings.TrimSpace(a.config.BootstrapAdminToken) != ""
 
 	auth.WriteJSON(w, http.StatusOK, map[string]any{
-		"bootstrap_enabled":            bootstrapRecovery,
+		"bootstrap_enabled":          bootstrapRecovery,
 		"bootstrap_recovery_enabled": bootstrapRecovery,
-		"initial_setup_required":       initialSetup,
-		"oidc_enabled":                 a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
-		"oidc_oauth_enabled":           a.auth.OIDCOAuthReady(),
-		"has_users":                    len(users) > 0,
-		"has_admin_users":              hasAdminUsers,
-		"app_env":                      a.config.AppEnv,
+		"initial_setup_required":     initialSetup,
+		"oidc_enabled":               a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
+		"oidc_oauth_enabled":         a.auth.OIDCOAuthReady(),
+		"has_users":                  len(users) > 0,
+		"has_admin_users":            hasAdminUsers,
+		"app_env":                    a.config.AppEnv,
 	})
 }
 
@@ -259,10 +259,10 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, map[string]any{
 		"general": map[string]any{
-			"http_addr":   a.config.HTTPAddr,
-			"app_env":     a.config.AppEnv,
-			"log_level":   a.config.SlogLevel().String(),
-			"log_format":  a.config.LogFormatName(),
+			"http_addr":  a.config.HTTPAddr,
+			"app_env":    a.config.AppEnv,
+			"log_level":  a.config.SlogLevel().String(),
+			"log_format": a.config.LogFormatName(),
 		},
 		"security": map[string]any{
 			"allowed_origins":       a.config.AllowedOrigins,
@@ -270,9 +270,9 @@ func (a *API) handleRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
 			"encryption_configured": a.config.EncryptionKey != "",
 		},
 		"scheduler": map[string]any{
-			"poll_interval":            a.config.SchedulerPollInterval.String(),
-			"metrics_sync_interval":    a.config.SchedulerMetricsSyncInterval.String(),
-			"workers":                  a.config.SchedulerWorkers,
+			"poll_interval":         a.config.SchedulerPollInterval.String(),
+			"metrics_sync_interval": a.config.SchedulerMetricsSyncInterval.String(),
+			"workers":               a.config.SchedulerWorkers,
 		},
 		"oidc": map[string]any{
 			"enabled":    a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
@@ -507,7 +507,7 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	connectedAccount, err := providerImpl.ConnectAccount(r.Context(), input, providerInstance)
+	connectedAccount, err := providerImpl.ConnectAccount(a.providerContext(r.Context()), input, providerInstance)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -921,7 +921,13 @@ func (a *API) prepareProviderInstance(r *http.Request, input domain.CreateProvid
 	if !ok {
 		return domain.PreparedProviderInstance{}, errors.New("unsupported provider")
 	}
-	return providerImpl.PrepareProviderInstance(r.Context(), input)
+	return providerImpl.PrepareProviderInstance(a.providerContext(r.Context()), input)
+}
+
+func (a *API) providerContext(ctx context.Context) context.Context {
+	return provider.WithOutboundInstancePolicy(ctx, provider.OutboundPolicy{
+		AllowPrivateLAN: a.config.AllowPrivateProviderInstanceURLs,
+	})
 }
 
 func sliceOrEmpty[T any](items []T) []T {
