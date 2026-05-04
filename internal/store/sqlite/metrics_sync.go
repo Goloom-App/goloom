@@ -91,6 +91,7 @@ func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string,
 	defer tx.Rollback()
 
 	now := nowString()
+	utcDay := time.Now().UTC().Format("2006-01-02")
 	for name, val := range metrics {
 		name = strings.TrimSpace(name)
 		if name == "" {
@@ -103,6 +104,16 @@ func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string,
 				value = excluded.value,
 				updated_at = excluded.updated_at`,
 			postID, accountID, name, val, now,
+		)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `
+			insert into post_metrics_history (post_id, account_id, metric, value, recorded_at)
+			values (?, ?, ?, ?, ?)
+			on conflict(post_id, account_id, metric, recorded_at) do update set
+				value = excluded.value`,
+			postID, accountID, name, val, utcDay,
 		)
 		if err != nil {
 			return err

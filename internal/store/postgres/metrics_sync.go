@@ -70,23 +70,38 @@ func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string,
 	if len(metrics) == 0 {
 		return nil
 	}
+	utcDay := time.Now().UTC().Format("2006-01-02")
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
 	for name, val := range metrics {
 		name = strings.TrimSpace(name)
 		if name == "" {
 			continue
 		}
-		_, err := s.pool.Exec(ctx, `
+		if _, err := tx.Exec(ctx, `
 			insert into post_metrics (post_id, account_id, metric, value, updated_at)
 			values ($1, $2, $3, $4, now())
 			on conflict (post_id, account_id, metric) do update
 			set value = excluded.value, updated_at = excluded.updated_at`,
 			postID, accountID, name, val,
-		)
-		if err != nil {
+		); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			insert into post_metrics_history (post_id, account_id, metric, value, recorded_at)
+			values ($1, $2, $3, $4, $5::date)
+			on conflict (post_id, account_id, metric, recorded_at) do update
+			set value = excluded.value`,
+			postID, accountID, name, val, utcDay,
+		); err != nil {
 			return err
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (s *Store) MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID, accountID, utcDay string) error {
