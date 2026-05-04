@@ -236,12 +236,20 @@ func (m *mockStore) LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []s
 	return map[string]map[string]string{}, nil
 }
 
-func (m *mockStore) ListPostedTargetsForMetricSync(ctx context.Context, notBefore time.Time, limit int) ([]domain.PostedTargetForMetricSync, error) {
+func (m *mockStore) ListPostedTargetsForMetricSync(_ context.Context, _ time.Time, _ string, _ int) ([]domain.PostedTargetForMetricSync, error) {
 	return nil, nil
 }
 
 func (m *mockStore) UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error {
 	return nil
+}
+
+func (m *mockStore) MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID, accountID, utcDay string) error {
+	return nil
+}
+
+func (m *mockStore) ListOAuthAccountsWithAccessTokenExpiringBefore(ctx context.Context, before time.Time, limit int) ([]domain.AccountOAuthTokenExpiry, error) {
+	return nil, nil
 }
 
 func (m *mockStore) GetTeamAnalytics(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsSummary, error) {
@@ -374,11 +382,11 @@ func TestNew_workersDefault(t *testing.T) {
 	t.Parallel()
 	st := &mockStore{}
 	reg := provider.NewRegistry()
-	svc := New(testLogger(), st, reg, time.Minute, 0, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 0, 0, 0)
 	if svc.workers != 1 {
 		t.Fatalf("workers want 1, got %d", svc.workers)
 	}
-	svcNeg := New(testLogger(), st, reg, time.Minute, -3, 0)
+	svcNeg := New(testLogger(), st, reg, time.Minute, -3, 0, 0)
 	if svcNeg.workers != 1 {
 		t.Fatalf("negative workers want 1, got %d", svcNeg.workers)
 	}
@@ -391,7 +399,7 @@ func TestService_enqueueDuePosts_listsMarksAndEnqueues(t *testing.T) {
 			{ID: "p2", Content: "c2"},
 		},
 	}
-	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 2, 0)
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 2, 0, 0)
 	ctx := context.Background()
 	q := make(chan domain.ScheduledPost, 4)
 	if err := svc.enqueueDuePosts(ctx, q); err != nil {
@@ -410,7 +418,7 @@ func TestService_enqueueDuePosts_listsMarksAndEnqueues(t *testing.T) {
 func TestService_enqueueDuePosts_listError(t *testing.T) {
 	want := context.Canceled
 	st := &mockStore{listDueErr: want}
-	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0)
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
 	q := make(chan domain.ScheduledPost, 1)
 	err := svc.enqueueDuePosts(context.Background(), q)
 	if err != want {
@@ -428,7 +436,7 @@ func TestService_enqueueDuePosts_markProcessingError_skipsPost(t *testing.T) {
 			return nil
 		},
 	}
-	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0)
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
 	q := make(chan domain.ScheduledPost, 4)
 	if err := svc.enqueueDuePosts(context.Background(), q); err != nil {
 		t.Fatal(err)
@@ -451,7 +459,7 @@ func (errMarkFail) Error() string { return "mark failed" }
 func TestService_processPost_noTargets_marksPosted(t *testing.T) {
 	reg := provider.NewRegistry(&fakeProvider{name: "mastodon"})
 	st := &mockStore{loadTargets: nil}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "solo", Content: "x", AttemptCount: 0})
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -472,7 +480,7 @@ func TestService_processPost_firstTargetFailsSecondSucceeds(t *testing.T) {
 			{ID: "good", Provider: "ok"},
 		},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", Content: "c", AttemptCount: 0})
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -492,7 +500,7 @@ func TestService_processPost_success(t *testing.T) {
 			{ID: "a1", Provider: "mastodon"},
 		},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	post := domain.ScheduledPost{ID: "post1", TeamID: "team1", Content: "hi", AttemptCount: 0}
 	svc.processPost(context.Background(), post)
 
@@ -522,7 +530,7 @@ func TestService_processPost_appliesPostVersionPerAccount(t *testing.T) {
 			{PostID: "post1", AccountID: "a1", Content: "only a1"},
 		},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	post := domain.ScheduledPost{ID: "post1", TeamID: "t1", Content: "default", AttemptCount: 0}
 	svc.processPost(context.Background(), post)
 
@@ -550,7 +558,7 @@ func TestService_processPost_listVersionsError_schedulesRetry(t *testing.T) {
 		loadTargets:                    []domain.SocialAccount{{ID: "a1", Provider: "mastodon"}},
 		listPostVersionsForTeamPostErr: errListVersions{},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", TeamID: "t1", Content: "c", AttemptCount: 0})
 
 	st.mu.Lock()
@@ -568,7 +576,7 @@ func TestService_processPost_unsupportedProvider(t *testing.T) {
 	st := &mockStore{
 		loadTargets: []domain.SocialAccount{{ID: "a1", Provider: "unknown"}},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", AttemptCount: 0})
 
 	st.mu.Lock()
@@ -590,7 +598,7 @@ func TestService_processPost_decryptAccessError(t *testing.T) {
 			return "", errDecrypt{}
 		},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", AttemptCount: 0})
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -612,7 +620,7 @@ func TestService_processPost_decryptRefreshError(t *testing.T) {
 			return "", errDecrypt{}
 		},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", AttemptCount: 0})
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -627,7 +635,7 @@ func TestService_processPost_publishError(t *testing.T) {
 	st := &mockStore{
 		loadTargets: []domain.SocialAccount{{ID: "a1", Provider: "mastodon"}},
 	}
-	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", AttemptCount: 0})
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -642,7 +650,7 @@ func (errPub) Error() string { return "publish failed" }
 
 func TestService_processPost_loadTargetsError(t *testing.T) {
 	st := &mockStore{loadTargetsErr: errLoad{}}
-	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0)
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", AttemptCount: 0})
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -657,7 +665,7 @@ func (errLoad) Error() string { return "load" }
 
 func TestService_failPost_finalFailureNoNextAttempt(t *testing.T) {
 	st := &mockStore{}
-	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0)
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
 	post := domain.ScheduledPost{ID: "p1", AttemptCount: 4} // +1 => 5
 	svc.failPost(context.Background(), post, errPub{})
 
@@ -674,7 +682,7 @@ func TestService_failPost_finalFailureNoNextAttempt(t *testing.T) {
 
 func TestService_failPost_retrySchedulesNextAttempt(t *testing.T) {
 	st := &mockStore{}
-	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0)
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
 	post := domain.ScheduledPost{ID: "p1", AttemptCount: 1} // next attempt count 2
 	before := time.Now()
 	svc.failPost(context.Background(), post, errPub{})
@@ -698,7 +706,7 @@ func TestService_failPost_retrySchedulesNextAttempt(t *testing.T) {
 
 func TestService_Start_stopsOnContextCancel(t *testing.T) {
 	st := &mockStore{listDuePosts: nil}
-	svc := New(testLogger(), st, provider.NewRegistry(), 20*time.Millisecond, 1, 0)
+	svc := New(testLogger(), st, provider.NewRegistry(), 20*time.Millisecond, 1, 0, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {

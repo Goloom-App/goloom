@@ -23,6 +23,7 @@ type Config struct {
 	RateLimitPerMinute               int
 	SchedulerPollInterval            time.Duration
 	SchedulerMetricsSyncInterval     time.Duration
+	SchedulerAccountHealthInterval   time.Duration
 	SchedulerWorkers                 int
 
 	// LogLevel: debug, info, warn, error — empty means derive from AppEnv (development=debug, production=info).
@@ -59,6 +60,7 @@ func Load() (Config, error) {
 		RateLimitPerMinute:               getInt("RATE_LIMIT_PER_MINUTE", 60),
 		SchedulerPollInterval:            getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
 		SchedulerMetricsSyncInterval:     getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", time.Hour),
+		SchedulerAccountHealthInterval:   getDuration("SCHEDULER_ACCOUNT_HEALTH_INTERVAL", time.Hour),
 		SchedulerWorkers:                 getInt("SCHEDULER_WORKERS", 4),
 		LogLevel:                         strings.TrimSpace(getEnv("LOG_LEVEL", "")),
 		LogFormat:                        strings.TrimSpace(getEnv("LOG_FORMAT", "")),

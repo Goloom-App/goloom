@@ -15,25 +15,27 @@ import (
 )
 
 type Service struct {
-	logger             *slog.Logger
-	store              store.Store
-	providers          *provider.Registry
-	pollInterval       time.Duration
-	metricSyncInterval time.Duration
-	workers            int
+	logger                *slog.Logger
+	store                 store.Store
+	providers             *provider.Registry
+	pollInterval          time.Duration
+	metricSyncInterval    time.Duration
+	accountHealthInterval time.Duration
+	workers               int
 }
 
-func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration) *Service {
+func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration) *Service {
 	if workers <= 0 {
 		workers = 1
 	}
 	return &Service{
-		logger:             logger,
-		store:              store,
-		providers:          providers,
-		pollInterval:       pollInterval,
-		metricSyncInterval: metricSyncInterval,
-		workers:            workers,
+		logger:                logger,
+		store:                 store,
+		providers:             providers,
+		pollInterval:          pollInterval,
+		metricSyncInterval:    metricSyncInterval,
+		accountHealthInterval: accountHealthInterval,
+		workers:               workers,
 	}
 }
 
@@ -64,6 +66,14 @@ func (s *Service) Start(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			s.runMetricSyncLoop(ctx)
+		}()
+	}
+
+	if s.accountHealthInterval > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.runAccountHealthLoop(ctx)
 		}()
 	}
 
@@ -208,7 +218,7 @@ func (s *Service) runMetricSyncLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.metricSyncInterval)
 	defer ticker.Stop()
 	for {
-		s.syncPostedMetrics(ctx)
+		s.fetchMetricsJob(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -217,9 +227,57 @@ func (s *Service) runMetricSyncLoop(ctx context.Context) {
 	}
 }
 
-func (s *Service) syncPostedMetrics(ctx context.Context) {
+// runAccountHealthLoop periodically logs OAuth accounts whose access token expiry is in the past
+// or within the next 48 hours (re-auth / refresh needed).
+func (s *Service) runAccountHealthLoop(ctx context.Context) {
+	ticker := time.NewTicker(s.accountHealthInterval)
+	defer ticker.Stop()
+	for {
+		s.accountHealthJob(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Service) accountHealthJob(ctx context.Context) {
+	horizon := time.Now().UTC().Add(48 * time.Hour)
+	accounts, err := s.store.ListOAuthAccountsWithAccessTokenExpiringBefore(ctx, horizon, 500)
+	if err != nil {
+		s.logger.Error("account health list failed", "error", err)
+		return
+	}
+	now := time.Now().UTC()
+	for _, a := range accounts {
+		exp := a.AccessTokenExpiresAt.UTC()
+		if exp.Before(now) {
+			s.logger.Warn("oauth access token expired",
+				"account_id", a.ID,
+				"team_id", a.TeamID,
+				"provider", a.Provider,
+				"username", a.Username,
+				"access_token_expires_at", exp.Format(time.RFC3339),
+			)
+			continue
+		}
+		s.logger.Info("oauth access token expiring soon",
+			"account_id", a.ID,
+			"team_id", a.TeamID,
+			"provider", a.Provider,
+			"username", a.Username,
+			"access_token_expires_at", exp.Format(time.RFC3339),
+			"hours_remaining", time.Until(exp).Hours(),
+		)
+	}
+}
+
+// fetchMetricsJob pulls provider metrics for posted targets at most once per UTC calendar day per target.
+func (s *Service) fetchMetricsJob(ctx context.Context) {
 	since := time.Now().Add(-30 * 24 * time.Hour)
-	rows, err := s.store.ListPostedTargetsForMetricSync(ctx, since, 500)
+	utcDay := time.Now().UTC().Format("2006-01-02")
+	rows, err := s.store.ListPostedTargetsForMetricSync(ctx, since, utcDay, 500)
 	if err != nil {
 		s.logger.Error("metric sync list failed", "error", err)
 		return
@@ -257,6 +315,10 @@ func (s *Service) syncPostedMetrics(ctx context.Context) {
 		}
 		if err := s.store.UpsertPostMetrics(ctx, row.PostID, row.Account.ID, m); err != nil {
 			s.logger.Warn("metric sync upsert failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
+			continue
+		}
+		if err := s.store.MarkScheduledPostTargetMetricsSynced(ctx, row.PostID, row.Account.ID, utcDay); err != nil {
+			s.logger.Warn("metric sync mark daily cursor failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
 		}
 	}
 }
