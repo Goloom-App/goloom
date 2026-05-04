@@ -22,10 +22,14 @@ type mockStore struct {
 	listDuePosts   []domain.ScheduledPost
 	listDueErr     error
 
-	markProcessingErr error
-	markProcessingFn func(postID string) error
+	listPostVersionsForTeamPostFn  func(ctx context.Context, teamID, postID string) ([]domain.PostVersion, error)
+	listPostVersionsForTeamPost    []domain.PostVersion
+	listPostVersionsForTeamPostErr error
 
-	loadTargets   []domain.SocialAccount
+	markProcessingErr error
+	markProcessingFn  func(postID string) error
+
+	loadTargets    []domain.SocialAccount
 	loadTargetsErr error
 
 	decryptAccessFn  func(account domain.SocialAccount) (string, error)
@@ -249,14 +253,24 @@ func (m *mockStore) ListPostMetricsForTeamPost(ctx context.Context, teamID, post
 }
 
 func (m *mockStore) ListPostVersionsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostVersion, error) {
-	return nil, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.listPostVersionsForTeamPostFn != nil {
+		return m.listPostVersionsForTeamPostFn(ctx, teamID, postID)
+	}
+	if m.listPostVersionsForTeamPostErr != nil {
+		return nil, m.listPostVersionsForTeamPostErr
+	}
+	return m.listPostVersionsForTeamPost, nil
 }
 
 func (m *mockStore) ApplyPostVersionsPatch(ctx context.Context, teamID, postID string, versions []domain.PostVersion) error {
 	return nil
 }
 
-func (m *mockStore) EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error { return nil }
+func (m *mockStore) EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error {
+	return nil
+}
 
 func (m *mockStore) EnsurePersonalTeam(ctx context.Context, userID string) (domain.Team, error) {
 	return domain.Team{}, nil
@@ -316,6 +330,8 @@ type fakeProvider struct {
 	name       string
 	publishRes provider.PublishResult
 	publishErr error
+	pubMu      sync.Mutex
+	published  []provider.PublishRequest
 }
 
 func (f *fakeProvider) Name() string { return f.name }
@@ -337,6 +353,9 @@ func (f *fakeProvider) UploadMedia(ctx context.Context, account domain.SocialAcc
 }
 
 func (f *fakeProvider) Publish(ctx context.Context, account domain.SocialAccount, auth provider.PublishAuth, req provider.PublishRequest) (provider.PublishResult, error) {
+	f.pubMu.Lock()
+	f.published = append(f.published, req)
+	f.pubMu.Unlock()
 	if f.publishErr != nil {
 		return provider.PublishResult{}, f.publishErr
 	}
@@ -474,7 +493,7 @@ func TestService_processPost_success(t *testing.T) {
 		},
 	}
 	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
-	post := domain.ScheduledPost{ID: "post1", Content: "hi", AttemptCount: 0}
+	post := domain.ScheduledPost{ID: "post1", TeamID: "team1", Content: "hi", AttemptCount: 0}
 	svc.processPost(context.Background(), post)
 
 	st.mu.Lock()
@@ -488,6 +507,59 @@ func TestService_processPost_success(t *testing.T) {
 	last := st.markPostCalls[len(st.markPostCalls)-1]
 	if last.status != domain.PostStatusPosted || last.attemptCount != 1 || last.nextAttempt != nil {
 		t.Fatalf("unexpected mark post: %#v", last)
+	}
+}
+
+func TestService_processPost_appliesPostVersionPerAccount(t *testing.T) {
+	fp := &fakeProvider{name: "mastodon", publishRes: provider.PublishResult{URL: "https://ex/u", RemoteID: "1"}}
+	reg := provider.NewRegistry(fp)
+	st := &mockStore{
+		loadTargets: []domain.SocialAccount{
+			{ID: "a1", Provider: "mastodon"},
+			{ID: "a2", Provider: "mastodon"},
+		},
+		listPostVersionsForTeamPost: []domain.PostVersion{
+			{PostID: "post1", AccountID: "a1", Content: "only a1"},
+		},
+	}
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	post := domain.ScheduledPost{ID: "post1", TeamID: "t1", Content: "default", AttemptCount: 0}
+	svc.processPost(context.Background(), post)
+
+	fp.pubMu.Lock()
+	defer fp.pubMu.Unlock()
+	if len(fp.published) != 2 {
+		t.Fatalf("want 2 publishes, got %d", len(fp.published))
+	}
+	if fp.published[0].Content != "only a1" {
+		t.Fatalf("a1 content: %q", fp.published[0].Content)
+	}
+	if fp.published[1].Content != "default" {
+		t.Fatalf("a2 content: %q", fp.published[1].Content)
+	}
+}
+
+type errListVersions struct{}
+
+func (errListVersions) Error() string { return "list versions failed" }
+
+func TestService_processPost_listVersionsError_schedulesRetry(t *testing.T) {
+	fp := &fakeProvider{name: "mastodon", publishRes: provider.PublishResult{URL: "x", RemoteID: "1"}}
+	reg := provider.NewRegistry(fp)
+	st := &mockStore{
+		loadTargets:                    []domain.SocialAccount{{ID: "a1", Provider: "mastodon"}},
+		listPostVersionsForTeamPostErr: errListVersions{},
+	}
+	svc := New(testLogger(), st, reg, time.Minute, 1, 0)
+	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", TeamID: "t1", Content: "c", AttemptCount: 0})
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if len(st.markTargetCalls) != 0 {
+		t.Fatalf("expected no target marks, got %#v", st.markTargetCalls)
+	}
+	if len(st.markPostCalls) != 1 || st.markPostCalls[0].nextAttempt == nil {
+		t.Fatalf("expected retry mark post, got %#v", st.markPostCalls)
 	}
 }
 

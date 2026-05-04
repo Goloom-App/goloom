@@ -15,12 +15,12 @@ import (
 )
 
 type Service struct {
-	logger               *slog.Logger
-	store                store.Store
-	providers            *provider.Registry
-	pollInterval         time.Duration
-	metricSyncInterval   time.Duration
-	workers              int
+	logger             *slog.Logger
+	store              store.Store
+	providers          *provider.Registry
+	pollInterval       time.Duration
+	metricSyncInterval time.Duration
+	workers            int
 }
 
 func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration) *Service {
@@ -108,6 +108,23 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		return
 	}
 
+	var versionContentByAccount map[string]string
+	if len(accounts) > 0 {
+		vers, err := s.store.ListPostVersionsForTeamPost(ctx, post.TeamID, post.ID)
+		if err != nil {
+			s.failPost(ctx, post, fmt.Errorf("list post versions: %w", err))
+			return
+		}
+		for _, v := range vers {
+			if c := strings.TrimSpace(v.Content); c != "" {
+				if versionContentByAccount == nil {
+					versionContentByAccount = make(map[string]string)
+				}
+				versionContentByAccount[v.AccountID] = c
+			}
+		}
+	}
+
 	var firstErr error
 	for _, account := range accounts {
 		providerImpl, ok := s.providers.Get(account.Provider)
@@ -148,11 +165,18 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			continue
 		}
 
+		content := post.Content
+		if versionContentByAccount != nil {
+			if o, ok := versionContentByAccount[account.ID]; ok {
+				content = o
+			}
+		}
+
 		result, err := providerImpl.Publish(ctx, account, provider.PublishAuth{
 			AccessToken:  token,
 			RefreshToken: refreshToken,
 		}, provider.PublishRequest{
-			Content:     post.Content,
+			Content:     content,
 			MediaIDs:    post.MediaIDs,
 			Visibility:  post.Visibility,
 			ScheduledAt: nil,
