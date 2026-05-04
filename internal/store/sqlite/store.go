@@ -78,7 +78,7 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 	}
 	defer tx.Rollback()
 
-	const subject = "local-admin"
+	const subject = domain.BootstrapAdminSubject
 	userID := uuid.NewString()
 	now := nowString()
 	_, err = tx.ExecContext(ctx, `
@@ -146,12 +146,11 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 		return domain.User{}, err
 	}
 
-	var isFirst bool
-	var count int
-	if err := tx.QueryRowContext(ctx, `select count(*) from users`).Scan(&count); err != nil {
+	var nonBootstrap int
+	if err := tx.QueryRowContext(ctx, `select count(*) from users where subject != ?`, domain.BootstrapAdminSubject).Scan(&nonBootstrap); err != nil {
 		return domain.User{}, err
 	}
-	isFirst = count == 0
+	isFirst := nonBootstrap == 0
 
 	now := nowString()
 	user := domain.User{

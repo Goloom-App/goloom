@@ -49,7 +49,7 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 	}
 	defer tx.Rollback(ctx)
 
-	const subject = "local-admin"
+	const subject = domain.BootstrapAdminSubject
 	var userID string
 	err = tx.QueryRow(ctx, `
 		insert into users (subject, email, name, is_admin)
@@ -82,12 +82,12 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 
 func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {
 	const query = `
-		with first_user as (
-			select count(*) = 0 as is_first from users
+		with first_oidc_admin as (
+			select (count(*) filter (where subject <> $4::text) = 0) as grant_admin from users
 		)
 		insert into users (subject, email, name, is_admin)
-		select $1, $2, $3, is_first
-		from first_user
+		select $1, $2, $3, grant_admin
+		from first_oidc_admin
 		on conflict (subject) do update
 		set email = excluded.email,
 		    name = excluded.name,
@@ -96,7 +96,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 	`
 
 	var user domain.User
-	err := s.pool.QueryRow(ctx, query, subject, email, name).Scan(
+	err := s.pool.QueryRow(ctx, query, subject, email, name, domain.BootstrapAdminSubject).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Name,

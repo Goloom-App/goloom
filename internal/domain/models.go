@@ -11,6 +11,9 @@ var ErrProviderInstanceInUse = errors.New("provider instance still has connected
 // ErrProviderInstanceNotFound is returned when deleting a provider instance that does not exist.
 var ErrProviderInstanceNotFound = errors.New("provider instance not found")
 
+// BootstrapAdminSubject is the fixed users.subject for the bootstrap / API-token administrator.
+const BootstrapAdminSubject = "local-admin"
+
 type TeamRole string
 
 const (
