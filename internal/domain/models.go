@@ -198,6 +198,34 @@ type TeamAnalyticsSummary struct {
 	TopPosts     []PostEngagementSummary `json:"top_posts"`
 }
 
+// TeamMetricDelta combines live post_metrics totals with day-over-day change from post_metrics_history.
+type TeamMetricDelta struct {
+	Metric         string   `json:"metric"`
+	Total          int64    `json:"total"`
+	DeltaVsPrevDay int64    `json:"delta_vs_prev_day"`
+	DeltaPercent   *float64 `json:"delta_percent,omitempty"`
+}
+
+// TeamAnalyticsReport is returned by GET /v1/teams/{teamID}/analytics/summary.
+type TeamAnalyticsReport struct {
+	Metrics  []TeamMetricDelta       `json:"metrics"`
+	TopPosts []PostEngagementSummary `json:"top_posts"`
+}
+
+// PostAnalyticsListRow is one posted row for GET /v1/teams/{teamID}/analytics/posts.
+type PostAnalyticsListRow struct {
+	PostID      string    `json:"post_id"`
+	Title       string    `json:"title"`
+	ScheduledAt time.Time `json:"scheduled_at"`
+	Score       int64     `json:"score"`
+}
+
+// MetricHistoryPoint is one day in GET /v1/teams/{teamID}/analytics/chart time series.
+type MetricHistoryPoint struct {
+	Date  string `json:"date"`
+	Value int64  `json:"value"`
+}
+
 type APIToken struct {
 	ID         string     `json:"id"`
 	UserID     string     `json:"user_id"`

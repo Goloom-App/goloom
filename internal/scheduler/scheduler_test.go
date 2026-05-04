@@ -256,6 +256,18 @@ func (m *mockStore) GetTeamAnalytics(ctx context.Context, teamID string, topPost
 	return domain.TeamAnalyticsSummary{MetricsTotal: map[string]int64{}, TopPosts: nil}, nil
 }
 
+func (m *mockStore) GetTeamAnalyticsReport(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsReport, error) {
+	return domain.TeamAnalyticsReport{}, nil
+}
+
+func (m *mockStore) ListTeamPostAnalyticsRanking(ctx context.Context, teamID string, sort string, limit, offset int) ([]domain.PostAnalyticsListRow, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetTeamMetricHistorySeries(ctx context.Context, teamID, metric string, days int) ([]domain.MetricHistoryPoint, error) {
+	return nil, nil
+}
+
 func (m *mockStore) ListPostMetricsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostMetric, error) {
 	return nil, nil
 }

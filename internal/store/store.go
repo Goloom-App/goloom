@@ -67,6 +67,9 @@ type Store interface {
 	MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID, accountID, utcDay string) error
 	ListOAuthAccountsWithAccessTokenExpiringBefore(ctx context.Context, before time.Time, limit int) ([]domain.AccountOAuthTokenExpiry, error)
 	GetTeamAnalytics(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsSummary, error)
+	GetTeamAnalyticsReport(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsReport, error)
+	ListTeamPostAnalyticsRanking(ctx context.Context, teamID string, sort string, limit, offset int) ([]domain.PostAnalyticsListRow, error)
+	GetTeamMetricHistorySeries(ctx context.Context, teamID, metric string, days int) ([]domain.MetricHistoryPoint, error)
 	ListPostMetricsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostMetric, error)
 	ListPostVersionsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostVersion, error)
 	ApplyPostVersionsPatch(ctx context.Context, teamID, postID string, versions []domain.PostVersion) error
