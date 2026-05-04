@@ -39,10 +39,10 @@ The goal is to transform Goloom from a basic social media scheduler into a robus
 ## Phase 3: Automation & Background Services
 *Goal: Implement reliable background jobs for account health and metric synchronization.*
 
-- [ ] **Account Health Monitoring**
+- [x] **Account Health Monitoring**
     - Implement `AccountHealthJob` to flag expired tokens.
     - [Reference: docs/plan-feature-implementation.md (Section 1.4)](docs/plan-feature-implementation.md)
-- [ ] **Metric Synchronization**
+- [x] **Metric Synchronization**
     - Implement `FetchMetricsJob` with daily snapshot logic.
     - [Reference: docs/analytics-parameters.md](docs/analytics-parameters.md)
     - [Reference: docs/plan-analytics-implementation.md](docs/plan-analytics-implementation.md)

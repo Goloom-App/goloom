@@ -437,3 +437,68 @@ func TestSQLite_AnalyticsAndPostVersions(t *testing.T) {
 		t.Fatalf("after clear: %#v %v", vers2, err)
 	}
 }
+
+func TestSQLite_ListPostedTargetsForMetricSync_respectsDailyCursor(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "mcur", "mcur@x", "Mcur")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "mcur-" + uuid.NewString(), Description: ""})
+	acc, _ := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://x", Username: "x", AccessToken: "t",
+	})
+	principal := domain.AuthenticatedPrincipal{User: u}
+	post, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+		Content: "c", ScheduledAt: time.Now().UTC(), TargetAccounts: []string{acc.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://example.com/1", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	day := time.Now().UTC().Format("2006-01-02")
+	since := time.Now().Add(-48 * time.Hour)
+	rows, err := s.ListPostedTargetsForMetricSync(ctx, since, day, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("want 1 row before cursor, got %d", len(rows))
+	}
+	if err := s.MarkScheduledPostTargetMetricsSynced(ctx, post.ID, acc.ID, day); err != nil {
+		t.Fatal(err)
+	}
+	rows2, err := s.ListPostedTargetsForMetricSync(ctx, since, day, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows2) != 0 {
+		t.Fatalf("want 0 rows same UTC day after cursor, got %d", len(rows2))
+	}
+}
+
+func TestSQLite_ListOAuthAccountsWithAccessTokenExpiringBefore(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "tokh", "tokh@x", "Tokh")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "tokh-" + uuid.NewString(), Description: ""})
+	exp := time.Now().UTC().Add(-time.Hour)
+	if _, err := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://x", Username: "x", AccessToken: "t",
+		AccessTokenExpiresAt: &exp,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := s.ListOAuthAccountsWithAccessTokenExpiringBefore(ctx, time.Now().UTC().Add(24*time.Hour), 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != 1 {
+		t.Fatalf("want 1 expiring account, got %d", len(out))
+	}
+}
