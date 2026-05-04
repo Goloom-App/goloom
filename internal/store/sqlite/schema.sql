@@ -80,6 +80,7 @@ create table if not exists social_accounts (
     access_token_ciphertext text not null,
     refresh_token_ciphertext text not null default '',
     max_chars_override integer,
+    access_token_expires_at text,
     created_at text not null
 );
 
@@ -93,6 +94,8 @@ create table if not exists scheduled_posts (
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
     attempt_count integer not null default 0,
     last_error text,
+    visibility text not null default 'public',
+    media_ids text not null default '[]',
     created_at text not null,
     updated_at text not null
 );
@@ -103,6 +106,7 @@ create table if not exists scheduled_post_targets (
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
     published_url text,
     last_error text,
+    publish_metadata text not null default '{}',
     primary key (post_id, account_id)
 );
 

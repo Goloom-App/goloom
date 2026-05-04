@@ -193,3 +193,10 @@ create table if not exists post_versions (
     content text not null default '',
     primary key (post_id, account_id)
 );
+
+alter table social_accounts add column if not exists access_token_expires_at timestamptz;
+
+alter table scheduled_posts add column if not exists visibility text not null default 'public';
+alter table scheduled_posts add column if not exists media_ids text not null default '[]';
+
+alter table scheduled_post_targets add column if not exists publish_metadata text not null default '{}';

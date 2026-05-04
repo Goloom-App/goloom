@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -38,6 +39,37 @@ const (
 	PostStatusFailed     PostStatus = "failed"
 	PostStatusCancelled  PostStatus = "cancelled"
 )
+
+// Post visibility values aligned with Mastodon API.
+const (
+	PostVisibilityPublic   = "public"
+	PostVisibilityUnlisted = "unlisted"
+	PostVisibilityPrivate  = "private"
+	PostVisibilityDirect   = "direct"
+)
+
+// NormalizePostVisibility returns a supported visibility or public.
+func NormalizePostVisibility(v string) string {
+	n := strings.ToLower(strings.TrimSpace(v))
+	switch n {
+	case PostVisibilityPublic, PostVisibilityUnlisted, PostVisibilityPrivate, PostVisibilityDirect:
+		return n
+	default:
+		return PostVisibilityPublic
+	}
+}
+
+// NormalizeMediaIDs trims and drops empty platform media IDs.
+func NormalizeMediaIDs(ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
+}
 
 type User struct {
 	ID        string    `json:"id"`
@@ -100,6 +132,7 @@ type SocialAccount struct {
 	AccessTokenCiphertext  string          `json:"-"`
 	RefreshTokenCiphertext string          `json:"-"`
 	MaxCharsOverride       *int            `json:"max_chars_override,omitempty"`
+	AccessTokenExpiresAt   *time.Time      `json:"access_token_expires_at,omitempty"`
 	CreatedAt              time.Time       `json:"created_at"`
 }
 
@@ -117,6 +150,8 @@ type ScheduledPost struct {
 	UpdatedAt      time.Time         `json:"updated_at"`
 	TargetAccounts []string          `json:"target_accounts"`
 	PublishedLinks map[string]string `json:"published_links,omitempty"`
+	Visibility     string            `json:"visibility,omitempty"`
+	MediaIDs       []string          `json:"media_ids,omitempty"`
 }
 
 type ScheduledPostTarget struct {
@@ -200,6 +235,7 @@ type ConnectedAccount struct {
 	AvatarURL          string
 	AccessToken        string
 	RefreshToken       string
+	AccessTokenExpiresAt *time.Time
 }
 
 type ProviderInstance struct {
@@ -271,6 +307,8 @@ type CreatePostInput struct {
 	Content        string    `json:"content"`
 	ScheduledAt    time.Time `json:"scheduled_at"`
 	TargetAccounts []string  `json:"target_accounts"`
+	Visibility     string    `json:"visibility,omitempty"`
+	MediaIDs       []string  `json:"media_ids,omitempty"`
 }
 
 func (in CreatePostInput) Validate() error {

@@ -20,6 +20,10 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table teams add column is_personal integer not null default 0`,
 		`alter table teams add column personal_for_user_id text references users(id) on delete cascade`,
 		`alter table social_accounts add column avatar_url text not null default ''`,
+		`alter table social_accounts add column access_token_expires_at text`,
+		`alter table scheduled_posts add column visibility text not null default 'public'`,
+		`alter table scheduled_posts add column media_ids text not null default '[]'`,
+		`alter table scheduled_post_targets add column publish_metadata text not null default '{}'`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)
@@ -119,7 +123,7 @@ func (s *Store) GetAccountByID(ctx context.Context, accountID string) (domain.So
 	return queryAccount(ctx, s.db, `
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where id = ?`, accountID)
 }
@@ -132,7 +136,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where id in (%s)`, placeholders),
 		args...,
@@ -164,7 +168,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, created_at, updated_at
 		from scheduled_posts
 		where id = ?`, postID)
 	if err != nil {
