@@ -10,6 +10,67 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 )
 
+func (a *API) handleTeamAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
+	top := 10
+	if raw := strings.TrimSpace(r.URL.Query().Get("top_posts")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 100 {
+			top = n
+		}
+	}
+	report, err := a.store.GetTeamAnalyticsReport(r.Context(), r.PathValue("teamID"), top)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, report)
+}
+
+func (a *API) handleTeamAnalyticsPosts(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	offset := 0
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("offset")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
+	items, err := a.store.ListTeamPostAnalyticsRanking(r.Context(), r.PathValue("teamID"), sort, limit, offset)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
+}
+
+func (a *API) handleTeamAnalyticsChart(w http.ResponseWriter, r *http.Request) {
+	metric := strings.TrimSpace(r.URL.Query().Get("metric"))
+	if metric == "" {
+		http.Error(w, "metric query parameter is required", http.StatusBadRequest)
+		return
+	}
+	days := 30
+	if raw := strings.TrimSpace(r.URL.Query().Get("days")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			days = n
+		}
+	}
+	series, err := a.store.GetTeamMetricHistorySeries(r.Context(), r.PathValue("teamID"), metric, days)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{
+		"metric": metric,
+		"days":   days,
+		"series": sliceOrEmpty(series),
+	})
+}
+
 func (a *API) handleTeamAnalytics(w http.ResponseWriter, r *http.Request) {
 	top := 10
 	if raw := strings.TrimSpace(r.URL.Query().Get("top_posts")); raw != "" {

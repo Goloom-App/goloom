@@ -157,6 +157,84 @@ func TestAPI_TeamAnalytics_and_PostAnalytics(t *testing.T) {
 			t.Fatalf("want 401, got %d", rec.Code)
 		}
 	})
+
+	t.Run("analytics summary", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+teamID+"/analytics/summary", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+		}
+		var body struct {
+			Metrics []struct {
+				Metric         string `json:"metric"`
+				Total          int64  `json:"total"`
+				DeltaVsPrevDay int64  `json:"delta_vs_prev_day"`
+			} `json:"metrics"`
+			TopPosts []any `json:"top_posts"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Metrics) < 2 {
+			t.Fatalf("metrics: %#v", body.Metrics)
+		}
+	})
+
+	t.Run("analytics posts", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+teamID+"/analytics/posts?limit=10", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+		}
+		var body struct {
+			Items []struct {
+				PostID string `json:"post_id"`
+				Score  int64  `json:"score"`
+			} `json:"items"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Items) != 1 || body.Items[0].Score != 7 {
+			t.Fatalf("items: %#v", body.Items)
+		}
+	})
+
+	t.Run("analytics chart", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+teamID+"/analytics/chart?metric=likes&days=14", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+		}
+		var body struct {
+			Series []struct {
+				Date  string `json:"date"`
+				Value int64  `json:"value"`
+			} `json:"series"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Series) < 1 {
+			t.Fatalf("series: %#v", body.Series)
+		}
+	})
+
+	t.Run("analytics chart missing metric", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+teamID+"/analytics/chart", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("want 400, got %d", rec.Code)
+		}
+	})
 }
 
 func TestAPI_TeamAnalytics_forbiddenOtherTeam(t *testing.T) {

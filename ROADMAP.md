@@ -50,10 +50,10 @@ The goal is to transform Goloom from a basic social media scheduler into a robus
 ## Phase 4: Analytics Infrastructure & API
 *Goal: Build the data processing layer for performance insights.*
 
-- [ ] **Analytics Snapshot Storage**
+- [x] **Analytics Snapshot Storage**
     - Implement `post_metrics_history` and delta calculation logic.
     - [Reference: docs/plan-analytics-implementation.md](docs/plan-analytics-implementation.md)
-- [ ] **Aggregation API**
+- [x] **Aggregation API**
     - Create endpoints for summary, charts, and post-ranking.
     - [Reference: docs/plan-analytics-implementation.md (Section 2)](docs/plan-analytics-implementation.md)
 
