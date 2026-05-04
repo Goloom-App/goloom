@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -37,7 +40,7 @@ func Run(ctx context.Context) error {
 		"scheduler_workers", cfg.SchedulerWorkers,
 		"rate_limit_per_minute", cfg.RateLimitPerMinute,
 		"oidc_enabled", cfg.OIDCIssuerURL != "" && cfg.OIDCClientID != "",
-		"bootstrap_admin_configured", cfg.BootstrapAdminToken != "",
+		"bootstrap_recovery_configured", cfg.BootstrapEnabled && cfg.BootstrapAdminToken != "",
 	)
 
 	encrypter, err := security.NewEncrypter(cfg.EncryptionKey)
@@ -51,8 +54,29 @@ func Run(ctx context.Context) error {
 	}
 	defer dataStore.Close()
 
-	if cfg.BootstrapAdminToken != "" {
-		if err := dataStore.EnsureBootstrapAdmin(ctx, cfg.BootstrapAdminEmail, cfg.BootstrapAdminName, cfg.BootstrapAdminToken); err != nil {
+	users, err := dataStore.ListUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("list users: %w", err)
+	}
+	bootstrapToken := strings.TrimSpace(cfg.BootstrapAdminToken)
+	if len(users) == 0 {
+		if bootstrapToken == "" {
+			generated, genErr := randomBootstrapToken()
+			if genErr != nil {
+				return fmt.Errorf("bootstrap token: %w", genErr)
+			}
+			bootstrapToken = generated
+			fmt.Fprintln(os.Stdout, "")
+			fmt.Fprintln(os.Stdout, "=== GOLOOM: first administrator sign-in (copy token below) ===")
+			fmt.Fprintln(os.Stdout, bootstrapToken)
+			fmt.Fprintln(os.Stdout, "================================================================")
+			logger.Warn("database has no users: printed one-time bootstrap token to stdout (token value is not written to structured logs)")
+		}
+		if err := dataStore.EnsureBootstrapAdmin(ctx, cfg.BootstrapAdminEmail, cfg.BootstrapAdminName, bootstrapToken); err != nil {
+			return fmt.Errorf("bootstrap admin: %w", err)
+		}
+	} else if bootstrapToken != "" {
+		if err := dataStore.EnsureBootstrapAdmin(ctx, cfg.BootstrapAdminEmail, cfg.BootstrapAdminName, bootstrapToken); err != nil {
 			return fmt.Errorf("bootstrap admin: %w", err)
 		}
 	}
@@ -124,6 +148,14 @@ func Run(ctx context.Context) error {
 		}
 		return err
 	}
+}
+
+func randomBootstrapToken() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "gloom_bootstrap_" + base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func databaseBackend(raw string) string {

@@ -139,10 +139,13 @@ export interface RuntimeConfigRecord {
 
 export interface AuthStatusRecord {
   bootstrapEnabled: boolean
+  bootstrapRecoveryEnabled: boolean
+  initialSetupRequired: boolean
   oidcEnabled: boolean
   oidcOAuthEnabled: boolean
   hasUsers: boolean
   hasAdminUsers: boolean
+  appEnv: string
 }
 
 export interface SystemMetric {

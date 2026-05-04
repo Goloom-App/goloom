@@ -98,13 +98,13 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 		return err
 	}
 
+	if _, err := tx.ExecContext(ctx, `delete from api_tokens where user_id = ? and name = ?`, userID, "Bootstrap admin token"); err != nil {
+		return err
+	}
+
 	_, err = tx.ExecContext(ctx, `
 		insert into api_tokens (id, user_id, name, token_hash, expires_at, created_at)
-		values (?, ?, ?, ?, null, ?)
-		on conflict(token_hash) do update set
-			user_id = excluded.user_id,
-			name = excluded.name,
-			expires_at = null`,
+		values (?, ?, ?, ?, null, ?)`,
 		uuid.NewString(), userID, "Bootstrap admin token", security.HashToken(token), now,
 	)
 	if err != nil {

@@ -35,6 +35,8 @@ type Config struct {
 	BootstrapAdminEmail string
 	BootstrapAdminName  string
 	BootstrapAdminToken string
+	// BootstrapEnabled allows the recovery bootstrap tab when BootstrapAdminToken is set (after first users exist).
+	BootstrapEnabled bool
 
 	MastodonAppName       string
 	MastodonRedirectURI   string
@@ -62,6 +64,7 @@ func Load() (Config, error) {
 		BootstrapAdminEmail:   getEnv("BOOTSTRAP_ADMIN_EMAIL", "admin@localhost"),
 		BootstrapAdminName:    getEnv("BOOTSTRAP_ADMIN_NAME", "Local Administrator"),
 		BootstrapAdminToken:   getEnv("BOOTSTRAP_ADMIN_TOKEN", ""),
+		BootstrapEnabled:      parseBoolEnv("BOOTSTRAP_ENABLED", false),
 		MastodonAppName:       getEnv("MASTODON_APP_NAME", "goloom"),
 		MastodonRedirectURI:   "",
 		MastodonWebsite:       getEnv("MASTODON_WEBSITE", ""),
@@ -136,6 +139,19 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func parseBoolEnv(key string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "1", "true", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func getInt(key string, fallback int) int {

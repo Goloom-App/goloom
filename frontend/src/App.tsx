@@ -190,7 +190,8 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
-    requestAuthStatus(settings.general.apiBaseUrl.trim())
+    const apiOrigin = settings.general.apiBaseUrl.trim() || (typeof window !== 'undefined' ? window.location.origin : '')
+    requestAuthStatus(apiOrigin)
       .then((status) => {
         if (cancelled) {
           return
@@ -198,7 +199,7 @@ function App() {
         const mapped = toAuthStatusRecord(status)
         setAuthStatus(mapped)
         if (!activeConnection.bearerToken.trim()) {
-          setAuthView(mapped.bootstrapEnabled ? 'bootstrap' : 'login')
+          setAuthView(mapped.bootstrapRecoveryEnabled ? 'login' : 'login')
         }
       })
       .catch(() => {
@@ -285,7 +286,7 @@ function App() {
       setAuthSubmitting(true)
       setAuthError(null)
       setStatusMessage(null)
-      const baseUrl = loadStoredSettings().general.apiBaseUrl.trim()
+      const baseUrl = loadStoredSettings().general.apiBaseUrl.trim() || (typeof window !== 'undefined' ? window.location.origin : '')
       try {
         const meResponse = await createApiClient({ baseUrl, token }).me()
         setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
@@ -365,7 +366,7 @@ function App() {
     setStatusMessage(null)
     setAuthSubmitting(true)
     try {
-      const baseUrl = settings.general.apiBaseUrl.trim()
+      const baseUrl = settings.general.apiBaseUrl.trim() || window.location.origin
       const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`
       const { authorization_url: authorizationUrl } = await requestStartOIDCLogin(baseUrl, returnTo)
       window.location.href = authorizationUrl
@@ -1081,10 +1082,8 @@ function App() {
           authTokenDraft={authTokenDraft}
           authError={authError}
           authSubmitting={true}
-          apiBaseUrl={settings.general.apiBaseUrl}
           onViewChange={setAuthView}
           onTokenChange={setAuthTokenDraft}
-          onAPIBaseURLChange={updateAPIBaseURL}
           onSubmit={() => undefined}
           onStartOIDCLogin={() => undefined}
         />
@@ -1101,11 +1100,9 @@ function App() {
           authTokenDraft={authTokenDraft}
           authError={authError}
           authSubmitting={authSubmitting}
-          apiBaseUrl={settings.general.apiBaseUrl}
           onViewChange={setAuthView}
           onTokenChange={setAuthTokenDraft}
-          onAPIBaseURLChange={updateAPIBaseURL}
-          onSubmit={() => void authenticateWithToken(authView)}
+          onSubmit={(mode) => void authenticateWithToken(mode)}
           onStartOIDCLogin={() => void startOIDCLogin()}
         />
       </AuthShell>
@@ -2338,19 +2335,20 @@ function AuthShell({
 }) {
   return (
     <div className="app-shell auth-shell" data-theme={theme}>
-      <section className="auth-card">
-        <div className="auth-card__hero">
-          <div className="nav-rail__brand auth-card__brand" title="goloom">
-            <span>G</span>
+      <div className="auth-screen-center">
+        <section className="auth-card">
+          <div className="auth-card__hero auth-card__hero--compact">
+            <div className="nav-rail__brand auth-card__brand" title="goloom">
+              <span>G</span>
+            </div>
+            <div className="auth-card__copy">
+              <h1>goloom</h1>
+              <p className="hint auth-card__tagline">Social scheduling for teams</p>
+            </div>
           </div>
-          <div className="auth-card__copy">
-            <p className="eyebrow">Single-binary deployment</p>
-            <h1>Welcome to goloom</h1>
-            <p className="hint">The UI and API are served by the same application. Sign in to finish setup and start scheduling posts.</p>
-          </div>
-        </div>
-        {children}
-      </section>
+          {children}
+        </section>
+      </div>
     </div>
   )
 }
@@ -2361,10 +2359,8 @@ function AuthPanel({
   authTokenDraft,
   authError,
   authSubmitting,
-  apiBaseUrl,
   onViewChange,
   onTokenChange,
-  onAPIBaseURLChange,
   onSubmit,
   onStartOIDCLogin,
 }: {
@@ -2373,120 +2369,122 @@ function AuthPanel({
   authTokenDraft: string
   authError: string | null
   authSubmitting: boolean
-  apiBaseUrl: string
   onViewChange: (view: 'bootstrap' | 'login') => void
   onTokenChange: (value: string) => void
-  onAPIBaseURLChange: (value: string) => void
-  onSubmit: () => void
+  onSubmit: (mode: 'bootstrap' | 'login') => void
   onStartOIDCLogin: () => void
 }) {
+  const initial = Boolean(authStatus?.initialSetupRequired)
+  const recovery = Boolean(authStatus?.bootstrapRecoveryEnabled && !initial)
   const isBootstrap = view === 'bootstrap'
-  const title = isBootstrap ? 'Bootstrap onboarding' : 'Sign in'
-  const description = isBootstrap
-    ? 'Use the bootstrap admin token configured on the server for the first administrator session.'
-    : authStatus?.oidcOAuthEnabled
-      ? 'Sign in with OpenID Connect, or use an API token in the field below.'
-      : 'Enter a bearer token to open the embedded dashboard.'
+  const showDevHints = authStatus?.appEnv !== 'production'
+
+  if (!authStatus && !authSubmitting) {
+    return (
+      <div className="auth-panel">
+        <p className="hint auth-panel__solo">Could not reach the server. Check that the app is running and try again.</p>
+      </div>
+    )
+  }
+
+  if (!authStatus) {
+    return (
+      <div className="auth-panel">
+        <p className="hint auth-panel__solo">Connecting…</p>
+      </div>
+    )
+  }
+
+  const submitMode: 'bootstrap' | 'login' = initial || isBootstrap ? 'bootstrap' : 'login'
+  const tokenLabel = initial || isBootstrap ? 'Administrator token' : 'Access token'
+  const tokenHint = initial
+    ? 'On first start the server prints a one-time token to stdout (for example container logs). Paste it here.'
+    : isBootstrap
+      ? 'Paste the bootstrap token from BOOTSTRAP_ADMIN_TOKEN (recovery mode).'
+      : 'Paste an API token, OIDC ID token, or other bearer token issued for your account.'
 
   return (
     <div className="auth-panel">
-      {authStatus?.bootstrapEnabled ? (
-        <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
-          <button
-            type="button"
-            className={view === 'bootstrap' ? 'button button--prominent' : 'button button--secondary'}
-            onClick={() => onViewChange('bootstrap')}
-          >
-            Bootstrap
-          </button>
+      {recovery ? (
+        <div className="auth-tabs" role="tablist" aria-label="Sign-in mode">
           <button
             type="button"
             className={view === 'login' ? 'button button--prominent' : 'button button--secondary'}
             onClick={() => onViewChange('login')}
           >
-            Login
+            Sign in
+          </button>
+          <button
+            type="button"
+            className={view === 'bootstrap' ? 'button button--prominent' : 'button button--secondary'}
+            onClick={() => onViewChange('bootstrap')}
+          >
+            Bootstrap recovery
           </button>
         </div>
       ) : null}
 
       <div className="auth-panel__content">
-        <div className="auth-panel__header">
+        <div className="auth-panel__header auth-panel__header--solo">
           <div>
-            <p className="eyebrow">{isBootstrap ? 'Initial setup' : 'Authentication'}</p>
-            <h2>{title}</h2>
-            <p className="hint">{description}</p>
-          </div>
-          <div className="auth-badges">
-            <span className="pill">API token</span>
-            {authStatus?.bootstrapEnabled ? <span className="pill">Bootstrap enabled</span> : null}
-            {authStatus?.oidcEnabled ? <span className="pill">OIDC available</span> : null}
-            {authStatus?.oidcOAuthEnabled ? <span className="pill">OIDC redirect</span> : null}
+            <p className="eyebrow">{initial ? 'First start' : isBootstrap ? 'Recovery' : 'Sign in'}</p>
+            <h2>{initial ? 'Welcome' : isBootstrap ? 'Bootstrap recovery' : 'Sign in'}</h2>
+            <p className="hint">
+              {initial
+                ? 'Complete setup with OpenID Connect or the administrator token from your server log.'
+                : authStatus.oidcOAuthEnabled && !isBootstrap
+                  ? 'Use your identity provider, or sign in with a token.'
+                  : tokenHint}
+            </p>
           </div>
         </div>
 
-        {authStatus && !authStatus.bootstrapEnabled && isBootstrap ? (
-          <div className="empty-state">
-            <h3>Bootstrap mode is unavailable</h3>
-            <p className="hint">Set `BOOTSTRAP_ADMIN_TOKEN` on the server to enable bootstrap onboarding, or switch to the regular login screen.</p>
-          </div>
-        ) : (
+        {authStatus.hasUsers || authStatus.oidcOAuthEnabled || initial ? (
           <div className="auth-form">
-            <label className="field">
-              <span>API base URL (optional)</span>
-              <input
-                value={apiBaseUrl}
-                onChange={(event) => onAPIBaseURLChange(event.target.value)}
-                placeholder="Leave empty to use this server"
-              />
-            </label>
-            {authStatus?.oidcOAuthEnabled ? (
+            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? (
               <div className="inline-cluster">
-                <button
-                  type="button"
-                  className="button button--prominent"
-                  onClick={onStartOIDCLogin}
-                  disabled={authSubmitting}
-                >
-                  {authSubmitting ? 'Redirecting…' : 'Sign in with OpenID Connect'}
+                <button type="button" className="button button--prominent" onClick={onStartOIDCLogin} disabled={authSubmitting}>
+                  {authSubmitting ? 'Redirecting…' : 'Continue with OpenID Connect'}
                 </button>
               </div>
             ) : null}
-            {authStatus?.oidcOAuthEnabled ? (
-              <p className="hint">Manual token entry remains available if your IdP or network blocks redirects.</p>
+
+            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? (
+              <p className="hint auth-form__divider-label">or use a token</p>
             ) : null}
+
             <label className="field">
-              <span>{isBootstrap ? 'Bootstrap admin token' : 'Bearer token'}</span>
+              <span>{tokenLabel}</span>
               <input
                 type="password"
+                autoComplete="off"
                 value={authTokenDraft}
                 onChange={(event) => onTokenChange(event.target.value)}
-                placeholder={isBootstrap ? 'Enter bootstrap token' : 'Enter bearer token'}
+                placeholder={initial ? 'Paste token from server log' : isBootstrap ? 'Bootstrap token' : 'Bearer token'}
               />
             </label>
-            {authError ? <div className="status-banner"><span className="status-banner__error">{authError}</span></div> : null}
-            <div className="inline-cluster">
-              <button type="button" className="button button--prominent" onClick={onSubmit} disabled={authSubmitting}>
-                {authSubmitting ? 'Signing in...' : isBootstrap ? 'Start bootstrap session' : 'Sign in'}
-              </button>
-              {authStatus?.bootstrapEnabled ? (
-                <button
-                  type="button"
-                  className="button button--secondary"
-                  onClick={() => onViewChange(isBootstrap ? 'login' : 'bootstrap')}
-                  disabled={authSubmitting}
-                >
-                  {isBootstrap ? 'Use regular login instead' : 'Use bootstrap onboarding instead'}
-                </button>
-              ) : null}
-            </div>
-          </div>
-        )}
+            <p className="hint">{tokenHint}</p>
 
-        {authStatus && !authStatus.hasUsers && !authStatus.bootstrapEnabled ? (
-          <div className="empty-state">
-            <h3>No initial access method is configured</h3>
-            <p className="hint">Configure `BOOTSTRAP_ADMIN_TOKEN` or OIDC on the server, then reload this page.</p>
+            {authError ? (
+              <div className="status-banner">
+                <span className="status-banner__error">{authError}</span>
+              </div>
+            ) : null}
+
+            <div className="inline-cluster">
+              <button type="button" className="button button--prominent" onClick={() => onSubmit(submitMode)} disabled={authSubmitting}>
+                {authSubmitting ? 'Signing in…' : 'Sign in with token'}
+              </button>
+            </div>
+
+            {showDevHints ? (
+              <p className="hint">API base URL can be changed later under Settings if this UI is not served from the same host as the API.</p>
+            ) : null}
           </div>
+        ) : null}
+
+        {authStatus.hasUsers && !authStatus.oidcOAuthEnabled && !authStatus.bootstrapRecoveryEnabled ? (
+          <p className="hint">OIDC browser login is not configured. Use an API token or ask an admin to set OIDC_ISSUER_URL, OIDC_CLIENT_ID, OIDC_REDIRECT_URI, and PUBLIC_BASE_URL.</p>
         ) : null}
       </div>
     </div>

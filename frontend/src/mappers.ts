@@ -144,10 +144,13 @@ export function toRuntimeConfigRecord(runtimeConfig: BackendRuntimeConfig): Runt
 export function toAuthStatusRecord(status: BackendAuthStatus): AuthStatusRecord {
   return {
     bootstrapEnabled: status.bootstrap_enabled,
+    bootstrapRecoveryEnabled: Boolean(status.bootstrap_recovery_enabled),
+    initialSetupRequired: Boolean(status.initial_setup_required),
     oidcEnabled: status.oidc_enabled,
     oidcOAuthEnabled: status.oidc_oauth_enabled,
     hasUsers: status.has_users,
     hasAdminUsers: status.has_admin_users,
+    appEnv: status.app_env ?? '',
   }
 }
 

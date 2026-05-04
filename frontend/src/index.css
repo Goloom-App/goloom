@@ -107,6 +107,17 @@ body {
   overflow: auto;
 }
 
+.auth-screen-center {
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+  z-index: 1;
+}
+
 /* 2026 Mesh Gradient Backgrounds */
 .app-shell::before,
 .app-shell::after {
@@ -858,7 +869,8 @@ input:focus, select:focus, textarea:focus {
 
 /* Auth (login) */
 .auth-card {
-  width: min(560px, 100%);
+  width: min(480px, 100%);
+  margin-inline: auto;
   background: var(--surface-raised);
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border);
@@ -873,11 +885,45 @@ input:focus, select:focus, textarea:focus {
   align-items: flex-start;
 }
 
+.auth-card__hero--compact {
+  align-items: center;
+  padding-bottom: 0.5rem;
+}
+
 .auth-card__copy h1 {
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.03em;
   margin: 0.35rem 0 0.5rem;
+}
+
+.auth-card__tagline {
+  margin: 0.15rem 0 0;
+}
+
+.auth-panel__solo {
+  padding: 0 2rem 2rem;
+  text-align: center;
+}
+
+.auth-panel__header--solo {
+  justify-content: center;
+  text-align: center;
+}
+
+.auth-panel__header--solo .hint {
+  max-width: 28rem;
+  margin-inline: auto;
+}
+
+.auth-form__divider-label {
+  text-align: center;
+  margin: -0.25rem 0 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-dim);
 }
 
 .auth-panel {

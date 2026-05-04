@@ -160,12 +160,18 @@ func (a *API) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	initialSetup := len(users) == 0
+	bootstrapRecovery := a.config.BootstrapEnabled && strings.TrimSpace(a.config.BootstrapAdminToken) != ""
+
 	auth.WriteJSON(w, http.StatusOK, map[string]any{
-		"bootstrap_enabled":    a.config.BootstrapAdminToken != "",
-		"oidc_enabled":         a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
-		"oidc_oauth_enabled":   a.auth.OIDCOAuthReady(),
-		"has_users":            len(users) > 0,
-		"has_admin_users":      hasAdminUsers,
+		"bootstrap_enabled":            bootstrapRecovery,
+		"bootstrap_recovery_enabled": bootstrapRecovery,
+		"initial_setup_required":       initialSetup,
+		"oidc_enabled":                 a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
+		"oidc_oauth_enabled":           a.auth.OIDCOAuthReady(),
+		"has_users":                    len(users) > 0,
+		"has_admin_users":              hasAdminUsers,
+		"app_env":                      a.config.AppEnv,
 	})
 }
 

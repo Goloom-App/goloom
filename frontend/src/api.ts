@@ -128,10 +128,13 @@ export interface BackendAPIToken {
 
 export interface BackendAuthStatus {
   bootstrap_enabled: boolean
+  bootstrap_recovery_enabled: boolean
+  initial_setup_required: boolean
   oidc_enabled: boolean
   oidc_oauth_enabled: boolean
   has_users: boolean
   has_admin_users: boolean
+  app_env?: string
 }
 
 export interface BackendOAuthAuthorization {
