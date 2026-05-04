@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
@@ -336,6 +337,62 @@ func TestMastodonProvider_GetMetrics_requiresPublishedURL(t *testing.T) {
 	_, err := p.GetMetrics(context.Background(), domain.SocialAccount{InstanceURL: "https://x"}, PublishAuth{AccessToken: "t"}, "")
 	if err == nil {
 		t.Fatal("expected error for empty published URL")
+	}
+}
+
+func TestMastodonProvider_UploadMedia(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v2/media" {
+			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer tok" {
+			t.Fatalf("auth header: %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"id": "99"})
+	}))
+	defer server.Close()
+
+	p := NewMastodonProvider(MastodonRegistrationConfig{})
+	acc := domain.SocialAccount{InstanceURL: server.URL}
+	id, err := p.UploadMedia(context.Background(), acc, PublishAuth{AccessToken: "tok"}, strings.NewReader("x"), "a.png", "image/png", "alt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "99" {
+		t.Fatalf("media id: %q", id)
+	}
+}
+
+func TestMastodonProvider_RefreshAccessToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/oauth/token" {
+			t.Fatalf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token":  "new-access",
+			"refresh_token": "new-refresh",
+			"expires_in":    3600,
+		})
+	}))
+	defer server.Close()
+
+	mp := NewMastodonProvider(MastodonRegistrationConfig{}).(*MastodonProvider)
+	inst := domain.ProviderInstance{
+		InstanceURL:   server.URL,
+		ClientID:      "cid",
+		TokenEndpoint: server.URL + "/oauth/token",
+	}
+	access, refresh, exp, err := mp.RefreshAccessToken(context.Background(), inst, "secret", "old-refresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if access != "new-access" || refresh != "new-refresh" {
+		t.Fatalf("tokens %q %q", access, refresh)
+	}
+	if exp == nil || time.Until(*exp) < time.Hour-time.Minute || time.Until(*exp) > time.Hour+time.Minute {
+		t.Fatalf("unexpected expiry: %v", exp)
 	}
 }
 

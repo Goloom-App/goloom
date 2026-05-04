@@ -1,14 +1,17 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
@@ -25,6 +28,7 @@ type mastodonAccountResponse struct {
 type mastodonStatusResponse struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
+	URI string `json:"uri"`
 }
 
 type mastodonAuthorizationServerMetadata struct {
@@ -35,6 +39,7 @@ type mastodonAuthorizationServerMetadata struct {
 type mastodonTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
 }
 
 type mastodonAppRegistrationRequest struct {
@@ -244,13 +249,73 @@ func (p *MastodonProvider) ConnectAccountOAuthCallback(ctx context.Context, inst
 		return domain.ConnectedAccount{}, errors.New("mastodon token exchange returned no access token")
 	}
 
-	return p.connectAccountWithToken(
+	var accessExpires *time.Time
+	if tokenResponse.ExpiresIn > 0 {
+		t := time.Now().UTC().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second)
+		accessExpires = &t
+	}
+
+	acc, err := p.connectAccountWithToken(
 		ctx,
 		instance.InstanceURL,
 		instance.ID,
 		strings.TrimSpace(tokenResponse.AccessToken),
 		strings.TrimSpace(tokenResponse.RefreshToken),
 	)
+	if err != nil {
+		return domain.ConnectedAccount{}, err
+	}
+	acc.AccessTokenExpiresAt = accessExpires
+	return acc, nil
+}
+
+// RefreshAccessToken exchanges a refresh token for new Mastodon OAuth tokens.
+func (p *MastodonProvider) RefreshAccessToken(ctx context.Context, instance domain.ProviderInstance, clientSecret, refreshToken string) (string, string, *time.Time, error) {
+	tokenEndpoint := strings.TrimSpace(instance.TokenEndpoint)
+	if tokenEndpoint == "" {
+		tokenEndpoint = strings.TrimRight(instance.InstanceURL, "/") + "/oauth/token"
+	}
+	bodyValues := url.Values{}
+	bodyValues.Set("grant_type", "refresh_token")
+	bodyValues.Set("refresh_token", strings.TrimSpace(refreshToken))
+	bodyValues.Set("client_id", strings.TrimSpace(instance.ClientID))
+	bodyValues.Set("client_secret", strings.TrimSpace(clientSecret))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(bodyValues.Encode()))
+	if err != nil {
+		return "", "", nil, fmt.Errorf("build mastodon refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := defaultHTTPClient.Do(req)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("mastodon token refresh: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		msg := strings.TrimSpace(string(errBody))
+		if msg == "" {
+			return "", "", nil, fmt.Errorf("mastodon token refresh failed with status %d", resp.StatusCode)
+		}
+		return "", "", nil, fmt.Errorf("mastodon token refresh failed with status %d: %s", resp.StatusCode, msg)
+	}
+
+	var tokenResponse mastodonTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		return "", "", nil, fmt.Errorf("decode mastodon refresh response: %w", err)
+	}
+	if strings.TrimSpace(tokenResponse.AccessToken) == "" {
+		return "", "", nil, errors.New("mastodon refresh returned no access token")
+	}
+	var accessExpires *time.Time
+	if tokenResponse.ExpiresIn > 0 {
+		t := time.Now().UTC().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second)
+		accessExpires = &t
+	}
+	newRT := strings.TrimSpace(tokenResponse.RefreshToken)
+	return strings.TrimSpace(tokenResponse.AccessToken), newRT, accessExpires, nil
 }
 
 func (p *MastodonProvider) connectAccountWithToken(ctx context.Context, normalizedURL, providerInstanceID, accessToken, refreshToken string) (domain.ConnectedAccount, error) {
@@ -292,8 +357,24 @@ func (p *MastodonProvider) connectAccountWithToken(ctx context.Context, normaliz
 	}, nil
 }
 
+func (p *MastodonProvider) UploadMedia(ctx context.Context, account domain.SocialAccount, auth PublishAuth, file io.Reader, filename, mimeType, altText string) (string, error) {
+	return uploadMastodonV2Media(ctx, strings.TrimRight(account.InstanceURL, "/"), auth.AccessToken, file, filename, mimeType, altText)
+}
+
 func (p *MastodonProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {
-	body, err := marshalJSONBody(map[string]any{"status": req.Content})
+	payload := map[string]any{"status": req.Content}
+	ids := domain.NormalizeMediaIDs(req.MediaIDs)
+	if len(ids) > 0 {
+		payload["media_ids"] = ids
+	}
+	vis := domain.NormalizePostVisibility(req.Visibility)
+	if vis != "" {
+		payload["visibility"] = vis
+	}
+	if req.ScheduledAt != nil && !req.ScheduledAt.IsZero() {
+		payload["scheduled_at"] = req.ScheduledAt.UTC().Format(time.RFC3339Nano)
+	}
+	body, err := marshalJSONBody(payload)
 	if err != nil {
 		return PublishResult{}, err
 	}
@@ -308,15 +389,76 @@ func (p *MastodonProvider) Publish(ctx context.Context, account domain.SocialAcc
 		return PublishResult{}, fmt.Errorf("mastodon publish failed with status %d", resp.StatusCode)
 	}
 
-	var payload mastodonStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	var statusPayload mastodonStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&statusPayload); err != nil {
 		return PublishResult{}, fmt.Errorf("decode mastodon publish response: %w", err)
 	}
 
+	meta := map[string]string{}
+	if strings.TrimSpace(statusPayload.URI) != "" {
+		meta["uri"] = strings.TrimSpace(statusPayload.URI)
+	}
 	return PublishResult{
-		RemoteID: payload.ID,
-		URL:      payload.URL,
+		RemoteID: statusPayload.ID,
+		URL:      statusPayload.URL,
+		Metadata: meta,
 	}, nil
+}
+
+func uploadMastodonV2Media(ctx context.Context, apiBase, accessToken string, file io.Reader, filename, mimeType, altText string) (string, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.WriteField("description", altText); err != nil {
+		return "", err
+	}
+	fn := strings.TrimSpace(filename)
+	if fn == "" {
+		fn = "upload"
+	}
+	fw, err := mw.CreateFormFile("file", fn)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(fw, file); err != nil {
+		return "", err
+	}
+	if err := mw.Close(); err != nil {
+		return "", err
+	}
+
+	endpoint := apiBase + "/api/v2/media?synchronous=true"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
+	if err != nil {
+		return "", fmt.Errorf("build media upload: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+
+	resp, err := defaultHTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("mastodon media upload: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		msg := strings.TrimSpace(string(errBody))
+		if msg == "" {
+			return "", fmt.Errorf("mastodon media upload failed with status %d", resp.StatusCode)
+		}
+		return "", fmt.Errorf("mastodon media upload failed with status %d: %s", resp.StatusCode, msg)
+	}
+
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", fmt.Errorf("decode mastodon media response: %w", err)
+	}
+	if strings.TrimSpace(out.ID) == "" {
+		return "", errors.New("mastodon media upload returned no id")
+	}
+	return strings.TrimSpace(out.ID), nil
 }
 
 func (p *MastodonProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error) {

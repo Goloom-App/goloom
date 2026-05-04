@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
@@ -123,8 +125,24 @@ func (p *GenericStatusProvider) ConnectAccount(ctx context.Context, input domain
 	return acc, nil
 }
 
+func (p *GenericStatusProvider) UploadMedia(ctx context.Context, account domain.SocialAccount, auth PublishAuth, file io.Reader, filename, mimeType, altText string) (string, error) {
+	return uploadMastodonV2Media(ctx, strings.TrimRight(account.InstanceURL, "/"), auth.AccessToken, file, filename, mimeType, altText)
+}
+
 func (p *GenericStatusProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {
-	body, err := marshalJSONBody(map[string]any{"status": req.Content})
+	payload := map[string]any{"status": req.Content}
+	ids := domain.NormalizeMediaIDs(req.MediaIDs)
+	if len(ids) > 0 {
+		payload["media_ids"] = ids
+	}
+	vis := domain.NormalizePostVisibility(req.Visibility)
+	if vis != "" {
+		payload["visibility"] = vis
+	}
+	if req.ScheduledAt != nil && !req.ScheduledAt.IsZero() {
+		payload["scheduled_at"] = req.ScheduledAt.UTC().Format(time.RFC3339Nano)
+	}
+	body, err := marshalJSONBody(payload)
 	if err != nil {
 		return PublishResult{}, err
 	}
@@ -139,12 +157,16 @@ func (p *GenericStatusProvider) Publish(ctx context.Context, account domain.Soci
 		return PublishResult{}, fmt.Errorf("%s publish failed with status %d", p.name, resp.StatusCode)
 	}
 
-	var payload mastodonStatusResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	var statusPayload mastodonStatusResponse
+	if err := json.NewDecoder(resp.Body).Decode(&statusPayload); err != nil {
 		return PublishResult{}, fmt.Errorf("decode %s publish response: %w", p.name, err)
 	}
 
-	return PublishResult{RemoteID: payload.ID, URL: payload.URL}, nil
+	meta := map[string]string{}
+	if strings.TrimSpace(statusPayload.URI) != "" {
+		meta["uri"] = strings.TrimSpace(statusPayload.URI)
+	}
+	return PublishResult{RemoteID: statusPayload.ID, URL: statusPayload.URL, Metadata: meta}, nil
 }
 
 func (p *GenericStatusProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error) {

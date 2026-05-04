@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -190,10 +191,17 @@ func (p *BlueskyProvider) fetchBlueskyActorAvatar(ctx context.Context, instanceU
 	return strings.TrimSpace(*out.Avatar)
 }
 
+func (p *BlueskyProvider) UploadMedia(_ context.Context, _ domain.SocialAccount, _ PublishAuth, _ io.Reader, _, _, _ string) (string, error) {
+	return "", errors.New("bluesky media upload is not supported")
+}
+
 func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {
 	token := strings.TrimSpace(auth.AccessToken)
 	if token == "" {
 		return PublishResult{}, errors.New("missing bluesky credential")
+	}
+	if len(domain.NormalizeMediaIDs(req.MediaIDs)) > 0 {
+		return PublishResult{}, errors.New("bluesky posts do not support attached media ids in this integration")
 	}
 
 	if account.AuthType == domain.AccountAuthTypeAppPassword {
@@ -235,6 +243,7 @@ func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAcco
 	return PublishResult{
 		RemoteID: payload.URI,
 		URL:      buildBlueskyPostURL(account.Username, payload.URI),
+		Metadata: map[string]string{"uri": payload.URI},
 	}, nil
 }
 

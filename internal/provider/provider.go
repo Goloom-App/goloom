@@ -2,8 +2,10 @@ package provider
 
 import (
 	"context"
+	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
@@ -16,7 +18,10 @@ type Capabilities struct {
 
 // PublishRequest is the normalized payload for publishing a status update.
 type PublishRequest struct {
-	Content string
+	Content     string
+	MediaIDs    []string
+	Visibility  string
+	ScheduledAt *time.Time
 }
 
 // PublishAuth carries decrypted credentials for a publish call.
@@ -29,6 +34,7 @@ type PublishAuth struct {
 type PublishResult struct {
 	RemoteID string
 	URL      string
+	Metadata map[string]string
 }
 
 // EngagementMetric is one normalized metric from a provider before persistence.
@@ -43,12 +49,18 @@ type OAuthAccountConnector interface {
 	ConnectAccountOAuthCallback(ctx context.Context, instance domain.ProviderInstance, clientSecret, redirectURI, code string) (domain.ConnectedAccount, error)
 }
 
+// OAuthTokenRefresher exchanges a refresh token for new credentials (Mastodon-compatible OAuth).
+type OAuthTokenRefresher interface {
+	RefreshAccessToken(ctx context.Context, instance domain.ProviderInstance, clientSecret, refreshToken string) (accessToken, newRefreshToken string, expiresAt *time.Time, err error)
+}
+
 // SocialMediaProvider is implemented by each supported network integration.
 type SocialMediaProvider interface {
 	Name() string
 	Capabilities(ctx context.Context, account domain.SocialAccount) (Capabilities, error)
 	PrepareProviderInstance(ctx context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error)
 	ConnectAccount(ctx context.Context, input domain.CreateAccountInput, instance *domain.ProviderInstance) (domain.ConnectedAccount, error)
+	UploadMedia(ctx context.Context, account domain.SocialAccount, auth PublishAuth, file io.Reader, filename, mimeType, altText string) (string, error)
 	Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error)
 	GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error)
 }
