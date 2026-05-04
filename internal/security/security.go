@@ -66,28 +66,73 @@ func HashToken(token string) string {
 	return base64.StdEncoding.EncodeToString(sum[:])
 }
 
+type visitorEntry struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+// Limiter applies per-IP token-bucket rate limiting and evicts idle visitor state to bound memory.
 type Limiter struct {
-	rate     rate.Limit
-	burst    int
-	visitors sync.Map
+	rate       rate.Limit
+	burst      int
+	visitorTTL time.Duration
+	pruneEvery time.Duration
+	mu         sync.Mutex
+	visitors   map[string]*visitorEntry
+	lastPrune  time.Time
 }
 
 func NewLimiter(perMinute int) *Limiter {
+	return newLimiter(perMinute, 15*time.Minute, time.Minute)
+}
+
+func newLimiter(perMinute int, visitorTTL, pruneEvery time.Duration) *Limiter {
 	if perMinute <= 0 {
 		perMinute = 60
 	}
+	if visitorTTL <= 0 {
+		visitorTTL = 15 * time.Minute
+	}
+	if pruneEvery <= 0 {
+		pruneEvery = time.Minute
+	}
 	return &Limiter{
-		rate:  rate.Every(time.Minute / time.Duration(perMinute)),
-		burst: perMinute,
+		rate:       rate.Every(time.Minute / time.Duration(perMinute)),
+		burst:      perMinute,
+		visitorTTL: visitorTTL,
+		pruneEvery: pruneEvery,
+		visitors:   make(map[string]*visitorEntry),
 	}
 }
 
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
-		value, _ := l.visitors.LoadOrStore(ip, rate.NewLimiter(l.rate, l.burst))
-		limiter := value.(*rate.Limiter)
-		if !limiter.Allow() {
+		now := time.Now()
+
+		l.mu.Lock()
+		if now.Sub(l.lastPrune) >= l.pruneEvery {
+			cutoff := now.Add(-l.visitorTTL)
+			for key, v := range l.visitors {
+				if v.lastSeen.Before(cutoff) {
+					delete(l.visitors, key)
+				}
+			}
+			l.lastPrune = now
+		}
+		entry := l.visitors[ip]
+		if entry == nil {
+			entry = &visitorEntry{
+				limiter:  rate.NewLimiter(l.rate, l.burst),
+				lastSeen: now,
+			}
+			l.visitors[ip] = entry
+		}
+		entry.lastSeen = now
+		lim := entry.limiter
+		l.mu.Unlock()
+
+		if !lim.Allow() {
 			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}

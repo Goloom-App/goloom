@@ -172,6 +172,31 @@ func TestLimiter_Middleware_rateLimited(t *testing.T) {
 	}
 }
 
+func TestLimiter_prunesIdleVisitors(t *testing.T) {
+	t.Parallel()
+	l := newLimiter(1000, 40*time.Millisecond, 15*time.Millisecond)
+	h := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req1 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req1.RemoteAddr = "192.0.2.50:1"
+	h.ServeHTTP(httptest.NewRecorder(), req1)
+
+	time.Sleep(80 * time.Millisecond)
+
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2.RemoteAddr = "192.0.2.51:1"
+	h.ServeHTTP(httptest.NewRecorder(), req2)
+
+	l.mu.Lock()
+	n := len(l.visitors)
+	l.mu.Unlock()
+	if n > 2 {
+		t.Fatalf("visitor map grew unexpectedly: %d", n)
+	}
+}
+
 func TestLimiter_Middleware_xForwardedForKeying(t *testing.T) {
 	t.Parallel()
 	l := NewLimiter(1)
