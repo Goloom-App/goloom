@@ -256,7 +256,7 @@ func TestPostgres_ScheduledPosts_and_due(t *testing.T) {
 	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusFailed, "err", &next); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://post", ""); err != nil {
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://post", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.LoadPostTargets(ctx, post.ID); err != nil {

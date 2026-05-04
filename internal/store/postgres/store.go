@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -16,6 +17,24 @@ import (
 
 //go:embed schema.sql
 var schemaSQL string
+
+func encodeMediaIDsJSON(ids []string) (string, error) {
+	ids = domain.NormalizeMediaIDs(ids)
+	b, err := json.Marshal(ids)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func decodePostMediaIDs(raw string, dest *[]string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		*dest = nil
+		return nil
+	}
+	return json.Unmarshal([]byte(raw), dest)
+}
 
 type Store struct {
 	pool      *pgxpool.Pool
@@ -484,7 +503,7 @@ func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.S
 	const query = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where team_id = $1
 		order by created_at desc
@@ -499,6 +518,7 @@ func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.S
 	var accounts []domain.SocialAccount
 	for rows.Next() {
 		var account domain.SocialAccount
+		var accessExpires sql.NullTime
 		if err := rows.Scan(
 			&account.ID,
 			&account.TeamID,
@@ -512,9 +532,14 @@ func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.S
 			&account.AccessTokenCiphertext,
 			&account.RefreshTokenCiphertext,
 			&account.MaxCharsOverride,
+			&accessExpires,
 			&account.CreatedAt,
 		); err != nil {
 			return nil, err
+		}
+		if accessExpires.Valid {
+			t := accessExpires.Time.UTC()
+			account.AccessTokenExpiresAt = &t
 		}
 		accounts = append(accounts, account)
 	}
@@ -539,15 +564,16 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 		insert into social_accounts (
 			team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 			avatar_url,
-			access_token_ciphertext, refresh_token_ciphertext
+			access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at
 		)
-		values ($1, $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9, $10)
+		values ($1, $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9, $10, $11)
 		returning id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		          avatar_url,
-		          access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		          access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 	`
 
 	var account domain.SocialAccount
+	var accessExpires sql.NullTime
 	err = s.pool.QueryRow(
 		ctx,
 		query,
@@ -561,6 +587,7 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 		strings.TrimSpace(input.AvatarURL),
 		accessCipher,
 		refreshCipher,
+		input.AccessTokenExpiresAt,
 	).Scan(
 		&account.ID,
 		&account.TeamID,
@@ -574,9 +601,17 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 		&account.AccessTokenCiphertext,
 		&account.RefreshTokenCiphertext,
 		&account.MaxCharsOverride,
+		&accessExpires,
 		&account.CreatedAt,
 	)
-	return account, err
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	if accessExpires.Valid {
+		t := accessExpires.Time.UTC()
+		account.AccessTokenExpiresAt = &t
+	}
+	return account, nil
 }
 
 func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) error {
@@ -594,7 +629,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 	const query = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where team_id = $1 and id = any($2)
 	`
@@ -608,6 +643,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 	var accounts []domain.SocialAccount
 	for rows.Next() {
 		var account domain.SocialAccount
+		var accessExpires sql.NullTime
 		if err := rows.Scan(
 			&account.ID,
 			&account.TeamID,
@@ -621,9 +657,14 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 			&account.AccessTokenCiphertext,
 			&account.RefreshTokenCiphertext,
 			&account.MaxCharsOverride,
+			&accessExpires,
 			&account.CreatedAt,
 		); err != nil {
 			return nil, err
+		}
+		if accessExpires.Valid {
+			t := accessExpires.Time.UTC()
+			account.AccessTokenExpiresAt = &t
 		}
 		accounts = append(accounts, account)
 	}
@@ -637,15 +678,22 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	}
 	defer tx.Rollback(ctx)
 
+	visibility := domain.NormalizePostVisibility(input.Visibility)
+	mediaJSON, err := encodeMediaIDsJSON(input.MediaIDs)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+
 	const insertPost = `
-		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, visibility, media_ids)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		returning id, team_id, author_user_id, title, content, scheduled_at, status,
-		          attempt_count, coalesce(last_error, ''), created_at, updated_at
+		          attempt_count, coalesce(last_error, ''), visibility, media_ids, created_at, updated_at
 	`
 
 	post := domain.ScheduledPost{}
-	err = tx.QueryRow(ctx, insertPost, teamID, principal.User.ID, input.Title, input.Content, input.ScheduledAt, domain.PostStatusPending).Scan(
+	var mediaRaw string
+	err = tx.QueryRow(ctx, insertPost, teamID, principal.User.ID, input.Title, input.Content, input.ScheduledAt, domain.PostStatusPending, visibility, mediaJSON).Scan(
 		&post.ID,
 		&post.TeamID,
 		&post.AuthorUserID,
@@ -655,10 +703,15 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		&post.Status,
 		&post.AttemptCount,
 		&post.LastError,
+		&post.Visibility,
+		&mediaRaw,
 		&post.CreatedAt,
 		&post.UpdatedAt,
 	)
 	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	if err := decodePostMediaIDs(mediaRaw, &post.MediaIDs); err != nil {
 		return domain.ScheduledPost{}, err
 	}
 
@@ -686,6 +739,7 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 	const query = `
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
+		       p.visibility, p.media_ids,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -700,6 +754,7 @@ func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (do
 	const query = `
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
+		       p.visibility, p.media_ids,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -724,10 +779,15 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 	}
 	defer tx.Rollback(ctx)
 
+	visibility := domain.NormalizePostVisibility(input.Visibility)
+	mediaJSON, err := encodeMediaIDsJSON(input.MediaIDs)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
 	_, err = tx.Exec(
 		ctx,
-		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, updated_at = now() where id = $4 and team_id = $5`,
-		input.Title, input.Content, input.ScheduledAt, postID, teamID,
+		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, updated_at = now() where id = $6 and team_id = $7`,
+		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, postID, teamID,
 	)
 	if err != nil {
 		return domain.ScheduledPost{}, err
@@ -771,6 +831,7 @@ func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.Scheduled
 	const query = `
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
+		       p.visibility, p.media_ids,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -810,13 +871,21 @@ func (s *Store) MarkPostResult(ctx context.Context, postID string, attemptCount 
 	return err
 }
 
-func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string) error {
+func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string) error {
+	metaJSON := "{}"
+	if publishMetadata != nil {
+		b, err := json.Marshal(publishMetadata)
+		if err != nil {
+			return err
+		}
+		metaJSON = string(b)
+	}
 	_, err := s.pool.Exec(
 		ctx,
 		`update scheduled_post_targets
-		 set status = $1, published_url = nullif($2, ''), last_error = nullif($3, '')
-		 where post_id = $4 and account_id = $5`,
-		status, publishedURL, lastError, postID, accountID,
+		 set status = $1, published_url = nullif($2, ''), last_error = nullif($3, ''), publish_metadata = $4
+		 where post_id = $5 and account_id = $6`,
+		status, publishedURL, lastError, metaJSON, postID, accountID,
 	)
 	return err
 }
@@ -825,7 +894,7 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 	const query = `
 		select a.id, a.team_id, a.provider, a.auth_type, coalesce(a.provider_instance_id::text, ''), a.instance_url, a.username, a.remote_account_id,
 		       a.avatar_url,
-		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.created_at
+		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.access_token_expires_at, a.created_at
 		from scheduled_post_targets t
 		join social_accounts a on a.id = t.account_id
 		where t.post_id = $1
@@ -840,6 +909,7 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 	var accounts []domain.SocialAccount
 	for rows.Next() {
 		var account domain.SocialAccount
+		var accessExpires sql.NullTime
 		if err := rows.Scan(
 			&account.ID,
 			&account.TeamID,
@@ -853,9 +923,14 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 			&account.AccessTokenCiphertext,
 			&account.RefreshTokenCiphertext,
 			&account.MaxCharsOverride,
+			&accessExpires,
 			&account.CreatedAt,
 		); err != nil {
 			return nil, err
+		}
+		if accessExpires.Valid {
+			t := accessExpires.Time.UTC()
+			account.AccessTokenExpiresAt = &t
 		}
 		accounts = append(accounts, account)
 	}
@@ -878,6 +953,33 @@ func (s *Store) DecryptProviderInstanceClientSecret(instance domain.ProviderInst
 		return "", nil
 	}
 	return s.encrypter.Decrypt(instance.ClientSecretCiphertext)
+}
+
+func (s *Store) UpdateSocialAccountTokens(ctx context.Context, accountID string, accessToken, refreshToken string, accessExpiresAt *time.Time) error {
+	accessCipher, err := s.encrypter.Encrypt(accessToken)
+	if err != nil {
+		return fmt.Errorf("encrypt access token: %w", err)
+	}
+	if strings.TrimSpace(refreshToken) != "" {
+		refreshCipher, encErr := s.encrypter.Encrypt(refreshToken)
+		if encErr != nil {
+			return fmt.Errorf("encrypt refresh token: %w", encErr)
+		}
+		_, err = s.pool.Exec(ctx, `
+			update social_accounts
+			set access_token_ciphertext = $1, refresh_token_ciphertext = $2, access_token_expires_at = $3
+			where id = $4`,
+			accessCipher, refreshCipher, accessExpiresAt, accountID,
+		)
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `
+		update social_accounts
+		set access_token_ciphertext = $1, access_token_expires_at = $2
+		where id = $3`,
+		accessCipher, accessExpiresAt, accountID,
+	)
+	return err
 }
 
 func (s *Store) LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error) {
@@ -923,6 +1025,7 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 	var posts []domain.ScheduledPost
 	for rows.Next() {
 		var post domain.ScheduledPost
+		var mediaRaw string
 		if err := rows.Scan(
 			&post.ID,
 			&post.TeamID,
@@ -935,8 +1038,16 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 			&post.LastError,
 			&post.CreatedAt,
 			&post.UpdatedAt,
+			&post.Visibility,
+			&mediaRaw,
 			&post.TargetAccounts,
 		); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(post.Visibility) == "" {
+			post.Visibility = domain.PostVisibilityPublic
+		}
+		if err := decodePostMediaIDs(mediaRaw, &post.MediaIDs); err != nil {
 			return nil, err
 		}
 		posts = append(posts, post)

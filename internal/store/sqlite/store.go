@@ -460,7 +460,7 @@ func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.S
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where team_id = ?
 		order by created_at desc`,
@@ -489,15 +489,19 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 
 	accountID := uuid.NewString()
 	now := nowString()
+	var accessExpires any
+	if input.AccessTokenExpiresAt != nil && !input.AccessTokenExpiresAt.IsZero() {
+		accessExpires = formatTime(*input.AccessTokenExpiresAt)
+	}
 	_, err = s.db.ExecContext(ctx, `
 		insert into social_accounts (
 			id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 			avatar_url,
-			access_token_ciphertext, refresh_token_ciphertext, created_at
+			access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, created_at
 		)
-		values (?, ?, ?, ?, nullif(?, ''), ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, nullif(?, ''), ?, ?, ?, ?, ?, ?, ?, ?)`,
 		accountID, teamID, input.Provider, input.AuthType, input.ProviderInstanceID, input.InstanceURL, input.Username,
-		input.RemoteAccountID, strings.TrimSpace(input.AvatarURL), accessCipher, refreshCipher, now,
+		input.RemoteAccountID, strings.TrimSpace(input.AvatarURL), accessCipher, refreshCipher, accessExpires, now,
 	)
 	if err != nil {
 		return domain.SocialAccount{}, err
@@ -505,7 +509,7 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 	return queryAccount(ctx, s.db, `
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where id = ?`,
 		accountID,
@@ -532,7 +536,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
 		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where team_id = ? and id in (%s)`, placeholders),
 		args...,
@@ -553,13 +557,19 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 
 	now := nowString()
 	postID := uuid.NewString()
+	visibility := domain.NormalizePostVisibility(input.Visibility)
+	mediaJSON, err := encodeMediaIDsJSON(input.MediaIDs)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
 	if _, err := tx.ExecContext(ctx, `
 		insert into scheduled_posts (
 			id, team_id, author_user_id, title, content, scheduled_at, status,
-			attempt_count, last_error, created_at, updated_at
+			attempt_count, last_error, visibility, media_ids, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?)`,
-		postID, teamID, principal.User.ID, input.Title, input.Content, formatTime(input.ScheduledAt), domain.PostStatusPending, now, now,
+		values (?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?)`,
+		postID, teamID, principal.User.ID, input.Title, input.Content, formatTime(input.ScheduledAt), domain.PostStatusPending,
+		visibility, mediaJSON, now, now,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
@@ -582,7 +592,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, created_at, updated_at
 		from scheduled_posts
 		where team_id = ?
 		order by scheduled_at asc`,
@@ -605,7 +615,7 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and id = ?`,
 		teamID, postID,
@@ -628,11 +638,16 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 	}
 	defer tx.Rollback()
 
+	visibility := domain.NormalizePostVisibility(input.Visibility)
+	mediaJSON, err := encodeMediaIDsJSON(input.MediaIDs)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
 	if _, err := tx.ExecContext(ctx, `
 		update scheduled_posts
-		set title = ?, content = ?, scheduled_at = ?, updated_at = ?
+		set title = ?, content = ?, scheduled_at = ?, visibility = ?, media_ids = ?, updated_at = ?
 		where id = ? and team_id = ?`,
-		input.Title, input.Content, formatTime(input.ScheduledAt), nowString(), postID, teamID,
+		input.Title, input.Content, formatTime(input.ScheduledAt), visibility, mediaJSON, nowString(), postID, teamID,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
@@ -672,7 +687,7 @@ func (s *Store) DeleteScheduledPost(ctx context.Context, teamID, postID string) 
 func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, created_at, updated_at
 		from scheduled_posts
 		where scheduled_at <= ?
 		  and status in (?, ?)
@@ -719,12 +734,51 @@ func (s *Store) MarkPostResult(ctx context.Context, postID string, attemptCount 
 	return err
 }
 
-func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string) error {
+func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string) error {
+	metaJSON := "{}"
+	if publishMetadata != nil {
+		b, err := json.Marshal(publishMetadata)
+		if err != nil {
+			return err
+		}
+		metaJSON = string(b)
+	}
 	_, err := s.db.ExecContext(ctx, `
 		update scheduled_post_targets
-		set status = ?, published_url = ?, last_error = ?
+		set status = ?, published_url = ?, last_error = ?, publish_metadata = ?
 		where post_id = ? and account_id = ?`,
-		status, nullableString(publishedURL), nullableString(lastError), postID, accountID,
+		status, nullableString(publishedURL), nullableString(lastError), metaJSON, postID, accountID,
+	)
+	return err
+}
+
+func (s *Store) UpdateSocialAccountTokens(ctx context.Context, accountID string, accessToken, refreshToken string, accessExpiresAt *time.Time) error {
+	accessCipher, err := s.encrypter.Encrypt(accessToken)
+	if err != nil {
+		return fmt.Errorf("encrypt access token: %w", err)
+	}
+	var exp any
+	if accessExpiresAt != nil && !accessExpiresAt.IsZero() {
+		exp = formatTime(*accessExpiresAt)
+	}
+	if strings.TrimSpace(refreshToken) != "" {
+		refreshCipher, encErr := s.encrypter.Encrypt(refreshToken)
+		if encErr != nil {
+			return fmt.Errorf("encrypt refresh token: %w", encErr)
+		}
+		_, err = s.db.ExecContext(ctx, `
+			update social_accounts
+			set access_token_ciphertext = ?, refresh_token_ciphertext = ?, access_token_expires_at = ?
+			where id = ?`,
+			accessCipher, refreshCipher, exp, accountID,
+		)
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		update social_accounts
+		set access_token_ciphertext = ?, access_token_expires_at = ?
+		where id = ?`,
+		accessCipher, exp, accountID,
 	)
 	return err
 }
@@ -733,7 +787,7 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 	rows, err := s.db.QueryContext(ctx, `
 		select a.id, a.team_id, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
 		       a.avatar_url,
-		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.created_at
+		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.access_token_expires_at, a.created_at
 		from scheduled_post_targets t
 		join social_accounts a on a.id = t.account_id
 		where t.post_id = ?`,
@@ -925,6 +979,7 @@ func scanAccount(scanner accountScanner) (domain.SocialAccount, error) {
 		account            domain.SocialAccount
 		providerInstanceID sql.NullString
 		maxChars           sql.NullInt64
+		accessExpiresRaw   sql.NullString
 		createdAt          string
 	)
 	if err := scanner.Scan(
@@ -940,6 +995,7 @@ func scanAccount(scanner accountScanner) (domain.SocialAccount, error) {
 		&account.AccessTokenCiphertext,
 		&account.RefreshTokenCiphertext,
 		&maxChars,
+		&accessExpiresRaw,
 		&createdAt,
 	); err != nil {
 		return domain.SocialAccount{}, err
@@ -948,6 +1004,16 @@ func scanAccount(scanner accountScanner) (domain.SocialAccount, error) {
 	if maxChars.Valid {
 		value := int(maxChars.Int64)
 		account.MaxCharsOverride = &value
+	}
+	if accessExpiresRaw.Valid && strings.TrimSpace(accessExpiresRaw.String) != "" {
+		exp, err := parseTime(accessExpiresRaw.String)
+		if err != nil {
+			return domain.SocialAccount{}, err
+		}
+		if !exp.IsZero() {
+			t := exp
+			account.AccessTokenExpiresAt = &t
+		}
 	}
 	var err error
 	account.CreatedAt, err = parseTime(createdAt)
@@ -998,11 +1064,12 @@ func scanProviderInstance(scanner providerInstanceScanner) (domain.ProviderInsta
 
 func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 	var (
-		post      domain.ScheduledPost
-		lastError sql.NullString
-		scheduled string
-		createdAt string
-		updatedAt string
+		post         domain.ScheduledPost
+		lastError    sql.NullString
+		scheduled    string
+		mediaIDsJSON string
+		createdAt    string
+		updatedAt    string
 	)
 	if err := scanner.Scan(
 		&post.ID,
@@ -1014,12 +1081,22 @@ func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 		&post.Status,
 		&post.AttemptCount,
 		&lastError,
+		&post.Visibility,
+		&mediaIDsJSON,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
 	post.LastError = lastError.String
+	if strings.TrimSpace(post.Visibility) == "" {
+		post.Visibility = domain.PostVisibilityPublic
+	}
+	if strings.TrimSpace(mediaIDsJSON) != "" {
+		if err := json.Unmarshal([]byte(mediaIDsJSON), &post.MediaIDs); err != nil {
+			return domain.ScheduledPost{}, fmt.Errorf("decode media_ids: %w", err)
+		}
+	}
 	var err error
 	post.ScheduledAt, err = parseTime(scheduled)
 	if err != nil {
@@ -1144,6 +1221,15 @@ func inClause(values []string) (string, []any) {
 		args[i] = value
 	}
 	return strings.Join(parts, ", "), args
+}
+
+func encodeMediaIDsJSON(ids []string) (string, error) {
+	ids = domain.NormalizeMediaIDs(ids)
+	b, err := json.Marshal(ids)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func nowString() string {

@@ -102,16 +102,24 @@ func (s *Store) GetAccountByID(ctx context.Context, accountID string) (domain.So
 	const q = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts where id = $1`
 	var account domain.SocialAccount
+	var accessExpires sql.NullTime
 	err := s.pool.QueryRow(ctx, q, accountID).Scan(
 		&account.ID, &account.TeamID, &account.Provider, &account.AuthType, &account.ProviderInstanceID,
 		&account.InstanceURL, &account.Username, &account.RemoteAccountID,
 		&account.AvatarURL,
-		&account.AccessTokenCiphertext, &account.RefreshTokenCiphertext, &account.MaxCharsOverride, &account.CreatedAt,
+		&account.AccessTokenCiphertext, &account.RefreshTokenCiphertext, &account.MaxCharsOverride, &accessExpires, &account.CreatedAt,
 	)
-	return account, err
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	if accessExpires.Valid {
+		t := accessExpires.Time.UTC()
+		account.AccessTokenExpiresAt = &t
+	}
+	return account, nil
 }
 
 func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]domain.SocialAccount, error) {
@@ -121,7 +129,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 	const q = `
 		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		       avatar_url,
-		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, created_at
+		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where id = any($1)`
 	rows, err := s.pool.Query(ctx, q, ids)
@@ -132,13 +140,18 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 	var accounts []domain.SocialAccount
 	for rows.Next() {
 		var account domain.SocialAccount
+		var accessExpires sql.NullTime
 		if err := rows.Scan(
 			&account.ID, &account.TeamID, &account.Provider, &account.AuthType, &account.ProviderInstanceID,
 			&account.InstanceURL, &account.Username, &account.RemoteAccountID,
 			&account.AvatarURL,
-			&account.AccessTokenCiphertext, &account.RefreshTokenCiphertext, &account.MaxCharsOverride, &account.CreatedAt,
+			&account.AccessTokenCiphertext, &account.RefreshTokenCiphertext, &account.MaxCharsOverride, &accessExpires, &account.CreatedAt,
 		); err != nil {
 			return nil, err
+		}
+		if accessExpires.Valid {
+			t := accessExpires.Time.UTC()
+			account.AccessTokenExpiresAt = &t
 		}
 		accounts = append(accounts, account)
 	}
@@ -165,6 +178,7 @@ func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain
 	const query = `
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
+		       p.visibility, p.media_ids,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id

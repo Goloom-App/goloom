@@ -55,7 +55,8 @@ type Store interface {
 	ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error)
 	MarkPostProcessing(ctx context.Context, postID string) error
 	MarkPostResult(ctx context.Context, postID string, attemptCount int, status domain.PostStatus, lastError string, nextAttempt *time.Time) error
-	MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string) error
+	MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string) error
+	UpdateSocialAccountTokens(ctx context.Context, accountID string, accessToken, refreshToken string, accessExpiresAt *time.Time) error
 	LoadPostTargets(ctx context.Context, postID string) ([]domain.SocialAccount, error)
 	DecryptAccessToken(account domain.SocialAccount) (string, error)
 	DecryptRefreshToken(account domain.SocialAccount) (string, error)

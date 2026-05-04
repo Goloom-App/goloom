@@ -358,7 +358,7 @@ func TestSQLite_ListDuePosts_and_processingFlow(t *testing.T) {
 	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusFailed, "e", &next); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://u", ""); err != nil {
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://u", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	targets, err := s.LoadPostTargets(ctx, post.ID)
