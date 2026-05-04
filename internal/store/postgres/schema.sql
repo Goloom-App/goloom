@@ -187,6 +187,18 @@ create table if not exists post_metrics (
 
 create index if not exists idx_post_metrics_post on post_metrics(post_id);
 
+create table if not exists post_metrics_history (
+    post_id uuid not null references scheduled_posts(id) on delete cascade,
+    account_id uuid not null references social_accounts(id) on delete cascade,
+    metric text not null,
+    value bigint not null default 0,
+    recorded_at date not null default ((now() at time zone 'utc')::date),
+    primary key (post_id, account_id, metric, recorded_at)
+);
+
+create index if not exists idx_post_metrics_history_post on post_metrics_history(post_id);
+create index if not exists idx_post_metrics_history_recorded on post_metrics_history(recorded_at);
+
 create table if not exists post_versions (
     post_id uuid not null references scheduled_posts(id) on delete cascade,
     account_id uuid not null references social_accounts(id) on delete cascade,
