@@ -191,17 +191,47 @@ func (p *BlueskyProvider) fetchBlueskyActorAvatar(ctx context.Context, instanceU
 	return strings.TrimSpace(*out.Avatar)
 }
 
-func (p *BlueskyProvider) UploadMedia(_ context.Context, _ domain.SocialAccount, _ PublishAuth, _ io.Reader, _, _, _ string) (string, error) {
-	return "", errors.New("bluesky media upload is not supported")
+func (p *BlueskyProvider) UploadMedia(ctx context.Context, account domain.SocialAccount, auth PublishAuth, file io.Reader, filename, mimeType, altText string) (string, error) {
+	_ = filename
+	data, err := io.ReadAll(io.LimitReader(file, blueskyMaxUploadBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(data) > blueskyMaxUploadBytes {
+		return "", errors.New("bluesky media file too large (max 8MB)")
+	}
+	if len(data) == 0 {
+		return "", errors.New("empty file")
+	}
+
+	token := strings.TrimSpace(auth.AccessToken)
+	if token == "" {
+		return "", errors.New("missing bluesky credential")
+	}
+	if account.AuthType == domain.AccountAuthTypeAppPassword {
+		session, err := p.createSession(ctx, account.InstanceURL, account.Username, token)
+		if err != nil {
+			return "", err
+		}
+		token = session.AccessJWT
+	}
+
+	mt := strings.ToLower(strings.TrimSpace(mimeType))
+	if mt != "image/jpeg" && mt != "image/png" {
+		return "", fmt.Errorf("bluesky upload supports image/jpeg and image/png only, got %q", mimeType)
+	}
+
+	blob, err := blueskyUploadBlob(ctx, account.InstanceURL, token, data, mt)
+	if err != nil {
+		return "", err
+	}
+	return encodeBlueskyMediaID(blob, strings.TrimSpace(altText))
 }
 
 func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {
 	token := strings.TrimSpace(auth.AccessToken)
 	if token == "" {
 		return PublishResult{}, errors.New("missing bluesky credential")
-	}
-	if len(domain.NormalizeMediaIDs(req.MediaIDs)) > 0 {
-		return PublishResult{}, errors.New("bluesky posts do not support attached media ids in this integration")
 	}
 
 	if account.AuthType == domain.AccountAuthTypeAppPassword {
@@ -212,14 +242,41 @@ func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAcco
 		token = session.AccessJWT
 	}
 
+	ids := domain.NormalizeMediaIDs(req.MediaIDs)
+	var embedImages []map[string]any
+	if len(ids) > 0 {
+		decoded, err := decodeBlueskyMediaIDs(ids)
+		if err != nil {
+			return PublishResult{}, err
+		}
+		for _, item := range decoded {
+			embedImages = append(embedImages, map[string]any{
+				"image": item.Blob,
+				"alt":   strings.TrimSpace(item.Alt),
+			})
+		}
+	}
+
+	if strings.TrimSpace(req.Content) == "" && len(embedImages) == 0 {
+		return PublishResult{}, errors.New("content or media is required")
+	}
+
+	record := map[string]any{
+		"$type":     "app.bsky.feed.post",
+		"text":      req.Content,
+		"createdAt": time.Now().UTC().Format(time.RFC3339),
+	}
+	if len(embedImages) > 0 {
+		record["embed"] = map[string]any{
+			"$type":  "app.bsky.embed.images",
+			"images": embedImages,
+		}
+	}
+
 	body, err := marshalJSONBody(map[string]any{
 		"repo":       account.RemoteAccountID,
 		"collection": "app.bsky.feed.post",
-		"record": map[string]any{
-			"$type":     "app.bsky.feed.post",
-			"text":      req.Content,
-			"createdAt": time.Now().UTC().Format(time.RFC3339),
-		},
+		"record":     record,
 	})
 	if err != nil {
 		return PublishResult{}, err
