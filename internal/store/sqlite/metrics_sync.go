@@ -9,11 +9,15 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 )
 
-func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore time.Time, limit int) ([]domain.PostedTargetForMetricSync, error) {
+func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore time.Time, utcDay string, limit int) ([]domain.PostedTargetForMetricSync, error) {
 	if limit <= 0 {
 		limit = 500
 	}
 	since := formatTime(notBefore.UTC())
+	utcDay = strings.TrimSpace(utcDay)
+	if utcDay == "" {
+		utcDay = time.Now().UTC().Format("2006-01-02")
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		select t.post_id, t.published_url,
 		       a.id, a.team_id, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
@@ -26,9 +30,10 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		  and p.status = 'posted'
 		  and t.published_url is not null and trim(t.published_url) <> ''
 		  and p.updated_at >= ?
+		  and (t.metrics_last_sync_date is null or t.metrics_last_sync_date < ?)
 		order by p.updated_at desc
 		limit ?`,
-		since, limit,
+		since, utcDay, limit,
 	)
 	if err != nil {
 		return nil, err
@@ -104,4 +109,18 @@ func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string,
 		}
 	}
 	return tx.Commit()
+}
+
+func (s *Store) MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID, accountID, utcDay string) error {
+	utcDay = strings.TrimSpace(utcDay)
+	if utcDay == "" {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+		update scheduled_post_targets
+		set metrics_last_sync_date = ?
+		where post_id = ? and account_id = ?`,
+		utcDay, postID, accountID,
+	)
+	return err
 }

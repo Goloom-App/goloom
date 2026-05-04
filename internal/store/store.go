@@ -62,8 +62,10 @@ type Store interface {
 	DecryptRefreshToken(account domain.SocialAccount) (string, error)
 	DecryptProviderInstanceClientSecret(instance domain.ProviderInstance) (string, error)
 	LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error)
-	ListPostedTargetsForMetricSync(ctx context.Context, notBefore time.Time, limit int) ([]domain.PostedTargetForMetricSync, error)
+	ListPostedTargetsForMetricSync(ctx context.Context, notBefore time.Time, utcDay string, limit int) ([]domain.PostedTargetForMetricSync, error)
 	UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error
+	MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID, accountID, utcDay string) error
+	ListOAuthAccountsWithAccessTokenExpiringBefore(ctx context.Context, before time.Time, limit int) ([]domain.AccountOAuthTokenExpiry, error)
 	GetTeamAnalytics(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsSummary, error)
 	ListPostMetricsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostMetric, error)
 	ListPostVersionsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostVersion, error)

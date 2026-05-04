@@ -199,3 +199,4 @@ alter table scheduled_posts add column if not exists visibility text not null de
 alter table scheduled_posts add column if not exists media_ids text not null default '[]';
 
 alter table scheduled_post_targets add column if not exists publish_metadata text not null default '{}';
+alter table scheduled_post_targets add column if not exists metrics_last_sync_date text;

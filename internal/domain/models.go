@@ -81,12 +81,12 @@ type User struct {
 }
 
 type Team struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name"`
-	Description      string    `json:"description"`
-	IsPersonal       bool      `json:"is_personal"`
-	PersonalForUserID string   `json:"personal_for_user_id,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Description       string    `json:"description"`
+	IsPersonal        bool      `json:"is_personal"`
+	PersonalForUserID string    `json:"personal_for_user_id,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type TeamInvitation struct {
@@ -226,15 +226,15 @@ type CreateAccountInput struct {
 }
 
 type ConnectedAccount struct {
-	Provider           string
-	AuthType           AccountAuthType
-	ProviderInstanceID string
-	InstanceURL        string
-	Username           string
-	RemoteAccountID    string
-	AvatarURL          string
-	AccessToken        string
-	RefreshToken       string
+	Provider             string
+	AuthType             AccountAuthType
+	ProviderInstanceID   string
+	InstanceURL          string
+	Username             string
+	RemoteAccountID      string
+	AvatarURL            string
+	AccessToken          string
+	RefreshToken         string
 	AccessTokenExpiresAt *time.Time
 }
 
@@ -282,15 +282,24 @@ type CreateTeamInput struct {
 }
 
 // AdminMetrics aggregates global counts for the admin dashboard.
+// AccountOAuthTokenExpiry carries token-expiry fields for background health checks.
+type AccountOAuthTokenExpiry struct {
+	ID                   string    `json:"id"`
+	TeamID               string    `json:"team_id"`
+	Provider             string    `json:"provider"`
+	Username             string    `json:"username"`
+	AccessTokenExpiresAt time.Time `json:"access_token_expires_at"`
+}
+
 type AdminMetrics struct {
-	UsersCount               int   `json:"users_count"`
-	TeamsCount               int   `json:"teams_count"`
-	ProviderInstancesCount   int   `json:"provider_instances_count"`
-	PostsPending             int64 `json:"posts_pending"`
-	PostsProcessing          int64 `json:"posts_processing"`
-	PostsPosted              int64 `json:"posts_posted"`
-	PostsFailed              int64 `json:"posts_failed"`
-	PostsCancelled           int64 `json:"posts_cancelled"`
+	UsersCount             int   `json:"users_count"`
+	TeamsCount             int   `json:"teams_count"`
+	ProviderInstancesCount int   `json:"provider_instances_count"`
+	PostsPending           int64 `json:"posts_pending"`
+	PostsProcessing        int64 `json:"posts_processing"`
+	PostsPosted            int64 `json:"posts_posted"`
+	PostsFailed            int64 `json:"posts_failed"`
+	PostsCancelled         int64 `json:"posts_cancelled"`
 }
 
 type AddTeamMemberInput struct {

@@ -24,6 +24,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table scheduled_posts add column visibility text not null default 'public'`,
 		`alter table scheduled_posts add column media_ids text not null default '[]'`,
 		`alter table scheduled_post_targets add column publish_metadata text not null default '{}'`,
+		`alter table scheduled_post_targets add column metrics_last_sync_date text`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)

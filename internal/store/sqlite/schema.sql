@@ -107,6 +107,7 @@ create table if not exists scheduled_post_targets (
     published_url text,
     last_error text,
     publish_metadata text not null default '{}',
+    metrics_last_sync_date text,
     primary key (post_id, account_id)
 );
 
