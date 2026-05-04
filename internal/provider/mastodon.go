@@ -1,13 +1,11 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -362,19 +360,7 @@ func (p *MastodonProvider) UploadMedia(ctx context.Context, account domain.Socia
 }
 
 func (p *MastodonProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {
-	payload := map[string]any{"status": req.Content}
-	ids := domain.NormalizeMediaIDs(req.MediaIDs)
-	if len(ids) > 0 {
-		payload["media_ids"] = ids
-	}
-	vis := domain.NormalizePostVisibility(req.Visibility)
-	if vis != "" {
-		payload["visibility"] = vis
-	}
-	if req.ScheduledAt != nil && !req.ScheduledAt.IsZero() {
-		payload["scheduled_at"] = req.ScheduledAt.UTC().Format(time.RFC3339Nano)
-	}
-	body, err := marshalJSONBody(payload)
+	body, err := marshalJSONBody(mastodonCompatibleStatusPayload(req))
 	if err != nil {
 		return PublishResult{}, err
 	}
@@ -403,62 +389,6 @@ func (p *MastodonProvider) Publish(ctx context.Context, account domain.SocialAcc
 		URL:      statusPayload.URL,
 		Metadata: meta,
 	}, nil
-}
-
-func uploadMastodonV2Media(ctx context.Context, apiBase, accessToken string, file io.Reader, filename, mimeType, altText string) (string, error) {
-	var buf bytes.Buffer
-	mw := multipart.NewWriter(&buf)
-	if err := mw.WriteField("description", altText); err != nil {
-		return "", err
-	}
-	fn := strings.TrimSpace(filename)
-	if fn == "" {
-		fn = "upload"
-	}
-	fw, err := mw.CreateFormFile("file", fn)
-	if err != nil {
-		return "", err
-	}
-	if _, err := io.Copy(fw, file); err != nil {
-		return "", err
-	}
-	if err := mw.Close(); err != nil {
-		return "", err
-	}
-
-	endpoint := apiBase + "/api/v2/media?synchronous=true"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, &buf)
-	if err != nil {
-		return "", fmt.Errorf("build media upload: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(accessToken))
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-
-	resp, err := defaultHTTPClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("mastodon media upload: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		msg := strings.TrimSpace(string(errBody))
-		if msg == "" {
-			return "", fmt.Errorf("mastodon media upload failed with status %d", resp.StatusCode)
-		}
-		return "", fmt.Errorf("mastodon media upload failed with status %d: %s", resp.StatusCode, msg)
-	}
-
-	var out struct {
-		ID string `json:"id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", fmt.Errorf("decode mastodon media response: %w", err)
-	}
-	if strings.TrimSpace(out.ID) == "" {
-		return "", errors.New("mastodon media upload returned no id")
-	}
-	return strings.TrimSpace(out.ID), nil
 }
 
 func (p *MastodonProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error) {

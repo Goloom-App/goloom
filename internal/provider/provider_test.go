@@ -351,7 +351,7 @@ func TestMastodonProvider_UploadMedia(t *testing.T) {
 			t.Fatalf("auth header: %q", r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"id": "99"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "99", "url": "http://cdn/ready"})
 	}))
 	defer server.Close()
 

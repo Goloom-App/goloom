@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
@@ -130,19 +129,7 @@ func (p *GenericStatusProvider) UploadMedia(ctx context.Context, account domain.
 }
 
 func (p *GenericStatusProvider) Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error) {
-	payload := map[string]any{"status": req.Content}
-	ids := domain.NormalizeMediaIDs(req.MediaIDs)
-	if len(ids) > 0 {
-		payload["media_ids"] = ids
-	}
-	vis := domain.NormalizePostVisibility(req.Visibility)
-	if vis != "" {
-		payload["visibility"] = vis
-	}
-	if req.ScheduledAt != nil && !req.ScheduledAt.IsZero() {
-		payload["scheduled_at"] = req.ScheduledAt.UTC().Format(time.RFC3339Nano)
-	}
-	body, err := marshalJSONBody(payload)
+	body, err := marshalJSONBody(mastodonCompatibleStatusPayload(req))
 	if err != nil {
 		return PublishResult{}, err
 	}

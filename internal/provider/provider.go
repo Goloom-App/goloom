@@ -22,6 +22,10 @@ type PublishRequest struct {
 	MediaIDs    []string
 	Visibility  string
 	ScheduledAt *time.Time
+	// SpoilerText is Mastodon-style content warning (CW) text; empty means none.
+	SpoilerText string
+	// Sensitive marks media as sensitive where the provider supports it (e.g. Mastodon).
+	Sensitive bool
 }
 
 // PublishAuth carries decrypted credentials for a publish call.
