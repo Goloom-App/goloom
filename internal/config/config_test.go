@@ -1,10 +1,16 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 )
+
+// 32+ chars; required when APP_ENV is production.
+const testProductionEncryptionKey = "test-production-encryption-key-32b!"
 
 func TestSlogLevel(t *testing.T) {
 	tests := []struct {
@@ -69,6 +75,12 @@ func TestSlogLevel(t *testing.T) {
 			os.Setenv("LOG_LEVEL", tt.logLevel)
 			defer os.Unsetenv("APP_ENV")
 			defer os.Unsetenv("LOG_LEVEL")
+			if strings.EqualFold(strings.TrimSpace(tt.appEnv), "production") {
+				os.Setenv("ENCRYPTION_KEY", testProductionEncryptionKey)
+				defer os.Unsetenv("ENCRYPTION_KEY")
+			} else {
+				os.Unsetenv("ENCRYPTION_KEY")
+			}
 
 			cfg, err := Load()
 			if err != nil {
@@ -127,6 +139,12 @@ func TestLogFormatJSON(t *testing.T) {
 			os.Setenv("LOG_FORMAT", tt.logFormat)
 			defer os.Unsetenv("APP_ENV")
 			defer os.Unsetenv("LOG_FORMAT")
+			if strings.EqualFold(strings.TrimSpace(tt.appEnv), "production") {
+				os.Setenv("ENCRYPTION_KEY", testProductionEncryptionKey)
+				defer os.Unsetenv("ENCRYPTION_KEY")
+			} else {
+				os.Unsetenv("ENCRYPTION_KEY")
+			}
 
 			cfg, err := Load()
 			if err != nil {
@@ -137,5 +155,33 @@ func TestLogFormatJSON(t *testing.T) {
 				t.Errorf("LogFormatJSON() = %v, want %v", got, tt.expected)
 			}
 		})
+	}
+}
+
+func TestLoad_productionRequiresEncryptionKey(t *testing.T) {
+	os.Setenv("APP_ENV", "production")
+	os.Unsetenv("ENCRYPTION_KEY")
+	defer os.Unsetenv("APP_ENV")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when ENCRYPTION_KEY is missing in production")
+	}
+	if !strings.Contains(err.Error(), "ENCRYPTION_KEY") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoad_productionRejectsDevelopmentDefaultKey(t *testing.T) {
+	os.Setenv("APP_ENV", "production")
+	defer os.Unsetenv("APP_ENV")
+
+	sum := sha256.Sum256([]byte("development-insecure-key"))
+	os.Setenv("ENCRYPTION_KEY", hex.EncodeToString(sum[:]))
+	defer os.Unsetenv("ENCRYPTION_KEY")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when ENCRYPTION_KEY is the development default in production")
 	}
 }
