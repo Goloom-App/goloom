@@ -64,6 +64,28 @@ export interface PostRecord {
   publishedLinks?: Record<string, string>
 }
 
+/** Normalized engagement row for UI (maps from BackendPostMetric). */
+export interface PostMetricRecord {
+  postId: string
+  accountId: string
+  metric: string
+  value: number
+  updatedAt: string
+}
+
+/** Per-account draft override for a post (maps from BackendPostVersion). */
+export interface PostVersionRecord {
+  postId: string
+  accountId: string
+  content: string
+}
+
+/** Workspace analytics snapshot (maps from BackendTeamAnalytics). */
+export interface TeamAnalyticsRecord {
+  metricsTotal: Record<string, number>
+  topPosts: Array<{ postId: string; title: string; score: number }>
+}
+
 export interface ProviderInstanceRecord {
   id: string
   provider: ProviderName

@@ -70,6 +70,31 @@ export interface BackendPost {
   published_links?: Record<string, string>
 }
 
+export interface BackendPostEngagementSummary {
+  post_id: string
+  title: string
+  score: number
+}
+
+export interface BackendTeamAnalytics {
+  metrics_total: Record<string, number>
+  top_posts: BackendPostEngagementSummary[]
+}
+
+export interface BackendPostMetric {
+  post_id: string
+  account_id: string
+  metric: string
+  value: number
+  updated_at: string
+}
+
+export interface BackendPostVersion {
+  post_id: string
+  account_id: string
+  content: string
+}
+
 export interface BackendProviderInstance {
   id: string
   provider: ProviderName
@@ -96,6 +121,7 @@ export interface BackendRuntimeConfig {
   }
   scheduler: {
     poll_interval: string
+    metrics_sync_interval?: string
     workers: number
   }
   oidc: {
@@ -395,6 +421,32 @@ export function createApiClient(options: ApiClientOptions) {
       return request<void>(options, `/v1/teams/${teamID}/posts/${postID}`, {
         method: 'DELETE',
         headers: buildHeaders(options.token, false),
+      })
+    },
+    getTeamAnalytics(teamID: string, opts?: { top_posts?: number }) {
+      const q =
+        opts?.top_posts != null && opts.top_posts > 0
+          ? `?top_posts=${encodeURIComponent(String(opts.top_posts))}`
+          : ''
+      return request<BackendTeamAnalytics>(options, `/v1/teams/${teamID}/analytics${q}`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    getPostAnalytics(teamID: string, postID: string) {
+      return request<{ items: BackendPostMetric[] }>(options, `/v1/teams/${teamID}/posts/${postID}/analytics`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listPostVersions(teamID: string, postID: string) {
+      return request<{ items: BackendPostVersion[] }>(options, `/v1/teams/${teamID}/posts/${postID}/versions`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    patchPostVersions(teamID: string, postID: string, payload: { versions: { account_id: string; content: string }[] }) {
+      return request<{ items: BackendPostVersion[] }>(options, `/v1/teams/${teamID}/posts/${postID}/versions`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
       })
     },
   }
