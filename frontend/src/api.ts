@@ -222,11 +222,11 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
-    createMyApiToken(name: string) {
+    createMyApiToken(payload: { name: string; expires_at?: string }) {
       return request<{ token: string; api_token: BackendAPIToken }>(options, '/v1/me/api-tokens', {
         method: 'POST',
         headers: buildHeaders(options.token),
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(payload),
       })
     },
     revokeMyApiToken(tokenID: string) {

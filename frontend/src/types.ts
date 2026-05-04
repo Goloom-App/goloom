@@ -83,6 +83,9 @@ export interface ProviderSetting {
 }
 
 export interface SettingsState {
+  ui: {
+    colorScheme: 'system' | 'dark' | 'light'
+  }
   general: {
     apiBaseUrl: string
     bearerToken: string

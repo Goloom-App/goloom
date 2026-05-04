@@ -268,7 +268,7 @@ func (m *mockStore) AdminMetrics(ctx context.Context) (domain.AdminMetrics, erro
 	return domain.AdminMetrics{}, nil
 }
 
-func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string) (string, domain.APIToken, error) {
+func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
 

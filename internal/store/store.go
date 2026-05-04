@@ -64,7 +64,7 @@ type Store interface {
 	EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error
 
 	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
-	CreateUserAPIToken(ctx context.Context, userID, name string) (plaintext string, meta domain.APIToken, err error)
+	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (plaintext string, meta domain.APIToken, err error)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error
 }

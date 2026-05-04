@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
 )
 
 type createAPITokenRequest struct {
-	Name string `json:"name"`
+	Name      string  `json:"name"`
+	ExpiresAt *string `json:"expires_at,omitempty"`
 }
 
 func (a *API) handleListMyAPITokens(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +40,20 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json body", http.StatusBadRequest)
 		return
 	}
-	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name)
+	var expires *time.Time
+	if input.ExpiresAt != nil && *input.ExpiresAt != "" {
+		t, err := time.Parse(time.RFC3339, *input.ExpiresAt)
+		if err != nil {
+			http.Error(w, "expires_at must be RFC3339 timestamp", http.StatusBadRequest)
+			return
+		}
+		if !t.After(time.Now().UTC()) {
+			http.Error(w, "expires_at must be in the future", http.StatusBadRequest)
+			return
+		}
+		expires = &t
+	}
+	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

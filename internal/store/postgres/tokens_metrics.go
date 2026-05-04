@@ -61,10 +61,15 @@ func (s *Store) AdminMetrics(ctx context.Context) (domain.AdminMetrics, error) {
 	return m, rows.Err()
 }
 
-func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string) (string, domain.APIToken, error) {
+func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (string, domain.APIToken, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", domain.APIToken{}, errors.New("name is required")
+	}
+	exp := expiresAt
+	if exp == nil {
+		t := time.Now().UTC().AddDate(0, 0, 90)
+		exp = &t
 	}
 	plaintext, err := randomAPIToken()
 	if err != nil {
@@ -73,12 +78,13 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string) (st
 	hash := security.HashToken(plaintext)
 	id := uuid.NewString()
 	var createdAt time.Time
+	var storedExpires time.Time
 	err = s.pool.QueryRow(ctx, `
 		insert into api_tokens (id, user_id, name, token_hash, expires_at, created_at)
-		values ($1, $2, $3, $4, null, now())
-		returning created_at`,
-		id, userID, name, hash,
-	).Scan(&createdAt)
+		values ($1, $2, $3, $4, $5, now())
+		returning created_at, expires_at`,
+		id, userID, name, hash, *exp,
+	).Scan(&createdAt, &storedExpires)
 	if err != nil {
 		return "", domain.APIToken{}, err
 	}
@@ -86,6 +92,7 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string) (st
 		ID:        id,
 		UserID:    userID,
 		Name:      name,
+		ExpiresAt: &storedExpires,
 		CreatedAt: createdAt,
 	}, nil
 }

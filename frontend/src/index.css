@@ -409,6 +409,7 @@ body {
 }
 
 .app-main {
+  position: relative;
   z-index: 5;
   min-height: 0;
   height: 100%;
@@ -418,6 +419,110 @@ body {
   padding: 2rem;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+}
+
+.theme-floating-toggle {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 80;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.theme-floating-toggle:hover {
+  background: var(--surface-soft);
+  transform: scale(1.04);
+}
+
+.status-banner-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.status-banner-panel__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.status-banner-panel__close {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.status-banner-panel__close:hover {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
+.page-header__toolbar {
+  gap: 0.5rem;
+}
+
+.page-header__icon-btn {
+  padding: 0.45rem 0.55rem;
+  min-width: 2.5rem;
+  display: grid;
+  place-items: center;
+}
+
+.team-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.team-workspace-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.timeline-month-block {
+  margin-bottom: 2rem;
+}
+
+.timeline-month-heading {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+  color: var(--text);
+}
+
+.content-calendar__nav-btn--text {
+  font-size: 1.1rem;
+  font-weight: 700;
+  min-width: 2.25rem;
+  line-height: 1;
 }
 
 /* 3-Column Layout Specifics */
@@ -537,6 +642,12 @@ body {
   grid-template-columns: 1fr 400px;
   overflow: hidden;
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5);
+}
+
+.team-workspace-modal {
+  grid-template-columns: 1fr;
+  width: min(640px, 100%);
+  height: min(90vh, 800px);
 }
 
 .composer-main {

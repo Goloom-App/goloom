@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
+  addDays,
   addMinutes,
   addMonths,
   eachDayOfInterval,
@@ -89,7 +90,11 @@ function defaultAccountConnectDraft(): AccountConnectDraft {
 
 function App() {
   const [section, setSection] = useState<AppSection>('calendar')
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => getSystemTheme())
+  const [systemIsDark, setSystemIsDark] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : true,
+  )
   const [currentDate] = useState<Date>(new Date())
   const [contentCalendarMonth, setContentCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [calendarDragOverKey, setCalendarDragOverKey] = useState<string | null>(null)
@@ -119,6 +124,9 @@ function App() {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null)
+  const [teamModalOpen, setTeamModalOpen] = useState(false)
+  const [newApiTokenExpiresYmd, setNewApiTokenExpiresYmd] = useState(() => format(addDays(new Date(), 90), 'yyyy-MM-dd'))
   const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
   const [providerInstances, setProviderInstances] = useState<ProviderInstanceRecord[]>([])
   const [adminMetrics, setAdminMetrics] = useState<BackendAdminMetrics | null>(null)
@@ -151,17 +159,34 @@ function App() {
     writeStoredSettings(settings)
   }, [settings])
 
+  const resolvedTheme = useMemo((): 'dark' | 'light' => {
+    const scheme = settings.ui.colorScheme
+    if (scheme === 'dark') {
+      return 'dark'
+    }
+    if (scheme === 'light') {
+      return 'light'
+    }
+    return systemIsDark ? 'dark' : 'light'
+  }, [settings.ui.colorScheme, systemIsDark])
+
   useEffect(() => {
+    if (settings.ui.colorScheme !== 'system') {
+      return
+    }
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
     const syncTheme = (event?: MediaQueryListEvent) => {
-      const isDark = event ? event.matches : mediaQuery.matches
-      setTheme(isDark ? 'dark' : 'light')
+      setSystemIsDark(event ? event.matches : mediaQuery.matches)
     }
-
     syncTheme()
     mediaQuery.addEventListener('change', syncTheme)
     return () => mediaQuery.removeEventListener('change', syncTheme)
-  }, [])
+  }, [settings.ui.colorScheme])
+
+  const noticeKey = `${loading ? 'L' : ''}|${error ?? ''}|${statusMessage ?? ''}`
+  useEffect(() => {
+    setDismissedNoticeKey(null)
+  }, [noticeKey])
 
   useEffect(() => {
     let cancelled = false
@@ -358,13 +383,16 @@ function App() {
     }))
   }
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (opts?: { silent?: boolean }) => {
     if (!api) {
       return
     }
 
-    setLoading(true)
-    setError(null)
+    const silent = Boolean(opts?.silent)
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+    }
 
     try {
       const meResponse = await api.me()
@@ -410,9 +438,13 @@ function App() {
         setAuthError('Session expired. Sign in again to continue.')
         return
       }
-      setError(cause instanceof Error ? cause.message : 'Failed to load dashboard data')
+      if (!silent) {
+        setError(cause instanceof Error ? cause.message : 'Failed to load dashboard data')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }, [api, clearAuthenticatedState])
 
@@ -434,7 +466,7 @@ function App() {
       return
     }
     if (prevSectionRef.current !== section && CONTENT_REFRESH_SECTIONS.includes(section)) {
-      void loadDashboard()
+      void loadDashboard({ silent: true })
     }
     prevSectionRef.current = section
   }, [api, section, loadDashboard])
@@ -446,7 +478,7 @@ function App() {
     const seconds = settings.scheduler.pollIntervalSeconds ?? 15
     const intervalMs = Math.min(60_000, Math.max(5_000, seconds * 1000))
     const id = window.setInterval(() => {
-      void loadDashboard()
+      void loadDashboard({ silent: true })
     }, intervalMs)
     return () => window.clearInterval(id)
   }, [api, section, loadDashboard, settings.scheduler.pollIntervalSeconds])
@@ -467,7 +499,7 @@ function App() {
           params.delete('invite')
           const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`
           window.history.replaceState({}, document.title, next)
-          await loadDashboard()
+          await loadDashboard({ silent: true })
         }
       } catch (cause) {
         if (!cancelled) {
@@ -687,10 +719,11 @@ function App() {
       return
     }
     await runAction(async () => {
-      await api.createTeam({ name: newTeamName.trim(), description: newTeamDescription.trim() })
+      const created = await api.createTeam({ name: newTeamName.trim(), description: newTeamDescription.trim() })
       setNewTeamName('')
       setNewTeamDescription('')
-      await loadDashboard()
+      setSelectedTeamId(created.id)
+      await loadDashboard({ silent: true })
     }, 'Team created')
   }
 
@@ -701,7 +734,7 @@ function App() {
     await runAction(async () => {
       await api.addTeamMember(selectedTeam.id, { user_id: addMemberUserId.trim(), role: addMemberRole })
       setAddMemberUserId('')
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, 'Member added')
   }
 
@@ -715,7 +748,7 @@ function App() {
     try {
       const res = await api.createTeamInvitation(selectedTeam.id, { email: inviteEmail.trim(), role: inviteRole })
       setInviteEmail('')
-      await loadDashboard()
+      await loadDashboard({ silent: true })
       setStatusMessage(`Invitation created. One-time acceptance token: ${res.token}`)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Invitation failed')
@@ -730,7 +763,7 @@ function App() {
     }
     await runAction(async () => {
       await api.removeTeamMember(selectedTeam.id, userId)
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, 'Member removed')
   }
 
@@ -772,7 +805,7 @@ function App() {
       }
       setAdminProviderDraft(defaultAdminProviderDraft())
       setShowAdminProviderAdvanced(false)
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, editingProviderId ? 'Provider updated' : 'Provider registered')
   }
 
@@ -795,7 +828,7 @@ function App() {
         setAdminProviderDraft(defaultAdminProviderDraft())
         setShowAdminProviderAdvanced(false)
       }
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, 'Provider instance removed')
   }
 
@@ -805,7 +838,7 @@ function App() {
     }
     await runAction(async () => {
       await api.deleteAccount(selectedTeam.id, accountId)
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, 'Account disconnected')
   }
 
@@ -838,7 +871,7 @@ function App() {
           refresh_token: d.refreshToken.trim() || undefined,
         })
         setAccountDraft(defaultAccountConnectDraft())
-        await loadDashboard()
+        await loadDashboard({ silent: true })
       }, 'Mastodon account connected')
       return
     }
@@ -859,7 +892,7 @@ function App() {
           access_token: d.accessToken.trim(),
         })
         setAccountDraft(defaultAccountConnectDraft())
-        await loadDashboard()
+        await loadDashboard({ silent: true })
       }, 'Friendica account connected')
       return
     }
@@ -877,7 +910,7 @@ function App() {
             app_password: d.appPassword.trim(),
           })
           setAccountDraft(defaultAccountConnectDraft())
-          await loadDashboard()
+          await loadDashboard({ silent: true })
         }, 'Bluesky account connected')
         return
       }
@@ -892,7 +925,7 @@ function App() {
           refresh_token: d.refreshToken.trim() || undefined,
         })
         setAccountDraft(defaultAccountConnectDraft())
-        await loadDashboard()
+        await loadDashboard({ silent: true })
       }, 'Bluesky account connected')
     }
   }
@@ -924,10 +957,17 @@ function App() {
     if (!api || !newApiTokenName.trim()) {
       return
     }
+    const expEnd = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`)
+    if (!newApiTokenExpiresYmd.trim() || Number.isNaN(expEnd.getTime()) || expEnd.getTime() <= Date.now()) {
+      setError('Choose an expiry date in the future (UTC end of day).')
+      return
+    }
     await runAction(async () => {
-      const res = await api.createMyApiToken(newApiTokenName.trim())
+      const expiresAt = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`).toISOString()
+      const res = await api.createMyApiToken({ name: newApiTokenName.trim(), expires_at: expiresAt })
       setNewTokenPlaintext(res.token)
       setNewApiTokenName('')
+      setNewApiTokenExpiresYmd(format(addDays(new Date(), 90), 'yyyy-MM-dd'))
       const list = await api.listMyApiTokens()
       setApiTokens(list.items ?? [])
     }, 'API token created. Copy the secret below; it is not stored in plain text.')
@@ -966,7 +1006,7 @@ function App() {
         await api.createPost(selectedTeam.id, payload)
       }
       setComposerOpen(false)
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, composerMode === 'edit' ? 'Post updated' : 'Post scheduled')
   }
 
@@ -979,7 +1019,7 @@ function App() {
       setExpandedPostId((current) => (current === postId ? null : current))
       setEditingPostId((current) => (current === postId ? null : current))
       setComposerOpen(false)
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, 'Post deleted')
   }
 
@@ -1028,13 +1068,13 @@ function App() {
           target_accounts: original.targetAccountIds,
         })
       }
-      await loadDashboard()
+      await loadDashboard({ silent: true })
     }, changed.length > 1 ? 'Posts rescheduled to avoid overlap' : 'Post moved on calendar')
   }
 
   if (authStatusLoading && !activeConnection.bearerToken.trim()) {
     return (
-      <AuthShell theme={theme}>
+      <AuthShell theme={resolvedTheme}>
         <AuthPanel
           view="login"
           authStatus={null}
@@ -1054,7 +1094,7 @@ function App() {
 
   if (!activeConnection.bearerToken.trim()) {
     return (
-      <AuthShell theme={theme}>
+      <AuthShell theme={resolvedTheme}>
         <AuthPanel
           view={authView}
           authStatus={authStatus}
@@ -1073,7 +1113,7 @@ function App() {
   }
 
   return (
-    <div className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'}`} data-theme={theme}>
+    <div className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'}`} data-theme={resolvedTheme}>
       <aside className="app-sidebar" aria-label="Main navigation">
         <div className="app-sidebar__header">
           <div className="app-sidebar__logo" title="goloom" aria-hidden="true">
@@ -1169,36 +1209,72 @@ function App() {
           <button
             type="button"
             className="app-sidebar__theme"
-            onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
-            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            onClick={() => clearAuthenticatedState('Signed out')}
+            title="Sign out"
+            aria-label="Sign out"
           >
-            <Icon name={theme === 'dark' ? 'sun' : 'moon'} className="inline-icon" />
+            <Icon name="lock" className="inline-icon" />
           </button>
         </div>
       </aside>
 
       <main className="app-main">
+          <button
+            type="button"
+            className="theme-floating-toggle"
+            onClick={() =>
+              setSettings((current) => ({
+                ...current,
+                ui: { ...current.ui, colorScheme: resolvedTheme === 'dark' ? 'light' : 'dark' },
+              }))
+            }
+            title={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}
+            aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            <Icon name={resolvedTheme === 'dark' ? 'sun' : 'moon'} className="inline-icon" />
+          </button>
           <header className="page-header">
             <div>
               <p className="eyebrow">Social publishing</p>
               <h1>{SECTION_HEADINGS[section]}</h1>
             </div>
 
-            <div className="inline-cluster">
+            <div className="inline-cluster page-header__toolbar">
+              {section === 'teams' ? (
+                <button
+                  type="button"
+                  className="button button--secondary page-header__icon-btn"
+                  onClick={() => setTeamModalOpen(true)}
+                  aria-label="Open team workspace"
+                  title="Create or manage teams"
+                >
+                  <Icon name="plus" className="inline-icon" />
+                </button>
+              ) : null}
               <select className="team-select" value={effectiveSelectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)} disabled={teams.length === 0}>
                 {teams.length === 0 ? <option value="">No team loaded</option> : teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
               </select>
             </div>
           </header>
 
-          {(error || statusMessage || loading) && (
-            <section className="glass-panel">
-              {loading ? <span className="hint">Loading backend data…</span> : null}
-              {statusMessage ? <span className="status-banner__success">{statusMessage}</span> : null}
-              {error ? <span className="status-banner__error">{error}</span> : null}
+          {(error || statusMessage || loading) && dismissedNoticeKey !== noticeKey ? (
+            <section className="glass-panel status-banner-panel">
+              <div className="status-banner-panel__body">
+                {loading ? <span className="hint">Loading backend data…</span> : null}
+                {statusMessage ? <span className="status-banner__success">{statusMessage}</span> : null}
+                {error ? <span className="status-banner__error">{error}</span> : null}
+              </div>
+              <button
+                type="button"
+                className="status-banner-panel__close"
+                onClick={() => setDismissedNoticeKey(noticeKey)}
+                aria-label="Dismiss notification"
+                title="Dismiss"
+              >
+                <Icon name="close" className="inline-icon" />
+              </button>
             </section>
-          )}
+          ) : null}
 
           {section === 'calendar' && (
             <div className="timeline-view">
@@ -1208,23 +1284,37 @@ function App() {
                   <p className="hint">Create a post to start building your publishing timeline.</p>
                 </div>
               ) : (
-                groupPostsByDay(upcomingPosts).map((group) => (
-                  <section key={group.key} className="timeline-day-section">
-                    <p className="eyebrow" style={{ marginBottom: '1rem' }}>{format(parseISO(group.posts[0].scheduledAt), 'EEEE, d MMMM')}</p>
-                    <div className="posts-grid">
-                      {group.posts.map((post) => (
-                        <PostCard
-                          key={post.id}
-                          post={post}
-                          active={expandedPostId === post.id}
-                          onClick={() => setExpandedPostId(post.id)}
-                          onEdit={() => openEditor(post.id)}
-                          onDelete={() => void deletePost(post.id)}
-                          accounts={accounts}
-                        />
-                      ))}
-                    </div>
-                  </section>
+                groupUpcomingIntoMonths(upcomingPosts).map((month) => (
+                  <div key={month.monthKey} className="timeline-month-block">
+                    <h2 className="timeline-month-heading">{month.monthLabel}</h2>
+                    {month.days.map((group) => (
+                      <section key={group.key} className="timeline-day-section">
+                        <p
+                          className="eyebrow"
+                          style={{
+                            marginBottom: '1rem',
+                            fontWeight: group.posts.length > 1 ? 700 : 500,
+                          }}
+                        >
+                          {format(parseISO(group.posts[0].scheduledAt), 'EEEE, d MMMM')}
+                          {group.posts.length > 1 ? ` · ${group.posts.length} posts` : null}
+                        </p>
+                        <div className="posts-grid">
+                          {group.posts.map((post) => (
+                            <PostCard
+                              key={post.id}
+                              post={post}
+                              active={expandedPostId === post.id}
+                              onClick={() => setExpandedPostId(post.id)}
+                              onEdit={() => openEditor(post.id)}
+                              onDelete={() => void deletePost(post.id)}
+                              accounts={accounts}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
                 ))
               )}
             </div>
@@ -1235,20 +1325,20 @@ function App() {
               <div className="content-calendar__toolbar glass-panel">
                 <button
                   type="button"
-                  className="button button--secondary content-calendar__nav-btn"
+                  className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
                   onClick={() => setContentCalendarMonth((m) => startOfMonth(subMonths(m, 1)))}
                   aria-label="Previous month"
                 >
-                  <Icon name="chevron-left" className="inline-icon" />
+                  &lt;
                 </button>
                 <h2 className="content-calendar__month-title">{format(contentCalendarMonth, 'MMMM yyyy')}</h2>
                 <button
                   type="button"
-                  className="button button--secondary content-calendar__nav-btn"
+                  className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
                   onClick={() => setContentCalendarMonth((m) => startOfMonth(addMonths(m, 1)))}
                   aria-label="Next month"
                 >
-                  <Icon name="chevron-right" className="inline-icon" />
+                  &gt;
                 </button>
               </div>
               <div className="content-calendar__grid glass-panel" role="grid" aria-label="Scheduled posts by day">
@@ -1368,35 +1458,29 @@ function App() {
           {section === 'teams' && (
             <div className="teams-view two-column-detail">
               <div className="glass-panel">
-                <h2 className="section-card__title">Create team</h2>
-                <p className="hint">New teams you create are owned by you. Personal workspaces cannot receive members.</p>
-                <label className="field">
-                  <span>Name</span>
-                  <input value={newTeamName} onChange={(event) => setNewTeamName(event.target.value)} placeholder="Marketing" />
-                </label>
-                <label className="field">
-                  <span>Description</span>
-                  <input value={newTeamDescription} onChange={(event) => setNewTeamDescription(event.target.value)} placeholder="Optional" />
-                </label>
-                <button type="button" className="button button--primary" onClick={() => void handleCreateTeam()} disabled={syncing || !newTeamName.trim()}>
-                  Create team
-                </button>
-              </div>
-
-              <div className="glass-panel">
                 <h2 className="section-card__title">Your teams</h2>
+                <p className="hint">Each card shows members, connected accounts, and post activity for that workspace.</p>
                 <div className="team-grid">
-                  {teams.map((team) => (
-                    <button
-                      key={team.id}
-                      type="button"
-                      className={`team-card ${team.id === selectedTeamId ? 'team-card--active' : ''}`}
-                      onClick={() => setSelectedTeamId(team.id)}
-                    >
-                      <strong>{team.name}{team.isPersonal ? ' · Personal' : ''}</strong>
-                      <small>{team.members.length} members · {team.accountIds.length} accounts</small>
-                    </button>
-                  ))}
+                  {teams.map((team) => {
+                    const teamPosts = posts.filter((p) => p.teamId === team.id)
+                    const plannedCount = teamPosts.filter((p) => p.status === 'scheduled').length
+                    const publishedCount = teamPosts.filter((p) => p.status === 'posted').length
+                    return (
+                      <button
+                        key={team.id}
+                        type="button"
+                        className={`team-card ${team.id === effectiveSelectedTeamId ? 'team-card--active' : ''}`}
+                        onClick={() => setSelectedTeamId(team.id)}
+                      >
+                        <strong>{team.name}{team.isPersonal ? ' · Personal' : ''}</strong>
+                        <small>{team.members.length} members · {team.accountIds.length} accounts</small>
+                        <div className="team-card__stats">
+                          <span>{plannedCount} planned</span>
+                          <span>{publishedCount} published</span>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -1404,78 +1488,37 @@ function App() {
                 <div className="glass-panel">
                   <h2 className="section-card__title">{selectedTeam.name}</h2>
                   <p className="hint">{selectedTeam.description || 'No description'}</p>
-
+                  {(() => {
+                    const teamPosts = posts.filter((p) => p.teamId === selectedTeam.id)
+                    const plannedCount = teamPosts.filter((p) => p.status === 'scheduled').length
+                    const publishedCount = teamPosts.filter((p) => p.status === 'posted').length
+                    return (
+                      <div className="stat-grid" style={{ marginTop: '1rem' }}>
+                        <div className="stat-tile">
+                          <span className="stat-tile__label">Planned posts</span>
+                          <span className="stat-tile__value">{plannedCount}</span>
+                        </div>
+                        <div className="stat-tile">
+                          <span className="stat-tile__label">Published</span>
+                          <span className="stat-tile__value">{publishedCount}</span>
+                        </div>
+                        <div className="stat-tile">
+                          <span className="stat-tile__label">Members</span>
+                          <span className="stat-tile__value">{selectedTeam.members.length}</span>
+                        </div>
+                        <div className="stat-tile">
+                          <span className="stat-tile__label">Accounts</span>
+                          <span className="stat-tile__value">{selectedTeam.accountIds.length}</span>
+                        </div>
+                      </div>
+                    )
+                  })()}
                   {selectedTeam.isPersonal ? (
-                    <p className="hint">This is your personal workspace. Invite other users from a shared team instead.</p>
-                  ) : myRoleInSelectedTeam === 'owner' ? (
-                    <>
-                      <h3 className="subsection-title">Members</h3>
-                      <ul className="member-list">
-                        {selectedTeam.members.map((m) => (
-                          <li key={m.userId} className="member-list__row">
-                            <div>
-                              <strong>{directoryUserLabel(m.userId)}</strong>
-                              <span className="member-list__role">{m.role}</span>
-                            </div>
-                            {m.userId !== principalUser?.id ? (
-                              <button type="button" className="button button--secondary" onClick={() => void handleRemoveTeamMember(m.userId)} disabled={syncing}>
-                                Remove
-                              </button>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-
-                      <h3 className="subsection-title">Add member</h3>
-                      <p className="hint">Grant access to an existing user from the directory.</p>
-                      <div className="inline-cluster" style={{ flexWrap: 'wrap' }}>
-                        <select value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
-                          <option value="">Select user…</option>
-                          {directoryUsers
-                            .filter((u) => !selectedTeam.members.some((m) => m.userId === u.id))
-                            .map((u) => (
-                              <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-                            ))}
-                        </select>
-                        <select value={addMemberRole} onChange={(event) => setAddMemberRole(event.target.value as 'editor' | 'viewer')}>
-                          <option value="editor">Editor</option>
-                          <option value="viewer">Viewer</option>
-                        </select>
-                        <button type="button" className="button button--primary" onClick={() => void handleAddTeamMember()} disabled={syncing || !addMemberUserId}>
-                          Add
-                        </button>
-                      </div>
-
-                      <h3 className="subsection-title">Invite by email</h3>
-                      <p className="hint">Generates a one-time token the invitee uses with the invitation link flow.</p>
-                      <div className="inline-cluster" style={{ flexWrap: 'wrap' }}>
-                        <input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="colleague@company.com" />
-                        <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as 'editor' | 'viewer')}>
-                          <option value="editor">Editor</option>
-                          <option value="viewer">Viewer</option>
-                        </select>
-                        <button type="button" className="button button--secondary" onClick={() => void handleInviteToTeam()} disabled={syncing || !inviteEmail.trim()}>
-                          Create invitation
-                        </button>
-                      </div>
-                    </>
-                  ) : myRoleInSelectedTeam ? (
-                    <>
-                      <h3 className="subsection-title">Members</h3>
-                      <ul className="member-list">
-                        {selectedTeam.members.map((m) => (
-                          <li key={m.userId} className="member-list__row">
-                            <div>
-                              <strong>{directoryUserLabel(m.userId)}</strong>
-                              <span className="member-list__role">{m.role}</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="hint">Only the team owner can add or remove people.</p>
-                    </>
+                    <p className="hint" style={{ marginTop: '1rem' }}>This is your personal workspace. Invite other users from a shared team instead.</p>
                   ) : (
-                    <p className="hint">You do not have access to this team.</p>
+                    <p className="hint" style={{ marginTop: '1rem' }}>
+                      Use the <strong>+</strong> button next to the team selector to create a shared team or manage members and invitations.
+                    </p>
                   )}
                 </div>
               ) : null}
@@ -1740,22 +1783,31 @@ function App() {
                     </button>
                   </div>
                 ) : null}
-                <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '1rem' }}>
-                  <input
-                    value={newApiTokenName}
-                    onChange={(event) => setNewApiTokenName(event.target.value)}
-                    placeholder="Token label (e.g. CI, laptop)"
-                  />
+                <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '1rem', alignItems: 'flex-end' }}>
+                  <label className="field" style={{ minWidth: '12rem' }}>
+                    <span>Label</span>
+                    <input
+                      value={newApiTokenName}
+                      onChange={(event) => setNewApiTokenName(event.target.value)}
+                      placeholder="e.g. CI, laptop"
+                    />
+                  </label>
+                  <label className="field" style={{ minWidth: '11rem' }}>
+                    <span>Expires (UTC end of day)</span>
+                    <input type="date" value={newApiTokenExpiresYmd} onChange={(event) => setNewApiTokenExpiresYmd(event.target.value)} />
+                  </label>
                   <button type="button" className="button button--primary" onClick={() => void handleCreateApiToken()} disabled={syncing || !newApiTokenName.trim()}>
                     Create token
                   </button>
                 </div>
+                <p className="hint">Expiry uses end of the selected calendar day in UTC (default picker value is 90 days ahead).</p>
                 {apiTokensLoading ? <p className="hint">Loading tokens…</p> : null}
                 <table className="data-table">
                   <thead>
                     <tr>
                       <th>Name</th>
                       <th>Created</th>
+                      <th>Expires</th>
                       <th>Last used</th>
                       <th />
                     </tr>
@@ -1765,6 +1817,7 @@ function App() {
                       <tr key={t.id}>
                         <td>{t.name}</td>
                         <td>{format(parseISO(t.created_at), 'PPp')}</td>
+                        <td>{t.expires_at && isValid(parseISO(t.expires_at)) ? format(parseISO(t.expires_at), 'PPp') : '—'}</td>
                         <td>{t.last_used_at ? format(parseISO(t.last_used_at), 'PPp') : '—'}</td>
                         <td>
                           <button type="button" className="button button--secondary" onClick={() => void handleRevokeApiToken(t.id)} disabled={syncing}>
@@ -2033,7 +2086,7 @@ function App() {
                   account={account}
                   content={selectedPost.content}
                   scheduledAt={selectedPost.scheduledAt}
-                  theme={theme}
+                  theme={resolvedTheme}
                   publishedPostUrl={
                     selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
                   }
@@ -2047,6 +2100,114 @@ function App() {
           </div>
         </aside>
         ) : null}
+
+      {teamModalOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setTeamModalOpen(false)}>
+          <div className="composer-container team-workspace-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="composer-main">
+              <header className="team-workspace-modal__head">
+                <div>
+                  <p className="eyebrow">Team workspace</p>
+                  <h2>Create or manage teams</h2>
+                </div>
+                <button type="button" className="button button--secondary" onClick={() => setTeamModalOpen(false)} aria-label="Close">
+                  <Icon name="close" className="inline-icon" />
+                </button>
+              </header>
+
+              <h3 className="subsection-title">Create team</h3>
+              <p className="hint">New teams you create are owned by you. Personal workspaces cannot receive members.</p>
+              <label className="field">
+                <span>Name</span>
+                <input value={newTeamName} onChange={(event) => setNewTeamName(event.target.value)} placeholder="Marketing" />
+              </label>
+              <label className="field">
+                <span>Description</span>
+                <input value={newTeamDescription} onChange={(event) => setNewTeamDescription(event.target.value)} placeholder="Optional" />
+              </label>
+              <button type="button" className="button button--primary" onClick={() => void handleCreateTeam()} disabled={syncing || !newTeamName.trim()}>
+                Create team
+              </button>
+
+              <div className="divider" style={{ margin: '1.5rem 0' }} />
+
+              <h3 className="subsection-title">Members · {selectedTeam?.name ?? '—'}</h3>
+              {!selectedTeam ? (
+                <p className="hint">Select a team in the header to manage members.</p>
+              ) : selectedTeam.isPersonal ? (
+                <p className="hint">Personal workspace has no shared members.</p>
+              ) : myRoleInSelectedTeam === 'owner' ? (
+                <>
+                  <ul className="member-list">
+                    {selectedTeam.members.map((m) => (
+                      <li key={m.userId} className="member-list__row">
+                        <div>
+                          <strong>{directoryUserLabel(m.userId)}</strong>
+                          <span className="member-list__role">{m.role}</span>
+                        </div>
+                        {m.userId !== principalUser?.id ? (
+                          <button type="button" className="button button--secondary" onClick={() => void handleRemoveTeamMember(m.userId)} disabled={syncing}>
+                            Remove
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <h4 className="subsection-title" style={{ marginTop: '1rem' }}>Add member</h4>
+                  <p className="hint">Grant access to an existing user from the directory.</p>
+                  <div className="inline-cluster" style={{ flexWrap: 'wrap' }}>
+                    <select value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
+                      <option value="">Select user…</option>
+                      {directoryUsers
+                        .filter((u) => !selectedTeam.members.some((m) => m.userId === u.id))
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                        ))}
+                    </select>
+                    <select value={addMemberRole} onChange={(event) => setAddMemberRole(event.target.value as 'editor' | 'viewer')}>
+                      <option value="editor">Editor</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                    <button type="button" className="button button--primary" onClick={() => void handleAddTeamMember()} disabled={syncing || !addMemberUserId}>
+                      Add
+                    </button>
+                  </div>
+
+                  <h4 className="subsection-title" style={{ marginTop: '1rem' }}>Invite by email</h4>
+                  <p className="hint">Generates a one-time token the invitee uses with the invitation link flow.</p>
+                  <div className="inline-cluster" style={{ flexWrap: 'wrap' }}>
+                    <input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="colleague@company.com" />
+                    <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as 'editor' | 'viewer')}>
+                      <option value="editor">Editor</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                    <button type="button" className="button button--secondary" onClick={() => void handleInviteToTeam()} disabled={syncing || !inviteEmail.trim()}>
+                      Create invitation
+                    </button>
+                  </div>
+                </>
+              ) : myRoleInSelectedTeam ? (
+                <>
+                  <ul className="member-list">
+                    {selectedTeam.members.map((m) => (
+                      <li key={m.userId} className="member-list__row">
+                        <div>
+                          <strong>{directoryUserLabel(m.userId)}</strong>
+                          <span className="member-list__role">{m.role}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="hint">Only the team owner can add or remove people.</p>
+                </>
+              ) : (
+                <p className="hint">You do not have access to this team.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {composerOpen && (
         <div className="modal-backdrop" onClick={closeComposer}>
@@ -2129,7 +2290,7 @@ function App() {
                   account={selectedComposerAccounts[0]}
                   content={editorDraft.content}
                   scheduledAt={editorDraft.scheduledAt}
-                  theme={theme}
+                  theme={resolvedTheme}
                 />
               ) : (
                 <p className="hint">Select a destination to see a preview.</p>
@@ -2456,7 +2617,29 @@ function groupPostsByDay(posts: PostRecord[]) {
     const key = format(parseISO(post.scheduledAt), 'yyyy-MM-dd')
     groups.set(key, [...(groups.get(key) ?? []), post])
   }
-  return Array.from(groups.entries()).map(([key, value]) => ({ key, posts: value }))
+  for (const [, list] of groups) {
+    list.sort((a, b) => parseISO(a.scheduledAt).getTime() - parseISO(b.scheduledAt).getTime())
+  }
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => ({ key, posts: value }))
+}
+
+function groupUpcomingIntoMonths(posts: PostRecord[]) {
+  const byDay = groupPostsByDay(posts)
+  const out: { monthKey: string; monthLabel: string; days: { key: string; posts: PostRecord[] }[] }[] = []
+  for (const g of byDay) {
+    const first = parseISO(g.posts[0]!.scheduledAt)
+    const monthKey = format(first, 'yyyy-MM')
+    const monthLabel = format(first, 'MMMM yyyy')
+    const last = out[out.length - 1]
+    if (!last || last.monthKey !== monthKey) {
+      out.push({ monthKey, monthLabel, days: [g] })
+    } else {
+      last.days.push(g)
+    }
+  }
+  return out
 }
 
 function calendarCellsForMonth(month: Date, posts: PostRecord[]) {
@@ -2491,13 +2674,6 @@ function initialsFromName(name: string): string {
   return `${parts[0]![0] ?? ''}${parts[parts.length - 1]![0] ?? ''}`.toUpperCase() || '?'
 }
 
-function getSystemTheme(): 'dark' | 'light' {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'dark'
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
 function loadStoredSettings(): SettingsState {
   if (typeof window === 'undefined') {
     return initialSettings
@@ -2511,6 +2687,7 @@ function loadStoredSettings(): SettingsState {
     return {
       ...initialSettings,
       ...parsed,
+      ui: { ...initialSettings.ui, ...parsed.ui },
       general: { ...initialSettings.general, ...parsed.general },
       oidc: { ...initialSettings.oidc, ...parsed.oidc },
       security: { ...initialSettings.security, ...parsed.security },

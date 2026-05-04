@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/security"
@@ -60,11 +61,17 @@ func (s *Store) AdminMetrics(ctx context.Context) (domain.AdminMetrics, error) {
 	return m, rows.Err()
 }
 
-func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string) (string, domain.APIToken, error) {
+func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (string, domain.APIToken, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", domain.APIToken{}, errors.New("name is required")
 	}
+	exp := expiresAt
+	if exp == nil {
+		t := time.Now().UTC().AddDate(0, 0, 90)
+		exp = &t
+	}
+	expiresStr := exp.UTC().Format(time.RFC3339)
 	plaintext, err := randomAPIToken()
 	if err != nil {
 		return "", domain.APIToken{}, err
@@ -74,17 +81,19 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string) (st
 	now := nowString()
 	_, err = s.db.ExecContext(ctx, `
 		insert into api_tokens (id, user_id, name, token_hash, expires_at, created_at)
-		values (?, ?, ?, ?, null, ?)`,
-		id, userID, name, hash, now,
+		values (?, ?, ?, ?, ?, ?)`,
+		id, userID, name, hash, expiresStr, now,
 	)
 	if err != nil {
 		return "", domain.APIToken{}, err
 	}
 	created := mustParseTime(now)
+	expParsed := mustParseTime(expiresStr)
 	return plaintext, domain.APIToken{
 		ID:        id,
 		UserID:    userID,
 		Name:      name,
+		ExpiresAt: &expParsed,
 		CreatedAt: created,
 	}, nil
 }

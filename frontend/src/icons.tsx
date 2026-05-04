@@ -1,6 +1,8 @@
 import type { ReactNode, SVGProps } from 'react'
 
 export type IconName =
+  | 'lock'
+  | 'close'
   | 'sun'
   | 'moon'
   | 'calendar'
@@ -17,6 +19,18 @@ export type IconName =
   | 'chevron-right'
 
 const iconPaths: Record<IconName, ReactNode> = {
+  lock: (
+    <>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </>
+  ),
+  close: (
+    <>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </>
+  ),
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />
