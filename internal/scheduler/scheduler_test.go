@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"sync"
@@ -41,6 +42,7 @@ type markTargetCall struct {
 	postID, accountID       string
 	status                  domain.PostStatus
 	publishedURL, lastError string
+	publishMetadata         map[string]string
 }
 
 type markPostCall struct {
@@ -179,7 +181,7 @@ func (m *mockStore) MarkPostResult(ctx context.Context, postID string, attemptCo
 	return nil
 }
 
-func (m *mockStore) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string) error {
+func (m *mockStore) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.markTargetErr != nil {
@@ -187,8 +189,12 @@ func (m *mockStore) MarkPostTargetResult(ctx context.Context, postID, accountID 
 	}
 	m.markTargetCalls = append(m.markTargetCalls, markTargetCall{
 		postID: postID, accountID: accountID, status: status,
-		publishedURL: publishedURL, lastError: lastError,
+		publishedURL: publishedURL, lastError: lastError, publishMetadata: publishMetadata,
 	})
+	return nil
+}
+
+func (m *mockStore) UpdateSocialAccountTokens(ctx context.Context, accountID string, accessToken, refreshToken string, accessExpiresAt *time.Time) error {
 	return nil
 }
 
@@ -324,6 +330,10 @@ func (f *fakeProvider) PrepareProviderInstance(ctx context.Context, input domain
 
 func (f *fakeProvider) ConnectAccount(ctx context.Context, input domain.CreateAccountInput, instance *domain.ProviderInstance) (domain.ConnectedAccount, error) {
 	return domain.ConnectedAccount{}, nil
+}
+
+func (f *fakeProvider) UploadMedia(ctx context.Context, account domain.SocialAccount, auth provider.PublishAuth, file io.Reader, filename, mimeType, altText string) (string, error) {
+	return "", errors.New("not implemented")
 }
 
 func (f *fakeProvider) Publish(ctx context.Context, account domain.SocialAccount, auth provider.PublishAuth, req provider.PublishRequest) (provider.PublishResult, error) {

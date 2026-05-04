@@ -86,6 +86,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAccounts))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/oauth/mastodon/start", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleStartMastodonOAuth))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAccount))))
+	mux.Handle("POST /v1/teams/{teamID}/media/upload", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaUpload))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/{accountID}/migrate", a.auth.RequireAuth(http.HandlerFunc(a.handleMigrateAccount)))
 	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeleteAccount)))
 	mux.Handle("GET /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPosts))))
@@ -596,6 +597,8 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
 	input.Title = strings.TrimSpace(input.Title)
+	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
+	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
 	if input.ScheduledAt.IsZero() {
 		input.ScheduledAt = time.Now().UTC()
 	}
@@ -649,6 +652,8 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
 	input.Title = strings.TrimSpace(input.Title)
+	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
+	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
 	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -730,6 +735,8 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
+	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
+	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
 	validation, effectiveTeam, err := a.validatePostInput(r.Context(), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

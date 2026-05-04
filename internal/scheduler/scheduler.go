@@ -10,6 +10,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/socialtokens"
 	"git.f4mily.net/goloom/internal/store"
 )
 
@@ -112,16 +113,26 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		providerImpl, ok := s.providers.Get(account.Provider)
 		if !ok {
 			err := fmt.Errorf("unsupported provider %q", account.Provider)
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error())
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 
+		acc, err := socialtokens.EnsureMastodonFresh(ctx, s.store, s.providers, account)
+		if err != nil {
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		account = acc
+
 		token, err := s.store.DecryptAccessToken(account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error())
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -130,7 +141,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		refreshToken, err := s.store.DecryptRefreshToken(account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error())
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -140,16 +151,21 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		result, err := providerImpl.Publish(ctx, account, provider.PublishAuth{
 			AccessToken:  token,
 			RefreshToken: refreshToken,
-		}, provider.PublishRequest{Content: post.Content})
+		}, provider.PublishRequest{
+			Content:     post.Content,
+			MediaIDs:    post.MediaIDs,
+			Visibility:  post.Visibility,
+			ScheduledAt: nil,
+		})
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error())
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 
-		if err := s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusPosted, result.URL, ""); err != nil {
+		if err := s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusPosted, result.URL, "", result.Metadata); err != nil {
 			s.logger.Warn("failed to mark post target result", "post_id", post.ID, "account_id", account.ID, "error", err)
 		}
 	}
