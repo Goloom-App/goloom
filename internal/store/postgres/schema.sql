@@ -215,6 +215,7 @@ alter table scheduled_posts add column if not exists media_exclude_by_account te
 
 alter table scheduled_post_targets add column if not exists publish_metadata text not null default '{}';
 alter table scheduled_post_targets add column if not exists metrics_last_sync_date text;
+alter table scheduled_post_targets add column if not exists metrics_last_sync_at timestamptz;
 
 alter table scheduled_posts drop constraint if exists scheduled_posts_status_check;
 alter table scheduled_posts add constraint scheduled_posts_status_check

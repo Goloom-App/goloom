@@ -14,10 +14,15 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		limit = 500
 	}
 	since := formatTime(notBefore.UTC())
+	now := time.Now().UTC()
+	recentPostCutoff := formatTime(now.Add(-24 * time.Hour))
+	recentSyncCutoff := formatTime(now.Add(-30 * time.Minute))
+	olderSyncCutoff := formatTime(now.Add(-6 * time.Hour))
 	utcDay = strings.TrimSpace(utcDay)
 	if utcDay == "" {
 		utcDay = time.Now().UTC().Format("2006-01-02")
 	}
+	_ = utcDay
 	rows, err := s.db.QueryContext(ctx, `
 		select t.post_id, t.published_url,
 		       a.id, a.team_id, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
@@ -30,10 +35,20 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		  and p.status = 'posted'
 		  and t.published_url is not null and trim(t.published_url) <> ''
 		  and p.updated_at >= ?
-		  and (t.metrics_last_sync_date is null or t.metrics_last_sync_date < ?)
+		  and (
+			t.metrics_last_sync_at is null
+			or (
+				p.updated_at >= ?
+				and t.metrics_last_sync_at <= ?
+			)
+			or (
+				p.updated_at < ?
+				and t.metrics_last_sync_at <= ?
+			)
+		  )
 		order by p.updated_at desc
 		limit ?`,
-		since, utcDay, limit,
+		since, recentPostCutoff, recentSyncCutoff, recentPostCutoff, olderSyncCutoff, limit,
 	)
 	if err != nil {
 		return nil, err
@@ -129,9 +144,9 @@ func (s *Store) MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID
 	}
 	_, err := s.db.ExecContext(ctx, `
 		update scheduled_post_targets
-		set metrics_last_sync_date = ?
+		set metrics_last_sync_date = ?, metrics_last_sync_at = ?
 		where post_id = ? and account_id = ?`,
-		utcDay, postID, accountID,
+		utcDay, nowString(), postID, accountID,
 	)
 	return err
 }

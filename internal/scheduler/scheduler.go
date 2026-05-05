@@ -289,7 +289,7 @@ func (s *Service) accountHealthJob(ctx context.Context) {
 
 // fetchMetricsJob pulls provider metrics for posted targets at most once per UTC calendar day per target.
 func (s *Service) fetchMetricsJob(ctx context.Context) {
-	since := time.Now().Add(-30 * 24 * time.Hour)
+	since := time.Now().Add(-7 * 24 * time.Hour)
 	utcDay := time.Now().UTC().Format("2006-01-02")
 	rows, err := s.store.ListPostedTargetsForMetricSync(ctx, since, utcDay, 500)
 	if err != nil {

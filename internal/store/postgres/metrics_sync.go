@@ -12,10 +12,15 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 	if limit <= 0 {
 		limit = 500
 	}
+	now := time.Now().UTC()
+	recentPostCutoff := now.Add(-24 * time.Hour)
+	recentSyncCutoff := now.Add(-30 * time.Minute)
+	olderSyncCutoff := now.Add(-6 * time.Hour)
 	utcDay = strings.TrimSpace(utcDay)
 	if utcDay == "" {
 		utcDay = time.Now().UTC().Format("2006-01-02")
 	}
+	_ = utcDay
 	const query = `
 		select t.post_id, t.published_url,
 		       a.id, a.team_id, a.provider, a.auth_type, coalesce(a.provider_instance_id::text, ''), a.instance_url, a.username, a.remote_account_id,
@@ -28,12 +33,22 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		  and p.status = 'posted'
 		  and t.published_url is not null and trim(t.published_url) <> ''
 		  and p.updated_at >= $1
-		  and (t.metrics_last_sync_date is null or t.metrics_last_sync_date < $2)
+		  and (
+			t.metrics_last_sync_at is null
+			or (
+				p.updated_at >= $2
+				and t.metrics_last_sync_at <= $3
+			)
+			or (
+				p.updated_at < $2
+				and t.metrics_last_sync_at <= $4
+			)
+		  )
 		order by p.updated_at desc
-		limit $3
+		limit $5
 	`
 
-	rows, err := s.pool.Query(ctx, query, notBefore, utcDay, limit)
+	rows, err := s.pool.Query(ctx, query, notBefore, recentPostCutoff, recentSyncCutoff, olderSyncCutoff, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +126,7 @@ func (s *Store) MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID
 	}
 	_, err := s.pool.Exec(ctx, `
 		update scheduled_post_targets
-		set metrics_last_sync_date = $3
+		set metrics_last_sync_date = $3, metrics_last_sync_at = now()
 		where post_id = $1 and account_id = $2`,
 		postID, accountID, utcDay,
 	)
