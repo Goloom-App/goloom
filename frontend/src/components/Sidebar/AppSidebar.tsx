@@ -52,17 +52,27 @@ export function AppSidebar({
             id="workspace-select"
             className="app-sidebar__workspace-select"
             value={effectiveSelectedTeamId}
-            onChange={(event) => onSelectTeam(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value
+              if (value === '__create_team__') {
+                onOpenTeamSettings()
+                return
+              }
+              onSelectTeam(value)
+            }}
             disabled={teams.length === 0}
           >
             {teams.length === 0 ? (
               <option value="">No team loaded</option>
             ) : (
-              teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))
+              <>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+                <option value="__create_team__">+ Create new team…</option>
+              </>
             )}
           </select>
           <button

@@ -19,7 +19,6 @@ import { AdminView } from './views/admin/AdminView'
 import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admin/adminTypes'
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { SettingsView } from './views/settings/SettingsView'
-import { TeamsView } from './views/teams/TeamsView'
 import {
   ApiError,
   createApiClient,
@@ -94,7 +93,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null)
-  const [teamModalOpen, setTeamModalOpen] = useState(false)
   const [newApiTokenExpiresYmd, setNewApiTokenExpiresYmd] = useState(() => format(addDays(new Date(), 90), 'yyyy-MM-dd'))
   const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
   const [providerInstances, setProviderInstances] = useState<ProviderInstanceRecord[]>([])
@@ -1311,7 +1309,6 @@ function App() {
         onSelectTeam={setSelectedTeamId}
         onOpenTeamSettings={() => {
           setSection('teams')
-          setTeamModalOpen(true)
         }}
         onCreatePost={openCreateComposer}
         onSignOut={() => clearAuthenticatedState('Signed out')}
@@ -1434,136 +1431,9 @@ function App() {
           ) : null}
 
           {section === 'teams' && (
-            <TeamsView
-              teams={teams}
-              posts={posts}
-              effectiveSelectedTeamId={effectiveSelectedTeamId}
-              selectedTeam={selectedTeam}
-              onSelectTeam={setSelectedTeamId}
-            />
-          )}
-
-          {section === 'accounts' && (
-            <AccountsView
-              selectedTeam={selectedTeam}
-              teamAccounts={teamAccounts}
-              canEditTeamAccounts={canEditTeamAccounts}
-              syncing={syncing}
-              accountDraft={accountDraft}
-              setAccountDraft={setAccountDraft}
-              instancesForAccountConnect={instancesForAccountConnect}
-              onDeleteTeamAccount={handleDeleteTeamAccount}
-              onConnectSocialAccount={handleConnectSocialAccount}
-              onMastodonOAuthConnect={handleMastodonOAuthConnect}
-            />
-          )}
-
-          {section === 'settings' && (
-            <SettingsView
-              settings={settings}
-              setSettings={setSettings}
-              updateAPIBaseURL={updateAPIBaseURL}
-              connectBackend={connectBackend}
-              loadDashboard={loadDashboard}
-              apiPresent={Boolean(api)}
-              syncing={syncing}
-              newTokenPlaintext={newTokenPlaintext}
-              setNewTokenPlaintext={setNewTokenPlaintext}
-              newApiTokenName={newApiTokenName}
-              setNewApiTokenName={setNewApiTokenName}
-              newApiTokenExpiresYmd={newApiTokenExpiresYmd}
-              setNewApiTokenExpiresYmd={setNewApiTokenExpiresYmd}
-              onCreateApiToken={handleCreateApiToken}
-              onRevokeApiToken={handleRevokeApiToken}
-              apiTokens={apiTokens}
-              apiTokensLoading={apiTokensLoading}
-            />
-          )}
-
-          {section === 'admin' && principalUser?.globalRole === 'admin' ? (
-            <AdminView
-              adminMetrics={adminMetrics}
-              adminMetricsLoading={adminMetricsLoading}
-              adminRuntime={adminRuntime}
-              directoryUsers={directoryUsers}
-              providerInstances={providerInstances}
-              accounts={accounts}
-              adminProviderDraft={adminProviderDraft}
-              setAdminProviderDraft={setAdminProviderDraft}
-              editingProviderId={editingProviderId}
-              setEditingProviderId={setEditingProviderId}
-              showAdminProviderAdvanced={showAdminProviderAdvanced}
-              setShowAdminProviderAdvanced={setShowAdminProviderAdvanced}
-              syncing={syncing}
-              onSaveAdminProvider={handleSaveAdminProvider}
-              onDeleteProviderInstance={handleDeleteProviderInstance}
-            />
-          ) : section === 'admin' ? (
             <div className="glass-panel">
-              <p className="hint">Administrator access is required for this section.</p>
-            </div>
-          ) : null}
-        </main>
-
-        {showPreviewColumn ? (
-        <aside className="preview-column">
-          <div className="preview-header">
-            <div className="preview-header__top">
-              <div>
-                <p className="eyebrow">Live Preview</p>
-                <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
-              </div>
-              {selectedPost &&
-              (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
-              canEditScheduledPosts ? (
-                <button type="button" className="button button--secondary preview-header__edit" onClick={() => openEditor(selectedPost.id)}>
-                  <Icon name="edit" className="inline-icon" />
-                  <span>Edit</span>
-                </button>
-              ) : null}
-            </div>
-          </div>
-          <div className="preview-content">
-            {selectedPost ? (
-              sharedAccountLabels(selectedPost, accounts).map((account) => (
-                <SocialPreview
-                  key={account.id}
-                  account={account}
-                  content={selectedPost.content}
-                  scheduledAt={selectedPost.scheduledAt}
-                  theme={resolvedTheme}
-                  publishedPostUrl={
-                    selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
-                  }
-                  engagement={
-                    section === 'archive' && selectedPost.status === 'posted'
-                      ? engagementForAccount(archivePreviewMetrics, account.id)
-                      : null
-                  }
-                />
-              ))
-            ) : (
-              <div className="empty-state">
-                <p className="hint">Select a post from the timeline to see how it will look on different platforms.</p>
-              </div>
-            )}
-          </div>
-        </aside>
-        ) : null}
-
-      {teamModalOpen ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setTeamModalOpen(false)}>
-          <div className="composer-container team-workspace-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="composer-main">
-              <header className="team-workspace-modal__head">
-                <div>
-                  <p className="eyebrow">Team workspace</p>
-                  <h2>Create or manage teams</h2>
-                </div>
-                <button type="button" className="button button--secondary" onClick={() => setTeamModalOpen(false)} aria-label="Close">
-                  <Icon name="close" className="inline-icon" />
-                </button>
-              </header>
+              <h2 className="section-card__title">Team settings</h2>
+              <p className="hint">Create new teams, manage members, update access, and transfer ownership.</p>
 
               <h3 className="subsection-title">Create team</h3>
               <p className="hint">New teams you create are owned by you. Personal workspaces cannot receive members.</p>
@@ -1706,9 +1576,115 @@ function App() {
                 <p className="hint">You do not have access to this team.</p>
               )}
             </div>
+          )}
+
+          {section === 'accounts' && (
+            <AccountsView
+              selectedTeam={selectedTeam}
+              teamAccounts={teamAccounts}
+              canEditTeamAccounts={canEditTeamAccounts}
+              syncing={syncing}
+              accountDraft={accountDraft}
+              setAccountDraft={setAccountDraft}
+              instancesForAccountConnect={instancesForAccountConnect}
+              onDeleteTeamAccount={handleDeleteTeamAccount}
+              onConnectSocialAccount={handleConnectSocialAccount}
+              onMastodonOAuthConnect={handleMastodonOAuthConnect}
+            />
+          )}
+
+          {section === 'settings' && (
+            <SettingsView
+              settings={settings}
+              setSettings={setSettings}
+              updateAPIBaseURL={updateAPIBaseURL}
+              connectBackend={connectBackend}
+              loadDashboard={loadDashboard}
+              apiPresent={Boolean(api)}
+              syncing={syncing}
+              newTokenPlaintext={newTokenPlaintext}
+              setNewTokenPlaintext={setNewTokenPlaintext}
+              newApiTokenName={newApiTokenName}
+              setNewApiTokenName={setNewApiTokenName}
+              newApiTokenExpiresYmd={newApiTokenExpiresYmd}
+              setNewApiTokenExpiresYmd={setNewApiTokenExpiresYmd}
+              onCreateApiToken={handleCreateApiToken}
+              onRevokeApiToken={handleRevokeApiToken}
+              apiTokens={apiTokens}
+              apiTokensLoading={apiTokensLoading}
+            />
+          )}
+
+          {section === 'admin' && principalUser?.globalRole === 'admin' ? (
+            <AdminView
+              adminMetrics={adminMetrics}
+              adminMetricsLoading={adminMetricsLoading}
+              adminRuntime={adminRuntime}
+              directoryUsers={directoryUsers}
+              providerInstances={providerInstances}
+              accounts={accounts}
+              adminProviderDraft={adminProviderDraft}
+              setAdminProviderDraft={setAdminProviderDraft}
+              editingProviderId={editingProviderId}
+              setEditingProviderId={setEditingProviderId}
+              showAdminProviderAdvanced={showAdminProviderAdvanced}
+              setShowAdminProviderAdvanced={setShowAdminProviderAdvanced}
+              syncing={syncing}
+              onSaveAdminProvider={handleSaveAdminProvider}
+              onDeleteProviderInstance={handleDeleteProviderInstance}
+            />
+          ) : section === 'admin' ? (
+            <div className="glass-panel">
+              <p className="hint">Administrator access is required for this section.</p>
+            </div>
+          ) : null}
+        </main>
+
+        {showPreviewColumn ? (
+        <aside className="preview-column">
+          <div className="preview-header">
+            <div className="preview-header__top">
+              <div>
+                <p className="eyebrow">Live Preview</p>
+                <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
+              </div>
+              {selectedPost &&
+              (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
+              canEditScheduledPosts ? (
+                <button type="button" className="button button--secondary preview-header__edit" onClick={() => openEditor(selectedPost.id)}>
+                  <Icon name="edit" className="inline-icon" />
+                  <span>Edit</span>
+                </button>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ) : null}
+          <div className="preview-content">
+            {selectedPost ? (
+              sharedAccountLabels(selectedPost, accounts).map((account) => (
+                <SocialPreview
+                  key={account.id}
+                  account={account}
+                  content={selectedPost.content}
+                  scheduledAt={selectedPost.scheduledAt}
+                  theme={resolvedTheme}
+                  publishedPostUrl={
+                    selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
+                  }
+                  engagement={
+                    section === 'archive' && selectedPost.status === 'posted'
+                      ? engagementForAccount(archivePreviewMetrics, account.id)
+                      : null
+                  }
+                />
+              ))
+            ) : (
+              <div className="empty-state">
+                <p className="hint">Select a post from the timeline to see how it will look on different platforms.</p>
+              </div>
+            )}
+          </div>
+        </aside>
+        ) : null}
 
       <PostComposer
         open={composerOpen}
