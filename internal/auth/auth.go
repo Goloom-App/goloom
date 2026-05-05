@@ -38,7 +38,11 @@ func New(ctx context.Context, cfg config.Config, store store.Store) (*Service, e
 	if err != nil {
 		return nil, err
 	}
-	service.verifier = provider.Verifier(&oidc.Config{ClientID: cfg.OIDCClientID})
+	verifier, err := buildVerifierFromProvider(ctx, provider, cfg.OIDCClientID, cfg.OIDCClientSecret)
+	if err != nil {
+		return nil, err
+	}
+	service.verifier = verifier
 	service.oauth2Cfg = oauth2.Config{
 		ClientID:     cfg.OIDCClientID,
 		ClientSecret: cfg.OIDCClientSecret,
