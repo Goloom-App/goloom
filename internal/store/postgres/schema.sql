@@ -217,3 +217,31 @@ alter table scheduled_post_targets add column if not exists metrics_last_sync_da
 alter table scheduled_posts drop constraint if exists scheduled_posts_status_check;
 alter table scheduled_posts add constraint scheduled_posts_status_check
     check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft'));
+
+-- Media library (must match db/schema.sql for Docker init parity)
+create table if not exists media_items (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    sha256 text not null,
+    filename text not null,
+    mime_type text not null,
+    size_bytes bigint not null,
+    width integer,
+    height integer,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_media_items_team on media_items(team_id);
+create index if not exists idx_media_items_sha256 on media_items(sha256);
+create unique index if not exists ux_media_items_team_sha256 on media_items(team_id, sha256);
+
+create table if not exists media_provider_mappings (
+    media_id uuid not null references media_items(id) on delete cascade,
+    account_id uuid not null references social_accounts(id) on delete cascade,
+    remote_id text not null,
+    expires_at timestamptz,
+    created_at timestamptz not null default now(),
+    primary key (media_id, account_id)
+);
+
+create index if not exists idx_media_mappings_account on media_provider_mappings(account_id);
