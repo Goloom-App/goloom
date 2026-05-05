@@ -129,8 +129,11 @@ func TestSQLite_TeamsAndMemberships(t *testing.T) {
 		t.Fatalf("expected personal workspace first: %#v", teams[0])
 	}
 	allTeams, err := s.ListTeamsForUser(ctx, member.ID, true)
-	if err != nil || len(allTeams) < 1 {
-		t.Fatalf("admin list: %v", err)
+	if err != nil || len(allTeams) != 1 {
+		t.Fatalf("member workspace list: %v %#v", err, allTeams)
+	}
+	if !allTeams[0].IsPersonal || allTeams[0].PersonalForUserID != member.ID {
+		t.Fatalf("expected member personal workspace only: %#v", allTeams[0])
 	}
 	if _, err := s.AddTeamMember(ctx, team.ID, domain.AddTeamMemberInput{UserID: member.ID, Role: domain.RoleEditor}); err != nil {
 		t.Fatal(err)
@@ -165,7 +168,7 @@ func TestSQLite_ProviderInstances(t *testing.T) {
 		Name:                  "inst-" + uuid.NewString(),
 		InstanceURL:           "https://social.example",
 		ClientID:              "cid",
-		ClientSecret:        "secret",
+		ClientSecret:          "secret",
 		Scopes:                []string{"read", "write"},
 		AuthorizationEndpoint: "https://social.example/oauth/authorize",
 		TokenEndpoint:         "https://social.example/oauth/token",
@@ -247,12 +250,12 @@ func TestSQLite_SocialAccounts(t *testing.T) {
 		t.Fatalf("refresh: %v", err)
 	}
 	accNoRef, err := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
-		Provider:        "mastodon",
-		AuthType:        domain.AccountAuthTypeOAuthToken,
-		InstanceURL:     "https://m2.example",
-		Username:        "u2",
-		AccessToken:     "only",
-		RefreshToken:    "",
+		Provider:     "mastodon",
+		AuthType:     domain.AccountAuthTypeOAuthToken,
+		InstanceURL:  "https://m2.example",
+		Username:     "u2",
+		AccessToken:  "only",
+		RefreshToken: "",
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -226,15 +226,13 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 }
 
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
+	_ = isAdmin
 	query := `
 		select id, name, description, is_personal, personal_for_user_id, created_at
 		from teams
 	`
-	args := []any{}
-	if !isAdmin {
-		query += ` where id in (select team_id from team_memberships where user_id = ?)`
-		args = append(args, userID)
-	}
+	args := []any{userID}
+	query += ` where id in (select team_id from team_memberships where user_id = ?)`
 	query += ` order by is_personal desc, name asc`
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
