@@ -38,7 +38,7 @@ func (s *Store) GetMediaItemByID(ctx context.Context, teamID, mediaID string) (d
 	if err != nil {
 		return domain.MediaItem{}, err
 	}
-	item.CreatedAt, _ = parseSQLiteTime(createdAtStr)
+	item.CreatedAt, _ = parseTime(createdAtStr)
 	return item, nil
 }
 
@@ -64,7 +64,7 @@ func (s *Store) ListTeamMedia(ctx context.Context, teamID string) ([]domain.Medi
 		); err != nil {
 			return nil, err
 		}
-		item.CreatedAt, _ = parseSQLiteTime(createdAtStr)
+		item.CreatedAt, _ = parseTime(createdAtStr)
 		items = append(items, item)
 	}
 	return items, nil
@@ -91,10 +91,10 @@ func (s *Store) GetMediaProviderMapping(ctx context.Context, mediaID, accountID 
 		return domain.MediaProviderMapping{}, err
 	}
 	if expiresAtStr.Valid {
-		t, _ := parseSQLiteTime(expiresAtStr.String)
+		t, _ := parseTime(expiresAtStr.String)
 		m.ExpiresAt = &t
 	}
-	m.CreatedAt, _ = parseSQLiteTime(createdAtStr)
+	m.CreatedAt, _ = parseTime(createdAtStr)
 	return m, nil
 }
 
