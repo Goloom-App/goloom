@@ -121,6 +121,18 @@ export interface BackendPostVersion {
   content: string
 }
 
+export interface BackendMediaItem {
+  id: string
+  team_id: string
+  sha256: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  width?: number
+  height?: number
+  created_at: string
+}
+
 export interface BackendProviderInstance {
   id: string
   provider: ProviderName
@@ -241,6 +253,10 @@ export function requestStartOIDCLogin(baseUrl: string, returnTo: string) {
 
 export function createApiClient(options: ApiClientOptions) {
   return {
+    authorizationHeader() {
+      const t = options.token.trim()
+      return t ? `Bearer ${t}` : ''
+    },
     me() {
       return request<{ user: BackendUser; kind: string }>(options, '/v1/me', {
         headers: buildHeaders(options.token, false),
@@ -465,28 +481,45 @@ export function createApiClient(options: ApiClientOptions) {
         body: JSON.stringify(payload),
       })
     },
-    uploadTeamMedia(teamID: string, accountID: string, file: File, altText?: string) {
-      const form = new FormData()
-      form.set('account_id', accountID)
-      form.set('file', file)
-      if (altText?.trim()) {
-        form.set('alt_text', altText.trim())
-      }
-      const headers = new Headers()
-      if (options.token.trim()) {
-        headers.set('Authorization', `Bearer ${options.token}`)
-      }
-      return request<{ media_id: string }>(options, `/v1/teams/${teamID}/media/upload`, {
-        method: 'POST',
-        headers,
-        body: form,
-      })
-    },
     deletePost(teamID: string, postID: string) {
       return request<void>(options, `/v1/teams/${teamID}/posts/${postID}`, {
         method: 'DELETE',
         headers: buildHeaders(options.token, false),
       })
+    },
+    listTeamMedia(teamID: string) {
+      return request<{ items: BackendMediaItem[] }>(options, `/v1/teams/${teamID}/media`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    uploadTeamMediaToLibrary(teamID: string, file: File) {
+      const form = new FormData()
+      form.set('file', file)
+      const headers = new Headers()
+      if (options.token.trim()) {
+        headers.set('Authorization', `Bearer ${options.token}`)
+      }
+      return request<BackendMediaItem>(options, `/v1/teams/${teamID}/media`, {
+        method: 'POST',
+        headers,
+        body: form,
+      })
+    },
+    deleteTeamMedia(teamID: string, mediaID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/media/${mediaID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    mediaPreviewUrl(teamID: string, mediaID: string): string {
+      const baseUrl = options.baseUrl.trim().replace(/\/$/, '')
+      const path = `/v1/teams/${teamID}/media/${mediaID}/preview`
+      const url = baseUrl ? `${baseUrl}${path}` : path
+      // Note: This URL requires Authorization header which standard <img> doesn't send.
+      // We'll need a way to pass the token, e.g. as a query param or use a custom hook to fetch as blob.
+      // For simplicity in this PWA evolution, we'll allow token in query param for previews
+      // OR better: use a blob URL via fetch in the component.
+      return url
     },
     getTeamAnalytics(teamID: string, opts?: { top_posts?: number }) {
       const q =

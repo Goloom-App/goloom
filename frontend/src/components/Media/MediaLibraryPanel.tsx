@@ -1,31 +1,113 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from '../../icons'
+import type { BackendMediaItem, createApiClient } from '../../api'
 
-export type LocalMediaEntry = {
-  id: string
-  filename: string
-  accountId: string
-  createdAt: string
-}
+type Api = ReturnType<typeof createApiClient>
 
 /**
- * Team media workspace: drag-and-drop upload and grid of uploaded asset IDs (session + localStorage).
+ * SecureImage fetches a preview with Authorization and displays it via an object URL.
  */
+function SecureImage({
+  url,
+  authHeader,
+  alt,
+  className,
+}: {
+  url: string
+  authHeader: string
+  alt?: string
+  className?: string
+}) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [error, setError] = useState(false)
+  const objectUrlRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    objectUrlRef.current = null
+    setBlobUrl(null)
+    setError(false)
+
+    void (async () => {
+      try {
+        const headers: HeadersInit = {}
+        if (authHeader) {
+          headers.Authorization = authHeader
+        }
+        const response = await fetch(url, { headers })
+        if (!response.ok) {
+          throw new Error('preview failed')
+        }
+        const blob = await response.blob()
+        const u = URL.createObjectURL(blob)
+        if (cancelled) {
+          URL.revokeObjectURL(u)
+          return
+        }
+        objectUrlRef.current = u
+        setBlobUrl(u)
+      } catch {
+        if (!cancelled) {
+          setError(true)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
+      }
+    }
+  }, [url, authHeader])
+
+  if (error) {
+    return (
+      <div
+        className={className}
+        style={{
+          display: 'grid',
+          placeItems: 'center',
+          background: 'var(--surface-soft)',
+        }}
+      >
+        <Icon name="image" />
+      </div>
+    )
+  }
+
+  if (!blobUrl) {
+    return (
+      <div className={`${className ?? ''} media-library__preview-skeleton`.trim()} aria-hidden="true" />
+    )
+  }
+
+  return <img src={blobUrl} alt={alt ?? ''} className={className} loading="lazy" />
+}
+
 export function MediaLibraryPanel({
+  teamId,
   teamLabel,
   entries,
   onUpload,
+  onDelete,
   uploading,
   uploadHint,
+  api,
 }: {
+  teamId: string
   teamLabel: string
-  entries: LocalMediaEntry[]
+  entries: BackendMediaItem[]
   onUpload: (file: File) => Promise<void>
+  onDelete?: (mediaId: string) => Promise<void>
   uploading: boolean
   uploadHint?: string
+  api: Api
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const authHeader = api.authorizationHeader()
 
   const runFile = useCallback(
     (file: File) => {
@@ -47,7 +129,9 @@ export function MediaLibraryPanel({
     <div className="media-library media-library--page">
       <div className="media-library__header">
         <p className="eyebrow">Media library</p>
-        <p className="hint">Uploads for {teamLabel}. Files are sent to the provider you pick below; IDs are stored for attaching to posts.</p>
+        <p className="hint">
+          Persistent uploads for {teamLabel}. These files are stored on Goloom and synced to providers when you publish.
+        </p>
       </div>
 
       <div
@@ -88,17 +172,45 @@ export function MediaLibraryPanel({
         {uploadHint ? <p className="hint media-library__drop-hint">{uploadHint}</p> : null}
       </div>
 
-      <div className="media-library__body media-library__body--simple">
-        <div className="media-library__grid" aria-label="Uploaded media">
+      <div className="media-library__body">
+        <div className="media-library__grid" aria-label="Media library items">
           {entries.length === 0 ? (
-            <p className="hint media-library__empty">No uploads yet. Add an image or video above.</p>
+            <p className="hint media-library__empty">No media in library yet. Upload an image or video above.</p>
           ) : (
             entries.map((entry) => (
-              <div key={`${entry.id}-${entry.createdAt}`} className="media-library__tile media-library__tile--static">
-                <span className="media-library__tile-label">{entry.filename}</span>
-                <code className="mono media-library__tile-id" title={entry.id}>
-                  {entry.id.length > 36 ? `${entry.id.slice(0, 18)}…` : entry.id}
-                </code>
+              <div key={entry.id} className="media-library__tile">
+                <div className="media-library__preview">
+                  {entry.mime_type.startsWith('image/') ? (
+                    <SecureImage
+                      url={api.mediaPreviewUrl(teamId, entry.id)}
+                      authHeader={authHeader}
+                      alt={entry.filename}
+                      className="media-library__img"
+                    />
+                  ) : (
+                    <div className="media-library__file-placeholder">
+                      <Icon name="film" />
+                    </div>
+                  )}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      className="media-library__delete-btn"
+                      onClick={() => void onDelete(entry.id)}
+                      title="Delete from library"
+                    >
+                      <Icon name="trash" />
+                    </button>
+                  )}
+                </div>
+                <div className="media-library__tile-info">
+                  <span className="media-library__tile-label" title={entry.filename}>
+                    {entry.filename}
+                  </span>
+                  <span className="hint">
+                    {entry.mime_type.split('/')[1]?.toUpperCase()} · {(entry.size_bytes / 1024).toFixed(1)} KB
+                  </span>
+                </div>
               </div>
             ))
           )}

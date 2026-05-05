@@ -45,7 +45,7 @@ export function PostComposer({
   onSave: () => void | Promise<void>
   onSaveDraft: () => void | Promise<void>
   onClose: () => void
-  /** Upload via POST /teams/:id/media/upload; returns provider media id. */
+  /** Upload to team media library (POST /teams/:id/media); returns library media id for scheduler JIT sync. */
   onMediaUpload?: (file: File) => Promise<string>
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
@@ -170,7 +170,7 @@ export function PostComposer({
             }
             onRemove={(id) => setDraft((current) => ({ ...current, mediaIds: current.mediaIds.filter((x) => x !== id) }))}
             onUpload={onMediaUpload}
-            uploadLabel={teamAccounts.length === 0 ? 'Add a social account to this team to upload media.' : undefined}
+            uploadLabel={onMediaUpload ? undefined : 'Select a workspace to attach media files.'}
             disabled={syncing}
           />
 

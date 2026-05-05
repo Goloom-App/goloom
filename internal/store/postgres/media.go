@@ -2,9 +2,32 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"github.com/jackc/pgx/v5"
 )
+
+func (s *Store) FindMediaItemByTeamSHA256(ctx context.Context, teamID, sha256 string) (domain.MediaItem, bool, error) {
+	var item domain.MediaItem
+	err := s.pool.QueryRow(ctx, `
+		select id, team_id, sha256, filename, mime_type, size_bytes, width, height, created_at
+		from media_items
+		where team_id = $1 and sha256 = $2
+		order by created_at asc
+		limit 1
+	`, teamID, sha256).Scan(
+		&item.ID, &item.TeamID, &item.Sha256, &item.Filename, &item.MimeType,
+		&item.SizeBytes, &item.Width, &item.Height, &item.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.MediaItem{}, false, nil
+		}
+		return domain.MediaItem{}, false, err
+	}
+	return item, true, nil
+}
 
 func (s *Store) CreateMediaItem(ctx context.Context, item domain.MediaItem) (domain.MediaItem, error) {
 	err := s.pool.QueryRow(ctx, `

@@ -502,3 +502,51 @@ func TestSQLite_ListOAuthAccountsWithAccessTokenExpiringBefore(t *testing.T) {
 		t.Fatalf("want 1 expiring account, got %d", len(out))
 	}
 }
+
+func TestSQLite_MediaFindByTeamSHA256(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, err := s.UpsertOIDCUser(ctx, "medsha", "medsha@x", "Medsha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "medsha-" + uuid.NewString(), Description: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, ok, err := s.FindMediaItemByTeamSHA256(ctx, team.ID, "deadbeef")
+	if err != nil || ok {
+		t.Fatalf("missing sha: ok=%v err=%v", ok, err)
+	}
+
+	width, height := 8, 8
+	created, err := s.CreateMediaItem(ctx, domain.MediaItem{
+		TeamID:    team.ID,
+		Sha256:    "abc123",
+		Filename:  "a.png",
+		MimeType:  "image/png",
+		SizeBytes: 10,
+		Width:     &width,
+		Height:    &height,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found, ok, err := s.FindMediaItemByTeamSHA256(ctx, team.ID, "abc123")
+	if err != nil || !ok || found.ID != created.ID {
+		t.Fatalf("FindMediaItemByTeamSHA256: %+v ok=%v err=%v", found, ok, err)
+	}
+
+	_, err = s.CreateMediaItem(ctx, domain.MediaItem{
+		TeamID:    team.ID,
+		Sha256:    "abc123",
+		Filename:  "b.png",
+		MimeType:  "image/png",
+		SizeBytes: 10,
+	})
+	if err == nil {
+		t.Fatal("duplicate team_id+sha256 should violate unique index")
+	}
+}

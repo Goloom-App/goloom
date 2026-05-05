@@ -1362,7 +1362,6 @@ function App() {
             <MediaLibraryView
               teamId={selectedTeam.id}
               teamName={selectedTeam.name}
-              teamAccounts={teamAccounts}
               api={api}
               onError={(msg) => setError(msg)}
             />
@@ -1610,12 +1609,8 @@ function App() {
         onMediaUpload={
           api && selectedTeam
             ? async (file) => {
-                const accountId = editorDraft.targetAccountIds[0] ?? teamAccounts[0]?.id
-                if (!accountId) {
-                  throw new Error('Select at least one destination account to upload media.')
-                }
-                const r = await api.uploadTeamMedia(selectedTeam.id, accountId, file)
-                return r.media_id
+                const item = await api.uploadTeamMediaToLibrary(selectedTeam.id, file)
+                return item.id
               }
             : undefined
         }

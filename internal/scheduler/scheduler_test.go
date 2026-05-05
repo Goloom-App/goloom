@@ -344,6 +344,32 @@ func (m *mockStore) RevokeUserAPIToken(ctx context.Context, userID, tokenID stri
 	return nil
 }
 
+func (m *mockStore) CreateMediaItem(ctx context.Context, item domain.MediaItem) (domain.MediaItem, error) {
+	return domain.MediaItem{}, errors.New("mock: CreateMediaItem not configured")
+}
+
+func (m *mockStore) FindMediaItemByTeamSHA256(ctx context.Context, teamID, sha256 string) (domain.MediaItem, bool, error) {
+	return domain.MediaItem{}, false, nil
+}
+
+func (m *mockStore) GetMediaItemByID(ctx context.Context, teamID, mediaID string) (domain.MediaItem, error) {
+	return domain.MediaItem{}, errors.New("mock: GetMediaItemByID not configured")
+}
+
+func (m *mockStore) ListTeamMedia(ctx context.Context, teamID string) ([]domain.MediaItem, error) {
+	return nil, nil
+}
+
+func (m *mockStore) DeleteMediaItem(ctx context.Context, teamID, mediaID string) error { return nil }
+
+func (m *mockStore) GetMediaProviderMapping(ctx context.Context, mediaID, accountID string) (domain.MediaProviderMapping, error) {
+	return domain.MediaProviderMapping{}, errors.New("mock: no mapping")
+}
+
+func (m *mockStore) UpsertMediaProviderMapping(ctx context.Context, mapping domain.MediaProviderMapping) error {
+	return nil
+}
+
 var _ store.Store = (*mockStore)(nil)
 
 type fakeProvider struct {

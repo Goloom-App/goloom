@@ -227,6 +227,7 @@ create table if not exists media_items (
 
 create index if not exists idx_media_items_team on media_items(team_id);
 create index if not exists idx_media_items_sha256 on media_items(sha256);
+create unique index if not exists ux_media_items_team_sha256 on media_items(team_id, sha256);
 
 create table if not exists media_provider_mappings (
     media_id uuid not null references media_items(id) on delete cascade,

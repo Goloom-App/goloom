@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -367,7 +368,7 @@ func (s *Service) syncMediaToProvider(ctx context.Context, post domain.Scheduled
 		if err != nil {
 			return nil, fmt.Errorf("open local media %q: %w", item.ID, err)
 		}
-		// Uploading to provider. 
+		// Uploading to provider.
 		remoteID, err := p.UploadMedia(ctx, account, auth, file, item.Filename, item.MimeType, "")
 		file.Close()
 		if err != nil {

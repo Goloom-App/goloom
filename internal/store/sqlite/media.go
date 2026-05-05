@@ -9,6 +9,29 @@ import (
 	"github.com/google/uuid"
 )
 
+func (s *Store) FindMediaItemByTeamSHA256(ctx context.Context, teamID, sha256 string) (domain.MediaItem, bool, error) {
+	var item domain.MediaItem
+	var createdAtStr string
+	err := s.db.QueryRowContext(ctx, `
+		select id, team_id, sha256, filename, mime_type, size_bytes, width, height, created_at
+		from media_items
+		where team_id = ? and sha256 = ?
+		order by created_at asc
+		limit 1
+	`, teamID, sha256).Scan(
+		&item.ID, &item.TeamID, &item.Sha256, &item.Filename, &item.MimeType,
+		&item.SizeBytes, &item.Width, &item.Height, &createdAtStr,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.MediaItem{}, false, nil
+		}
+		return domain.MediaItem{}, false, err
+	}
+	item.CreatedAt, _ = parseTime(createdAtStr)
+	return item, true, nil
+}
+
 func (s *Store) CreateMediaItem(ctx context.Context, item domain.MediaItem) (domain.MediaItem, error) {
 	if item.ID == "" {
 		item.ID = uuid.NewString()

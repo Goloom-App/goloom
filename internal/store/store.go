@@ -76,6 +76,8 @@ type Store interface {
 	EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error
 
 	CreateMediaItem(ctx context.Context, item domain.MediaItem) (domain.MediaItem, error)
+	// FindMediaItemByTeamSHA256 returns ok=true when the team already ingested this file hash (dedup).
+	FindMediaItemByTeamSHA256(ctx context.Context, teamID, sha256 string) (item domain.MediaItem, ok bool, err error)
 	GetMediaItemByID(ctx context.Context, teamID, mediaID string) (domain.MediaItem, error)
 	ListTeamMedia(ctx context.Context, teamID string) ([]domain.MediaItem, error)
 	DeleteMediaItem(ctx context.Context, teamID, mediaID string) error

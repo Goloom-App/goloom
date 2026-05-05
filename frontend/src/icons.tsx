@@ -18,6 +18,7 @@ export type IconName =
   | 'admin'
   | 'chart'
   | 'image'
+  | 'film'
   | 'chevron-left'
   | 'chevron-right'
 
@@ -120,6 +121,13 @@ const iconPaths: Record<IconName, ReactNode> = {
       <rect x="4" y="5" width="16" height="14" rx="2" />
       <circle cx="9" cy="10" r="1.5" />
       <path d="m4 16 4.5-4.5a1.5 1.5 0 0 1 2.1 0L15 16" />
+    </>
+  ),
+  film: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path d="M8 4v16M16 4v16" />
+      <path d="M11 10 16 12 11 14z" />
     </>
   ),
   'chevron-left': <path d="m14.5 5-7 7 7 7" />,

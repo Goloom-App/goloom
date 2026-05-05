@@ -2351,6 +2351,29 @@ input:focus, select:focus, textarea:focus {
   overflow: hidden;
 }
 
+.media-library__preview-skeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    var(--surface-soft),
+    var(--surface-muted),
+    var(--surface-soft)
+  );
+  background-size: 200% 100%;
+  animation: media-library-shimmer 1.15s ease-in-out infinite;
+}
+
+@keyframes media-library-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
 .media-library__img {
   width: 100%;
   height: 100%;
