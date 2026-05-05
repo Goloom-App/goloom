@@ -143,17 +143,86 @@ body {
   background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
 }
 
-/* Auth screen: compact mark only */
-.nav-rail__brand {
-  width: 42px;
-  height: 42px;
-  background: var(--primary);
-  color: var(--primary-text);
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 1.2rem;
+/* Brand mark (sidebar, login, favicon.svg — keep geometry aligned) */
+.goloom-logo {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.goloom-logo--md {
+  width: 40px;
+  height: 40px;
+}
+
+.goloom-logo--lg {
+  width: 48px;
+  height: 48px;
+}
+
+.goloom-logo__layer {
+  position: absolute;
+  opacity: 0.92;
+}
+
+.goloom-logo--md .goloom-logo__layer {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+}
+
+.goloom-logo--lg .goloom-logo__layer {
+  width: 26px;
+  height: 26px;
+  border-radius: 10px;
+}
+
+.goloom-logo__layer--a {
+  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+  z-index: 1;
+}
+
+.goloom-logo--md .goloom-logo__layer--a {
+  top: 2px;
+  left: 2px;
+}
+
+.goloom-logo--lg .goloom-logo__layer--a {
+  top: 2.4px;
+  left: 2.4px;
+}
+
+.goloom-logo__layer--b {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  z-index: 2;
+}
+
+.goloom-logo--md .goloom-logo__layer--b {
+  top: 8px;
+  left: 10px;
+}
+
+.goloom-logo--lg .goloom-logo__layer--b {
+  top: 9.6px;
+  left: 12px;
+}
+
+.goloom-logo__layer--c {
+  background: linear-gradient(135deg, #fb923c, #ea580c);
+  z-index: 3;
+}
+
+.goloom-logo--md .goloom-logo__layer--c {
+  top: 14px;
+  left: 4px;
+}
+
+.goloom-logo--lg .goloom-logo__layer--c {
+  top: 16.8px;
+  left: 4.8px;
+}
+
+.auth-card__logo {
+  flex-shrink: 0;
 }
 
 .app-sidebar {
@@ -175,42 +244,6 @@ body {
   gap: 0.75rem;
   margin-bottom: 1.25rem;
   flex-shrink: 0;
-}
-
-.app-sidebar__logo {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-}
-
-.app-sidebar__logo-layer {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-radius: 8px;
-  opacity: 0.92;
-}
-
-.app-sidebar__logo-layer--a {
-  top: 2px;
-  left: 2px;
-  background: linear-gradient(135deg, #38bdf8, #0ea5e9);
-  z-index: 1;
-}
-
-.app-sidebar__logo-layer--b {
-  top: 8px;
-  left: 10px;
-  background: linear-gradient(135deg, #a78bfa, #7c3aed);
-  z-index: 2;
-}
-
-.app-sidebar__logo-layer--c {
-  top: 14px;
-  left: 4px;
-  background: linear-gradient(135deg, #fb923c, #ea580c);
-  z-index: 3;
 }
 
 .app-sidebar__title {
@@ -1706,6 +1739,207 @@ input:focus, select:focus, textarea:focus {
   border: 1px solid rgba(16, 185, 129, 0.35);
   border-radius: 12px;
   background: linear-gradient(145deg, rgba(16, 185, 129, 0.08), transparent);
+}
+
+.dashboard-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-bottom: 1rem;
+}
+
+.dashboard-panel {
+  padding: 1.25rem 1.5rem;
+}
+
+.dashboard-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.dashboard-panel__title {
+  margin: 0.25rem 0 0;
+  font-size: 1.15rem;
+}
+
+.dashboard-panel__empty {
+  margin: 0.5rem 0 0;
+}
+
+.dashboard-upcoming {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dashboard-upcoming__row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  cursor: pointer;
+  color: inherit;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.dashboard-upcoming__row:hover {
+  border-color: var(--accent);
+  background: var(--surface-soft);
+}
+
+.dashboard-upcoming__time {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  min-width: 3.5rem;
+}
+
+.dashboard-upcoming__time strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.dashboard-upcoming__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.dashboard-upcoming__title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-upcoming__accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.dashboard-upcoming__draft {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.dashboard-spark-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-spark {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  background: var(--surface-muted);
+}
+
+.dashboard-spark__head {
+  margin-bottom: 0.35rem;
+}
+
+.dashboard-spark__title {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.dashboard-spark__subtitle {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.dashboard-spark__chart {
+  width: 100%;
+}
+
+.dashboard-spark__placeholder {
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.dashboard-accounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.65rem;
+}
+
+.dashboard-account-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.dashboard-account-card__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-account-card__name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-account-card__handle {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dashboard-account-card__pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.dashboard-account-card__pill--active {
+  background: rgba(34, 197, 94, 0.18);
+  color: #15803d;
+}
+
+.dashboard-account-card__pill--reauth {
+  background: rgba(251, 191, 36, 0.22);
+  color: #b45309;
 }
 
 .analytics-view {

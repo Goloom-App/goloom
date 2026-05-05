@@ -1,3 +1,4 @@
+import { GoloomLogo } from '../brand/GoloomLogo'
 import { Icon } from '../../icons'
 import type { IconName } from '../../icons'
 import type { AppSection, TeamRecord, UserRecord } from '../../types'
@@ -30,11 +31,7 @@ export function AppSidebar({
   return (
     <aside className="app-sidebar" aria-label="Main navigation">
       <div className="app-sidebar__header">
-        <div className="app-sidebar__logo" title="goloom" aria-hidden="true">
-          <span className="app-sidebar__logo-layer app-sidebar__logo-layer--a" />
-          <span className="app-sidebar__logo-layer app-sidebar__logo-layer--b" />
-          <span className="app-sidebar__logo-layer app-sidebar__logo-layer--c" />
-        </div>
+        <GoloomLogo />
         <span className="app-sidebar__title">goloom</span>
       </div>
 

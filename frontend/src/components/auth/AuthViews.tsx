@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { GoloomLogo } from '../brand/GoloomLogo'
 import type { AuthStatusRecord } from '../../types'
 
 export function AuthShell({ theme, children }: { theme: 'dark' | 'light'; children: ReactNode }) {
@@ -7,9 +8,7 @@ export function AuthShell({ theme, children }: { theme: 'dark' | 'light'; childr
       <div className="auth-screen-center">
         <section className="auth-card">
           <div className="auth-card__hero auth-card__hero--compact">
-            <div className="nav-rail__brand auth-card__brand" title="goloom">
-              <span>G</span>
-            </div>
+            <GoloomLogo size="lg" className="auth-card__logo" />
             <div className="auth-card__copy">
               <h1>goloom</h1>
               <p className="hint auth-card__tagline">Social scheduling for teams</p>
