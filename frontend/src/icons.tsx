@@ -19,6 +19,8 @@ export type IconName =
   | 'chart'
   | 'image'
   | 'film'
+  | 'share'
+  | 'plus-circle'
   | 'chevron-left'
   | 'chevron-right'
 
@@ -128,6 +130,21 @@ const iconPaths: Record<IconName, ReactNode> = {
       <rect x="4" y="4" width="16" height="16" rx="2" />
       <path d="M8 4v16M16 4v16" />
       <path d="M11 10 16 12 11 14z" />
+    </>
+  ),
+  share: (
+    <>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 10.8 6.8-3.6" />
+      <path d="m8.6 13.2 6.8 3.6" />
+    </>
+  ),
+  'plus-circle': (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v8M8 12h8" />
     </>
   ),
   'chevron-left': <path d="m14.5 5-7 7 7 7" />,

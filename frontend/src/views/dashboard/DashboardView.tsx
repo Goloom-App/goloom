@@ -139,7 +139,7 @@ export function DashboardView({
           <p className="hint">OAuth expiry determines reconnect prompts</p>
         </div>
         <button type="button" className="button button--secondary" onClick={onOpenAccounts}>
-          <Icon name="channels" className="inline-icon" />
+          <Icon name="share" className="inline-icon" />
           <span>Manage accounts</span>
         </button>
       </div>

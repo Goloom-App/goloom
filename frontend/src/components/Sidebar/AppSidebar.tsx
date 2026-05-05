@@ -9,10 +9,14 @@ export function AppSidebar({
   sidebarContentNav,
   sidebarWorkspaceNav,
   sidebarConfigNav,
+  teams,
   principalUser,
+  effectiveSelectedTeamId,
   selectedTeam,
   syncing,
   selectedTeamPresent,
+  onSelectTeam,
+  onOpenTeamSettings,
   onCreatePost,
   onSignOut,
 }: {
@@ -21,10 +25,14 @@ export function AppSidebar({
   sidebarContentNav: { id: AppSection; label: string; icon: IconName }[]
   sidebarWorkspaceNav: { id: AppSection; label: string; icon: IconName }[]
   sidebarConfigNav: { id: AppSection; label: string; icon: IconName }[]
+  teams: TeamRecord[]
   principalUser: UserRecord | null
+  effectiveSelectedTeamId: string
   selectedTeam: TeamRecord | null
   syncing: boolean
   selectedTeamPresent: boolean
+  onSelectTeam: (teamId: string) => void
+  onOpenTeamSettings: () => void
   onCreatePost: () => void
   onSignOut: () => void
 }) {
@@ -33,6 +41,40 @@ export function AppSidebar({
       <div className="app-sidebar__header">
         <GoloomLogo />
         <span className="app-sidebar__title">goloom</span>
+      </div>
+
+      <div className="app-sidebar__workspace-picker">
+        <label className="app-sidebar__workspace-label" htmlFor="workspace-select">
+          Workspace
+        </label>
+        <div className="app-sidebar__workspace-row">
+          <select
+            id="workspace-select"
+            className="app-sidebar__workspace-select"
+            value={effectiveSelectedTeamId}
+            onChange={(event) => onSelectTeam(event.target.value)}
+            disabled={teams.length === 0}
+          >
+            {teams.length === 0 ? (
+              <option value="">No team loaded</option>
+            ) : (
+              teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))
+            )}
+          </select>
+          <button
+            type="button"
+            className="app-sidebar__workspace-add"
+            onClick={onOpenTeamSettings}
+            aria-label="Create or manage teams"
+            title="Create or manage teams"
+          >
+            <Icon name="plus-circle" className="inline-icon" />
+          </button>
+        </div>
       </div>
 
       <button type="button" className="app-sidebar__cta" onClick={onCreatePost} disabled={!selectedTeamPresent || syncing}>

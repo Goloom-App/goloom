@@ -26,6 +26,7 @@ type Store interface {
 	EnsurePersonalTeamsMigrated(ctx context.Context) error
 	GetTeamByID(ctx context.Context, teamID string) (domain.Team, error)
 	CreateTeam(ctx context.Context, ownerUserID string, input domain.CreateTeamInput) (domain.Team, error)
+	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
 	ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error)
 	AddTeamMember(ctx context.Context, teamID string, input domain.AddTeamMemberInput) (domain.TeamMembership, error)
 	RemoveTeamMember(ctx context.Context, teamID, userID string) error

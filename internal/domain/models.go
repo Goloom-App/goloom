@@ -203,22 +203,22 @@ type SocialAccount struct {
 }
 
 type ScheduledPost struct {
-	ID             string            `json:"id"`
-	TeamID         string            `json:"team_id"`
-	AuthorUserID   string            `json:"author_user_id"`
-	Title          string            `json:"title"`
-	Content        string            `json:"content"`
-	ScheduledAt    time.Time         `json:"scheduled_at"`
-	Status         PostStatus        `json:"status"`
-	AttemptCount   int               `json:"attempt_count"`
-	LastError      string            `json:"last_error,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
-	TargetAccounts []string          `json:"target_accounts"`
-	PublishedLinks map[string]string `json:"published_links,omitempty"`
-	Visibility               string              `json:"visibility,omitempty"`
-	MediaIDs               []string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
+	ID                    string              `json:"id"`
+	TeamID                string              `json:"team_id"`
+	AuthorUserID          string              `json:"author_user_id"`
+	Title                 string              `json:"title"`
+	Content               string              `json:"content"`
+	ScheduledAt           time.Time           `json:"scheduled_at"`
+	Status                PostStatus          `json:"status"`
+	AttemptCount          int                 `json:"attempt_count"`
+	LastError             string              `json:"last_error,omitempty"`
+	CreatedAt             time.Time           `json:"created_at"`
+	UpdatedAt             time.Time           `json:"updated_at"`
+	TargetAccounts        []string            `json:"target_accounts"`
+	PublishedLinks        map[string]string   `json:"published_links,omitempty"`
+	Visibility            string              `json:"visibility,omitempty"`
+	MediaIDs              []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
 }
 
 type ScheduledPostTarget struct {
@@ -396,6 +396,11 @@ type CreateTeamInput struct {
 	Description string `json:"description"`
 }
 
+type UpdateTeamInput struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
 // AdminMetrics aggregates global counts for the admin dashboard.
 // AccountOAuthTokenExpiry carries token-expiry fields for background health checks.
 type AccountOAuthTokenExpiry struct {
@@ -428,14 +433,14 @@ type UpdateUserInput struct {
 }
 
 type CreatePostInput struct {
-	Title                   string              `json:"title"`
-	Content                 string              `json:"content"`
-	ScheduledAt             time.Time           `json:"scheduled_at"`
-	TargetAccounts          []string            `json:"target_accounts"`
-	Visibility              string              `json:"visibility,omitempty"`
-	MediaIDs                []string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount   map[string][]string `json:"media_exclude_by_account,omitempty"`
-	Draft                   bool                `json:"draft,omitempty"`
+	Title                 string              `json:"title"`
+	Content               string              `json:"content"`
+	ScheduledAt           time.Time           `json:"scheduled_at"`
+	TargetAccounts        []string            `json:"target_accounts"`
+	Visibility            string              `json:"visibility,omitempty"`
+	MediaIDs              []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
+	Draft                 bool                `json:"draft,omitempty"`
 }
 
 func (in CreatePostInput) Validate() error {

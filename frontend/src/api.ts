@@ -275,6 +275,13 @@ export function createApiClient(options: ApiClientOptions) {
         body: JSON.stringify(payload),
       })
     },
+    updateTeam(teamID: string, payload: { name: string; description: string }) {
+      return request<BackendTeam>(options, `/v1/teams/${teamID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
     listUsers() {
       return request<{ items: BackendUser[] }>(options, '/v1/users', {
         headers: buildHeaders(options.token, false),

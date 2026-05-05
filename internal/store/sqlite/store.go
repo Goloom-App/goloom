@@ -279,6 +279,24 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 	return team, nil
 }
 
+func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error) {
+	_, err := s.db.ExecContext(ctx, `
+		update teams
+		set name = ?, description = ?
+		where id = ?`,
+		input.Name, input.Description, teamID,
+	)
+	if err != nil {
+		return domain.Team{}, err
+	}
+	return queryTeam(ctx, s.db, `
+		select id, name, description, created_at, is_personal, personal_for_user_id
+		from teams
+		where id = ?`,
+		teamID,
+	)
+}
+
 func (s *Store) ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select user_id, team_id, role, created_at
@@ -1085,13 +1103,13 @@ func scanProviderInstance(scanner providerInstanceScanner) (domain.ProviderInsta
 
 func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 	var (
-		post              domain.ScheduledPost
-		lastError         sql.NullString
-		scheduled         string
-		mediaIDsJSON      string
-		mediaExcludeJSON  string
-		createdAt         string
-		updatedAt         string
+		post             domain.ScheduledPost
+		lastError        sql.NullString
+		scheduled        string
+		mediaIDsJSON     string
+		mediaExcludeJSON string
+		createdAt        string
+		updatedAt        string
 	)
 	if err := scanner.Scan(
 		&post.ID,

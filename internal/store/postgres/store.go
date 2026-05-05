@@ -310,6 +310,25 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 	return team, nil
 }
 
+func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error) {
+	const query = `
+		update teams
+		set name = $2, description = $3
+		where id = $1
+		returning id, name, description, created_at, is_personal, personal_for_user_id
+	`
+	var team domain.Team
+	err := s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description).Scan(
+		&team.ID,
+		&team.Name,
+		&team.Description,
+		&team.CreatedAt,
+		&team.IsPersonal,
+		&team.PersonalForUserID,
+	)
+	return team, err
+}
+
 func (s *Store) ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error) {
 	const query = `
 		select user_id, team_id, role, created_at

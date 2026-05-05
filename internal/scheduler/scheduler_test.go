@@ -81,6 +81,10 @@ func (m *mockStore) CreateTeam(ctx context.Context, ownerUserID string, input do
 	return domain.Team{}, nil
 }
 
+func (m *mockStore) UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error) {
+	return domain.Team{}, nil
+}
+
 func (m *mockStore) ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error) {
 	return nil, nil
 }

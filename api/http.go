@@ -68,6 +68,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/users", a.auth.RequireAuth(http.HandlerFunc(a.handleListUsers)))
 	mux.Handle("GET /v1/teams", a.auth.RequireAuth(http.HandlerFunc(a.handleListTeams)))
 	mux.Handle("POST /v1/teams", a.auth.RequireAuth(http.HandlerFunc(a.handleCreateTeam)))
+	mux.Handle("PATCH /v1/teams/{teamID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpdateTeam))))
 	mux.Handle("GET /v1/admin/users", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListUsers))))
 	mux.Handle("PATCH /v1/admin/users/{userID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateUser))))
 	mux.Handle("GET /v1/admin/runtime-config", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleRuntimeConfig))))
@@ -236,6 +237,37 @@ func (a *API) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth.WriteJSON(w, http.StatusCreated, team)
+}
+
+func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
+	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		http.Error(w, "team not found", http.StatusNotFound)
+		return
+	}
+	if team.IsPersonal {
+		http.Error(w, "personal workspace cannot be updated", http.StatusBadRequest)
+		return
+	}
+
+	var input domain.UpdateTeamInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Description = strings.TrimSpace(input.Description)
+	if input.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+
+	updated, err := a.store.UpdateTeam(r.Context(), team.ID, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
 func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {

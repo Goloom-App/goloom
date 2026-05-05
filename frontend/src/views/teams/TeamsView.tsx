@@ -82,7 +82,7 @@ export function TeamsView({
             </p>
           ) : (
             <p className="hint" style={{ marginTop: '1rem' }}>
-              Use the <strong>+</strong> button next to the team selector to create a shared team or manage members and invitations.
+              Open workspace selector in sidebar to create a team or update members, access levels, ownership, and description.
             </p>
           )}
         </div>

@@ -48,7 +48,7 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
   archive: 'Archive',
   analytics: 'Analytics',
   mediaLibrary: 'Media library',
-  teams: 'Teams',
+  teams: 'Team settings',
   accounts: 'Accounts',
   settings: 'Settings',
   admin: 'Admin',
@@ -106,8 +106,11 @@ function App() {
   const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
   const [newTeamName, setNewTeamName] = useState('')
   const [newTeamDescription, setNewTeamDescription] = useState('')
+  const [teamSettingsName, setTeamSettingsName] = useState('')
+  const [teamSettingsDescription, setTeamSettingsDescription] = useState('')
   const [addMemberUserId, setAddMemberUserId] = useState('')
   const [addMemberRole, setAddMemberRole] = useState<'editor' | 'viewer'>('editor')
+  const [memberRoleEdits, setMemberRoleEdits] = useState<Record<string, TeamRole>>({})
   const [newApiTokenName, setNewApiTokenName] = useState('')
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('editor')
@@ -588,8 +591,8 @@ function App() {
 
   const sidebarWorkspaceNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
     () => [
-      { id: 'teams', label: 'Teams', icon: 'teams' },
-      { id: 'accounts', label: 'Accounts', icon: 'channels' },
+      { id: 'teams', label: 'Team settings', icon: 'teams' },
+      { id: 'accounts', label: 'Accounts', icon: 'share' },
     ],
     [],
   )
@@ -661,6 +664,18 @@ function App() {
 
   const canEditTeamAccounts = myRoleInSelectedTeam === 'owner' || myRoleInSelectedTeam === 'editor'
   const canEditScheduledPosts = canEditTeamAccounts
+
+  useEffect(() => {
+    if (!selectedTeam) {
+      setTeamSettingsName('')
+      setTeamSettingsDescription('')
+      setMemberRoleEdits({})
+      return
+    }
+    setTeamSettingsName(selectedTeam.name)
+    setTeamSettingsDescription(selectedTeam.description ?? '')
+    setMemberRoleEdits(Object.fromEntries(selectedTeam.members.map((member) => [member.userId, member.role])))
+  }, [selectedTeam])
 
   const instancesForAccountConnect = useMemo(
     () => providerInstances.filter((p) => p.provider === accountDraft.provider),
@@ -787,6 +802,24 @@ function App() {
     }, 'Team created')
   }
 
+  async function handleUpdateTeam() {
+    if (!api || !selectedTeam || selectedTeam.isPersonal) {
+      return
+    }
+    const name = teamSettingsName.trim()
+    if (!name) {
+      setError('Team name is required.')
+      return
+    }
+    await runAction(async () => {
+      await api.updateTeam(selectedTeam.id, {
+        name,
+        description: teamSettingsDescription.trim(),
+      })
+      await loadDashboard({ silent: true })
+    }, 'Team settings updated')
+  }
+
   async function handleAddTeamMember() {
     if (!api || !selectedTeam || !addMemberUserId.trim()) {
       return
@@ -825,6 +858,33 @@ function App() {
       await api.removeTeamMember(selectedTeam.id, userId)
       await loadDashboard({ silent: true })
     }, 'Member removed')
+  }
+
+  async function handleChangeTeamMemberRole(userId: string) {
+    if (!api || !selectedTeam || !memberRoleEdits[userId]) {
+      return
+    }
+    const role = memberRoleEdits[userId]
+    if (!role) {
+      return
+    }
+    await runAction(async () => {
+      await api.addTeamMember(selectedTeam.id, { user_id: userId, role })
+      await loadDashboard({ silent: true })
+    }, 'Member access updated')
+  }
+
+  async function handleTransferOwnership(userId: string) {
+    if (!api || !selectedTeam) {
+      return
+    }
+    if (!window.confirm('Transfer ownership to this member? You can still stay owner unless you change your role.')) {
+      return
+    }
+    await runAction(async () => {
+      await api.addTeamMember(selectedTeam.id, { user_id: userId, role: 'owner' })
+      await loadDashboard({ silent: true })
+    }, 'Ownership transferred')
   }
 
   async function handleSaveAdminProvider() {
@@ -1242,10 +1302,17 @@ function App() {
         sidebarContentNav={sidebarContentNav}
         sidebarWorkspaceNav={sidebarWorkspaceNav}
         sidebarConfigNav={sidebarConfigNav}
+        teams={teams}
         principalUser={principalUser}
+        effectiveSelectedTeamId={effectiveSelectedTeamId}
         selectedTeam={selectedTeam}
         syncing={syncing}
         selectedTeamPresent={Boolean(selectedTeam)}
+        onSelectTeam={setSelectedTeamId}
+        onOpenTeamSettings={() => {
+          setSection('teams')
+          setTeamModalOpen(true)
+        }}
         onCreatePost={openCreateComposer}
         onSignOut={() => clearAuthenticatedState('Signed out')}
       />
@@ -1271,22 +1338,7 @@ function App() {
               <h1>{SECTION_HEADINGS[section]}</h1>
             </div>
 
-            <div className="inline-cluster page-header__toolbar">
-              {section === 'teams' ? (
-                <button
-                  type="button"
-                  className="button button--secondary page-header__icon-btn"
-                  onClick={() => setTeamModalOpen(true)}
-                  aria-label="Open team workspace"
-                  title="Create or manage teams"
-                >
-                  <Icon name="plus" className="inline-icon" />
-                </button>
-              ) : null}
-              <select className="team-select" value={effectiveSelectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)} disabled={teams.length === 0}>
-                {teams.length === 0 ? <option value="">No team loaded</option> : teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-              </select>
-            </div>
+            <div className="inline-cluster page-header__toolbar" />
           </header>
 
           {(error || statusMessage || loading) && dismissedNoticeKey !== noticeKey ? (
@@ -1529,13 +1581,34 @@ function App() {
 
               <div className="divider" style={{ margin: '1.5rem 0' }} />
 
-              <h3 className="subsection-title">Members · {selectedTeam?.name ?? '—'}</h3>
+              <h3 className="subsection-title">Team settings · {selectedTeam?.name ?? '—'}</h3>
               {!selectedTeam ? (
-                <p className="hint">Select a team in the header to manage members.</p>
+                <p className="hint">Select a workspace from the sidebar to manage members.</p>
               ) : selectedTeam.isPersonal ? (
                 <p className="hint">Personal workspace has no shared members.</p>
               ) : myRoleInSelectedTeam === 'owner' ? (
                 <>
+                  <h4 className="subsection-title" style={{ marginTop: '1rem' }}>General</h4>
+                  <div className="inline-cluster" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <label className="field" style={{ minWidth: '14rem', flex: '1 1 14rem' }}>
+                      <span>Team name</span>
+                      <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
+                    </label>
+                    <label className="field" style={{ minWidth: '16rem', flex: '1 1 16rem' }}>
+                      <span>Description</span>
+                      <input value={teamSettingsDescription} onChange={(event) => setTeamSettingsDescription(event.target.value)} placeholder="Optional" />
+                    </label>
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      onClick={() => void handleUpdateTeam()}
+                      disabled={syncing || !teamSettingsName.trim()}
+                    >
+                      Save
+                    </button>
+                  </div>
+
+                  <h4 className="subsection-title" style={{ marginTop: '1rem' }}>Members & access</h4>
                   <ul className="member-list">
                     {selectedTeam.members.map((m) => (
                       <li key={m.userId} className="member-list__row">
@@ -1543,11 +1616,41 @@ function App() {
                           <strong>{directoryUserLabel(m.userId)}</strong>
                           <span className="member-list__role">{m.role}</span>
                         </div>
-                        {m.userId !== principalUser?.id ? (
-                          <button type="button" className="button button--secondary" onClick={() => void handleRemoveTeamMember(m.userId)} disabled={syncing}>
-                            Remove
+                        <div className="inline-cluster" style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <select
+                            value={memberRoleEdits[m.userId] ?? m.role}
+                            onChange={(event) =>
+                              setMemberRoleEdits((current) => ({ ...current, [m.userId]: event.target.value as TeamRole }))
+                            }
+                          >
+                            <option value="owner">Owner</option>
+                            <option value="editor">Editor</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() => void handleChangeTeamMemberRole(m.userId)}
+                            disabled={syncing || (memberRoleEdits[m.userId] ?? m.role) === m.role}
+                          >
+                            Apply access
                           </button>
-                        ) : null}
+                          {m.userId !== principalUser?.id ? (
+                            <>
+                              <button
+                                type="button"
+                                className="button button--secondary"
+                                onClick={() => void handleTransferOwnership(m.userId)}
+                                disabled={syncing || m.role === 'owner'}
+                              >
+                                Make owner
+                              </button>
+                              <button type="button" className="button button--secondary" onClick={() => void handleRemoveTeamMember(m.userId)} disabled={syncing}>
+                                Remove
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -1678,7 +1781,7 @@ function App() {
           <Icon name="image" className="inline-icon" />
         </button>
         <button type="button" className={section === 'accounts' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('accounts')}>
-          <Icon name="channels" className="inline-icon" />
+          <Icon name="share" className="inline-icon" />
         </button>
         <button type="button" className={section === 'settings' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('settings')}>
           <Icon name="settings" className="inline-icon" />
