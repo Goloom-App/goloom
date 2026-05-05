@@ -70,7 +70,7 @@ The goal is to transform Goloom from a basic social media scheduler into a robus
     - Implement charts (using Recharts) and summary tiles.
     - [Reference: docs/plan-analytics-implementation.md (Section 3)](docs/plan-analytics-implementation.md)
 - [x] **Media Library View**
-    - Implement the workspace-scoped media explorer with Unsplash/Giphy integration.
+    - Implement the workspace-scoped media explorer with local library persistence.
     - [Reference: docs/ui-views-catalog.md (Section 4)](docs/ui-views-catalog.md)
 
 ---
