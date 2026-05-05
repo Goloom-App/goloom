@@ -145,3 +145,29 @@ create table if not exists post_versions (
     content text not null default '',
     primary key (post_id, account_id)
 );
+
+create table if not exists media_items (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    sha256 text not null,
+    filename text not null,
+    mime_type text not null,
+    size_bytes integer not null,
+    width integer,
+    height integer,
+    created_at text not null
+);
+
+create index if not exists idx_media_items_team on media_items(team_id);
+create index if not exists idx_media_items_sha256 on media_items(sha256);
+
+create table if not exists media_provider_mappings (
+    media_id text not null references media_items(id) on delete cascade,
+    account_id text not null references social_accounts(id) on delete cascade,
+    remote_id text not null,
+    expires_at text,
+    created_at text not null,
+    primary key (media_id, account_id)
+);
+
+create index if not exists idx_media_mappings_account on media_provider_mappings(account_id);

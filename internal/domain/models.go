@@ -221,6 +221,26 @@ type PostAnalyticsListRow struct {
 	Score       int64     `json:"score"`
 }
 
+type MediaItem struct {
+	ID        string    `json:"id"`
+	TeamID    string    `json:"team_id"`
+	Sha256    string    `json:"sha256"`
+	Filename  string    `json:"filename"`
+	MimeType  string    `json:"mime_type"`
+	SizeBytes int64     `json:"size_bytes"`
+	Width     *int      `json:"width,omitempty"`
+	Height    *int      `json:"height,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type MediaProviderMapping struct {
+	MediaID   string     `json:"media_id"`
+	AccountID string     `json:"account_id"`
+	RemoteID  string     `json:"remote_id"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
 // MetricHistoryPoint is one day in GET /v1/teams/{teamID}/analytics/chart time series.
 type MetricHistoryPoint struct {
 	Date  string `json:"date"`
