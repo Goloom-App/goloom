@@ -85,9 +85,26 @@ export function toAccountRecord(account: BackendAccount, instances: ProviderInst
     username: account.username,
     authType: account.auth_type,
     avatarUrl: account.avatar_url?.trim() || undefined,
+    accessTokenExpiresAt: account.access_token_expires_at?.trim() || undefined,
     color: colorForProvider(account.provider),
     maxChars: account.max_chars_override ?? maxCharsForProvider(account.provider),
   }
+}
+
+/** OAuth accounts past access token expiry should reconnect; app-password accounts are treated as active. */
+export function accountConnectionStatus(account: AccountRecord): 'active' | 'reauth' {
+  if (account.authType !== 'oauth_token') {
+    return 'active'
+  }
+  const raw = account.accessTokenExpiresAt?.trim()
+  if (!raw) {
+    return 'active'
+  }
+  const t = new Date(raw).getTime()
+  if (Number.isNaN(t)) {
+    return 'active'
+  }
+  return t < Date.now() ? 'reauth' : 'active'
 }
 
 export function toPostRecord(post: BackendPost): PostRecord {

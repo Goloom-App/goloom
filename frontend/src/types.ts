@@ -1,4 +1,5 @@
 export type AppSection =
+  | 'dashboard'
   | 'calendar'
   | 'contentCalendar'
   | 'archive'
@@ -47,6 +48,8 @@ export interface AccountRecord {
   authType?: AccountAuthType
   /** Profile image URL from the provider when onboarding fetched it */
   avatarUrl?: string
+  /** OAuth access token expiry when known (ISO); app-password accounts omit this */
+  accessTokenExpiresAt?: string
   color: string
   maxChars: number
 }

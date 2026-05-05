@@ -51,6 +51,7 @@ export interface BackendAccount {
   remote_account_id: string
   avatar_url?: string
   max_chars_override?: number
+  access_token_expires_at?: string
   created_at: string
 }
 

@@ -9,6 +9,7 @@ import { SocialPreview } from './components/post/SocialPreview'
 import { AppSidebar } from './components/Sidebar/AppSidebar'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
+import { DashboardView } from './views/dashboard/DashboardView'
 import { calendarCellsForMonth } from './views/calendar/calendarUtils'
 import { ContentCalendarView } from './views/calendar/ContentCalendarView'
 import { ScheduleView } from './views/calendar/ScheduleView'
@@ -41,6 +42,7 @@ const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 const OIDC_PENDING_SESSION_KEY = 'goloom.oidc.pending_session_v1'
 
 const SECTION_HEADINGS: Record<AppSection, string> = {
+  dashboard: 'Dashboard',
   calendar: 'Schedule',
   contentCalendar: 'Content calendar',
   archive: 'Archive',
@@ -52,10 +54,10 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
   admin: 'Admin',
 }
 
-const CONTENT_REFRESH_SECTIONS: AppSection[] = ['calendar', 'archive', 'contentCalendar', 'analytics']
+const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics']
 
 function App() {
-  const [section, setSection] = useState<AppSection>('calendar')
+  const [section, setSection] = useState<AppSection>('dashboard')
   const [systemIsDark, setSystemIsDark] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -567,6 +569,7 @@ function App() {
 
   const sidebarContentNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
     () => [
+      { id: 'dashboard', label: 'Dashboard', icon: 'home' },
       { id: 'calendar', label: 'Schedule', icon: 'calendar' },
       { id: 'contentCalendar', label: 'Calendar', icon: 'calendarGrid' },
       { id: 'archive', label: 'Archive', icon: 'archive' },
@@ -623,6 +626,15 @@ function App() {
 
   const plannedPostsForContentCalendar = useMemo(
     () => teamPosts.filter((post) => post.status === 'scheduled' || post.status === 'draft'),
+    [teamPosts],
+  )
+
+  const dashboardUpcomingPosts = useMemo(
+    () =>
+      [...teamPosts]
+        .filter((post) => post.status === 'scheduled' || post.status === 'draft')
+        .sort((left, right) => parseISO(left.scheduledAt).getTime() - parseISO(right.scheduledAt).getTime())
+        .slice(0, 10),
     [teamPosts],
   )
 
@@ -693,7 +705,7 @@ function App() {
     setEditingPostId(null)
     setEditorDraft(defaultEditorDraft(currentDate, teamAccounts))
     setComposerOpen(true)
-    setSection('calendar')
+    setSection('dashboard')
   }
 
   async function openEditor(postId: string) {
@@ -726,7 +738,13 @@ function App() {
     setExpandedPostId(postId)
     setComposerOpen(true)
     setSection(
-      targetPost.status === 'posted' ? 'archive' : section === 'contentCalendar' ? 'contentCalendar' : 'calendar',
+      targetPost.status === 'posted'
+        ? 'archive'
+        : section === 'contentCalendar'
+          ? 'contentCalendar'
+          : section === 'dashboard'
+            ? 'dashboard'
+            : 'calendar',
     )
   }
 
@@ -1237,7 +1255,7 @@ function App() {
           </button>
           <header className="page-header">
             <div>
-              <p className="eyebrow">Social publishing</p>
+              <p className="eyebrow">{section === 'dashboard' ? 'Workspace' : 'Social publishing'}</p>
               <h1>{SECTION_HEADINGS[section]}</h1>
             </div>
 
@@ -1276,6 +1294,20 @@ function App() {
                 <Icon name="close" className="inline-icon" />
               </button>
             </section>
+          ) : null}
+
+          {section === 'dashboard' && selectedTeam && api ? (
+            <DashboardView
+              teamName={selectedTeam.name}
+              upcomingPosts={dashboardUpcomingPosts}
+              accounts={teamAccounts}
+              fetchSeries={(metric) => api.getTeamAnalyticsChart(selectedTeam.id, { metric, days: 7 })}
+              onOpenPost={(id) => void openEditor(id)}
+              onOpenSchedule={() => setSection('calendar')}
+              onOpenAccounts={() => setSection('accounts')}
+            />
+          ) : section === 'dashboard' ? (
+            <p className="hint">Select a team and connect to the API to load the dashboard.</p>
           ) : null}
 
           {section === 'calendar' && (
@@ -1590,6 +1622,14 @@ function App() {
       />
 
       <nav className="mobile-nav">
+        <button
+          type="button"
+          className={section === 'dashboard' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
+          onClick={() => setSection('dashboard')}
+          aria-label="Dashboard"
+        >
+          <Icon name="home" className="inline-icon" />
+        </button>
         <button type="button" className={section === 'calendar' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('calendar')}>
           <Icon name="calendar" className="inline-icon" />
         </button>
