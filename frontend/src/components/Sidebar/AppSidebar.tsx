@@ -16,7 +16,6 @@ export function AppSidebar({
   syncing,
   selectedTeamPresent,
   onSelectTeam,
-  onOpenTeamSettings,
   onCreatePost,
   onSignOut,
 }: {
@@ -32,7 +31,6 @@ export function AppSidebar({
   syncing: boolean
   selectedTeamPresent: boolean
   onSelectTeam: (teamId: string) => void
-  onOpenTeamSettings: () => void
   onCreatePost: () => void
   onSignOut: () => void
 }) {
@@ -55,7 +53,7 @@ export function AppSidebar({
             onChange={(event) => {
               const value = event.target.value
               if (value === '__create_team__') {
-                onOpenTeamSettings()
+                setSection('teams')
                 return
               }
               onSelectTeam(value)
@@ -75,15 +73,6 @@ export function AppSidebar({
               </>
             )}
           </select>
-          <button
-            type="button"
-            className="app-sidebar__workspace-add"
-            onClick={onOpenTeamSettings}
-            aria-label="Create or manage teams"
-            title="Create or manage teams"
-          >
-            <Icon name="plus-circle" className="inline-icon" />
-          </button>
         </div>
       </div>
 

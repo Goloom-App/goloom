@@ -1328,9 +1328,6 @@ function App() {
         syncing={syncing}
         selectedTeamPresent={Boolean(selectedTeam)}
         onSelectTeam={setSelectedTeamId}
-        onOpenTeamSettings={() => {
-          setSection('teams')
-        }}
         onCreatePost={openCreateComposer}
         onSignOut={() => clearAuthenticatedState('Signed out')}
       />

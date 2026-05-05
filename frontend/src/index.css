@@ -267,32 +267,12 @@ body {
 }
 
 .app-sidebar__workspace-row {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
+  display: block;
 }
 
 .app-sidebar__workspace-select {
   width: 100%;
   min-width: 0;
-}
-
-.app-sidebar__workspace-add {
-  width: 2.3rem;
-  height: 2.3rem;
-  flex-shrink: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-soft);
-  color: var(--text-soft);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-
-.app-sidebar__workspace-add:hover {
-  color: var(--text);
-  background: var(--surface-muted);
 }
 
 .app-sidebar__cta {
