@@ -337,3 +337,52 @@ func (s *Service) failPost(ctx context.Context, post domain.ScheduledPost, err e
 		s.logger.Error("failed to schedule retry", "post_id", post.ID, "error", markErr)
 	}
 }
+
+func (s *Service) syncMediaToProvider(ctx context.Context, post domain.ScheduledPost, account domain.SocialAccount, p provider.SocialMediaProvider, auth provider.PublishAuth) ([]string, error) {
+	if len(post.MediaIDs) == 0 {
+		return nil, nil
+	}
+
+	remoteIDs := make([]string, 0, len(post.MediaIDs))
+	for _, id := range post.MediaIDs {
+		// 1. Check if it's already a remote ID (e.g. legacy or direct upload)
+		item, err := s.store.GetMediaItemByID(ctx, post.TeamID, id)
+		if err != nil {
+			// Not a local UUID or not found, assume it's already a remote ID
+			remoteIDs = append(remoteIDs, id)
+			continue
+		}
+
+		// 2. Check if we already have a mapping for this account
+		mapping, err := s.store.GetMediaProviderMapping(ctx, item.ID, account.ID)
+		if err == nil {
+			// Found mapping, use it
+			remoteIDs = append(remoteIDs, mapping.RemoteID)
+			continue
+		}
+
+		// 3. Not mapped, upload now
+		filePath := store.GetMediaFilePath(post.TeamID, item.Sha256)
+		file, err := os.Open(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("open local media %q: %w", item.ID, err)
+		}
+		// Uploading to provider. 
+		remoteID, err := p.UploadMedia(ctx, account, auth, file, item.Filename, item.MimeType, "")
+		file.Close()
+		if err != nil {
+			return nil, fmt.Errorf("provider upload %q: %w", item.ID, err)
+		}
+
+		// 4. Cache the mapping
+		_ = s.store.UpsertMediaProviderMapping(ctx, domain.MediaProviderMapping{
+			MediaID:   item.ID,
+			AccountID: account.ID,
+			RemoteID:  remoteID,
+		})
+
+		remoteIDs = append(remoteIDs, remoteID)
+	}
+
+	return remoteIDs, nil
+}
