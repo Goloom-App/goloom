@@ -163,3 +163,27 @@ func (p *GenericStatusProvider) GetMetrics(ctx context.Context, account domain.S
 	}
 	return fetchMastodonCompatibleMetrics(ctx, account.InstanceURL, auth.AccessToken, path, publishedURL)
 }
+
+func (p *GenericStatusProvider) GetAccountMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth) ([]AccountMetric, error) {
+	resp, err := doJSONRequest(ctx, http.MethodGet, strings.TrimRight(account.InstanceURL, "/")+"/api/v1/accounts/verify_credentials", auth.AccessToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("%s account metrics failed with status %d", p.name, resp.StatusCode)
+	}
+	var payload struct {
+		FollowersCount int64 `json:"followers_count"`
+		FollowingCount int64 `json:"following_count"`
+		StatusesCount  int64 `json:"statuses_count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode %s account metrics response: %w", p.name, err)
+	}
+	return []AccountMetric{
+		{Name: "followers", Value: payload.FollowersCount},
+		{Name: "following", Value: payload.FollowingCount},
+		{Name: "posts", Value: payload.StatusesCount},
+	}, nil
+}

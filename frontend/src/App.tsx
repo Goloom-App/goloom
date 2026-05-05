@@ -1429,9 +1429,11 @@ function App() {
           {section === 'analytics' && api && effectiveSelectedTeamId ? (
             <AnalyticsView
               teamId={effectiveSelectedTeamId}
+              accounts={teamAccounts}
               fetchSummary={(opts) => api.getTeamAnalyticsSummary(effectiveSelectedTeamId, opts)}
               fetchPosts={(opts) => api.getTeamAnalyticsPosts(effectiveSelectedTeamId, opts)}
               fetchChart={(opts) => api.getTeamAnalyticsChart(effectiveSelectedTeamId, opts)}
+              fetchAccountGrowth={(accountID, opts) => api.getTeamAccountGrowth(effectiveSelectedTeamId, accountID, opts)}
             />
           ) : section === 'analytics' ? (
             <p className="hint">Connect to the API and select a team to view analytics.</p>

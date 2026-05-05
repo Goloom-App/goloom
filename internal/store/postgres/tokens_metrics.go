@@ -99,6 +99,14 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 	}, nil
 }
 
+func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
+	if ttl <= 0 {
+		ttl = 12 * time.Hour
+	}
+	expires := time.Now().UTC().Add(ttl)
+	return s.CreateUserAPIToken(ctx, userID, "__web_session", &expires)
+}
+
 func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {
 	rows, err := s.pool.Query(ctx, `
 		select id, user_id, name, last_used_at, expires_at, created_at

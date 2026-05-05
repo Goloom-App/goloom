@@ -71,6 +71,27 @@ func (a *API) handleTeamAnalyticsChart(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *API) handleTeamAccountGrowth(w http.ResponseWriter, r *http.Request) {
+	days := 30
+	if raw := strings.TrimSpace(r.URL.Query().Get("days")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			days = n
+		}
+	}
+	teamID := r.PathValue("teamID")
+	accountID := strings.TrimSpace(r.PathValue("accountID"))
+	series, err := a.store.GetTeamAccountMetricHistorySeries(r.Context(), teamID, accountID, days)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{
+		"days":    days,
+		"account": accountID,
+		"series":  sliceOrEmpty(series),
+	})
+}
+
 func (a *API) handleTeamAnalytics(w http.ResponseWriter, r *http.Request) {
 	top := 10
 	if raw := strings.TrimSpace(r.URL.Query().Get("top_posts")); raw != "" {

@@ -37,6 +37,27 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `create unique index if not exists idx_teams_personal_user on teams(personal_for_user_id) where personal_for_user_id is not null`); err != nil {
 		return fmt.Errorf("sqlite migrate index: %w", err)
 	}
+	for _, stmt := range []string{
+		`create table if not exists account_metrics (
+			account_id text not null references social_accounts(id) on delete cascade,
+			metric text not null,
+			value integer not null default 0,
+			updated_at text not null,
+			primary key (account_id, metric)
+		)`,
+		`create table if not exists account_metrics_history (
+			account_id text not null references social_accounts(id) on delete cascade,
+			metric text not null,
+			value integer not null default 0,
+			recorded_at text not null,
+			primary key (account_id, metric, recorded_at)
+		)`,
+		`create index if not exists idx_account_metrics_history_recorded on account_metrics_history(recorded_at)`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("sqlite migrate account metrics tables: %w", err)
+		}
+	}
 	if err := migrateSQLiteScheduledPostsDraftStatus(ctx, db); err != nil {
 		return err
 	}

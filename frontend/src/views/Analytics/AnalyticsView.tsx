@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { BackendMetricHistoryPoint, BackendPostAnalyticsListRow, BackendTeamAnalyticsReport } from '../../api'
+import type { BackendAccountGrowthPoint, BackendMetricHistoryPoint, BackendPostAnalyticsListRow, BackendTeamAnalyticsReport } from '../../api'
+import type { AccountRecord } from '../../types'
 
 function formatDeltaPct(n: number | undefined): string {
   if (n == null || Number.isNaN(n)) {
@@ -14,19 +15,25 @@ function formatDeltaPct(n: number | undefined): string {
 
 export function AnalyticsView({
   teamId,
+  accounts,
   fetchSummary,
   fetchPosts,
   fetchChart,
+  fetchAccountGrowth,
 }: {
   teamId: string
+  accounts: AccountRecord[]
   fetchSummary: (opts?: { top_posts?: number }) => Promise<BackendTeamAnalyticsReport>
   fetchPosts: (opts?: { sort?: string; limit?: number; offset?: number }) => Promise<{ items: BackendPostAnalyticsListRow[] }>
   fetchChart: (opts: { metric: string; days?: number }) => Promise<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>
+  fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
 }) {
   const [summary, setSummary] = useState<BackendTeamAnalyticsReport | null>(null)
   const [posts, setPosts] = useState<BackendPostAnalyticsListRow[]>([])
   const [series, setSeries] = useState<BackendMetricHistoryPoint[]>([])
   const [chartMetric, setChartMetric] = useState<string>('')
+  const [growthAccountId, setGrowthAccountId] = useState<string>('all')
+  const [accountGrowthSeries, setAccountGrowthSeries] = useState<BackendAccountGrowthPoint[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -86,6 +93,28 @@ export function AnalyticsView({
     }
   }, [chartMetric, fetchChart, teamId])
 
+  useEffect(() => {
+    if (!teamId) {
+      setAccountGrowthSeries([])
+      return
+    }
+    let cancelled = false
+    void fetchAccountGrowth(growthAccountId || 'all', { days: 30 })
+      .then((res) => {
+        if (!cancelled) {
+          setAccountGrowthSeries(res.series ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAccountGrowthSeries([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchAccountGrowth, growthAccountId, teamId])
+
   const barData = useMemo(() => {
     if (!summary?.metrics?.length) {
       return []
@@ -103,6 +132,17 @@ export function AnalyticsView({
   }, [summary])
 
   const lineData = useMemo(() => series.map((p) => ({ date: p.date, value: p.value })), [series])
+  const growthData = useMemo(
+    () =>
+      accountGrowthSeries.map((point) => ({
+        date: point.date,
+        followers: point.followers,
+        following: point.following,
+        posts: point.posts,
+        reach: point.followers + point.following,
+      })),
+    [accountGrowthSeries],
+  )
 
   if (!teamId) {
     return <p className="hint">Select a team to view analytics.</p>
@@ -227,6 +267,71 @@ export function AnalyticsView({
               )}
             </section>
           ) : null}
+
+          <section className="glass-panel analytics-chart-panel">
+            <div className="analytics-chart-panel__head">
+              <h3 className="subsection-title">Follower growth (30 days)</h3>
+              <label className="analytics-metric-select">
+                <span className="hint">Account</span>
+                <select value={growthAccountId} onChange={(e) => setGrowthAccountId(e.target.value)}>
+                  <option value="all">All accounts</option>
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {growthData.length === 0 ? (
+              <p className="hint">No account growth snapshots yet.</p>
+            ) : (
+              <div className="analytics-chart-wrap">
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={growthData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 11 }} />
+                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--surface-raised)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        color: 'var(--text)',
+                      }}
+                    />
+                    <Line type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+
+          <section className="glass-panel analytics-chart-panel">
+            <h3 className="subsection-title">Total reach (30 days)</h3>
+            {growthData.length === 0 ? (
+              <p className="hint">No account growth snapshots yet.</p>
+            ) : (
+              <div className="analytics-chart-wrap">
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={growthData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 11 }} />
+                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--surface-raised)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        color: 'var(--text)',
+                      }}
+                    />
+                    <Line type="monotone" dataKey="reach" stroke="#38bdf8" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
 
           <section className="glass-panel analytics-top-posts">
             <h3 className="subsection-title">Post performance</h3>

@@ -47,6 +47,8 @@ type EngagementMetric struct {
 	Value int64
 }
 
+type AccountMetric = EngagementMetric
+
 // OAuthAccountConnector is implemented by providers that support browser OAuth for account linking.
 type OAuthAccountConnector interface {
 	BuildAuthorizationURL(instance domain.ProviderInstance, state, redirectURI string) (string, error)
@@ -67,6 +69,7 @@ type SocialMediaProvider interface {
 	UploadMedia(ctx context.Context, account domain.SocialAccount, auth PublishAuth, file io.Reader, filename, mimeType, altText string) (string, error)
 	Publish(ctx context.Context, account domain.SocialAccount, auth PublishAuth, req PublishRequest) (PublishResult, error)
 	GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error)
+	GetAccountMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth) ([]AccountMetric, error)
 }
 
 // Registry resolves a provider implementation by canonical name.

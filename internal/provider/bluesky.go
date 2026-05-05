@@ -396,6 +396,46 @@ func (p *BlueskyProvider) GetMetrics(ctx context.Context, account domain.SocialA
 	}, nil
 }
 
+func (p *BlueskyProvider) GetAccountMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth) ([]AccountMetric, error) {
+	token := strings.TrimSpace(auth.AccessToken)
+	if token == "" {
+		return nil, errors.New("missing bluesky credential")
+	}
+	if account.AuthType == domain.AccountAuthTypeAppPassword {
+		session, err := p.createSession(ctx, account.InstanceURL, account.Username, token)
+		if err != nil {
+			return nil, err
+		}
+		token = session.AccessJWT
+	}
+	actor := strings.TrimSpace(account.RemoteAccountID)
+	if actor == "" {
+		actor = strings.TrimSpace(account.Username)
+	}
+	endpoint := strings.TrimRight(account.InstanceURL, "/") + "/xrpc/app.bsky.actor.getProfile?actor=" + url.QueryEscape(actor)
+	resp, err := doJSONRequest(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("bluesky profile metrics failed with status %d", resp.StatusCode)
+	}
+	var payload struct {
+		FollowersCount int64 `json:"followersCount"`
+		FollowsCount   int64 `json:"followsCount"`
+		PostsCount     int64 `json:"postsCount"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode bluesky profile response: %w", err)
+	}
+	return []AccountMetric{
+		{Name: "followers", Value: payload.FollowersCount},
+		{Name: "following", Value: payload.FollowsCount},
+		{Name: "posts", Value: payload.PostsCount},
+	}, nil
+}
+
 func (p *BlueskyProvider) createSession(ctx context.Context, instanceURL, identifier, password string) (blueskySessionResponse, error) {
 	body, err := marshalJSONBody(map[string]any{
 		"identifier": identifier,

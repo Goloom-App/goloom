@@ -256,6 +256,14 @@ func (m *mockStore) ListOAuthAccountsWithAccessTokenExpiringBefore(ctx context.C
 	return nil, nil
 }
 
+func (m *mockStore) ListAccountsForMetricsSync(ctx context.Context, limit int) ([]domain.SocialAccount, error) {
+	return nil, nil
+}
+
+func (m *mockStore) UpsertAccountMetrics(ctx context.Context, accountID string, metrics map[string]int64, recordedAt time.Time) error {
+	return nil
+}
+
 func (m *mockStore) GetTeamAnalytics(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsSummary, error) {
 	return domain.TeamAnalyticsSummary{MetricsTotal: map[string]int64{}, TopPosts: nil}, nil
 }
@@ -269,6 +277,10 @@ func (m *mockStore) ListTeamPostAnalyticsRanking(ctx context.Context, teamID str
 }
 
 func (m *mockStore) GetTeamMetricHistorySeries(ctx context.Context, teamID, metric string, days int) ([]domain.MetricHistoryPoint, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetTeamAccountMetricHistorySeries(ctx context.Context, teamID, accountID string, days int) ([]domain.AccountMetricHistoryPoint, error) {
 	return nil, nil
 }
 
@@ -337,6 +349,10 @@ func (m *mockStore) AdminMetrics(ctx context.Context) (domain.AdminMetrics, erro
 }
 
 func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (string, domain.APIToken, error) {
+	return "", domain.APIToken{}, nil
+}
+
+func (m *mockStore) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
 
@@ -413,6 +429,10 @@ func (f *fakeProvider) Publish(ctx context.Context, account domain.SocialAccount
 }
 
 func (f *fakeProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth provider.PublishAuth, publishedURL string) ([]provider.EngagementMetric, error) {
+	return nil, nil
+}
+
+func (f *fakeProvider) GetAccountMetrics(ctx context.Context, account domain.SocialAccount, auth provider.PublishAuth) ([]provider.AccountMetric, error) {
 	return nil, nil
 }
 

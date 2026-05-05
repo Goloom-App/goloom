@@ -103,6 +103,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/analytics/summary", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalyticsSummary))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalyticsPosts))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/chart", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalyticsChart))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/account/{accountID}/growth", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAccountGrowth))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalytics))))
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePostAnalytics))))
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostVersions))))
@@ -557,6 +558,7 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.syncAccountMetricsNow(r.Context(), account, connectedAccount)
 	auth.WriteJSON(w, http.StatusCreated, account)
 }
 
@@ -1016,6 +1018,34 @@ func (a *API) providerContext(ctx context.Context) context.Context {
 	return provider.WithOutboundInstancePolicy(ctx, provider.OutboundPolicy{
 		AllowPrivateLAN: a.config.AllowPrivateProviderInstanceURLs,
 	})
+}
+
+func (a *API) syncAccountMetricsNow(ctx context.Context, account domain.SocialAccount, connected domain.ConnectedAccount) {
+	providerImpl, ok := a.providers.Get(account.Provider)
+	if !ok {
+		return
+	}
+	metrics, err := providerImpl.GetAccountMetrics(ctx, account, provider.PublishAuth{
+		AccessToken:  connected.AccessToken,
+		RefreshToken: connected.RefreshToken,
+	})
+	if err != nil {
+		if a.log != nil {
+			a.log.Debug("initial account metrics sync failed", "account_id", account.ID, "provider", account.Provider, "error", err)
+		}
+		return
+	}
+	snapshot := make(map[string]int64, len(metrics))
+	for _, metric := range metrics {
+		name := strings.TrimSpace(metric.Name)
+		if name == "" {
+			continue
+		}
+		snapshot[name] = metric.Value
+	}
+	if err := a.store.UpsertAccountMetrics(ctx, account.ID, snapshot, time.Now().UTC()); err != nil && a.log != nil {
+		a.log.Debug("initial account metrics upsert failed", "account_id", account.ID, "provider", account.Provider, "error", err)
+	}
 }
 
 func sliceOrEmpty[T any](items []T) []T {

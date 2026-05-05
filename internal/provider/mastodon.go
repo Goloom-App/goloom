@@ -15,12 +15,15 @@ import (
 )
 
 type mastodonAccountResponse struct {
-	ID           string `json:"id"`
-	Username     string `json:"username"`
-	Acct         string `json:"acct"`
-	URL          string `json:"url"`
-	AvatarStatic string `json:"avatar_static"`
-	Avatar       string `json:"avatar"`
+	ID             string `json:"id"`
+	Username       string `json:"username"`
+	Acct           string `json:"acct"`
+	URL            string `json:"url"`
+	AvatarStatic   string `json:"avatar_static"`
+	Avatar         string `json:"avatar"`
+	FollowersCount int64  `json:"followers_count"`
+	FollowingCount int64  `json:"following_count"`
+	StatusesCount  int64  `json:"statuses_count"`
 }
 
 type mastodonStatusResponse struct {
@@ -393,6 +396,26 @@ func (p *MastodonProvider) Publish(ctx context.Context, account domain.SocialAcc
 
 func (p *MastodonProvider) GetMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth, publishedURL string) ([]EngagementMetric, error) {
 	return fetchMastodonCompatibleMetrics(ctx, account.InstanceURL, auth.AccessToken, "/api/v1/statuses", publishedURL)
+}
+
+func (p *MastodonProvider) GetAccountMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth) ([]AccountMetric, error) {
+	resp, err := doJSONRequest(ctx, http.MethodGet, strings.TrimRight(account.InstanceURL, "/")+"/api/v1/accounts/verify_credentials", auth.AccessToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("mastodon account metrics failed with status %d", resp.StatusCode)
+	}
+	var payload mastodonAccountResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decode mastodon account metrics response: %w", err)
+	}
+	return []AccountMetric{
+		{Name: "followers", Value: payload.FollowersCount},
+		{Name: "following", Value: payload.FollowingCount},
+		{Name: "posts", Value: payload.StatusesCount},
+	}, nil
 }
 
 func discoverMastodonOAuthMetadata(ctx context.Context, instanceURL string) (string, string, error) {

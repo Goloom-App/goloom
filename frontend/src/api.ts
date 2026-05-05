@@ -108,6 +108,13 @@ export interface BackendMetricHistoryPoint {
   value: number
 }
 
+export interface BackendAccountGrowthPoint {
+  date: string
+  followers: number
+  following: number
+  posts: number
+}
+
 export interface BackendPostMetric {
   post_id: string
   account_id: string
@@ -578,6 +585,21 @@ export function createApiClient(options: ApiClientOptions) {
       return request<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>(
         options,
         `/v1/teams/${teamID}/analytics/chart?${params.toString()}`,
+        {
+          headers: buildHeaders(options.token, false),
+        },
+      )
+    },
+    getTeamAccountGrowth(teamID: string, accountID: string, opts?: { days?: number }) {
+      const params = new URLSearchParams()
+      if (opts?.days != null && opts.days > 0) {
+        params.set('days', String(opts.days))
+      }
+      const encodedAccount = encodeURIComponent(accountID)
+      const suffix = params.toString()
+      return request<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>(
+        options,
+        `/v1/teams/${teamID}/analytics/account/${encodedAccount}/growth${suffix ? `?${suffix}` : ''}`,
         {
           headers: buildHeaders(options.token, false),
         },

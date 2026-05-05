@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
@@ -70,7 +71,7 @@ func (s *Service) OIDCAuthCodeURL(state, nonce, pkceVerifier string) (string, er
 }
 
 // OIDCExchangeCode completes the authorization code flow, verifies the ID token (including nonce),
-// upserts the user, and returns the raw ID token JWT for use as an API bearer token.
+// upserts the user, and returns a rolling API session token for SPA bearer auth.
 func (s *Service) OIDCExchangeCode(ctx context.Context, code, nonce, pkceVerifier string) (rawIDToken string, principal domain.AuthenticatedPrincipal, err error) {
 	if !s.OIDCOAuthReady() {
 		return "", domain.AuthenticatedPrincipal{}, errors.New("oidc oauth is not configured")
@@ -98,7 +99,11 @@ func (s *Service) OIDCExchangeCode(ctx context.Context, code, nonce, pkceVerifie
 	if err != nil {
 		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("UpsertOIDCUser: %w", err)
 	}
-	return raw, domain.AuthenticatedPrincipal{User: user, Kind: "oidc"}, nil
+	sessionToken, _, err := s.store.CreateSessionAPIToken(ctx, user.ID, 12*time.Hour)
+	if err != nil {
+		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("CreateSessionAPIToken: %w", err)
+	}
+	return sessionToken, domain.AuthenticatedPrincipal{User: user, Kind: "oidc"}, nil
 }
 
 func (s *Service) RequireAuth(next http.Handler) http.Handler {

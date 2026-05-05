@@ -67,10 +67,13 @@ type Store interface {
 	UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error
 	MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID, accountID, utcDay string) error
 	ListOAuthAccountsWithAccessTokenExpiringBefore(ctx context.Context, before time.Time, limit int) ([]domain.AccountOAuthTokenExpiry, error)
+	ListAccountsForMetricsSync(ctx context.Context, limit int) ([]domain.SocialAccount, error)
+	UpsertAccountMetrics(ctx context.Context, accountID string, metrics map[string]int64, recordedAt time.Time) error
 	GetTeamAnalytics(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsSummary, error)
 	GetTeamAnalyticsReport(ctx context.Context, teamID string, topPostsLimit int) (domain.TeamAnalyticsReport, error)
 	ListTeamPostAnalyticsRanking(ctx context.Context, teamID string, sort string, limit, offset int) ([]domain.PostAnalyticsListRow, error)
 	GetTeamMetricHistorySeries(ctx context.Context, teamID, metric string, days int) ([]domain.MetricHistoryPoint, error)
+	GetTeamAccountMetricHistorySeries(ctx context.Context, teamID, accountID string, days int) ([]domain.AccountMetricHistoryPoint, error)
 	ListPostMetricsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostMetric, error)
 	ListPostVersionsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostVersion, error)
 	ApplyPostVersionsPatch(ctx context.Context, teamID, postID string, versions []domain.PostVersion) error
@@ -87,6 +90,7 @@ type Store interface {
 
 	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
 	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (plaintext string, meta domain.APIToken, err error)
+	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error
 }

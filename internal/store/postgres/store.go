@@ -182,7 +182,11 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		return domain.AuthenticatedPrincipal{}, err
 	}
 
-	_, _ = s.pool.Exec(ctx, `update api_tokens set last_used_at = now() where token_hash = $1`, hash)
+	_, _ = s.pool.Exec(ctx, `
+		update api_tokens
+		set last_used_at = now(),
+		    expires_at = case when name = '__web_session' then now() + interval '12 hours' else expires_at end
+		where token_hash = $1`, hash)
 	return principal, nil
 }
 

@@ -200,7 +200,14 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	}
 	principal.User = user
 
-	_, _ = s.db.ExecContext(ctx, `update api_tokens set last_used_at = ? where token_hash = ?`, now, hash)
+	rollingExpiry := formatTime(time.Now().UTC().Add(12 * time.Hour))
+	_, _ = s.db.ExecContext(ctx, `
+		update api_tokens
+		set last_used_at = ?,
+		    expires_at = case when name = '__web_session' then ? else expires_at end
+		where token_hash = ?`,
+		now, rollingExpiry, hash,
+	)
 	return principal, nil
 }
 

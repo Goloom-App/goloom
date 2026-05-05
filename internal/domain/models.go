@@ -313,6 +313,13 @@ type MetricHistoryPoint struct {
 	Value int64  `json:"value"`
 }
 
+type AccountMetricHistoryPoint struct {
+	Date      string `json:"date"`
+	Followers int64  `json:"followers"`
+	Following int64  `json:"following"`
+	Posts     int64  `json:"posts"`
+}
+
 type APIToken struct {
 	ID         string     `json:"id"`
 	UserID     string     `json:"user_id"`

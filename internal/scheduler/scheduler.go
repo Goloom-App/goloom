@@ -78,6 +78,12 @@ func (s *Service) Start(ctx context.Context) {
 		}()
 	}
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.runAccountMetricsLoop(ctx)
+	}()
+
 	ticker := time.NewTicker(s.pollInterval)
 	defer ticker.Stop()
 	defer close(queue)
@@ -88,6 +94,19 @@ func (s *Service) Start(ctx context.Context) {
 			s.logger.Error("scheduler poll failed", "error", err)
 		}
 
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Service) runAccountMetricsLoop(ctx context.Context) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		s.accountMetricsJob(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -284,6 +303,54 @@ func (s *Service) accountHealthJob(ctx context.Context) {
 			"access_token_expires_at", exp.Format(time.RFC3339),
 			"hours_remaining", time.Until(exp).Hours(),
 		)
+	}
+}
+
+func (s *Service) accountMetricsJob(ctx context.Context) {
+	accounts, err := s.store.ListAccountsForMetricsSync(ctx, 2000)
+	if err != nil {
+		s.logger.Error("account metrics list failed", "error", err)
+		return
+	}
+	now := time.Now().UTC()
+	for _, account := range accounts {
+		providerImpl, ok := s.providers.Get(account.Provider)
+		if !ok {
+			continue
+		}
+		accFresh, err := socialtokens.EnsureMastodonFresh(ctx, s.store, s.providers, account)
+		if err == nil {
+			account = accFresh
+		}
+		token, err := s.store.DecryptAccessToken(account)
+		if err != nil {
+			s.logger.Warn("account metrics decrypt access failed", "account_id", account.ID, "error", err)
+			continue
+		}
+		refreshToken, err := s.store.DecryptRefreshToken(account)
+		if err != nil {
+			s.logger.Warn("account metrics decrypt refresh failed", "account_id", account.ID, "error", err)
+			continue
+		}
+		metrics, err := providerImpl.GetAccountMetrics(ctx, account, provider.PublishAuth{
+			AccessToken:  token,
+			RefreshToken: refreshToken,
+		})
+		if err != nil {
+			s.logger.Warn("account metrics fetch failed", "account_id", account.ID, "provider", account.Provider, "error", err)
+			continue
+		}
+		snapshot := make(map[string]int64, len(metrics))
+		for _, metric := range metrics {
+			name := strings.TrimSpace(metric.Name)
+			if name == "" {
+				continue
+			}
+			snapshot[name] = metric.Value
+		}
+		if err := s.store.UpsertAccountMetrics(ctx, account.ID, snapshot, now); err != nil {
+			s.logger.Warn("account metrics upsert failed", "account_id", account.ID, "error", err)
+		}
 	}
 }
 
