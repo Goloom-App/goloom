@@ -1897,6 +1897,12 @@ input:focus, select:focus, textarea:focus {
   font-size: 1.15rem;
 }
 
+.dashboard-manage-accounts__icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+}
+
 .dashboard-panel__empty {
   margin: 0.5rem 0 0;
 }

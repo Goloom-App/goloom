@@ -39,6 +39,8 @@ import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderI
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 /** Survives React Strict Mode remounts: hash is promoted here, then one reload applies the session. */
 const OIDC_PENDING_SESSION_KEY = 'goloom.oidc.pending_session_v1'
+const LAST_SECTION_STORAGE_KEY = 'goloom.last_section.v1'
+const LAST_TEAM_STORAGE_KEY = 'goloom.last_team.v1'
 
 const SECTION_HEADINGS: Record<AppSection, string> = {
   dashboard: 'Dashboard',
@@ -56,7 +58,7 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
 const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics']
 
 function App() {
-  const [section, setSection] = useState<AppSection>('dashboard')
+  const [section, setSection] = useState<AppSection>(() => loadInitialSection())
   const [systemIsDark, setSystemIsDark] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -81,7 +83,7 @@ function App() {
   const [teams, setTeams] = useState<TeamRecord[]>([])
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
   const [posts, setPosts] = useState<PostRecord[]>([])
-  const [selectedTeamId, setSelectedTeamId] = useState('')
+  const [selectedTeamId, setSelectedTeamId] = useState(() => loadInitialTeamId())
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
   const [archivePreviewMetrics, setArchivePreviewMetrics] = useState<BackendPostMetric[]>([])
   const [editingPostId, setEditingPostId] = useState<string | null>(null)
@@ -128,6 +130,25 @@ function App() {
   useEffect(() => {
     writeStoredSettings(settings)
   }, [settings])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.localStorage.setItem(LAST_SECTION_STORAGE_KEY, section)
+  }, [section])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const teamID = selectedTeamId.trim()
+    if (!teamID) {
+      window.localStorage.removeItem(LAST_TEAM_STORAGE_KEY)
+      return
+    }
+    window.localStorage.setItem(LAST_TEAM_STORAGE_KEY, teamID)
+  }, [selectedTeamId])
 
   const resolvedTheme = useMemo((): 'dark' | 'light' => {
     const scheme = settings.ui.colorScheme
@@ -1797,6 +1818,36 @@ function writeStoredSettings(settings: SettingsState) {
     return
   }
   window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+}
+
+function isAppSection(value: string): value is AppSection {
+  return value in SECTION_HEADINGS
+}
+
+function loadInitialSection(): AppSection {
+  if (typeof window === 'undefined') {
+    return 'dashboard'
+  }
+  const sectionFromQuery = new URLSearchParams(window.location.search).get('section')?.trim() ?? ''
+  if (sectionFromQuery && isAppSection(sectionFromQuery)) {
+    return sectionFromQuery
+  }
+  const stored = window.localStorage.getItem(LAST_SECTION_STORAGE_KEY)?.trim() ?? ''
+  if (stored && isAppSection(stored)) {
+    return stored
+  }
+  return 'dashboard'
+}
+
+function loadInitialTeamId(): string {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+  const teamFromQuery = new URLSearchParams(window.location.search).get('team')?.trim() ?? ''
+  if (teamFromQuery) {
+    return teamFromQuery
+  }
+  return window.localStorage.getItem(LAST_TEAM_STORAGE_KEY)?.trim() ?? ''
 }
 
 export default App
