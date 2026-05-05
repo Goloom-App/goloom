@@ -3,7 +3,7 @@ import { addDays, format, parseISO, set, startOfDay, startOfMonth } from 'date-f
 
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
-import { defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
+import { buildMediaExcludePayload, defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
 import { AppSidebar } from './components/Sidebar/AppSidebar'
@@ -210,8 +210,15 @@ function App() {
     if (oauthStatus === 'success') {
       setStatusMessage(message)
       setError(null)
+      setAuthError(null)
+    } else if (provider === 'oidc') {
+      // Login screen only shows authError; general `error` is for the main app shell.
+      setAuthError(message)
+      setError(null)
+      setStatusMessage(null)
     } else {
       setError(message)
+      setAuthError(null)
       setStatusMessage(null)
     }
 
@@ -732,6 +739,7 @@ function App() {
       status: targetPost.status,
       accountContentOverride,
       mediaIds: targetPost.mediaIds ? [...targetPost.mediaIds] : [],
+      mediaExcludeByAccount: targetPost.mediaExcludeByAccount ? { ...targetPost.mediaExcludeByAccount } : {},
     })
     setComposerMode('edit')
     setEditingPostId(postId)
@@ -1056,12 +1064,14 @@ function App() {
     }
 
     await runAction(async () => {
+      const mediaExclude = buildMediaExcludePayload(editorDraft.mediaExcludeByAccount, editorDraft.targetAccountIds, editorDraft.mediaIds)
       const payload = {
         title: editorDraft.title.trim(),
         content: defaultContent,
         scheduled_at: new Date(editorDraft.scheduledAt).toISOString(),
         target_accounts: editorDraft.targetAccountIds,
         media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
+        media_exclude_by_account: mediaExclude,
         draft: false,
       }
 
@@ -1092,12 +1102,14 @@ function App() {
     }
     await runAction(async () => {
       const defaultContent = editorDraft.content
+      const mediaExclude = buildMediaExcludePayload(editorDraft.mediaExcludeByAccount, editorDraft.targetAccountIds, editorDraft.mediaIds)
       const payload = {
         title: editorDraft.title.trim(),
         content: defaultContent.trim(),
         scheduled_at: new Date(editorDraft.scheduledAt || Date.now()).toISOString(),
         target_accounts: editorDraft.targetAccountIds,
         media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
+        media_exclude_by_account: mediaExclude,
         draft: true,
       }
 
@@ -1606,6 +1618,13 @@ function App() {
         onSave={() => void handleSavePost()}
         onSaveDraft={() => void handleSaveDraft()}
         onClose={closeComposer}
+        teamId={selectedTeam?.id}
+        api={api ?? undefined}
+        authHeader={
+          activeConnection.bearerToken.trim()
+            ? `Bearer ${activeConnection.bearerToken.trim()}`
+            : undefined
+        }
         onMediaUpload={
           api && selectedTeam
             ? async (file) => {

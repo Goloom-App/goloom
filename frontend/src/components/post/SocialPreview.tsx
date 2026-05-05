@@ -1,8 +1,17 @@
 import { format, parseISO } from 'date-fns'
 import type { AccountRecord } from '../../types'
+import { Icon } from '../../icons'
+import { AuthMediaThumb } from '../Media/AuthMediaThumb'
 import { DestinationAvatar } from './DestinationAvatar'
 
 export type PreviewLayout = 'card' | 'mastodon' | 'bluesky' | 'friendica'
+
+export type SocialPreviewAttachment = {
+  id: string
+  previewUrl: string
+  mimeType: string
+  filename?: string
+}
 
 function layoutClass(layout: PreviewLayout) {
   switch (layout) {
@@ -41,6 +50,8 @@ export function SocialPreview({
   publishedPostUrl,
   layout,
   engagement,
+  attachments,
+  authHeader,
 }: {
   account: AccountRecord
   content: string
@@ -51,8 +62,12 @@ export function SocialPreview({
   layout?: PreviewLayout
   /** When set (e.g. archive), show interaction counts similar to native posts. */
   engagement?: PreviewEngagement | null
+  /** Library preview URLs require Bearer fetch (same as composer). */
+  attachments?: SocialPreviewAttachment[]
+  authHeader?: string
 }) {
   const resolved = layout ?? resolveLayout(account.provider)
+  const canLoadMedia = Boolean(authHeader?.trim())
   return (
     <div
       className={`social-preview ${theme === 'dark' ? 'social-preview--dark' : ''} ${layoutClass(resolved)}`}
@@ -70,6 +85,34 @@ export function SocialPreview({
       <div className="social-preview__body">
         {content || <span className="hint">Post content will appear here...</span>}
       </div>
+      {attachments && attachments.length > 0 ? (
+        <div className={`social-preview__media social-preview__media--${resolved}`} aria-label="Media attachments">
+          {attachments.map((item) => {
+            const isVideo = item.mimeType.startsWith('video/')
+            return (
+              <figure key={item.id} className="social-preview__media-figure">
+                {isVideo ? (
+                  <span className="social-preview__media-video">
+                    <Icon name="film" className="inline-icon" aria-hidden />
+                    <span className="social-preview__media-video-label">{item.filename ?? 'Video'}</span>
+                  </span>
+                ) : canLoadMedia ? (
+                  <AuthMediaThumb
+                    url={item.previewUrl}
+                    authHeader={authHeader!}
+                    alt={item.filename ?? ''}
+                    className="social-preview__media-thumb"
+                  />
+                ) : (
+                  <span className="social-preview__media-placeholder">
+                    <Icon name="image" className="inline-icon" aria-hidden />
+                  </span>
+                )}
+              </figure>
+            )
+          })}
+        </div>
+      ) : null}
       {engagement ? (
         <div className="social-preview__stats" aria-label="Engagement">
           <span title="Likes">

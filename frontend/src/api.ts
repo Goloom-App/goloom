@@ -70,6 +70,7 @@ export interface BackendPost {
   target_accounts: string[]
   published_links?: Record<string, string>
   media_ids?: string[]
+  media_exclude_by_account?: Record<string, string[]>
 }
 
 export interface BackendPostEngagementSummary {
@@ -454,6 +455,7 @@ export function createApiClient(options: ApiClientOptions) {
         scheduled_at: string
         target_accounts: string[]
         media_ids?: string[]
+        media_exclude_by_account?: Record<string, string[]>
         draft?: boolean
       },
     ) {
@@ -472,6 +474,7 @@ export function createApiClient(options: ApiClientOptions) {
         scheduled_at: string
         target_accounts: string[]
         media_ids?: string[]
+        media_exclude_by_account?: Record<string, string[]>
         draft?: boolean
       },
     ) {

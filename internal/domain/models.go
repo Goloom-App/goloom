@@ -72,6 +72,71 @@ func NormalizeMediaIDs(ids []string) []string {
 	return out
 }
 
+// NormalizeMediaExcludeByAccount trims keys/values and keeps only exclusions for attachments on this post.
+func NormalizeMediaExcludeByAccount(ex map[string][]string, mediaIDs []string) map[string][]string {
+	if len(ex) == 0 {
+		return nil
+	}
+	allowed := make(map[string]struct{})
+	for _, id := range NormalizeMediaIDs(mediaIDs) {
+		allowed[id] = struct{}{}
+	}
+	out := make(map[string][]string)
+	for accountID, xs := range ex {
+		accountID = strings.TrimSpace(accountID)
+		if accountID == "" {
+			continue
+		}
+		var filtered []string
+		for _, mid := range xs {
+			mid = strings.TrimSpace(mid)
+			if mid == "" {
+				continue
+			}
+			if len(allowed) > 0 {
+				if _, ok := allowed[mid]; !ok {
+					continue
+				}
+			}
+			filtered = append(filtered, mid)
+		}
+		filtered = NormalizeMediaIDs(filtered)
+		if len(filtered) > 0 {
+			out[accountID] = filtered
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// FilterMediaIDsForAccount returns attachments this destination publishes after exclusions.
+func FilterMediaIDsForAccount(all []string, excludeByAccount map[string][]string, accountID string) []string {
+	all = NormalizeMediaIDs(all)
+	if len(all) == 0 || excludeByAccount == nil {
+		return append([]string(nil), all...)
+	}
+	xs := excludeByAccount[strings.TrimSpace(accountID)]
+	if len(xs) == 0 {
+		return append([]string(nil), all...)
+	}
+	drop := make(map[string]struct{})
+	for _, id := range xs {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			drop[id] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(all))
+	for _, id := range all {
+		if _, omit := drop[id]; !omit {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 type User struct {
 	ID        string    `json:"id"`
 	Email     string    `json:"email"`
@@ -151,8 +216,9 @@ type ScheduledPost struct {
 	UpdatedAt      time.Time         `json:"updated_at"`
 	TargetAccounts []string          `json:"target_accounts"`
 	PublishedLinks map[string]string `json:"published_links,omitempty"`
-	Visibility     string            `json:"visibility,omitempty"`
-	MediaIDs       []string          `json:"media_ids,omitempty"`
+	Visibility               string              `json:"visibility,omitempty"`
+	MediaIDs               []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
 }
 
 type ScheduledPostTarget struct {
@@ -362,13 +428,14 @@ type UpdateUserInput struct {
 }
 
 type CreatePostInput struct {
-	Title          string    `json:"title"`
-	Content        string    `json:"content"`
-	ScheduledAt    time.Time `json:"scheduled_at"`
-	TargetAccounts []string  `json:"target_accounts"`
-	Visibility     string    `json:"visibility,omitempty"`
-	MediaIDs       []string  `json:"media_ids,omitempty"`
-	Draft          bool      `json:"draft,omitempty"`
+	Title                   string              `json:"title"`
+	Content                 string              `json:"content"`
+	ScheduledAt             time.Time           `json:"scheduled_at"`
+	TargetAccounts          []string            `json:"target_accounts"`
+	Visibility              string              `json:"visibility,omitempty"`
+	MediaIDs                []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount   map[string][]string `json:"media_exclude_by_account,omitempty"`
+	Draft                   bool                `json:"draft,omitempty"`
 }
 
 func (in CreatePostInput) Validate() error {

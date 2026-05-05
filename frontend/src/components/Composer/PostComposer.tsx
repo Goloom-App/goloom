@@ -1,12 +1,37 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import type { BackendMediaItem, createApiClient } from '../../api'
 import { Icon } from '../../icons'
 import type { AccountRecord } from '../../types'
 import { DestinationAvatar } from '../post/DestinationAvatar'
 import { SocialPreview } from '../post/SocialPreview'
-import { charCounterClass } from './editorDraft'
+import type { SocialPreviewAttachment } from '../post/SocialPreview'
+import { charCounterClass, pruneMediaExcludeAfterRemove } from './editorDraft'
 import { ComposerMedia } from './ComposerMedia'
 import type { EditorDraftState } from './types'
+
+type Api = ReturnType<typeof createApiClient>
+
+function attachmentsForDestination(
+  draft: EditorDraftState,
+  accountId: string,
+  teamId: string | undefined | null,
+  api: Api | null | undefined,
+  meta: Record<string, Pick<BackendMediaItem, 'filename' | 'mime_type'>>,
+): SocialPreviewAttachment[] {
+  const ex = new Set(draft.mediaExcludeByAccount[accountId] ?? [])
+  if (!teamId || !api) {
+    return []
+  }
+  return draft.mediaIds
+    .filter((id) => !ex.has(id))
+    .map((id) => ({
+      id,
+      previewUrl: api.mediaPreviewUrl(teamId, id),
+      mimeType: meta[id]?.mime_type ?? 'image/jpeg',
+      filename: meta[id]?.filename,
+    }))
+}
 
 function effectiveBody(draft: EditorDraftState, accountId: string | null) {
   if (!accountId || accountId === 'default') {
@@ -34,6 +59,9 @@ export function PostComposer({
   onSaveDraft,
   onClose,
   onMediaUpload,
+  teamId,
+  api,
+  authHeader,
 }: {
   open: boolean
   mode: 'create' | 'edit'
@@ -47,8 +75,35 @@ export function PostComposer({
   onClose: () => void
   /** Upload to team media library (POST /teams/:id/media); returns library media id for scheduler JIT sync. */
   onMediaUpload?: (file: File) => Promise<string>
+  teamId?: string | null
+  api?: Api | null
+  authHeader?: string
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
+  const [libraryItems, setLibraryItems] = useState<BackendMediaItem[]>([])
+
+  useEffect(() => {
+    if (!open || !teamId || !api) {
+      setLibraryItems([])
+      return
+    }
+    let cancelled = false
+    void api
+      .listTeamMedia(teamId)
+      .then((res) => {
+        if (!cancelled) {
+          setLibraryItems(res.items ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLibraryItems([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, teamId, api])
 
   const selectedAccounts = useMemo(
     () => teamAccounts.filter((account) => draft.targetAccountIds.includes(account.id)),
@@ -70,6 +125,36 @@ export function PostComposer({
   }, [activeTab, selectedAccounts])
 
   const bodyLen = effectiveBody(draft, activeTab === 'default' ? null : activeTab).length
+
+  const libraryById = useMemo(() => {
+    const o: Record<string, Pick<BackendMediaItem, 'filename' | 'mime_type'>> = {}
+    for (const row of libraryItems) {
+      o[row.id] = { filename: row.filename, mime_type: row.mime_type }
+    }
+    for (const id of draft.mediaIds) {
+      if (!o[id]) {
+        o[id] = {
+          filename: id.length > 28 ? `${id.slice(0, 14)}…${id.slice(-8)}` : id,
+          mime_type: 'application/octet-stream',
+        }
+      }
+    }
+    return o
+  }, [libraryItems, draft.mediaIds])
+
+  const toggleDestinationMedia = (tabId: string, mediaId: string, wantAttached: boolean) => {
+    setDraft((cur) => {
+      const prev = cur.mediaExcludeByAccount[tabId] ?? []
+      const next = wantAttached ? prev.filter((x) => x !== mediaId) : prev.includes(mediaId) ? prev : [...prev, mediaId]
+      const mediaExcludeByAccount = { ...cur.mediaExcludeByAccount }
+      if (next.length === 0) {
+        delete mediaExcludeByAccount[tabId]
+      } else {
+        mediaExcludeByAccount[tabId] = next
+      }
+      return { ...cur, mediaExcludeByAccount }
+    })
+  }
 
   const overAnyLimit = useMemo(() => {
     if (draft.targetAccountIds.length === 0) {
@@ -163,16 +248,64 @@ export function PostComposer({
 
           <ComposerMedia
             mediaIds={draft.mediaIds}
-            onAdd={(id) =>
-              setDraft((current) =>
-                current.mediaIds.includes(id) ? current : { ...current, mediaIds: [...current.mediaIds, id] },
-              )
+            libraryById={libraryById}
+            onAddIds={(ids) =>
+              setDraft((current) => {
+                const merged = [...current.mediaIds]
+                const seen = new Set(merged)
+                for (const id of ids) {
+                  if (!seen.has(id)) {
+                    seen.add(id)
+                    merged.push(id)
+                  }
+                }
+                return { ...current, mediaIds: merged }
+              })
             }
-            onRemove={(id) => setDraft((current) => ({ ...current, mediaIds: current.mediaIds.filter((x) => x !== id) }))}
+            onRemove={(id) =>
+              setDraft((current) => ({
+                ...current,
+                mediaIds: current.mediaIds.filter((x) => x !== id),
+                mediaExcludeByAccount: pruneMediaExcludeAfterRemove(current.mediaExcludeByAccount, id),
+              }))
+            }
             onUpload={onMediaUpload}
+            teamId={teamId ?? undefined}
+            api={api ?? undefined}
+            authHeader={authHeader}
             uploadLabel={onMediaUpload ? undefined : 'Select a workspace to attach media files.'}
             disabled={syncing}
           />
+
+          {activeTab !== 'default' && draft.mediaIds.length > 0 ? (
+            <div className="composer-override-media">
+              <p className="eyebrow">Media for this destination</p>
+              <p className="hint">Uncheck to skip an attachment only for this account.</p>
+              <ul className="composer-override-media__list">
+                {draft.mediaIds.map((mid) => {
+                  const excluded = (draft.mediaExcludeByAccount[activeTab] ?? []).includes(mid)
+                  const meta = libraryById[mid]
+                  return (
+                    <li key={`${activeTab}-${mid}`} className="composer-override-media__row">
+                      <label className="composer-override-media__label">
+                        <input
+                          type="checkbox"
+                          checked={!excluded}
+                          disabled={syncing}
+                          onChange={(ev) => {
+                            toggleDestinationMedia(activeTab, mid, ev.target.checked)
+                          }}
+                        />
+                        <span className="composer-override-media__name" title={meta?.filename ?? mid}>
+                          {meta?.filename ?? mid}
+                        </span>
+                      </label>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : null}
 
           <label className="field">
             <span>Scheduled at</span>
@@ -243,6 +376,8 @@ export function PostComposer({
                   content={effectiveBody(draft, account.id)}
                   scheduledAt={draft.scheduledAt}
                   theme={theme}
+                  attachments={attachmentsForDestination(draft, account.id, teamId, api, libraryById)}
+                  authHeader={authHeader}
                 />
               ))
             ) : (

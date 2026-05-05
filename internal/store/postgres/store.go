@@ -18,6 +18,28 @@ import (
 //go:embed schema.sql
 var schemaSQL string
 
+func encodeMediaExcludeJSON(m map[string][]string) (string, error) {
+	if len(m) == 0 {
+		return "{}", nil
+	}
+	b, err := json.Marshal(m)
+	return string(b), err
+}
+
+func decodePostMediaExclude(raw string, dest *map[string][]string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		*dest = nil
+		return nil
+	}
+	var m map[string][]string
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return err
+	}
+	*dest = m
+	return nil
+}
+
 func encodeMediaIDsJSON(ids []string) (string, error) {
 	ids = domain.NormalizeMediaIDs(ids)
 	b, err := json.Marshal(ids)
@@ -683,21 +705,25 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
+	excludeJSON, err := encodeMediaExcludeJSON(input.MediaExcludeByAccount)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
 
 	const insertPost = `
-		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, visibility, media_ids)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, visibility, media_ids, media_exclude_by_account)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		returning id, team_id, author_user_id, title, content, scheduled_at, status,
-		          attempt_count, coalesce(last_error, ''), visibility, media_ids, created_at, updated_at
+		          attempt_count, coalesce(last_error, ''), visibility, media_ids, media_exclude_by_account, created_at, updated_at
 	`
 
 	post := domain.ScheduledPost{}
-	var mediaRaw string
+	var mediaRaw, mediaExcludeRaw string
 	st := domain.PostStatusPending
 	if input.Draft {
 		st = domain.PostStatusDraft
 	}
-	err = tx.QueryRow(ctx, insertPost, teamID, principal.User.ID, input.Title, input.Content, input.ScheduledAt, st, visibility, mediaJSON).Scan(
+	err = tx.QueryRow(ctx, insertPost, teamID, principal.User.ID, input.Title, input.Content, input.ScheduledAt, st, visibility, mediaJSON, excludeJSON).Scan(
 		&post.ID,
 		&post.TeamID,
 		&post.AuthorUserID,
@@ -709,6 +735,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		&post.LastError,
 		&post.Visibility,
 		&mediaRaw,
+		&mediaExcludeRaw,
 		&post.CreatedAt,
 		&post.UpdatedAt,
 	)
@@ -716,6 +743,9 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		return domain.ScheduledPost{}, err
 	}
 	if err := decodePostMediaIDs(mediaRaw, &post.MediaIDs); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	if err := decodePostMediaExclude(mediaExcludeRaw, &post.MediaExcludeByAccount); err != nil {
 		return domain.ScheduledPost{}, err
 	}
 
@@ -743,7 +773,7 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 	const query = `
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
-		       p.visibility, p.media_ids,
+		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -758,7 +788,7 @@ func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (do
 	const query = `
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
-		       p.visibility, p.media_ids,
+		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -792,11 +822,15 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
+	excludeJSON, err := encodeMediaExcludeJSON(input.MediaExcludeByAccount)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
 	newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, input)
 	_, err = tx.Exec(
 		ctx,
-		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, status = $6, updated_at = now() where id = $7 and team_id = $8`,
-		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, newStatus, postID, teamID,
+		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, media_exclude_by_account = $6, status = $7, updated_at = now() where id = $8 and team_id = $9`,
+		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, excludeJSON, newStatus, postID, teamID,
 	)
 	if err != nil {
 		return domain.ScheduledPost{}, err
@@ -840,7 +874,7 @@ func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.Scheduled
 	const query = `
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
-		       p.visibility, p.media_ids,
+		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -1034,7 +1068,7 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 	var posts []domain.ScheduledPost
 	for rows.Next() {
 		var post domain.ScheduledPost
-		var mediaRaw string
+		var mediaRaw, mediaExcludeRaw string
 		if err := rows.Scan(
 			&post.ID,
 			&post.TeamID,
@@ -1049,6 +1083,7 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 			&post.UpdatedAt,
 			&post.Visibility,
 			&mediaRaw,
+			&mediaExcludeRaw,
 			&post.TargetAccounts,
 		); err != nil {
 			return nil, err
@@ -1057,6 +1092,9 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 			post.Visibility = domain.PostVisibilityPublic
 		}
 		if err := decodePostMediaIDs(mediaRaw, &post.MediaIDs); err != nil {
+			return nil, err
+		}
+		if err := decodePostMediaExclude(mediaExcludeRaw, &post.MediaExcludeByAccount); err != nil {
 			return nil, err
 		}
 		posts = append(posts, post)

@@ -76,6 +76,8 @@ export interface PostRecord {
   publishedLinks?: Record<string, string>
   /** Platform media attachment IDs (Mastodon media IDs, Bluesky-encoded payloads, etc.) */
   mediaIds?: string[]
+  /** Per destination: media library IDs excluded from that publish */
+  mediaExcludeByAccount?: Record<string, string[]>
 }
 
 /** Normalized engagement row for UI (maps from BackendPostMetric). */

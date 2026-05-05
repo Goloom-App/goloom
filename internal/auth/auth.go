@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -72,26 +73,26 @@ func (s *Service) OIDCExchangeCode(ctx context.Context, code, nonce, pkceVerifie
 	}
 	tok, err := s.oauth2Cfg.Exchange(ctx, code, oauth2.VerifierOption(pkceVerifier))
 	if err != nil {
-		return "", domain.AuthenticatedPrincipal{}, err
+		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("oauth2 Exchange (token endpoint): %w", err)
 	}
 	raw, ok := tok.Extra("id_token").(string)
 	if !ok || raw == "" {
-		return "", domain.AuthenticatedPrincipal{}, errors.New("token response did not include id_token")
+		return "", domain.AuthenticatedPrincipal{}, errors.New("token response did not include id_token (need openid scope and IdP that returns id_token)")
 	}
 	idToken, err := s.verifier.Verify(ctx, raw)
 	if err != nil {
-		return "", domain.AuthenticatedPrincipal{}, err
+		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("id_token Verify (issuer/audience/signature): %w", err)
 	}
 	if nonce != "" && idToken.Nonce != nonce {
 		return "", domain.AuthenticatedPrincipal{}, errors.New("id token nonce mismatch")
 	}
 	var claims oidcClaims
 	if err := idToken.Claims(&claims); err != nil {
-		return "", domain.AuthenticatedPrincipal{}, err
+		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("id_token Claims: %w", err)
 	}
 	user, err := s.store.UpsertOIDCUser(ctx, claims.Subject, claims.Email, claims.Name)
 	if err != nil {
-		return "", domain.AuthenticatedPrincipal{}, err
+		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("UpsertOIDCUser: %w", err)
 	}
 	return raw, domain.AuthenticatedPrincipal{User: user, Kind: "oidc"}, nil
 }

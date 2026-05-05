@@ -183,12 +183,25 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			}
 		}
 
+		localMedia := domain.FilterMediaIDsForAccount(post.MediaIDs, post.MediaExcludeByAccount, account.ID)
+		remoteMedia, err := s.syncMediaToProvider(ctx, post.TeamID, localMedia, account, providerImpl, provider.PublishAuth{
+			AccessToken:  token,
+			RefreshToken: refreshToken,
+		})
+		if err != nil {
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+
 		result, err := providerImpl.Publish(ctx, account, provider.PublishAuth{
 			AccessToken:  token,
 			RefreshToken: refreshToken,
 		}, provider.PublishRequest{
 			Content:     content,
-			MediaIDs:    post.MediaIDs,
+			MediaIDs:    remoteMedia,
 			Visibility:  post.Visibility,
 			ScheduledAt: nil,
 		})
@@ -339,15 +352,15 @@ func (s *Service) failPost(ctx context.Context, post domain.ScheduledPost, err e
 	}
 }
 
-func (s *Service) syncMediaToProvider(ctx context.Context, post domain.ScheduledPost, account domain.SocialAccount, p provider.SocialMediaProvider, auth provider.PublishAuth) ([]string, error) {
-	if len(post.MediaIDs) == 0 {
+func (s *Service) syncMediaToProvider(ctx context.Context, teamID string, localMediaIDs []string, account domain.SocialAccount, p provider.SocialMediaProvider, auth provider.PublishAuth) ([]string, error) {
+	if len(localMediaIDs) == 0 {
 		return nil, nil
 	}
 
-	remoteIDs := make([]string, 0, len(post.MediaIDs))
-	for _, id := range post.MediaIDs {
+	remoteIDs := make([]string, 0, len(localMediaIDs))
+	for _, id := range localMediaIDs {
 		// 1. Check if it's already a remote ID (e.g. legacy or direct upload)
-		item, err := s.store.GetMediaItemByID(ctx, post.TeamID, id)
+		item, err := s.store.GetMediaItemByID(ctx, teamID, id)
 		if err != nil {
 			// Not a local UUID or not found, assume it's already a remote ID
 			remoteIDs = append(remoteIDs, id)
@@ -363,7 +376,7 @@ func (s *Service) syncMediaToProvider(ctx context.Context, post domain.Scheduled
 		}
 
 		// 3. Not mapped, upload now
-		filePath := store.GetMediaFilePath(post.TeamID, item.Sha256)
+		filePath := store.GetMediaFilePath(teamID, item.Sha256)
 		file, err := os.Open(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("open local media %q: %w", item.ID, err)

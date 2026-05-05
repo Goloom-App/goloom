@@ -96,6 +96,7 @@ create table if not exists scheduled_posts (
     last_error text,
     visibility text not null default 'public',
     media_ids text not null default '[]',
+    media_exclude_by_account text not null default '{}',
     created_at text not null,
     updated_at text not null
 );

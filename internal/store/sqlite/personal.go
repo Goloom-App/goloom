@@ -23,6 +23,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table social_accounts add column access_token_expires_at text`,
 		`alter table scheduled_posts add column visibility text not null default 'public'`,
 		`alter table scheduled_posts add column media_ids text not null default '[]'`,
+		`alter table scheduled_posts add column media_exclude_by_account text not null default '{}'`,
 		`alter table scheduled_post_targets add column publish_metadata text not null default '{}'`,
 		`alter table scheduled_post_targets add column metrics_last_sync_date text`,
 	}
@@ -65,10 +66,18 @@ CREATE TABLE scheduled_posts_new (
     last_error text,
     visibility text not null default 'public',
     media_ids text not null default '[]',
+    media_exclude_by_account text not null default '{}',
     created_at text not null,
     updated_at text not null
 );
-INSERT INTO scheduled_posts_new SELECT * FROM scheduled_posts;
+INSERT INTO scheduled_posts_new (
+    id, team_id, author_user_id, title, content, scheduled_at, status,
+    attempt_count, last_error, visibility, media_ids, media_exclude_by_account, created_at, updated_at
+)
+SELECT id, team_id, author_user_id, title, content, scheduled_at, status,
+    attempt_count, last_error, visibility, media_ids,
+    coalesce(nullif(trim(media_exclude_by_account), ''), '{}'), created_at, updated_at
+FROM scheduled_posts;
 DROP TABLE scheduled_posts;
 ALTER TABLE scheduled_posts_new RENAME TO scheduled_posts;
 CREATE INDEX IF NOT EXISTS idx_scheduled_posts_due ON scheduled_posts(status, scheduled_at);
@@ -211,7 +220,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, visibility, media_ids, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account, created_at, updated_at
 		from scheduled_posts
 		where id = ?`, postID)
 	if err != nil {

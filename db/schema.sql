@@ -210,6 +210,8 @@ alter table social_accounts add column if not exists access_token_expires_at tim
 alter table scheduled_posts add column if not exists visibility text not null default 'public';
 alter table scheduled_posts add column if not exists media_ids text not null default '[]';
 
+alter table scheduled_posts add column if not exists media_exclude_by_account text not null default '{}';
+
 alter table scheduled_post_targets add column if not exists publish_metadata text not null default '{}';
 alter table scheduled_post_targets add column if not exists metrics_last_sync_date text;
 

@@ -10,4 +10,6 @@ export type EditorDraftState = {
   accountContentOverride: Record<string, string>
   /** Uploaded attachment IDs for publishing (same semantics as API media_ids). */
   mediaIds: string[]
+  /** Per destination: library/media IDs omitted for that publish (others inherit full `mediaIds`). */
+  mediaExcludeByAccount: Record<string, string[]>
 }
