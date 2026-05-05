@@ -110,7 +110,11 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	_, err = s.EnsurePersonalTeam(ctx, userID)
+	return err
 }
 
 func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {

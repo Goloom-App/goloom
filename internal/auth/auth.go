@@ -120,6 +120,16 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
+// PrincipalHasTeamAccess reports whether the caller may access the team:
+// global administrators may use any team (recovery / OIDC-linked data); otherwise
+// a team_memberships role is required.
+func (s *Service) PrincipalHasTeamAccess(ctx context.Context, principal domain.AuthenticatedPrincipal, teamID string, roles ...domain.TeamRole) (bool, error) {
+	if principal.User.IsAdmin {
+		return true, nil
+	}
+	return s.store.UserHasAnyTeamRole(ctx, principal.User.ID, teamID, roles...)
+}
+
 func (s *Service) RequireTeamRole(teamIDParam string, roles ...domain.TeamRole) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +140,7 @@ func (s *Service) RequireTeamRole(teamIDParam string, roles ...domain.TeamRole) 
 			}
 
 			teamID := r.PathValue(teamIDParam)
-			allowed, err := s.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, teamID, roles...)
+			allowed, err := s.PrincipalHasTeamAccess(r.Context(), principal, teamID, roles...)
 			if err != nil {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return

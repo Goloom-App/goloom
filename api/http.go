@@ -539,7 +539,7 @@ func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, acc.TeamID, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, acc.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -575,7 +575,7 @@ func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, post.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -626,7 +626,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, effectiveTeam, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, effectiveTeam, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -651,7 +651,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -706,7 +706,7 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, post.TeamID, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -729,7 +729,7 @@ func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, post.TeamID, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -766,7 +766,7 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "team mismatch between URL and destinations", http.StatusBadRequest)
 		return
 	}
-	allowed, err := a.store.UserHasAnyTeamRole(r.Context(), principal.User.ID, effectiveTeam, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, effectiveTeam, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
