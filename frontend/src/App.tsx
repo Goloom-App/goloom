@@ -104,8 +104,6 @@ function App() {
   const [apiTokens, setApiTokens] = useState<BackendAPIToken[]>([])
   const [apiTokensLoading, setApiTokensLoading] = useState(false)
   const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
-  const [newTeamName, setNewTeamName] = useState('')
-  const [newTeamDescription, setNewTeamDescription] = useState('')
   const [teamSettingsName, setTeamSettingsName] = useState('')
   const [teamSettingsDescription, setTeamSettingsDescription] = useState('')
   const [addMemberUserId, setAddMemberUserId] = useState('')
@@ -808,16 +806,20 @@ function App() {
     return user ? `${user.name} · ${user.email}` : userId
   }
 
-  async function handleCreateTeam() {
-    if (!api || !newTeamName.trim()) {
+  async function handleCreateTeamFromSelector() {
+    if (!api) {
       return
     }
+    const newTeamName = (window.prompt('New team name') ?? '').trim()
+    if (!newTeamName) {
+      return
+    }
+    const newTeamDescription = (window.prompt('Team description (optional)') ?? '').trim()
     await runAction(async () => {
       const created = await api.createTeam({ name: newTeamName.trim(), description: newTeamDescription.trim() })
-      setNewTeamName('')
-      setNewTeamDescription('')
       setSelectedTeamId(created.id)
       await loadDashboard({ silent: true })
+      setSection('teams')
     }, 'Team created')
   }
 
@@ -1328,6 +1330,7 @@ function App() {
         syncing={syncing}
         selectedTeamPresent={Boolean(selectedTeam)}
         onSelectTeam={setSelectedTeamId}
+        onCreateTeamFromSelector={() => void handleCreateTeamFromSelector()}
         onCreatePost={openCreateComposer}
         onSignOut={() => clearAuthenticatedState('Signed out')}
       />
@@ -1453,23 +1456,7 @@ function App() {
           {section === 'teams' && (
             <div className="glass-panel">
               <h2 className="section-card__title">Team settings</h2>
-              <p className="hint">Create new teams, manage members, update access, and transfer ownership.</p>
-
-              <h3 className="subsection-title">Create team</h3>
-              <p className="hint">New teams you create are owned by you. Personal workspaces cannot receive members.</p>
-              <label className="field">
-                <span>Name</span>
-                <input value={newTeamName} onChange={(event) => setNewTeamName(event.target.value)} placeholder="Marketing" />
-              </label>
-              <label className="field">
-                <span>Description</span>
-                <input value={newTeamDescription} onChange={(event) => setNewTeamDescription(event.target.value)} placeholder="Optional" />
-              </label>
-              <button type="button" className="button button--primary" onClick={() => void handleCreateTeam()} disabled={syncing || !newTeamName.trim()}>
-                Create team
-              </button>
-
-              <div className="divider" style={{ margin: '1.5rem 0' }} />
+              <p className="hint">Manage members, update access, and transfer ownership for selected workspace.</p>
 
               <h3 className="subsection-title">Team settings · {selectedTeam?.name ?? '—'}</h3>
               {!selectedTeam ? (

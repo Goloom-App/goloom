@@ -16,6 +16,7 @@ export function AppSidebar({
   syncing,
   selectedTeamPresent,
   onSelectTeam,
+  onCreateTeamFromSelector,
   onCreatePost,
   onSignOut,
 }: {
@@ -31,6 +32,7 @@ export function AppSidebar({
   syncing: boolean
   selectedTeamPresent: boolean
   onSelectTeam: (teamId: string) => void
+  onCreateTeamFromSelector: () => void
   onCreatePost: () => void
   onSignOut: () => void
 }) {
@@ -53,7 +55,7 @@ export function AppSidebar({
             onChange={(event) => {
               const value = event.target.value
               if (value === '__create_team__') {
-                setSection('teams')
+                onCreateTeamFromSelector()
                 return
               }
               onSelectTeam(value)
