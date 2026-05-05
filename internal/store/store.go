@@ -75,6 +75,13 @@ type Store interface {
 	ApplyPostVersionsPatch(ctx context.Context, teamID, postID string, versions []domain.PostVersion) error
 	EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error
 
+	CreateMediaItem(ctx context.Context, item domain.MediaItem) (domain.MediaItem, error)
+	GetMediaItemByID(ctx context.Context, teamID, mediaID string) (domain.MediaItem, error)
+	ListTeamMedia(ctx context.Context, teamID string) ([]domain.MediaItem, error)
+	DeleteMediaItem(ctx context.Context, teamID, mediaID string) error
+	GetMediaProviderMapping(ctx context.Context, mediaID, accountID string) (domain.MediaProviderMapping, error)
+	UpsertMediaProviderMapping(ctx context.Context, mapping domain.MediaProviderMapping) error
+
 	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
 	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (plaintext string, meta domain.APIToken, err error)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
