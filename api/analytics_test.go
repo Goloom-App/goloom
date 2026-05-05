@@ -89,7 +89,7 @@ func analyticsTestHandler(t *testing.T, s *sqlitestore.Store) http.Handler {
 	)
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
 	h := api.New(logger, s, authSvc, reg, config.Config{})
-	return h.Handler(security.NewLimiter(10_000), nil)
+	return h.Handler(security.NewLimiter(10_000, 10_000), nil)
 }
 
 func TestAPI_TeamAnalytics_and_PostAnalytics(t *testing.T) {

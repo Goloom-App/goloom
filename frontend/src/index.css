@@ -1770,80 +1770,113 @@ input:focus, select:focus, textarea:focus {
   margin: 0.5rem 0 0;
 }
 
-.dashboard-upcoming {
+.dashboard-scheduled-cards {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0.25rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
 }
 
-.dashboard-upcoming__row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.75rem;
-  align-items: center;
+.dashboard-scheduled-cards__item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.dashboard-scheduled-card {
+  width: min(240px, 72vw);
+  min-height: 8.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   text-align: left;
-  padding: 0.65rem 0.75rem;
-  border-radius: 12px;
+  padding: 0.85rem 0.9rem;
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--surface-muted);
   cursor: pointer;
   color: inherit;
   transition:
     border-color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
 }
 
-.dashboard-upcoming__row:hover {
+.dashboard-scheduled-card:hover {
   border-color: var(--accent);
   background: var(--surface-soft);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
 
-.dashboard-upcoming__time {
+.dashboard-scheduled-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-scheduled-card__time {
   display: flex;
   flex-direction: column;
-  font-size: 0.78rem;
-  color: var(--text-soft);
-  min-width: 3.5rem;
+  gap: 0.1rem;
+  line-height: 1.2;
 }
 
-.dashboard-upcoming__time strong {
-  font-size: 0.95rem;
+.dashboard-scheduled-card__date {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.dashboard-scheduled-card__clock {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 
-.dashboard-upcoming__main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 0;
-}
-
-.dashboard-upcoming__title {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dashboard-upcoming__accounts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-}
-
-.dashboard-upcoming__draft {
-  font-size: 0.65rem;
+.dashboard-scheduled-card__draft {
+  flex-shrink: 0;
+  font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 0.15rem 0.45rem;
+  padding: 0.15rem 0.4rem;
   border-radius: 6px;
   background: var(--accent-soft);
   color: var(--text);
+}
+
+.dashboard-scheduled-card__title {
+  margin: 0 0 0.6rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-scheduled-card__accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 0.35rem;
 }
 
 .dashboard-spark-grid {

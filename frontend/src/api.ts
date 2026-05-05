@@ -143,6 +143,7 @@ export interface BackendRuntimeConfig {
   security: {
     allowed_origins: string[]
     rate_limit_per_minute: number
+    rate_limit_authenticated_per_minute: number
     encryption_configured: boolean
   }
   scheduler: {
@@ -209,7 +210,13 @@ async function request<T>(options: ApiClientOptions, path: string, init?: Reques
   const baseUrl = options.baseUrl.trim().replace(/\/$/, '')
   const response = await fetch(baseUrl ? `${baseUrl}${path}` : path, init)
   if (!response.ok) {
-    const message = await response.text()
+    let message = await response.text()
+    if (response.status === 429) {
+      const trimmed = message.trim().toLowerCase()
+      if (!trimmed || trimmed.includes('rate limit')) {
+        message = 'Too many requests. Please wait a moment and try again.'
+      }
+    }
     throw new ApiError(response.status, message || `Request failed with ${response.status}`)
   }
   if (response.status === 204) {

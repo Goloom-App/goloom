@@ -121,20 +121,22 @@ func TestHashToken(t *testing.T) {
 
 func TestNewLimiter_defaultWhenNonPositive(t *testing.T) {
 	t.Parallel()
-	for _, per := range []int{0, -5} {
-		l := NewLimiter(per)
-		if l == nil {
-			t.Fatal("nil limiter")
-		}
-		if l.burst != 60 {
-			t.Errorf("NewLimiter(%d): burst want 60, got %d", per, l.burst)
-		}
+	l := NewLimiter(0, 0)
+	if l == nil {
+		t.Fatal("nil limiter")
+	}
+	if l.anonBurst != 120 || l.authBurst != 600 {
+		t.Fatalf("want anon burst 120 auth burst 600, got %d %d", l.anonBurst, l.authBurst)
+	}
+	l2 := NewLimiter(-5, 0)
+	if l2.anonBurst != 120 {
+		t.Fatalf("negative anon: want burst 120, got %d", l2.anonBurst)
 	}
 }
 
 func TestLimiter_Middleware_allowsUnderBurst(t *testing.T) {
 	t.Parallel()
-	l := NewLimiter(1000) // very high per minute
+	l := NewLimiter(10000, 10000) // very high per minute
 	called := false
 	h := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -151,8 +153,8 @@ func TestLimiter_Middleware_allowsUnderBurst(t *testing.T) {
 
 func TestLimiter_Middleware_rateLimited(t *testing.T) {
 	t.Parallel()
-	// 1 request per minute, burst 1: second immediate request from same IP should 429
-	l := NewLimiter(1)
+	// Anonymous bucket: 1 req/min burst 1 — second request without bearer should 429
+	l := NewLimiter(1, 1000)
 	h := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -172,9 +174,37 @@ func TestLimiter_Middleware_rateLimited(t *testing.T) {
 	}
 }
 
+func TestLimiter_Middleware_bearerUsesHigherBucket(t *testing.T) {
+	t.Parallel()
+	l := NewLimiter(1, 10)
+	h := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := func() *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.Header.Set("Authorization", "Bearer token")
+		r.RemoteAddr = "192.0.2.77:1"
+		return r
+	}
+
+	for i := 0; i < 10; i++ {
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req())
+		if rr.Code != http.StatusOK {
+			t.Fatalf("bearer request %d: want 200, got %d", i, rr.Code)
+		}
+	}
+	rr429 := httptest.NewRecorder()
+	h.ServeHTTP(rr429, req())
+	if rr429.Code != http.StatusTooManyRequests {
+		t.Fatalf("11th bearer request: want 429, got %d", rr429.Code)
+	}
+}
+
 func TestLimiter_prunesIdleVisitors(t *testing.T) {
 	t.Parallel()
-	l := newLimiter(1000, 40*time.Millisecond, 15*time.Millisecond)
+	l := newLimiterDual(1000, 1000, 40*time.Millisecond, 15*time.Millisecond)
 	h := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -199,7 +229,7 @@ func TestLimiter_prunesIdleVisitors(t *testing.T) {
 
 func TestLimiter_Middleware_xForwardedForKeying(t *testing.T) {
 	t.Parallel()
-	l := NewLimiter(1)
+	l := NewLimiter(1, 1000)
 	h := l.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

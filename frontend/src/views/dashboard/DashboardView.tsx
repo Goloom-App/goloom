@@ -104,105 +104,119 @@ export function DashboardView({
     replies: 'Replies',
   }
 
-  return (
-    <div className="dashboard-view">
-      <section className="glass-panel dashboard-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <p className="eyebrow">Upcoming</p>
-            <h2 className="dashboard-panel__title">Scheduled posts</h2>
-            <p className="hint">{teamName}</p>
-          </div>
-          <button type="button" className="button button--secondary" onClick={onOpenSchedule}>
-            <Icon name="calendar" className="inline-icon" />
-            <span>Open schedule</span>
-          </button>
+  const performancePanel = (
+    <section className="glass-panel dashboard-panel">
+      <div className="dashboard-panel__header">
+        <div>
+          <p className="eyebrow">Performance</p>
+          <h2 className="dashboard-panel__title">Recent engagement</h2>
+          <p className="hint">Team totals from synced analytics</p>
         </div>
-        {upcomingPosts.length === 0 ? (
-          <p className="hint dashboard-panel__empty">No upcoming scheduled or draft posts. Create a post to fill your calendar.</p>
-        ) : (
-          <ul className="dashboard-upcoming">
-            {upcomingPosts.map((post) => (
-              <li key={post.id}>
-                <button type="button" className="dashboard-upcoming__row" onClick={() => onOpenPost(post.id)}>
-                  <div className="dashboard-upcoming__time">
-                    <span>{format(parseISO(post.scheduledAt), 'MMM d')}</span>
-                    <strong>{format(parseISO(post.scheduledAt), 'HH:mm')}</strong>
+        <button type="button" className="button button--secondary" onClick={() => void loadCharts()} disabled={loadingCharts}>
+          Refresh
+        </button>
+      </div>
+      <div className="dashboard-spark-grid">
+        {ENGAGEMENT_METRICS.map((m) => (
+          <MetricSparkline
+            key={m}
+            title={chartTitles[m]}
+            color={chartColors[m] ?? 'var(--accent)'}
+            points={(seriesByMetric[m] ?? []).map((p) => ({ date: p.date, value: p.value }))}
+            loading={loadingCharts}
+          />
+        ))}
+      </div>
+    </section>
+  )
+
+  const accountPanel = (
+    <section className="glass-panel dashboard-panel">
+      <div className="dashboard-panel__header">
+        <div>
+          <p className="eyebrow">Account health</p>
+          <h2 className="dashboard-panel__title">Connection status</h2>
+          <p className="hint">OAuth expiry determines reconnect prompts</p>
+        </div>
+        <button type="button" className="button button--secondary" onClick={onOpenAccounts}>
+          <Icon name="channels" className="inline-icon" />
+          <span>Manage accounts</span>
+        </button>
+      </div>
+      {accounts.length === 0 ? (
+        <p className="hint dashboard-panel__empty">No accounts linked to this workspace yet.</p>
+      ) : (
+        <div className="dashboard-accounts">
+          {accounts.map((account) => {
+            const status = accountConnectionStatus(account)
+            return (
+              <div key={account.id} className="dashboard-account-card">
+                <DestinationAvatar account={account} />
+                <div className="dashboard-account-card__meta">
+                  <span className="dashboard-account-card__name">{account.name}</span>
+                  <span className="dashboard-account-card__handle">{account.username}</span>
+                </div>
+                <span className={`dashboard-account-card__pill dashboard-account-card__pill--${status}`}>
+                  {status === 'active' ? 'Active' : 'Needs re-auth'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+
+  const scheduledPanel = (
+    <section className="glass-panel dashboard-panel">
+      <div className="dashboard-panel__header">
+        <div>
+          <p className="eyebrow">Schedule</p>
+          <h2 className="dashboard-panel__title">Upcoming posts</h2>
+          <p className="hint">{teamName}</p>
+        </div>
+        <button type="button" className="button button--secondary" onClick={onOpenSchedule}>
+          <Icon name="calendar" className="inline-icon" />
+          <span>Open schedule</span>
+        </button>
+      </div>
+      {upcomingPosts.length === 0 ? (
+        <p className="hint dashboard-panel__empty">No upcoming scheduled or draft posts. Create a post to fill your calendar.</p>
+      ) : (
+        <ul className="dashboard-scheduled-cards" role="list" aria-label="Upcoming scheduled posts">
+          {upcomingPosts.map((post) => {
+            const when = parseISO(post.scheduledAt)
+            const snippet = post.title?.trim() || post.content.slice(0, 80) || 'Untitled'
+            return (
+              <li key={post.id} className="dashboard-scheduled-cards__item">
+                <button type="button" className="dashboard-scheduled-card" onClick={() => onOpenPost(post.id)}>
+                  <div className="dashboard-scheduled-card__top">
+                    <time className="dashboard-scheduled-card__time" dateTime={post.scheduledAt}>
+                      <span className="dashboard-scheduled-card__date">{format(when, 'MMM d')}</span>
+                      <span className="dashboard-scheduled-card__clock">{format(when, 'HH:mm')}</span>
+                    </time>
+                    {post.status === 'draft' ? <span className="dashboard-scheduled-card__draft">Draft</span> : null}
                   </div>
-                  <div className="dashboard-upcoming__main">
-                    <span className="dashboard-upcoming__title">{post.title?.trim() || post.content.slice(0, 56) || 'Untitled'}</span>
-                    <span className="dashboard-upcoming__accounts">
-                      {sharedAccountLabels(post, accounts).map((a) => (
-                        <DestinationAvatar key={a.id} account={a} compact />
-                      ))}
-                    </span>
+                  <p className="dashboard-scheduled-card__title">{snippet}</p>
+                  <div className="dashboard-scheduled-card__accounts" aria-hidden="true">
+                    {sharedAccountLabels(post, accounts).map((a) => (
+                      <DestinationAvatar key={a.id} account={a} compact />
+                    ))}
                   </div>
-                  {post.status === 'draft' ? <span className="dashboard-upcoming__draft">Draft</span> : null}
                 </button>
               </li>
-            ))}
-          </ul>
-        )}
-      </section>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
 
-      <section className="glass-panel dashboard-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <p className="eyebrow">Performance</p>
-            <h2 className="dashboard-panel__title">Recent engagement</h2>
-            <p className="hint">Team totals from synced analytics</p>
-          </div>
-          <button type="button" className="button button--secondary" onClick={() => void loadCharts()} disabled={loadingCharts}>
-            Refresh
-          </button>
-        </div>
-        <div className="dashboard-spark-grid">
-          {ENGAGEMENT_METRICS.map((m) => (
-            <MetricSparkline
-              key={m}
-              title={chartTitles[m]}
-              color={chartColors[m] ?? 'var(--accent)'}
-              points={(seriesByMetric[m] ?? []).map((p) => ({ date: p.date, value: p.value }))}
-              loading={loadingCharts}
-            />
-          ))}
-        </div>
-      </section>
-
-      <section className="glass-panel dashboard-panel">
-        <div className="dashboard-panel__header">
-          <div>
-            <p className="eyebrow">Connections</p>
-            <h2 className="dashboard-panel__title">Account status</h2>
-            <p className="hint">OAuth expiry determines reconnect prompts</p>
-          </div>
-          <button type="button" className="button button--secondary" onClick={onOpenAccounts}>
-            <Icon name="channels" className="inline-icon" />
-            <span>Manage accounts</span>
-          </button>
-        </div>
-        {accounts.length === 0 ? (
-          <p className="hint dashboard-panel__empty">No accounts linked to this workspace yet.</p>
-        ) : (
-          <div className="dashboard-accounts">
-            {accounts.map((account) => {
-              const status = accountConnectionStatus(account)
-              return (
-                <div key={account.id} className="dashboard-account-card">
-                  <DestinationAvatar account={account} />
-                  <div className="dashboard-account-card__meta">
-                    <span className="dashboard-account-card__name">{account.name}</span>
-                    <span className="dashboard-account-card__handle">{account.username}</span>
-                  </div>
-                  <span className={`dashboard-account-card__pill dashboard-account-card__pill--${status}`}>
-                    {status === 'active' ? 'Active' : 'Needs re-auth'}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </section>
+  return (
+    <div className="dashboard-view">
+      {performancePanel}
+      {accountPanel}
+      {scheduledPanel}
     </div>
   )
 }

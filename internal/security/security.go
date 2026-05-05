@@ -67,14 +67,19 @@ func HashToken(token string) string {
 }
 
 type visitorEntry struct {
-	limiter  *rate.Limiter
+	anon     *rate.Limiter
+	auth     *rate.Limiter
 	lastSeen time.Time
 }
 
 // Limiter applies per-IP token-bucket rate limiting and evicts idle visitor state to bound memory.
+// Requests without Authorization: Bearer use anonymousPerMinute; requests with a bearer token use
+// authenticatedPerMinute (intended for SPA and API clients after login).
 type Limiter struct {
-	rate       rate.Limit
-	burst      int
+	anonRate   rate.Limit
+	anonBurst  int
+	authRate   rate.Limit
+	authBurst  int
 	visitorTTL time.Duration
 	pruneEvery time.Duration
 	mu         sync.Mutex
@@ -82,14 +87,26 @@ type Limiter struct {
 	lastPrune  time.Time
 }
 
-func NewLimiter(perMinute int) *Limiter {
-	return newLimiter(perMinute, 15*time.Minute, time.Minute)
+// NewLimiter builds a limiter. Non-positive anonymousPerMinute defaults to 120/min.
+// Non-positive authenticatedPerMinute defaults to max(300, 5*anonymousPerMinute).
+// If authenticatedPerMinute is lower than anonymousPerMinute, it is raised to match.
+func NewLimiter(anonymousPerMinute, authenticatedPerMinute int) *Limiter {
+	if anonymousPerMinute <= 0 {
+		anonymousPerMinute = 120
+	}
+	if authenticatedPerMinute <= 0 {
+		authenticatedPerMinute = anonymousPerMinute * 5
+		if authenticatedPerMinute < 300 {
+			authenticatedPerMinute = 300
+		}
+	}
+	if authenticatedPerMinute < anonymousPerMinute {
+		authenticatedPerMinute = anonymousPerMinute
+	}
+	return newLimiterDual(anonymousPerMinute, authenticatedPerMinute, 15*time.Minute, time.Minute)
 }
 
-func newLimiter(perMinute int, visitorTTL, pruneEvery time.Duration) *Limiter {
-	if perMinute <= 0 {
-		perMinute = 60
-	}
+func newLimiterDual(anonPerMinute, authPerMinute int, visitorTTL, pruneEvery time.Duration) *Limiter {
 	if visitorTTL <= 0 {
 		visitorTTL = 15 * time.Minute
 	}
@@ -97,16 +114,24 @@ func newLimiter(perMinute int, visitorTTL, pruneEvery time.Duration) *Limiter {
 		pruneEvery = time.Minute
 	}
 	return &Limiter{
-		rate:       rate.Every(time.Minute / time.Duration(perMinute)),
-		burst:      perMinute,
+		anonRate:   rate.Every(time.Minute / time.Duration(anonPerMinute)),
+		anonBurst:  anonPerMinute,
+		authRate:   rate.Every(time.Minute / time.Duration(authPerMinute)),
+		authBurst:  authPerMinute,
 		visitorTTL: visitorTTL,
 		pruneEvery: pruneEvery,
 		visitors:   make(map[string]*visitorEntry),
 	}
 }
 
+// Middleware rate-limits before invoking next. GET /healthz is not counted (liveness probes).
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		ip := clientIP(r)
 		now := time.Now()
 
@@ -123,13 +148,17 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 		entry := l.visitors[ip]
 		if entry == nil {
 			entry = &visitorEntry{
-				limiter:  rate.NewLimiter(l.rate, l.burst),
+				anon:     rate.NewLimiter(l.anonRate, l.anonBurst),
+				auth:     rate.NewLimiter(l.authRate, l.authBurst),
 				lastSeen: now,
 			}
 			l.visitors[ip] = entry
 		}
 		entry.lastSeen = now
-		lim := entry.limiter
+		lim := entry.anon
+		if requestHasBearer(r) {
+			lim = entry.auth
+		}
 		l.mu.Unlock()
 
 		if !lim.Allow() {
@@ -138,6 +167,11 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func requestHasBearer(r *http.Request) bool {
+	s := strings.TrimSpace(r.Header.Get("Authorization"))
+	return len(s) > 7 && strings.EqualFold(s[:7], "bearer ")
 }
 
 func CORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {

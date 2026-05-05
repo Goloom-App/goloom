@@ -159,6 +159,7 @@ export interface RuntimeConfigRecord {
   security: {
     allowedOrigins: string[]
     rateLimitPerMinute: number
+    rateLimitAuthenticatedPerMinute: number
     encryptionConfigured: boolean
   }
   scheduler: {

@@ -41,6 +41,7 @@ func Run(ctx context.Context) error {
 		"scheduler_account_health_interval", cfg.SchedulerAccountHealthInterval.String(),
 		"scheduler_workers", cfg.SchedulerWorkers,
 		"rate_limit_per_minute", cfg.RateLimitPerMinute,
+		"rate_limit_authenticated_per_minute", cfg.RateLimitAuthenticatedPerMinute,
 		"oidc_enabled", cfg.OIDCIssuerURL != "" && cfg.OIDCClientID != "",
 		"bootstrap_recovery_configured", cfg.BootstrapEnabled && cfg.BootstrapAdminToken != "",
 	)
@@ -115,7 +116,7 @@ func Run(ctx context.Context) error {
 	go schedulerService.Start(ctx)
 
 	apiHandler := api.New(logger, dataStore, authService, providers, cfg)
-	apiChain := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute), cfg.AllowedOrigins)
+	apiChain := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute, cfg.RateLimitAuthenticatedPerMinute), cfg.AllowedOrigins)
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/healthz", apiChain)
 	rootHandler.Handle("/v1/", apiChain)

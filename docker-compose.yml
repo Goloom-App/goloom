@@ -13,7 +13,7 @@ services:
       DATABASE_URL: file:/app/data/goloom.db
       ENCRYPTION_KEY: change-this-development-key-to-a-long-random-secret
       ALLOWED_ORIGINS: http://localhost:4173,http://localhost:5173,http://localhost:3000,http://localhost:8080
-      RATE_LIMIT_PER_MINUTE: 60
+      RATE_LIMIT_PER_MINUTE: 120
       SCHEDULER_POLL_INTERVAL: 15s
       SCHEDULER_WORKERS: 4
       BOOTSTRAP_ADMIN_EMAIL: admin@localhost
@@ -66,7 +66,7 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/goloom?sslmode=disable
       ENCRYPTION_KEY: change-this-development-key-to-a-long-random-secret
       ALLOWED_ORIGINS: http://localhost:4173,http://localhost:5173,http://localhost:3000
-      RATE_LIMIT_PER_MINUTE: 60
+      RATE_LIMIT_PER_MINUTE: 120
       SCHEDULER_POLL_INTERVAL: 15s
       SCHEDULER_WORKERS: 4
       BOOTSTRAP_ADMIN_EMAIL: admin@localhost

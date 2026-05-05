@@ -126,8 +126,10 @@ export function AdminView({
             <dd>
               <code className="inline-code">{adminRuntime.general.httpAddr}</code>
             </dd>
-            <dt>Rate limit / min</dt>
+            <dt>Rate limit / min (anonymous)</dt>
             <dd>{adminRuntime.security.rateLimitPerMinute}</dd>
+            <dt>Rate limit / min (Bearer)</dt>
+            <dd>{adminRuntime.security.rateLimitAuthenticatedPerMinute}</dd>
           </dl>
         </div>
       ) : null}

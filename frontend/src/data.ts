@@ -173,7 +173,7 @@ export const initialSettings: SettingsState = {
     enforcePKCE: true,
   },
   security: {
-    rateLimitPerMinute: 60,
+    rateLimitPerMinute: 120,
     corsOrigins: 'http://localhost:3000, http://localhost:5173',
     sanitizeInput: true,
     encryptProviderTokens: true,

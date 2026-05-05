@@ -144,6 +144,7 @@ export function toRuntimeConfigRecord(runtimeConfig: BackendRuntimeConfig): Runt
     security: {
       allowedOrigins: runtimeConfig.security.allowed_origins,
       rateLimitPerMinute: runtimeConfig.security.rate_limit_per_minute,
+      rateLimitAuthenticatedPerMinute: runtimeConfig.security.rate_limit_authenticated_per_minute ?? 300,
       encryptionConfigured: runtimeConfig.security.encryption_configured,
     },
     scheduler: {

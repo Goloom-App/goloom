@@ -21,10 +21,12 @@ type Config struct {
 	AllowPrivateProviderInstanceURLs bool
 	AllowedOrigins                   []string
 	RateLimitPerMinute               int
-	SchedulerPollInterval            time.Duration
-	SchedulerMetricsSyncInterval     time.Duration
-	SchedulerAccountHealthInterval   time.Duration
-	SchedulerWorkers                 int
+	// RateLimitAuthenticatedPerMinute caps Bearer-authenticated API traffic (SPA, tokens). 0 = derive on load.
+	RateLimitAuthenticatedPerMinute int
+	SchedulerPollInterval           time.Duration
+	SchedulerMetricsSyncInterval    time.Duration
+	SchedulerAccountHealthInterval  time.Duration
+	SchedulerWorkers                int
 
 	// LogLevel: debug, info, warn, error — empty means derive from AppEnv (development=debug, production=info).
 	LogLevel string
@@ -57,7 +59,8 @@ func Load() (Config, error) {
 		EncryptionKey:                    strings.TrimSpace(getEnv("ENCRYPTION_KEY", "")),
 		AllowPrivateProviderInstanceURLs: parseBoolEnv("ALLOW_PRIVATE_PROVIDER_INSTANCE_URLS", false),
 		AllowedOrigins:                   splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
-		RateLimitPerMinute:               getInt("RATE_LIMIT_PER_MINUTE", 60),
+		RateLimitPerMinute:               getInt("RATE_LIMIT_PER_MINUTE", 120),
+		RateLimitAuthenticatedPerMinute:  getInt("RATE_LIMIT_AUTHENTICATED_PER_MINUTE", 0),
 		SchedulerPollInterval:            getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
 		SchedulerMetricsSyncInterval:     getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", time.Hour),
 		SchedulerAccountHealthInterval:   getDuration("SCHEDULER_ACCOUNT_HEALTH_INTERVAL", time.Hour),
@@ -100,6 +103,21 @@ func Load() (Config, error) {
 
 	if len(cfg.EncryptionKey) < 32 {
 		return Config{}, fmt.Errorf("ENCRYPTION_KEY must be at least 32 characters")
+	}
+
+	if cfg.RateLimitPerMinute <= 0 {
+		cfg.RateLimitPerMinute = 120
+	}
+	authCap := cfg.RateLimitAuthenticatedPerMinute
+	if authCap <= 0 {
+		authCap = cfg.RateLimitPerMinute * 5
+		if authCap < 300 {
+			authCap = 300
+		}
+	}
+	cfg.RateLimitAuthenticatedPerMinute = authCap
+	if cfg.RateLimitAuthenticatedPerMinute < cfg.RateLimitPerMinute {
+		cfg.RateLimitAuthenticatedPerMinute = cfg.RateLimitPerMinute
 	}
 
 	return cfg, nil

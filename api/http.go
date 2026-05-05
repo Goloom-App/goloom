@@ -268,9 +268,10 @@ func (a *API) handleRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
 			"log_format": a.config.LogFormatName(),
 		},
 		"security": map[string]any{
-			"allowed_origins":       a.config.AllowedOrigins,
-			"rate_limit_per_minute": a.config.RateLimitPerMinute,
-			"encryption_configured": a.config.EncryptionKey != "",
+			"allowed_origins":                     a.config.AllowedOrigins,
+			"rate_limit_per_minute":               a.config.RateLimitPerMinute,
+			"rate_limit_authenticated_per_minute": a.config.RateLimitAuthenticatedPerMinute,
+			"encryption_configured":               a.config.EncryptionKey != "",
 		},
 		"scheduler": map[string]any{
 			"poll_interval":         a.config.SchedulerPollInterval.String(),
