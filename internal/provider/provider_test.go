@@ -227,18 +227,29 @@ func TestMastodonProvider_Publish_Error(t *testing.T) {
 
 func TestMastodonProvider_GetMetrics(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/statuses/999" {
-			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
 		if r.Header.Get("Authorization") != "Bearer tok" {
 			t.Errorf("expected Bearer tok, got %q", r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"favourites_count": 7,
-			"reblogs_count":    2,
-			"replies_count":    1,
-		})
+		switch r.URL.Path {
+		case "/api/v1/statuses/999":
+			json.NewEncoder(w).Encode(map[string]any{
+				"favourites_count": 7,
+				"reblogs_count":    2,
+				"replies_count":    1,
+			})
+		case "/api/v1/statuses/999/context":
+			json.NewEncoder(w).Encode(map[string]any{
+				"descendants": []any{
+					map[string]any{"id": "1"},
+					map[string]any{"id": "2"},
+					map[string]any{"id": "3"},
+					map[string]any{"id": "4"},
+				},
+			})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
@@ -252,7 +263,7 @@ func TestMastodonProvider_GetMetrics(t *testing.T) {
 	for _, x := range out {
 		m[x.Name] = x.Value
 	}
-	if m["likes"] != 7 || m["reposts"] != 2 || m["replies"] != 1 {
+	if m["likes"] != 7 || m["reposts"] != 2 || m["replies"] != 4 {
 		t.Fatalf("metrics: %#v", m)
 	}
 }
@@ -304,18 +315,22 @@ func TestBlueskyProvider_GetMetrics(t *testing.T) {
 
 func TestFriendicaProvider_GetMetrics(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/statuses/42" {
-			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
 		if r.Header.Get("Authorization") != "Bearer fc" {
 			t.Errorf("expected Bearer fc, got %q", r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"favourites_count": 1,
-			"reblogs_count":    2,
-			"replies_count":    3,
-		})
+		switch r.URL.Path {
+		case "/api/v1/statuses/42":
+			json.NewEncoder(w).Encode(map[string]any{
+				"favourites_count": 1,
+				"reblogs_count":    2,
+				"replies_count":    3,
+			})
+		case "/api/v1/statuses/42/context":
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 

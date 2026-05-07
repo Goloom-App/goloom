@@ -18,6 +18,10 @@ type mastodonStatusCounts struct {
 	RepliesCount    int `json:"replies_count"`
 }
 
+type mastodonStatusContext struct {
+	Descendants []json.RawMessage `json:"descendants"`
+}
+
 func mastodonStatusIDFromPublishedURL(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
@@ -77,10 +81,25 @@ func fetchMastodonCompatibleMetrics(ctx context.Context, instanceBaseURL, access
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return nil, fmt.Errorf("decode status: %w", err)
 	}
+	repliesCount := payload.RepliesCount
+
+	contextEndpoint := endpoint + "/context"
+	contextResp, err := doJSONRequest(ctx, http.MethodGet, contextEndpoint, accessToken, nil)
+	if err == nil {
+		defer contextResp.Body.Close()
+		if contextResp.StatusCode < http.StatusBadRequest {
+			var contextPayload mastodonStatusContext
+			if decodeErr := json.NewDecoder(contextResp.Body).Decode(&contextPayload); decodeErr == nil {
+				if descendantsCount := len(contextPayload.Descendants); descendantsCount > repliesCount {
+					repliesCount = descendantsCount
+				}
+			}
+		}
+	}
 
 	return []EngagementMetric{
 		{Name: "likes", Value: int64(payload.FavouritesCount)},
 		{Name: "reposts", Value: int64(payload.ReblogsCount)},
-		{Name: "replies", Value: int64(payload.RepliesCount)},
+		{Name: "replies", Value: int64(repliesCount)},
 	}, nil
 }
