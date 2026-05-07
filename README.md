@@ -1,164 +1,184 @@
 # goloom
 
-`goloom` is now a single Go application binary that serves both the API and the React frontend. By default it stores data in SQLite for zero-dependency deployments, and it can still use PostgreSQL when `DATABASE_URL` points at a Postgres instance.
+Lightweight social planning for teams and AI agents.
+
+`goloom` is a self-hosted social media planning application built as one Go binary (API + web UI). It helps teams plan posts across multiple social accounts without the heavy infrastructure and pricing model of typical enterprise-first tools.
+
+## Why goloom exists
+
+Most tools in this space are powerful but heavy: complex stacks, many paid tiers, and product scope optimized for large organizations.
+
+goloom was created for one focused outcome:
+
+- plan posts across different social media accounts
+- collaborate across teams
+- keep operations simple
+- integrate cleanly with AI agents such as OpenClaw
 
 ## Highlights
 
-- Single binary deployment: one process serves the UI and the API.
-- SQLite by default: no external database required.
-- PostgreSQL supported: set `DATABASE_URL=postgres://...` or `postgresql://...`.
-- Embedded frontend assets: production builds do not need a separate Node container.
-- Optional bootstrap admin token for first startup.
-- Mastodon instance registration can auto-create app credentials from just the instance URL.
-- Existing provider registry, scheduler, team model, OIDC support, and bearer-token API auth remain available.
+- Single binary deployment: UI and API in one process.
+- SQLite by default: no external database needed.
+- PostgreSQL optional for larger deployments.
+- Team workspaces with member roles (`owner`, `editor`, `viewer`).
+- Scheduling, validation, per-account post versions, media library.
+- Built-in analytics for post and account metrics.
+- API-first architecture with bearer-token auth.
+- OIDC support for browser sign-in.
+- Mastodon onboarding can auto-register app credentials from instance URL.
 
-## Quick Start
+## Getting Started
 
-Copy the example environment file:
+### 1) Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Set at least these values:
+Set required values:
 
 ```bash
 ENCRYPTION_KEY=replace-with-a-long-random-secret
 BOOTSTRAP_ADMIN_TOKEN=replace-with-a-strong-bootstrap-token
 ```
 
-Build and run:
+### 2) Build and run
 
 ```bash
 make build
 ./bin/goloom
 ```
 
-Then open [http://localhost:8080](http://localhost:8080) and use the bootstrap token in the Settings screen. If you leave the API base URL empty, the frontend talks to the same server automatically.
+Open [http://localhost:8080](http://localhost:8080).
 
-## Provider Onboarding
+### 3) Bootstrap first admin access
+
+Use the bootstrap token in the UI Settings screen. After first login, create normal API tokens and rotate bootstrap secrets.
+
+## API Documentation
+
+goloom API is designed for both developers and AI agents.
+Professional documentation stack uses OpenAPI + Redocly.
+
+### Base paths
+
+- Primary: `/v1/...`
+- Alias: `/api/v1/...` (same handlers, for tools expecting `/api/v1`)
+
+### Authentication
+
+Use bearer tokens:
+
+```http
+Authorization: Bearer <oidc-id-token-or-api-token>
+```
+
+### API quickstart (curl)
+
+Health and auth status:
+
+```bash
+curl -s http://localhost:8080/healthz
+curl -s http://localhost:8080/v1/auth/status
+```
+
+List providers:
+
+```bash
+curl -s http://localhost:8080/v1/providers
+```
+
+Get current identity:
+
+```bash
+curl -s \
+  -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8080/v1/me
+```
+
+### Endpoint groups
+
+- Discovery: `/healthz`, `/v1/providers`, `/v1/auth/status`
+- Identity: `/v1/me`, `/v1/me/api-tokens`
+- Teams: `/v1/teams`, `/v1/teams/{teamID}/members`
+- Accounts: `/v1/teams/{teamID}/accounts`, OAuth start endpoints
+- Posts: `/v1/teams/{teamID}/posts`, validation, versions, cancel
+- Analytics: `/v1/teams/{teamID}/analytics*`, post analytics
+- Admin: `/v1/admin/*`, provider instance management
+
+For complete route list, see `api/http.go`.
+
+### Build professional API docs
+
+Lint OpenAPI spec:
+
+```bash
+make docs-api-lint
+```
+
+Build static API docs (Redoc HTML):
+
+```bash
+make docs-api-build
+```
+
+Generated output:
+
+- `docs/api/dist/index.html`
+- source spec: `docs/api/openapi.yaml`
+
+### AI agent integration notes (OpenClaw and similar)
+
+- Stable JSON responses across core endpoints.
+- Predictable resource paths with team-scoped objects.
+- Validation endpoint before scheduling: `POST /v1/teams/{teamID}/posts/validate`.
+- API token lifecycle endpoints for secure agent onboarding.
+
+## Provider Support
 
 ### Mastodon
 
-Mastodon provider instances can be registered automatically from:
-
-- instance name
-- instance URL
-
-The backend will call the target instance's `/api/v1/apps` endpoint, store the returned `client_id` and `client_secret`, discover the authorization/token endpoints automatically, and use them for the browser-based OAuth authorization flow when a team connects an account.
-
-Optional backend configuration:
-
-```bash
-MASTODON_APP_NAME=goloom
-MASTODON_REDIRECT_URI=http://localhost:8080/v1/oauth/mastodon/callback
-MASTODON_WEBSITE=
-MASTODON_DEFAULT_SCOPES=read,write
-```
+- OAuth account connection
+- optional automatic app registration via instance URL
+- publishing and metrics (`likes`, `reposts`, `replies`)
 
 ### Friendica
 
-Friendica does not have the same portable automatic app registration flow here. If your instance provides OAuth app credentials, enter them manually in the admin provider-instance form.
+- manual provider app credentials
+- publishing and Mastodon-compatible metrics
 
 ### Bluesky
 
-For the current onboarding flow, Bluesky does not need stored client credentials. Register the PDS endpoint and then connect accounts with an app password.
+- account connection with app password
+- publishing and metrics support
 
-## Database Configuration
+## Deployment Options
 
-### Default SQLite
+### Default (single binary + SQLite)
 
-This is the default when `DATABASE_URL` is unset:
+Best for low-ops environments and small-to-medium teams.
 
 ```bash
 DATABASE_URL=file:./data/goloom.db
 ```
 
-The app creates the SQLite database and schema automatically at startup.
-
 ### PostgreSQL
 
-To use PostgreSQL instead:
+Use when you need external DB operations and scale patterns:
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/goloom?sslmode=disable
 ```
 
-The app also applies the embedded Postgres schema automatically on startup. The `make schema` target is still available if you want to apply `db/schema.sql` manually.
-
-## Logging
-
-The server uses Go’s structured logger (`log/slog`). Verbosity is controlled with **`LOG_LEVEL`**; output shape uses **`LOG_FORMAT`**.
-
-### Log level (`LOG_LEVEL`)
-
-Allowed values (case-insensitive):
-
-| Value | Meaning |
-|-------|---------|
-| `debug` | Most verbose (useful when troubleshooting). |
-| `info` | Normal operational messages. |
-| `warn` or `warning` | Warnings and above. |
-| `error` | Errors only. |
-
-If **`LOG_LEVEL` is unset or empty**, the effective level comes from **`APP_ENV`**:
-
-- `APP_ENV=production` → **info**
-- Otherwise (e.g. `development`) → **debug**
-
-If **`LOG_LEVEL` is set to anything else** (typo or unsupported string), the server falls back to **info**.
-
-Examples:
-
-```bash
-# Quiet production logs
-APP_ENV=production
-LOG_LEVEL=warn
-
-# Explicit debug regardless of APP_ENV
-LOG_LEVEL=debug
-```
-
-`docker-compose.yml` sets `LOG_LEVEL=debug` for the sample services so container output stays verbose during local experiments.
-
-### Log format (`LOG_FORMAT`)
-
-- **`json`** — One JSON object per line (good for log aggregation).
-- **`text`** — Human-readable key/value lines for local reading.
-
-If **`LOG_FORMAT` is unset**, the default is **JSON** when `APP_ENV=production`, and **text** otherwise.
-
-## Development
-
-Enter the development shell:
-
-```bash
-nix develop
-```
-
-Run the single app locally:
-
-```bash
-make run
-```
-
-Run the frontend dev server separately:
-
-```bash
-make frontend-dev
-```
-
-The Vite dev server proxies `/v1` and `/healthz` to `http://localhost:8080`, so the browser can keep using same-origin API paths during development.
-
 ## Docker
 
-Build the production image:
+Build:
 
 ```bash
 docker build -t goloom .
 ```
 
-Run with the default SQLite setup:
+Run:
 
 ```bash
 docker run --rm \
@@ -169,131 +189,53 @@ docker run --rm \
   goloom
 ```
 
-Use `docker compose up -d app` for the SQLite deployment.
-
-If you want PostgreSQL in Compose, start the profiled services explicitly:
+## Development
 
 ```bash
-docker compose --profile postgres up -d db app-postgres
+nix develop
+make run
 ```
 
-That exposes the Postgres-backed app on [http://localhost:8081](http://localhost:8081).
-
-## Authentication Bootstrap
-
-For fresh deployments without OIDC, set:
+Frontend-only dev server:
 
 ```bash
-BOOTSTRAP_ADMIN_EMAIL=admin@localhost
-BOOTSTRAP_ADMIN_NAME=Local Administrator
-BOOTSTRAP_ADMIN_TOKEN=replace-with-a-strong-bootstrap-token
+make frontend-dev
 ```
 
-On startup the app ensures that an admin user and hashed API token exist for that bootstrap identity. You can later rotate away from the bootstrap token or switch to OIDC.
+Recommended API-doc workflow in CI:
 
-## OIDC (OpenID Connect)
+- run `make docs-api-lint` on pull requests
+- optionally publish `docs/api/dist/index.html` as artifact/site
 
-OIDC is optional. When configured, the API accepts **OIDC ID tokens** in addition to normal API tokens: requests use the same header (`Authorization: Bearer …`). The server validates JWT-shaped bearer tokens with [go-oidc](https://github.com/coreos/go-oidc) when both issuer and client ID are set.
+## Configuration
 
-The embedded dashboard can start a **browser OAuth/OIDC authorization code flow** (with PKCE): `POST /v1/auth/oidc/start` returns an IdP authorization URL; after login the IdP redirects to **`GET /v1/oauth/oidc/callback`** on this server, which exchanges the code, verifies the ID token, provisions the user, and redirects back to the UI with the ID token in the URL fragment for local storage (same bearer token as a pasted ID token).
+Start from `.env.example`. Common keys:
 
-### Environment variables
+- `APP_ENV`, `HTTP_ADDR`, `PUBLIC_BASE_URL`
+- `DATABASE_URL`
+- `ENCRYPTION_KEY`
+- `BOOTSTRAP_ADMIN_*`
+- `SCHEDULER_*`
+- `OIDC_*`
+- `MASTODON_*`
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `OIDC_ISSUER_URL` | Yes, to enable OIDC | Issuer URL exactly as published by your IdP (OpenID Provider Configuration document). Examples: Keycloak `https://keycloak.example/realms/myrealm`, Auth0 `https://YOUR_TENANT.auth0.com/`, Entra ID `https://login.microsoftonline.com/{tenant-id}/v2.0`. |
-| `OIDC_CLIENT_ID` | Yes, to enable OIDC | OAuth client ID. Must match the audience the IdP puts on ID tokens (what go-oidc verifies against). |
-| `OIDC_CLIENT_SECRET` | Recommended | Used for the authorization code **token exchange** when you register a confidential client. Browser login uses PKCE; with a confidential client the secret is sent to the token endpoint together with the PKCE verifier. If set, `GET /v1/admin/runtime-config` reports `oidc.has_secret: true`. |
-| `OIDC_REDIRECT_URI` | No | Must match the redirect URI registered on the IdP. Defaults to `{PUBLIC_BASE_URL}/v1/oauth/oidc/callback` (same pattern as Mastodon’s `MASTODON_REDIRECT_URI`). |
+## Positioning vs heavy platforms
 
-OIDC is **enabled** when both `OIDC_ISSUER_URL` and `OIDC_CLIENT_ID` are non-empty. **`GET /v1/auth/status`** reports `oidc_oauth_enabled` when the server can run the browser redirect flow (issuer, client ID, and redirect URL are configured).
+goloom is intentionally optimized for:
 
-Copy from [`.env.example`](.env.example) or set the same keys in Docker Compose (see `docker-compose.yml` / `docker-compose-traefik.yml`).
+- lower runtime overhead
+- easier self-hosting
+- practical team collaboration
+- API-first automation for agent workflows
 
-### Identity provider configuration
+If you need broad enterprise suites, many commercial upsell modules, or advanced campaign ecosystems, other products may fit better. If you need a focused scheduler with strong API ergonomics and simple ops, goloom is the target shape.
 
-Create an OAuth/OIDC client on your IdP. For the **embedded UI login**, register the callback URL (see `OIDC_REDIRECT_URI` above) as an allowed redirect URI. Use scopes that yield an **ID token** with at least `openid`, and include `profile` / `email` when possible so `sub`, `name`, and `email` map into the local user record.
+## Security notes
 
-You can still paste a raw ID token or use CLI tools against other redirect URIs; that path is unchanged.
+- Provider access tokens are encrypted at rest.
+- API tokens are stored as hashes.
+- Set strong `ENCRYPTION_KEY` and rotate bootstrap/admin secrets after setup.
 
-### Redirect URIs on the IdP
+## License
 
-Your IdP will require **allowed redirect URI(s)** (names vary: “Valid redirect URIs”, “Redirect URLs”, etc.). The value must **exactly** match the `redirect_uri` goloom sends—same scheme, host, port, and path (including a trailing slash if present). For first-party browser login this is typically `https://<your-public-host>/v1/oauth/oidc/callback` (or `http://localhost:8080/v1/oauth/oidc/callback` in development), aligned with `PUBLIC_BASE_URL` / your Traefik `HOST`.
-
-Request ID tokens that include at least `sub` plus the standard `email` and `name` claims where possible—those map into the local user record.
-
-### Users and roles
-
-On first successful sign-in for a given `sub`, the user is created. If the database had **no users** yet, that first OIDC user becomes an **administrator**; later users are created as non-admin unless you promote them via admin APIs. Returning users are matched by `sub` and get `email` / `name` refreshed from the token.
-
-### Signing in from the UI
-
-When OIDC is configured, the welcome screen shows **OIDC available** and, when the redirect flow is ready, **OIDC redirect**. Use **Sign in with OpenID Connect** to complete the OAuth authorization code flow in the browser. You can still paste a valid **ID token** or API token into the bearer token field if you prefer.
-
-### Bearer tokens and the API
-
-Programmatic access is unchanged: send `Authorization: Bearer <id-token>` for interactive identity, or `Authorization: Bearer <api-token>` for issued API tokens.
-
-## REST API
-
-The API is implemented in the **same Go binary** as the dashboard—there is no separate backend service to proxy to. All routes live under **`/v1/...`**. For tools that default to an `/api/v1` prefix, the server also accepts **`/api/v1/...`** as an alias (for example `GET /api/v1/me` is the same as `GET /v1/me`).
-
-All authenticated endpoints expect:
-
-```http
-Authorization: Bearer <oidc-id-token-or-api-token>
-```
-
-### Discovery
-
-- `GET /healthz`
-- `GET /v1/providers`
-- `GET /v1/auth/status`
-- `POST /v1/auth/oidc/start` (JSON body `{"return_to": "<url>"}` — starts browser OIDC login when configured)
-- `GET /v1/oauth/oidc/callback` (IdP redirect; not called directly)
-- `GET /v1/me`
-- `GET /v1/me/api-tokens` — list your API tokens (metadata only)
-- `POST /v1/me/api-tokens` — create an API token (`{"name":"…"}`); response includes the secret once in `token`
-- `DELETE /v1/me/api-tokens/{tokenID}` — revoke a token
-- `GET /v1/admin/metrics` — global post/user/team counts (admin only)
-- `GET /v1/users`
-- `GET /v1/teams`
-- `POST /v1/teams`
-- `GET /v1/provider-instances`
-- `GET /v1/provider-instances/{instanceID}`
-
-### Team management
-
-- `GET /v1/teams/{teamID}/members`
-- `POST /v1/teams/{teamID}/members`
-- `DELETE /v1/teams/{teamID}/members/{userID}`
-- `GET /v1/teams/{teamID}/accounts`
-- `POST /v1/teams/{teamID}/accounts/oauth/mastodon/start`
-- `POST /v1/teams/{teamID}/accounts`
-- `DELETE /v1/teams/{teamID}/accounts/{accountID}`
-- `GET /v1/teams/{teamID}/posts`
-- `POST /v1/teams/{teamID}/posts`
-- `POST /v1/teams/{teamID}/posts/validate`
-- `GET /v1/teams/{teamID}/posts/{postID}`
-- `PATCH /v1/teams/{teamID}/posts/{postID}`
-- `DELETE /v1/teams/{teamID}/posts/{postID}`
-- `POST /v1/teams/{teamID}/posts/{postID}/cancel`
-
-### Admin endpoints
-
-- `GET /v1/admin/users`
-- `PATCH /v1/admin/users/{userID}`
-- `GET /v1/admin/runtime-config`
-- `GET /v1/admin/provider-instances`
-- `POST /v1/admin/provider-instances`
-- `PUT /v1/admin/provider-instances/{instanceID}`
-
-### OAuth callback
-
-- `GET /v1/oauth/oidc/callback` (browser OIDC login)
-- `GET /v1/oauth/mastodon/callback`
-
-## Notes
-
-- Provider tokens are encrypted before persistence, while API tokens are stored as hashes.
-- The provider implementations are structured for extension; production deployments should replace the current generic HTTP posting logic with provider-specific refresh and publishing flows where needed.
+See repository license file.

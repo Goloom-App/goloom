@@ -1,0 +1,461 @@
+openapi: 3.1.0
+info:
+  title: goloom API
+  version: 1.0.0
+  description: |
+    goloom is a lightweight social planning API for teams and AI agents.
+    This spec documents core endpoints for auth, teams, accounts, posts, and analytics.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+security:
+  - bearerAuth: []
+tags:
+  - name: Discovery
+  - name: Auth
+  - name: Teams
+  - name: Accounts
+  - name: Posts
+  - name: Analytics
+paths:
+  /healthz:
+    get:
+      tags: [Discovery]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /v1/providers:
+    get:
+      tags: [Discovery]
+      summary: List supported providers
+      security: []
+      responses:
+        "200":
+          description: Provider names
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      type: string
+                    example: [mastodon, friendica, bluesky]
+  /v1/auth/status:
+    get:
+      tags: [Auth]
+      summary: Get authentication/runtime auth flags
+      security: []
+      responses:
+        "200":
+          description: Auth status flags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatus"
+  /v1/me:
+    get:
+      tags: [Auth]
+      summary: Get authenticated principal
+      responses:
+        "200":
+          description: Authenticated principal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Principal"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/teams:
+    get:
+      tags: [Teams]
+      summary: List teams visible to current user
+      responses:
+        "200":
+          description: Team list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Team"
+    post:
+      tags: [Teams]
+      summary: Create team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamInput"
+      responses:
+        "201":
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/teams/{teamID}/accounts:
+    get:
+      tags: [Accounts]
+      summary: List social accounts for team
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      responses:
+        "200":
+          description: Account list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SocialAccount"
+    post:
+      tags: [Accounts]
+      summary: Connect/create social account
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountInput"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SocialAccount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /v1/teams/{teamID}/posts:
+    get:
+      tags: [Posts]
+      summary: List posts for team
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      responses:
+        "200":
+          description: Post list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ScheduledPost"
+    post:
+      tags: [Posts]
+      summary: Create post (draft or scheduled)
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostInput"
+      responses:
+        "201":
+          description: Post created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledPost"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostValidationResponse"
+  /v1/teams/{teamID}/posts/validate:
+    post:
+      tags: [Posts]
+      summary: Validate post against account capabilities
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostInput"
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostValidationResponse"
+  /v1/teams/{teamID}/analytics:
+    get:
+      tags: [Analytics]
+      summary: Team analytics aggregate
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      responses:
+        "200":
+          description: Team analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metrics_total:
+                    type: object
+                    additionalProperties:
+                      type: integer
+                      format: int64
+                  top_posts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PostEngagementSummary"
+  /v1/teams/{teamID}/posts/{postID}/analytics:
+    get:
+      tags: [Analytics]
+      summary: Per-post metrics
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/postID"
+      responses:
+        "200":
+          description: Post metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PostMetric"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    teamID:
+      in: path
+      name: teamID
+      required: true
+      schema:
+        type: string
+        format: uuid
+    postID:
+      in: path
+      name: postID
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+    BadRequest:
+      description: Invalid request body or parameters
+  schemas:
+    AuthStatus:
+      type: object
+      properties:
+        bootstrap_enabled:
+          type: boolean
+        bootstrap_recovery_enabled:
+          type: boolean
+        initial_setup_required:
+          type: boolean
+        oidc_enabled:
+          type: boolean
+        oidc_oauth_enabled:
+          type: boolean
+        has_users:
+          type: boolean
+        has_admin_users:
+          type: boolean
+        app_env:
+          type: string
+    Principal:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            email:
+              type: string
+            name:
+              type: string
+            is_admin:
+              type: boolean
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        is_personal:
+          type: boolean
+    CreateTeamInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    SocialAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        team_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+        username:
+          type: string
+        instance_url:
+          type: string
+    CreateAccountInput:
+      type: object
+      required: [provider]
+      properties:
+        provider:
+          type: string
+          example: mastodon
+        provider_instance_id:
+          type: string
+          format: uuid
+        instance_url:
+          type: string
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        identifier:
+          type: string
+        app_password:
+          type: string
+    ScheduledPost:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        team_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        status:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        target_accounts:
+          type: array
+          items:
+            type: string
+            format: uuid
+    CreatePostInput:
+      type: object
+      required: [content]
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        target_accounts:
+          type: array
+          items:
+            type: string
+            format: uuid
+        visibility:
+          type: string
+          example: public
+        draft:
+          type: boolean
+        media_ids:
+          type: array
+          items:
+            type: string
+    PostValidationResponse:
+      type: object
+      properties:
+        max_chars:
+          type: integer
+        content_length:
+          type: integer
+        valid:
+          type: boolean
+        destinations:
+          type: array
+          items:
+            type: object
+            properties:
+              account_id:
+                type: string
+              provider:
+                type: string
+              max_chars:
+                type: integer
+    PostMetric:
+      type: object
+      properties:
+        post_id:
+          type: string
+        account_id:
+          type: string
+        metric:
+          type: string
+          example: likes
+        value:
+          type: integer
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+    PostEngagementSummary:
+      type: object
+      properties:
+        post_id:
+          type: string
+        title:
+          type: string
+        score:
+          type: integer
+          format: int64

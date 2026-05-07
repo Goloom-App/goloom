@@ -1,0 +1,6 @@
+apis:
+  goloom@v1:
+    root: docs/api/openapi.yaml
+
+extends:
+  - recommended
