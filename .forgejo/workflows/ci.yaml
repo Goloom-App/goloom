@@ -85,11 +85,6 @@ jobs:
     outputs:
       image_ref: ${{ steps.image-meta.outputs.image_ref }}
     steps:
-      - name: Install git and Node (for actions/checkout)
-        run: /busybox/sh -c "apk add --no-cache git nodejs"
-
-      - uses: actions/checkout@v4
-
       - name: Compute registry and tags
         id: image-meta
         env:
