@@ -75,8 +75,6 @@ jobs:
     if: github.event_name == 'push'
     container:
       image: docker:cli
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
     outputs:
       image_ref: ${{ steps.image-meta.outputs.image_ref }}
     steps:
