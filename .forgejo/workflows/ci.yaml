@@ -79,12 +79,11 @@ jobs:
     needs: [test]
     if: github.event_name == 'push'
     runs-on: docker
-    # Use daemonless build/push so runner does not need /var/run/docker.sock.
-    container:
-      image: gcr.io/kaniko-project/executor:v1.23.2-debug
     outputs:
       image_ref: ${{ steps.image-meta.outputs.image_ref }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Compute registry and tags
         id: image-meta
         env:
@@ -125,118 +124,21 @@ jobs:
           registry_host="${SERVER_URL#https://}"
           registry_host="${registry_host#http://}"
           registry_host="${registry_host%%/*}"
-          auth_b64="$(printf '%s' "${REGISTRY_USER}:${REGISTRY_PASSWORD}" | base64 | tr -d '\n')"
-          mkdir -p /kaniko/.docker
-          cat > /kaniko/.docker/config.json <<EOF
-          {
-            "auths": {
-              "${registry_host}": {
-                "auth": "${auth_b64}"
-              }
-            }
-          }
-          EOF
+          echo "${REGISTRY_PASSWORD}" | docker login "${registry_host}" -u "${REGISTRY_USER}" --password-stdin
 
-      - name: Build and push image tags (kaniko)
+      - name: Build and push image tags
         env:
           TAGS: ${{ steps.image-meta.outputs.tags }}
-          REPOSITORY: ${{ github.repository }}
-          GITHUB_WORKSPACE: ${{ github.workspace }}
-          SERVER_URL: ${{ github.server_url }}
-          SHA: ${{ github.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          destinations=""
+          first_tag="${TAGS%% *}"
+          docker build -t "${first_tag}" .
+
           for tag in ${TAGS}; do
-            destinations="${destinations} --destination=${tag}"
+            if [ "${tag}" != "${first_tag}" ]; then
+              docker tag "${first_tag}" "${tag}"
+            fi
+            docker push "${tag}"
           done
-
-          repo_name="${REPOSITORY##*/}"
-          context_dir=""
-          dockerfile_path=""
-
-          # Try common Forgejo/act_runner workspace layouts.
-          if [ -n "${GITHUB_WORKSPACE}" ] && [ -f "${GITHUB_WORKSPACE}/Dockerfile" ]; then
-            context_dir="${GITHUB_WORKSPACE}"
-            dockerfile_path="${GITHUB_WORKSPACE}/Dockerfile"
-          elif [ -f "./Dockerfile" ]; then
-            context_dir="."
-            dockerfile_path="./Dockerfile"
-          elif [ -f "/workspace/Dockerfile" ]; then
-            context_dir="/workspace"
-            dockerfile_path="/workspace/Dockerfile"
-          else
-            for dir in /workspace/*; do
-              if [ -d "${dir}/${repo_name}" ] && [ -f "${dir}/${repo_name}/Dockerfile" ]; then
-                context_dir="${dir}/${repo_name}"
-                dockerfile_path="${dir}/${repo_name}/Dockerfile"
-                break
-              fi
-            done
-          fi
-
-          # Some runner/container combos do not mount checked-out repository files into
-          # this job container. Fallback: download source archive for current commit.
-          if [ -z "${context_dir}" ] || [ -z "${dockerfile_path}" ]; then
-            archive_dir="/workspace/src"
-            archive_file="/workspace/src.tar.gz"
-            base_url="${SERVER_URL%/}"
-
-            rm -rf "${archive_dir}" "${archive_file}"
-            mkdir -p "${archive_dir}"
-
-            downloaded=0
-            for candidate in \
-              "${base_url}/${REPOSITORY}/archive/${SHA}.tar.gz" \
-              "${base_url}/api/v1/repos/${REPOSITORY}/archive/${SHA}.tar.gz" \
-              "${base_url/https:\/\//http://}/${REPOSITORY}/archive/${SHA}.tar.gz" \
-              "${base_url/https:\/\//http://}/api/v1/repos/${REPOSITORY}/archive/${SHA}.tar.gz"
-            do
-              echo "Trying source archive URL: ${candidate}"
-              if [ -n "${GITHUB_TOKEN}" ]; then
-                if /busybox/wget --header "Authorization: token ${GITHUB_TOKEN}" -O "${archive_file}" "${candidate}"; then
-                  downloaded=1
-                  break
-                fi
-              else
-                if /busybox/wget -O "${archive_file}" "${candidate}"; then
-                  downloaded=1
-                  break
-                fi
-              fi
-            done
-
-            if [ "${downloaded}" -ne 1 ]; then
-              echo "Failed to download source archive from all candidate URLs"
-              exit 1
-            fi
-
-            tar -xzf "${archive_file}" -C "${archive_dir}" --strip-components=1
-
-            if [ -f "${archive_dir}/Dockerfile" ]; then
-              context_dir="${archive_dir}"
-              dockerfile_path="${archive_dir}/Dockerfile"
-            fi
-          fi
-
-          if [ -z "${context_dir}" ] || [ -z "${dockerfile_path}" ]; then
-            echo "Dockerfile not found. Debug workspace layout:"
-            echo "pwd=$(pwd)"
-            echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
-            ls -la
-            ls -la /workspace || true
-            exit 1
-          fi
-
-          echo "Using context: ${context_dir}"
-          echo "Using dockerfile: ${dockerfile_path}"
-
-          /kaniko/executor \
-            --context="${context_dir}" \
-            --dockerfile="${dockerfile_path}" \
-            --snapshot-mode=redo \
-            --use-new-run \
-            ${destinations}
 
   deploy-dockhand:
     name: Trigger Dockhand Deployment
