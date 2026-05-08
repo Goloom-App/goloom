@@ -11,6 +11,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/scheduling"
 	"git.f4mily.net/goloom/internal/socialtokens"
 	"git.f4mily.net/goloom/internal/store"
 )
@@ -90,6 +91,9 @@ func (s *Service) Start(ctx context.Context) {
 	defer wg.Wait()
 
 	for {
+		if err := s.materializePostTemplates(ctx); err != nil {
+			s.logger.Error("post template materialize failed", "error", err)
+		}
 		if err := s.enqueueDuePosts(ctx, queue); err != nil {
 			s.logger.Error("scheduler poll failed", "error", err)
 		}
@@ -201,6 +205,8 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 				content = o
 			}
 		}
+		publishedAt := time.Now().UTC()
+		content = domain.ExpandDynamicVariables(content, publishedAt, post.TemplateCounter)
 
 		localMedia := domain.FilterMediaIDsForAccount(post.MediaIDs, post.MediaExcludeByAccount, account.ID)
 		remoteMedia, err := s.syncMediaToProvider(ctx, post.TeamID, localMedia, account, providerImpl, provider.PublishAuth{
@@ -466,4 +472,62 @@ func (s *Service) syncMediaToProvider(ctx context.Context, teamID string, localM
 	}
 
 	return remoteIDs, nil
+}
+
+func (s *Service) materializePostTemplates(ctx context.Context) error {
+	templates, err := s.store.ListDuePostTemplates(ctx, 100)
+	if err != nil {
+		return err
+	}
+	for _, tmpl := range templates {
+		occ := tmpl.NextMaterializeAt
+		if occ == nil {
+			continue
+		}
+		rule, err := scheduling.ParseRecurrenceJSON(tmpl.RecurrenceJSON)
+		if err != nil {
+			s.logger.Warn("invalid template recurrence_json", "template_id", tmpl.ID, "error", err)
+			continue
+		}
+		skipped, err := s.store.IsPostTemplateOccurrenceSkipped(ctx, tmpl.ID, *occ)
+		if err != nil {
+			return err
+		}
+		nextOcc, err := scheduling.NextOccurrence(rule, *occ)
+		if err != nil {
+			s.logger.Warn("template next occurrence failed", "template_id", tmpl.ID, "error", err)
+			continue
+		}
+		if skipped {
+			if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, tmpl.CounterNext); err != nil {
+				return err
+			}
+			continue
+		}
+		authorID := tmpl.AuthorUserID
+		tplID := tmpl.ID
+		counterVal := tmpl.CounterNext
+		input := domain.CreatePostInput{
+			Title:                 tmpl.Title,
+			Content:               tmpl.Content,
+			ScheduledAt:           *occ,
+			TargetAccounts:        tmpl.TargetAccountIDs,
+			Visibility:            tmpl.Visibility,
+			MediaIDs:              tmpl.MediaIDs,
+			MediaExcludeByAccount: tmpl.MediaExcludeByAccount,
+			Draft:                 false,
+			AuthorUserID:          &authorID,
+			PostTemplateID:        &tplID,
+			TemplateCounter:       &counterVal,
+		}
+		principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
+		if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
+			s.logger.Error("materialize scheduled post from template failed", "template_id", tmpl.ID, "error", err)
+			continue
+		}
+		if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, tmpl.CounterNext+1); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -147,12 +147,13 @@ type User struct {
 }
 
 type Team struct {
-	ID                string    `json:"id"`
-	Name              string    `json:"name"`
-	Description       string    `json:"description"`
-	IsPersonal        bool      `json:"is_personal"`
-	PersonalForUserID string    `json:"personal_for_user_id,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID                  string                    `json:"id"`
+	Name                string                    `json:"name"`
+	Description         string                    `json:"description"`
+	IsPersonal          bool                      `json:"is_personal"`
+	PersonalForUserID   string                    `json:"personal_for_user_id,omitempty"`
+	SchedulingPrefs     TeamSchedulingPreferences `json:"scheduling_preferences"`
+	CreatedAt           time.Time                 `json:"created_at"`
 }
 
 type TeamInvitation struct {
@@ -219,6 +220,55 @@ type ScheduledPost struct {
 	Visibility            string              `json:"visibility,omitempty"`
 	MediaIDs              []string            `json:"media_ids,omitempty"`
 	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
+	PostTemplateID        *string             `json:"post_template_id,omitempty"`
+	TemplateCounter       *int                `json:"template_counter,omitempty"`
+}
+
+// PostTemplate drives recurring scheduled posts (stored in post_templates).
+type PostTemplate struct {
+	ID                    string              `json:"id"`
+	TeamID                string              `json:"team_id"`
+	AuthorUserID          string              `json:"author_user_id"`
+	Title                 string              `json:"title"`
+	Content               string              `json:"content"`
+	RecurrenceJSON        string              `json:"recurrence_json"`
+	Visibility            string              `json:"visibility"`
+	MediaIDs              []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs      []string            `json:"target_account_ids"`
+	Enabled               bool                `json:"enabled"`
+	NextMaterializeAt     *time.Time          `json:"next_materialize_at,omitempty"`
+	CounterNext           int                 `json:"counter_next"`
+	CreatedAt             time.Time           `json:"created_at"`
+	UpdatedAt             time.Time           `json:"updated_at"`
+}
+
+type CreatePostTemplateInput struct {
+	Title                 string              `json:"title"`
+	Content               string              `json:"content"`
+	RecurrenceJSON        string              `json:"recurrence_json"`
+	Visibility            string              `json:"visibility,omitempty"`
+	MediaIDs              []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs      []string            `json:"target_account_ids"`
+	Enabled               *bool               `json:"enabled,omitempty"`
+}
+
+type UpdatePostTemplateInput struct {
+	Title                 *string              `json:"title,omitempty"`
+	Content               *string              `json:"content,omitempty"`
+	RecurrenceJSON        *string              `json:"recurrence_json,omitempty"`
+	Visibility            *string              `json:"visibility,omitempty"`
+	MediaIDs              *[]string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount map[string][]string  `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs      *[]string            `json:"target_account_ids,omitempty"`
+	Enabled               *bool                `json:"enabled,omitempty"`
+}
+
+// EngagementHourBucket aggregates engagement score by UTC hour-of-day for posted content.
+type EngagementHourBucket struct {
+	HourUTC int   `json:"hour"`
+	Score   int64 `json:"score"`
 }
 
 type ScheduledPostTarget struct {
@@ -404,8 +454,9 @@ type CreateTeamInput struct {
 }
 
 type UpdateTeamInput struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name                  string                     `json:"name"`
+	Description           string                     `json:"description"`
+	SchedulingPreferences *TeamSchedulingPreferences `json:"scheduling_preferences,omitempty"`
 }
 
 // AdminMetrics aggregates global counts for the admin dashboard.
@@ -448,6 +499,10 @@ type CreatePostInput struct {
 	MediaIDs              []string            `json:"media_ids,omitempty"`
 	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
 	Draft                 bool                `json:"draft,omitempty"`
+	// Internal-only (workers): optional author override and template lineage for dynamic variables.
+	AuthorUserID          *string `json:"-"`
+	PostTemplateID        *string `json:"-"`
+	TemplateCounter       *int    `json:"-"`
 }
 
 func (in CreatePostInput) Validate() error {

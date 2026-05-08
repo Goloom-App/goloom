@@ -191,3 +191,29 @@ create table if not exists media_provider_mappings (
 );
 
 create index if not exists idx_media_mappings_account on media_provider_mappings(account_id);
+
+create table if not exists post_templates (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    author_user_id text not null references users(id) on delete restrict,
+    title text not null default '',
+    content text not null,
+    recurrence_json text not null,
+    visibility text not null default 'public',
+    media_ids text not null default '[]',
+    media_exclude_by_account text not null default '{}',
+    target_account_ids text not null default '[]',
+    enabled integer not null default 1,
+    next_materialize_at text,
+    counter_next integer not null default 1,
+    created_at text not null,
+    updated_at text not null
+);
+
+create index if not exists idx_post_templates_due on post_templates (enabled, next_materialize_at);
+
+create table if not exists post_template_skips (
+    template_id text not null references post_templates(id) on delete cascade,
+    occurrence_at text not null,
+    primary key (template_id, occurrence_at)
+);

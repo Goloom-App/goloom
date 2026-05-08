@@ -1,0 +1,68 @@
+package scheduling
+
+import (
+	"testing"
+	"time"
+)
+
+func TestNextOccurrence_weekly(t *testing.T) {
+	t.Parallel()
+	rule := &RecurrenceRule{
+		Kind:     RecurrenceWeekly,
+		Weekdays: []int{1}, // Monday
+		Hour:     9,
+		Minute:   30,
+		Timezone: "UTC",
+	}
+	// 2025-05-05 is Monday UTC
+	start := time.Date(2025, 5, 5, 10, 0, 0, 0, time.UTC)
+	next, err := NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 5, 12, 9, 30, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("got %v want %v", next, want)
+	}
+}
+
+func TestNextOccurrence_monthlyDOM(t *testing.T) {
+	t.Parallel()
+	rule := &RecurrenceRule{
+		Kind:       RecurrenceMonthlyDOM,
+		DayOfMonth: 15,
+		Hour:       14,
+		Minute:     0,
+		Timezone:   "UTC",
+	}
+	start := time.Date(2025, 5, 10, 0, 0, 0, 0, time.UTC)
+	next, err := NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 5, 15, 14, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("got %v want %v", next, want)
+	}
+}
+
+func TestNextOccurrence_anchorOffsetThreeDaysBefore(t *testing.T) {
+	t.Parallel()
+	rule := &RecurrenceRule{
+		Kind:       RecurrenceMonthlyAnchorOffset,
+		AnchorDay:  15,
+		OffsetDays: -3,
+		Hour:       8,
+		Minute:     0,
+		Timezone:   "UTC",
+	}
+	start := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
+	next, err := NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 5, 12, 8, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("got %v want %v", next, want)
+	}
+}

@@ -235,7 +235,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	_ = isAdmin
 	query := `
-		select id, name, description, is_personal, personal_for_user_id, created_at
+		select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
 		from teams
 	`
 	args := []any{userID}
@@ -285,17 +285,33 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 }
 
 func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error) {
-	_, err := s.db.ExecContext(ctx, `
-		update teams
-		set name = ?, description = ?
-		where id = ?`,
-		input.Name, input.Description, teamID,
-	)
-	if err != nil {
-		return domain.Team{}, err
+	if input.SchedulingPreferences != nil {
+		prefsJSON, err := domain.EncodeTeamSchedulingPrefsJSON(*input.SchedulingPreferences)
+		if err != nil {
+			return domain.Team{}, err
+		}
+		_, err = s.db.ExecContext(ctx, `
+			update teams
+			set name = ?, description = ?, scheduling_prefs = ?
+			where id = ?`,
+			input.Name, input.Description, prefsJSON, teamID,
+		)
+		if err != nil {
+			return domain.Team{}, err
+		}
+	} else {
+		_, err := s.db.ExecContext(ctx, `
+			update teams
+			set name = ?, description = ?
+			where id = ?`,
+			input.Name, input.Description, teamID,
+		)
+		if err != nil {
+			return domain.Team{}, err
+		}
 	}
 	return queryTeam(ctx, s.db, `
-		select id, name, description, created_at, is_personal, personal_for_user_id
+		select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
 		from teams
 		where id = ?`,
 		teamID,
@@ -597,14 +613,28 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	if input.Draft {
 		st = domain.PostStatusDraft
 	}
+	authorID := principal.User.ID
+	if input.AuthorUserID != nil && strings.TrimSpace(*input.AuthorUserID) != "" {
+		authorID = strings.TrimSpace(*input.AuthorUserID)
+	}
+	var templateID any
+	var templateCounter any
+	if input.PostTemplateID != nil && strings.TrimSpace(*input.PostTemplateID) != "" {
+		templateID = strings.TrimSpace(*input.PostTemplateID)
+	}
+	if input.TemplateCounter != nil {
+		templateCounter = *input.TemplateCounter
+	}
+
 	if _, err := tx.ExecContext(ctx, `
 		insert into scheduled_posts (
 			id, team_id, author_user_id, title, content, scheduled_at, status,
-			attempt_count, last_error, visibility, media_ids, media_exclude_by_account, created_at, updated_at
+			attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+			post_template_id, template_counter, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?)`,
-		postID, teamID, principal.User.ID, input.Title, input.Content, formatTime(input.ScheduledAt), st,
-		visibility, mediaJSON, excludeJSON, now, now,
+		values (?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?)`,
+		postID, teamID, authorID, input.Title, input.Content, formatTime(input.ScheduledAt), st,
+		visibility, mediaJSON, excludeJSON, templateID, templateCounter, now, now,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
@@ -627,7 +657,8 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
 		where team_id = ?
 		order by scheduled_at asc`,
@@ -650,7 +681,8 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and id = ?`,
 		teamID, postID,
@@ -731,7 +763,8 @@ func (s *Store) DeleteScheduledPost(ctx context.Context, teamID, postID string) 
 func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
 		where scheduled_at <= ?
 		  and status in (?, ?)
@@ -987,13 +1020,23 @@ func scanTeam(scanner teamScanner) (domain.Team, error) {
 		team              domain.Team
 		isPersonal        int
 		personalForUserID sql.NullString
+		schedulingPrefs   sql.NullString
 		createdAt         string
 	)
-	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &isPersonal, &personalForUserID, &createdAt); err != nil {
+	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt, &isPersonal, &personalForUserID, &schedulingPrefs); err != nil {
 		return domain.Team{}, err
 	}
 	team.IsPersonal = isPersonal != 0
 	team.PersonalForUserID = personalForUserID.String
+	if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {
+		prefs, err := domain.ParseTeamSchedulingPrefsJSON(schedulingPrefs.String)
+		if err != nil {
+			return domain.Team{}, err
+		}
+		team.SchedulingPrefs = prefs
+	} else {
+		team.SchedulingPrefs = domain.DefaultTeamSchedulingPreferences()
+	}
 	var err error
 	team.CreatedAt, err = parseTime(createdAt)
 	if err != nil {
@@ -1113,6 +1156,8 @@ func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 		scheduled        string
 		mediaIDsJSON     string
 		mediaExcludeJSON string
+		postTemplateID   sql.NullString
+		templateCtr      sql.NullInt64
 		createdAt        string
 		updatedAt        string
 	)
@@ -1129,12 +1174,22 @@ func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 		&post.Visibility,
 		&mediaIDsJSON,
 		&mediaExcludeJSON,
+		&postTemplateID,
+		&templateCtr,
 		&createdAt,
 		&updatedAt,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
 	post.LastError = lastError.String
+	if postTemplateID.Valid {
+		s := postTemplateID.String
+		post.PostTemplateID = &s
+	}
+	if templateCtr.Valid {
+		v := int(templateCtr.Int64)
+		post.TemplateCounter = &v
+	}
 	if strings.TrimSpace(post.Visibility) == "" {
 		post.Visibility = domain.PostVisibilityPublic
 	}

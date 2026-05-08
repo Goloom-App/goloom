@@ -259,3 +259,34 @@ create table if not exists media_provider_mappings (
 );
 
 create index if not exists idx_media_mappings_account on media_provider_mappings(account_id);
+
+alter table teams add column if not exists scheduling_prefs text not null default '{}';
+
+create table if not exists post_templates (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    author_user_id uuid not null references users(id) on delete restrict,
+    title text not null default '',
+    content text not null,
+    recurrence_json text not null,
+    visibility text not null default 'public',
+    media_ids text not null default '[]',
+    media_exclude_by_account text not null default '{}',
+    target_account_ids text not null default '[]',
+    enabled boolean not null default true,
+    next_materialize_at timestamptz,
+    counter_next integer not null default 1,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_post_templates_due on post_templates (enabled, next_materialize_at);
+
+create table if not exists post_template_skips (
+    template_id uuid not null references post_templates(id) on delete cascade,
+    occurrence_at timestamptz not null,
+    primary key (template_id, occurrence_at)
+);
+
+alter table scheduled_posts add column if not exists post_template_id uuid references post_templates(id) on delete set null;
+alter table scheduled_posts add column if not exists template_counter integer;

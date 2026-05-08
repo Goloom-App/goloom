@@ -34,19 +34,12 @@ func (s *Store) EnsurePersonalTeam(ctx context.Context, userID string) (domain.T
 
 	teamID := uuid.NewString()
 	name := fmt.Sprintf("Personal · %s", userID[:8])
-	var team domain.Team
-	var personal sql.NullString
-	err = tx.QueryRow(ctx, `
+	if _, err := tx.Exec(ctx, `
 		insert into teams (id, name, description, is_personal, personal_for_user_id)
-		values ($1, $2, '', true, $3)
-		returning id, name, description, is_personal, personal_for_user_id, created_at`,
+		values ($1, $2, '', true, $3)`,
 		teamID, name, userID,
-	).Scan(&team.ID, &team.Name, &team.Description, &team.IsPersonal, &personal, &team.CreatedAt)
-	if err != nil {
+	); err != nil {
 		return domain.Team{}, err
-	}
-	if personal.Valid {
-		team.PersonalForUserID = personal.String
 	}
 
 	if _, err := tx.Exec(ctx, `insert into team_memberships (user_id, team_id, role) values ($1, $2, $3)`, userID, teamID, domain.RoleOwner); err != nil {
@@ -84,18 +77,10 @@ func (s *Store) EnsurePersonalTeamsMigrated(ctx context.Context) error {
 }
 
 func (s *Store) GetTeamByID(ctx context.Context, teamID string) (domain.Team, error) {
-	const q = `
-		select id, name, description, is_personal, personal_for_user_id, created_at
-		from teams where id = $1`
-	var team domain.Team
-	var personal *string
-	err := s.pool.QueryRow(ctx, q, teamID).Scan(
-		&team.ID, &team.Name, &team.Description, &team.IsPersonal, &personal, &team.CreatedAt,
-	)
-	if personal != nil {
-		team.PersonalForUserID = *personal
-	}
-	return team, err
+	return scanTeamRow(s.pool.QueryRow(ctx, `
+		select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
+		from teams where id = $1`,
+		teamID))
 }
 
 func (s *Store) GetAccountByID(ctx context.Context, accountID string) (domain.SocialAccount, error) {

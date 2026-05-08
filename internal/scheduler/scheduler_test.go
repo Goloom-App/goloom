@@ -390,6 +390,46 @@ func (m *mockStore) UpsertMediaProviderMapping(ctx context.Context, mapping doma
 	return nil
 }
 
+func (m *mockStore) GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error) {
+	return domain.PostTemplate{}, nil
+}
+
+func (m *mockStore) CreatePostTemplate(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostTemplateInput) (domain.PostTemplate, error) {
+	return domain.PostTemplate{}, nil
+}
+
+func (m *mockStore) UpdatePostTemplate(ctx context.Context, teamID, templateID string, input domain.UpdatePostTemplateInput) (domain.PostTemplate, error) {
+	return domain.PostTemplate{}, nil
+}
+
+func (m *mockStore) DeletePostTemplate(ctx context.Context, teamID, templateID string) error {
+	return nil
+}
+
+func (m *mockStore) IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStore) AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error {
+	return nil
+}
+
+func (m *mockStore) AdvancePostTemplateSchedule(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext int) error {
+	return nil
+}
+
 var _ store.Store = (*mockStore)(nil)
 
 type fakeProvider struct {

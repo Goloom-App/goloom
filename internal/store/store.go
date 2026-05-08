@@ -27,6 +27,17 @@ type Store interface {
 	GetTeamByID(ctx context.Context, teamID string) (domain.Team, error)
 	CreateTeam(ctx context.Context, ownerUserID string, input domain.CreateTeamInput) (domain.Team, error)
 	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
+	GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error)
+
+	ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error)
+	ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error)
+	GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error)
+	CreatePostTemplate(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostTemplateInput) (domain.PostTemplate, error)
+	UpdatePostTemplate(ctx context.Context, teamID, templateID string, input domain.UpdatePostTemplateInput) (domain.PostTemplate, error)
+	DeletePostTemplate(ctx context.Context, teamID, templateID string) error
+	IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error)
+	AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error
+	AdvancePostTemplateSchedule(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext int) error
 	ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error)
 	AddTeamMember(ctx context.Context, teamID string, input domain.AddTeamMemberInput) (domain.TeamMembership, error)
 	RemoveTeamMember(ctx context.Context, teamID, userID string) error
