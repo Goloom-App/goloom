@@ -136,6 +136,22 @@ jobs:
           echo "tags=${tags}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
+      - name: Pin registry host in /etc/hosts
+        env:
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          registry_host="${SERVER_URL#https://}"
+          registry_host="${registry_host#http://}"
+          registry_host="${registry_host%%/*}"
+          ip="$(getent ahostsv4 "${registry_host}" | awk 'NR==1{print $1}')"
+          if [ -z "${ip}" ]; then
+            echo "Unable to resolve ${registry_host} via getent"
+            cat /etc/resolv.conf
+            exit 1
+          fi
+          echo "Pinning ${registry_host} -> ${ip}"
+          echo "${ip} ${registry_host}" >> /etc/hosts
+
       - name: Login to Forgejo registry
         env:
           SERVER_URL: ${{ github.server_url }}
