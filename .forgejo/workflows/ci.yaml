@@ -180,18 +180,35 @@ jobs:
           if [ -z "${context_dir}" ] || [ -z "${dockerfile_path}" ]; then
             archive_dir="/workspace/src"
             archive_file="/workspace/src.tar.gz"
-            archive_url="${SERVER_URL%/}/${REPOSITORY}/archive/${SHA}.tar.gz"
+            base_url="${SERVER_URL%/}"
 
             rm -rf "${archive_dir}" "${archive_file}"
             mkdir -p "${archive_dir}"
 
-            if [ -n "${GITHUB_TOKEN}" ]; then
-              /busybox/wget \
-                --header "Authorization: token ${GITHUB_TOKEN}" \
-                -O "${archive_file}" \
-                "${archive_url}"
-            else
-              /busybox/wget -O "${archive_file}" "${archive_url}"
+            downloaded=0
+            for candidate in \
+              "${base_url}/${REPOSITORY}/archive/${SHA}.tar.gz" \
+              "${base_url}/api/v1/repos/${REPOSITORY}/archive/${SHA}.tar.gz" \
+              "${base_url/https:\/\//http://}/${REPOSITORY}/archive/${SHA}.tar.gz" \
+              "${base_url/https:\/\//http://}/api/v1/repos/${REPOSITORY}/archive/${SHA}.tar.gz"
+            do
+              echo "Trying source archive URL: ${candidate}"
+              if [ -n "${GITHUB_TOKEN}" ]; then
+                if /busybox/wget --header "Authorization: token ${GITHUB_TOKEN}" -O "${archive_file}" "${candidate}"; then
+                  downloaded=1
+                  break
+                fi
+              else
+                if /busybox/wget -O "${archive_file}" "${candidate}"; then
+                  downloaded=1
+                  break
+                fi
+              fi
+            done
+
+            if [ "${downloaded}" -ne 1 ]; then
+              echo "Failed to download source archive from all candidate URLs"
+              exit 1
             fi
 
             tar -xzf "${archive_file}" -C "${archive_dir}" --strip-components=1
