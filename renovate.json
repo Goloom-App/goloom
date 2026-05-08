@@ -1,3 +1,23 @@
 {
-  "$schema": "https://docs.renovatebot.com/renovate-schema.json"
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "frontend/package.json"
+      ],
+      "rangeStrategy": "bump",
+      "postUpdateOptions": [
+        "pnpmDedupe"
+      ]
+    }
+  ]
 }
