@@ -41,7 +41,7 @@ jobs:
             command -v git
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Go module and build cache
         if: matrix.suite == 'backend'
@@ -81,7 +81,7 @@ jobs:
       - name: Install git and Node (for actions/checkout)
         run: apk add --no-cache git nodejs bash
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Compute registry and tags
         id: image-meta
