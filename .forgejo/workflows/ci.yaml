@@ -30,7 +30,7 @@ jobs:
           apk add --no-cache git nodejs npm 2>/dev/null || \
           (apt-get update && apt-get install -y git nodejs)
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Go Tests
         if: matrix.suite == 'backend'
@@ -54,7 +54,7 @@ jobs:
     outputs:
       image_ref: ${{ steps.registry.outputs.image_ref }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Registry & Image Ref
         id: registry
