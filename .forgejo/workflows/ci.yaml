@@ -99,7 +99,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: docker
     container:
-      image: alpine:3.22
+      image: alpine:3.23
     steps:
       - name: Trigger Webhook
         run: |
