@@ -136,6 +136,33 @@ jobs:
           echo "tags=${tags}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
+      - name: Diagnose container DNS
+        env:
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          registry_host="${SERVER_URL#https://}"
+          registry_host="${registry_host#http://}"
+          registry_host="${registry_host%%/*}"
+          echo "registry_host=${registry_host}"
+          echo "--- /etc/resolv.conf ---"
+          cat /etc/resolv.conf || true
+          echo "--- /etc/hosts ---"
+          cat /etc/hosts || true
+          echo "--- getent hosts ---"
+          getent hosts "${registry_host}" || true
+          echo "--- curl https check ---"
+          curl -sS -o /dev/null -w "http_code=%{http_code} ip=%{remote_ip}\n" \
+            "https://${registry_host}/v2/" || true
+
+      - name: Ensure container DNS works
+        env:
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          if ! grep -q '^nameserver' /etc/resolv.conf 2>/dev/null; then
+            echo "No nameserver in /etc/resolv.conf, injecting public resolvers"
+            printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\n' > /etc/resolv.conf
+          fi
+
       - name: Login to Forgejo registry
         env:
           SERVER_URL: ${{ github.server_url }}
