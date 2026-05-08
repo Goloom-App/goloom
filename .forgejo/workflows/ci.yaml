@@ -8,9 +8,6 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # Matrix = two jobs from one definition; runners execute them in parallel when capacity allows.
-  # Base images: GHCR mirror of Docker Hub (avoids Docker Hub anonymous rate limits). See
-  # https://github.com/psarossy/dockerhub-mirror — replace with your org's copies if you prefer.
   test:
     name: ${{ matrix.name }}
     runs-on: docker
@@ -19,188 +16,99 @@ jobs:
       matrix:
         include:
           - name: "Test Backend (Go)"
-            image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
+            image: golang:1.22-alpine # Standard-Images nutzen, falls möglich
             suite: backend
           - name: "Test Frontend (Node.js)"
-            image: ghcr.io/psarossy/node:lts
+            image: node:20-alpine
             suite: frontend
+
     container:
       image: ${{ matrix.image }}
     steps:
-      # actions/checkout and actions/cache are JavaScript actions: act_runner exec's
-      # `node` inside the job container, so the Go image must include Node even though
-      # tests only invoke `go`.
-      - name: Install git and Node (backend image)
-        if: matrix.suite == 'backend'
-        run: apk add --no-cache git nodejs
-
-      - name: Install git (frontend image)
-        if: matrix.suite == 'frontend'
+      # Zentrales Setup für Forgejo Runner (Node & Git werden für Actions benötigt)
+      - name: Install Runtime Deps
         run: |
-          if command -v apk >/dev/null 2>&1; then
-            apk add --no-cache git
-          elif command -v apt-get >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends git
-            rm -rf /var/lib/apt/lists/*
-          else
-            command -v git
-          fi
+          apk add --no-cache git nodejs npm 2>/dev/null || \
+          (apt-get update && apt-get install -y git nodejs)
 
       - uses: actions/checkout@v4
 
-      - name: Go module and build cache
+      # Backend Logic
+      - name: Go Tests
         if: matrix.suite == 'backend'
-        uses: actions/cache@v4
-        with:
-          path: |
-            /root/.cache/go-build
-            /go/pkg/mod
-          key: forgejo-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            forgejo-go-
+        run: |
+          export GOCACHE=/tmp/go-build
+          go test -v ./...
 
-      - name: Run Go tests
-        if: matrix.suite == 'backend'
-        run: go test -count=1 -v ./...
-
-      - name: Enable pnpm (Corepack)
-        if: matrix.suite == 'frontend'
-        run: corepack enable && corepack prepare pnpm@10 --activate
-
-      - name: Frontend install and build
+      # Frontend Logic
+      - name: Frontend Build
         if: matrix.suite == 'frontend'
         run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
           pnpm --dir frontend install --frozen-lockfile
           pnpm --dir frontend build
 
   publish-image:
-    name: Build and Publish Docker Image
+    name: Build & Publish
     needs: [test]
     if: github.event_name == 'push'
     runs-on: docker
     container:
       image: quay.io/buildah/stable:v1.41
     outputs:
-      image_ref: ${{ steps.image-meta.outputs.image_ref }}
+      image_ref: ${{ steps.meta.outputs.image_ref }}
     steps:
+      - name: Install Node/Git
+        run: apk add --no-cache git nodejs
+      
       - uses: actions/checkout@v4
 
-      - name: Install git and Node (for actions/checkout)
-        run: |
-          if command -v apk >/dev/null 2>&1; then
-            apk add --no-cache git nodejs
-          elif command -v apt-get >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends git nodejs
-            rm -rf /var/lib/apt/lists/*
-          else
-            command -v git
-            command -v node
-          fi
-
-      - name: Ensure buildah available
-        run: |
-          if ! command -v buildah >/dev/null 2>&1; then
-            echo "buildah not found in job image"
-            exit 1
-          fi
-
-      - name: Compute registry and tags
-        id: image-meta
+      - name: Image Meta & Login
+        id: meta
         env:
-          SERVER_URL: ${{ github.server_url }}
-          REPOSITORY: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-        run: |
-          registry_host="${SERVER_URL#https://}"
-          registry_host="${registry_host#http://}"
-          registry_host="${registry_host%%/*}"
-          image_repo="${registry_host}/${REPOSITORY}"
-          sha_tag="sha-${SHA}"
-
-          if [ "${REF_TYPE}" = "tag" ]; then
-            release_tag="${REF_NAME}"
-            tags="${image_repo}:${sha_tag} ${image_repo}:${release_tag} ${image_repo}:latest"
-          else
-            tags="${image_repo}:${sha_tag} ${image_repo}:latest"
-          fi
-
-          image_ref="${image_repo}:${sha_tag}"
-          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
-          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
-
-      - name: Login to Forgejo registry
-        env:
-          SERVER_URL: ${{ github.server_url }}
           REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
-          if [ -z "${REGISTRY_USER}" ] || [ -z "${REGISTRY_PASSWORD}" ]; then
-            echo "Missing REGISTRY_USER or REGISTRY_PASSWORD secret"
-            exit 1
-          fi
+          REGISTRY="${GITHUB_SERVER_URL#*//}"
+          IMAGE_REPO="${REGISTRY}/${GITHUB_REPOSITORY}"
+          SHA_TAG="sha-${GITHUB_SHA::7}"
+          
+          echo "${REGISTRY_PASSWORD}" | buildah login -u "${REGISTRY_USER}" --password-stdin "${REGISTRY}"
+          
+          echo "image_ref=${IMAGE_REPO}:${SHA_TAG}" >> "$GITHUB_OUTPUT"
+          echo "repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
 
-          registry_host="${SERVER_URL#https://}"
-          registry_host="${registry_host#http://}"
-          registry_host="${registry_host%%/*}"
-          echo "${REGISTRY_PASSWORD}" | buildah login -u "${REGISTRY_USER}" --password-stdin "${registry_host}"
-
-      - name: Build and push image tags
-        env:
-          TAGS: ${{ steps.image-meta.outputs.tags }}
+      - name: Build and Push
         run: |
           export STORAGE_DRIVER=vfs
-          export BUILDAH_ISOLATION=chroot
+          IMAGE="${{ steps.meta.outputs.image_ref }}"
+          LATEST="${{ steps.meta.outputs.repo }}:latest"
+          
+          buildah bud --format docker -t "$IMAGE" .
+          buildah tag "$IMAGE" "$LATEST"
+          
+          buildah push "$IMAGE" "docker://$IMAGE"
+          buildah push "$LATEST" "docker://$LATEST"
+          
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            TAG_REF="${{ steps.meta.outputs.repo }}:${{ github.ref_name }}"
+            buildah tag "$IMAGE" "$TAG_REF"
+            buildah push "$TAG_REF" "docker://$TAG_REF"
+          fi
 
-          first_tag="${TAGS%% *}"
-          buildah bud --format docker -t "${first_tag}" .
-
-          for tag in ${TAGS}; do
-            if [ "${tag}" != "${first_tag}" ]; then
-              buildah tag "${first_tag}" "${tag}"
-            fi
-            buildah push "${tag}" "docker://${tag}"
-          done
-
-  deploy-dockhand:
-    name: Trigger Dockhand Deployment
+  deploy:
+    name: Deploy
     needs: [publish-image]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: docker
-    container:
-      image: mirror.gcr.io/library/alpine:3.22
+    container: image: alpine:3.22
     steps:
-      - name: Trigger Dockhand webhook
-        env:
-          DOCKHAND_WEBHOOK_URL: ${{ secrets.DOCKHAND_WEBHOOK_URL }}
-          DOCKHAND_WEBHOOK_TOKEN: ${{ secrets.DOCKHAND_WEBHOOK_TOKEN }}
-          IMAGE_REF: ${{ needs.publish-image.outputs.image_ref }}
-          REPOSITORY: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          REF_NAME: ${{ github.ref_name }}
+      - name: Webhook
         run: |
-          if [ -z "${DOCKHAND_WEBHOOK_URL}" ]; then
-            echo "Missing DOCKHAND_WEBHOOK_URL secret"
-            exit 1
-          fi
-
           apk add --no-cache curl
-
-          payload="{\"repository\":\"${REPOSITORY}\",\"ref\":\"${REF_NAME}\",\"sha\":\"${SHA}\",\"image_ref\":\"${IMAGE_REF}\"}"
-
-          # Dockhand can use image_ref directly for compose update logic.
-          if [ -n "${DOCKHAND_WEBHOOK_TOKEN}" ]; then
-            curl --fail --show-error --silent \
-              -X POST "${DOCKHAND_WEBHOOK_URL}" \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer ${DOCKHAND_WEBHOOK_TOKEN}" \
-              -d "${payload}"
-          else
-            curl --fail --show-error --silent \
-              -X POST "${DOCKHAND_WEBHOOK_URL}" \
-              -H "Content-Type: application/json" \
-              -d "${payload}"
-          fi
+          curl --fail -X POST "${{ secrets.DOCKHAND_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.DOCKHAND_WEBHOOK_TOKEN }}" \
+            -d '{"image_ref":"${{ needs.publish-image.outputs.image_ref }}"}'
