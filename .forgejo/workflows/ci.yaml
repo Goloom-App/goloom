@@ -81,10 +81,11 @@ jobs:
     runs-on: docker
     container:
       image: quay.io/buildah/stable:v1.41
-      # quay.io/buildah/stable under act/docker: buildah login can get "socket: permission denied"
-      # on HTTPS to registry while git fetch works (SELinux/seccomp/cap interaction). Scoped
-      # to this job only. Tighten runner/image later if you switch off build-in-docker.
-      options: --privileged
+      # Buildah/registry TLS from Docker bridge networks can EPERM on connect while git/nodejs
+      # work (--privileged alone did not fix on some Forgejo/act setups). Host network matches
+      # host DNS and egress (same path as HTTPS to Forgejo/reverse-proxy on 443). If runner
+      # ignores job options, duplicate under container.options in forgejo-runner config.yml.
+      options: --network host --privileged
     outputs:
       image_ref: ${{ steps.image-meta.outputs.image_ref }}
     steps:
@@ -140,23 +141,7 @@ jobs:
           echo "tags=${tags}" >> "$GITHUB_OUTPUT"
           echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
 
-      - name: Pin registry host in /etc/hosts
-        env:
-          SERVER_URL: ${{ github.server_url }}
-        run: |
-          registry_host="${SERVER_URL#https://}"
-          registry_host="${registry_host#http://}"
-          registry_host="${registry_host%%/*}"
-          ip="$(getent ahostsv4 "${registry_host}" | awk 'NR==1{print $1}')"
-          if [ -z "${ip}" ]; then
-            echo "Unable to resolve ${registry_host} via getent"
-            cat /etc/resolv.conf
-            exit 1
-          fi
-          echo "Pinning ${registry_host} -> ${ip}"
-          echo "${ip} ${registry_host}" >> /etc/hosts
-
-      - name: Login to Forgejo registry
+      - name: Registry credentials (auth file; skips buildah login /v2 probe)
         env:
           SERVER_URL: ${{ github.server_url }}
           REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
@@ -170,11 +155,14 @@ jobs:
           registry_host="${SERVER_URL#https://}"
           registry_host="${registry_host#http://}"
           registry_host="${registry_host%%/*}"
-          echo "${REGISTRY_PASSWORD}" | buildah login -u "${REGISTRY_USER}" --password-stdin "${registry_host}"
+
+          auth_b64="$(printf '%s:%s' "${REGISTRY_USER}" "${REGISTRY_PASSWORD}" | base64 -w0)"
+          printf '{"auths":{"%s":{"auth":"%s"}}}\n' "${registry_host}" "${auth_b64}" > /tmp/registry-auth.json
 
       - name: Build and push image tags
         env:
           TAGS: ${{ steps.image-meta.outputs.tags }}
+          AUTHFILE: /tmp/registry-auth.json
         run: |
           export STORAGE_DRIVER=vfs
           export BUILDAH_ISOLATION=chroot
@@ -186,7 +174,7 @@ jobs:
             if [ "${tag}" != "${first_tag}" ]; then
               buildah tag "${first_tag}" "${tag}"
             fi
-            buildah push "${tag}" "docker://${tag}"
+            buildah push --authfile "${AUTHFILE}" "${tag}" "docker://${tag}"
           done
 
   deploy-dockhand:
