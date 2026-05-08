@@ -600,7 +600,6 @@ function App() {
       { id: 'calendar', label: 'Schedule', icon: 'calendar' },
       { id: 'contentCalendar', label: 'Calendar', icon: 'calendarGrid' },
       { id: 'archive', label: 'Archive', icon: 'archive' },
-      { id: 'analytics', label: 'Analytics', icon: 'chart' },
       { id: 'mediaLibrary', label: 'Media', icon: 'image' },
     ],
     [],
@@ -610,6 +609,7 @@ function App() {
     () => [
       { id: 'teams', label: 'Team settings', icon: 'teams' },
       { id: 'accounts', label: 'Accounts', icon: 'share' },
+      { id: 'analytics', label: 'Analytics', icon: 'chart' },
     ],
     [],
   )
