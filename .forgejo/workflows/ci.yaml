@@ -12,8 +12,8 @@ jobs:
   # Base images: GHCR mirror of Docker Hub (avoids Docker Hub anonymous rate limits). See
   # https://github.com/psarossy/dockerhub-mirror — replace with your org's copies if you prefer.
   test:
-    name: ${{ matrix.name }}
     runs-on: docker
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
@@ -75,10 +75,10 @@ jobs:
           pnpm --dir frontend build
 
   publish-image:
+    runs-on: docker
     name: Build and Publish Docker Image
     needs: [test]
     if: github.event_name == 'push'
-    runs-on: docker
     container:
       image: quay.io/buildah/stable:v1.41
       # Buildah/registry TLS from Docker bridge networks can EPERM on connect while git/nodejs
@@ -159,6 +159,28 @@ jobs:
           auth_b64="$(printf '%s:%s' "${REGISTRY_USER}" "${REGISTRY_PASSWORD}" | base64 -w0)"
           printf '{"auths":{"%s":{"auth":"%s"}}}\n' "${registry_host}" "${auth_b64}" > /tmp/registry-auth.json
 
+      # Forgejo/act often ignores job-level container.options: job stays on docker bridge DNS.
+      # buildah pull uses this file; only 127.0.0.11 can leave ghcr.io / gcr.io as SERVFAIL.
+      # Rebuild resolv.conf: keep search/options, keep embedded DNS when present, add LAN + public.
+      - name: Resolver list for GHCR / GCR pulls
+        run: |
+          set -e
+          f=/etc/resolv.conf
+          bak="${f}.ci-bak"
+          cp "$f" "${bak}"
+          hdr="$(grep -E '^(search|domain|options)[[:space:]]' "${bak}" 2>/dev/null || true)"
+          {
+            printf '%s\n' "$hdr"
+            if grep -q '^nameserver 127\.0\.0\.11' "${bak}" 2>/dev/null; then
+              echo 'nameserver 127.0.0.11'
+            fi
+            echo 'nameserver 192.168.10.1'
+            echo 'nameserver 1.1.1.1'
+          } >"${f}.new"
+          mv "${f}.new" "$f"
+          getent hosts ghcr.io >/dev/null
+          getent hosts gcr.io >/dev/null
+
       - name: Build and push image tags
         env:
           TAGS: ${{ steps.image-meta.outputs.tags }}
@@ -178,10 +200,10 @@ jobs:
           done
 
   deploy-dockhand:
+    runs-on: docker
     name: Trigger Dockhand Deployment
     needs: [publish-image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: docker
     container:
       image: mirror.gcr.io/library/alpine:3.22
     steps:
