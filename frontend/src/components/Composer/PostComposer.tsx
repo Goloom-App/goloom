@@ -2,7 +2,8 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import type { BackendMediaItem, createApiClient } from '../../api'
 import { Icon } from '../../icons'
-import type { AccountRecord } from '../../types'
+import type { AccountRecord, TeamSchedulingPreferences } from '../../types'
+import { ScheduleInsights } from './ScheduleInsights'
 import { DestinationAvatar } from '../post/DestinationAvatar'
 import { SocialPreview } from '../post/SocialPreview'
 import type { SocialPreviewAttachment } from '../post/SocialPreview'
@@ -63,6 +64,7 @@ export function PostComposer({
   teamId,
   api,
   authHeader,
+  schedulingPreferences,
 }: {
   open: boolean
   mode: 'create' | 'edit'
@@ -80,6 +82,7 @@ export function PostComposer({
   teamId?: string | null
   api?: Api | null
   authHeader?: string
+  schedulingPreferences?: TeamSchedulingPreferences | null
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
   const [mobilePanel, setMobilePanel] = useState<'edit' | 'preview'>('edit')
@@ -348,6 +351,16 @@ export function PostComposer({
               onChange={(event) => setDraft((current) => ({ ...current, scheduledAt: event.target.value }))}
             />
           </label>
+
+          {teamId && api ? (
+            <ScheduleInsights
+              teamId={teamId}
+              api={api}
+              scheduledAt={draft.scheduledAt}
+              setScheduledAt={(v) => setDraft((c) => ({ ...c, scheduledAt: v }))}
+              schedulingPreferences={schedulingPreferences ?? undefined}
+            />
+          ) : null}
 
           <footer className="composer-footer-actions">
             <button

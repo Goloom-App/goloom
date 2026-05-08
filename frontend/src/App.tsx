@@ -18,6 +18,7 @@ import { defaultAccountConnectDraft, type AccountConnectDraft } from './views/ac
 import { AdminView } from './views/admin/AdminView'
 import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admin/adminTypes'
 import { MediaLibraryView } from './views/media/MediaLibraryView'
+import { RecurringPostsView } from './views/recurring/RecurringPostsView'
 import { SettingsView } from './views/settings/SettingsView'
 import {
   ApiError,
@@ -51,6 +52,7 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
   mediaLibrary: 'Media library',
   management: 'Management',
   teams: 'Team settings',
+  recurringPosts: 'Recurring posts',
   accounts: 'Accounts',
   settings: 'Settings',
   admin: 'Admin',
@@ -112,6 +114,8 @@ function App() {
   const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
   const [teamSettingsName, setTeamSettingsName] = useState('')
   const [teamSettingsDescription, setTeamSettingsDescription] = useState('')
+  const [teamSchedulingTimezone, setTeamSchedulingTimezone] = useState('UTC')
+  const [teamSchedulingSlotsCsv, setTeamSchedulingSlotsCsv] = useState('')
   const [addMemberUserId, setAddMemberUserId] = useState('')
   const [addMemberRole, setAddMemberRole] = useState<'editor' | 'viewer'>('editor')
   const [memberRoleEdits, setMemberRoleEdits] = useState<Record<string, TeamRole>>({})
@@ -638,6 +642,7 @@ function App() {
   const sidebarWorkspaceNav: { id: AppSection; label: string; icon: IconName }[] = useMemo(
     () => [
       { id: 'teams', label: 'Team settings', icon: 'teams' },
+      { id: 'recurringPosts', label: 'Recurring', icon: 'channels' },
       { id: 'accounts', label: 'Accounts', icon: 'share' },
       { id: 'analytics', label: 'Analytics', icon: 'chart' },
     ],
@@ -716,11 +721,15 @@ function App() {
     if (!selectedTeam) {
       setTeamSettingsName('')
       setTeamSettingsDescription('')
+      setTeamSchedulingTimezone('UTC')
+      setTeamSchedulingSlotsCsv('')
       setMemberRoleEdits({})
       return
     }
     setTeamSettingsName(selectedTeam.name)
     setTeamSettingsDescription(selectedTeam.description ?? '')
+    setTeamSchedulingTimezone(selectedTeam.schedulingPreferences?.timezone ?? 'UTC')
+    setTeamSchedulingSlotsCsv((selectedTeam.schedulingPreferences?.default_timeslots ?? []).join(', '))
     setMemberRoleEdits(Object.fromEntries(selectedTeam.members.map((member) => [member.userId, member.role])))
   }, [selectedTeam])
 
@@ -873,9 +882,18 @@ function App() {
       return
     }
     await runAction(async () => {
+      const slots = teamSchedulingSlotsCsv
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
       await api.updateTeam(selectedTeam.id, {
         name,
         description: teamSettingsDescription.trim(),
+        scheduling_preferences: {
+          timezone: teamSchedulingTimezone.trim() || 'UTC',
+          default_timeslots: slots,
+          posting_windows: selectedTeam.schedulingPreferences?.posting_windows ?? [],
+        },
       })
       await loadDashboard({ silent: true })
     }, 'Team settings updated')
@@ -1542,6 +1560,9 @@ function App() {
                 <button type="button" className="button button--secondary management-hub__item" onClick={() => setSection('teams')}>
                   Team settings
                 </button>
+                <button type="button" className="button button--secondary management-hub__item" onClick={() => setSection('recurringPosts')}>
+                  Recurring posts
+                </button>
                 <button type="button" className="button button--secondary management-hub__item" onClick={() => setSection('accounts')}>
                   Accounts
                 </button>
@@ -1568,6 +1589,18 @@ function App() {
               accounts={accounts}
             />
           )}
+
+          {section === 'recurringPosts' && api && effectiveSelectedTeamId ? (
+            <RecurringPostsView
+              teamId={effectiveSelectedTeamId}
+              api={api}
+              accounts={teamAccounts}
+              canEdit={canEditScheduledPosts}
+              onStatus={(msg) => setStatusMessage(msg)}
+            />
+          ) : section === 'recurringPosts' ? (
+            <p className="hint">Connect and select a workspace to manage recurring templates.</p>
+          ) : null}
 
           {section === 'analytics' && api && effectiveSelectedTeamId ? (
             <AnalyticsView
@@ -1623,6 +1656,23 @@ function App() {
                     >
                       Save
                     </button>
+                  </div>
+
+                  <h4 className="subsection-title" style={{ marginTop: '1rem' }}>Smart scheduling defaults</h4>
+                  <p className="hint">Composer uses default timeslots as quick picks; engagement heatmap uses posted analytics (UTC).</p>
+                  <div className="inline-cluster" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <label className="field" style={{ minWidth: '12rem' }}>
+                      <span>Timezone (IANA)</span>
+                      <input value={teamSchedulingTimezone} onChange={(event) => setTeamSchedulingTimezone(event.target.value)} placeholder="UTC" />
+                    </label>
+                    <label className="field" style={{ minWidth: '18rem', flex: '1 1 18rem' }}>
+                      <span>Preferred default timeslots</span>
+                      <input
+                        value={teamSchedulingSlotsCsv}
+                        onChange={(event) => setTeamSchedulingSlotsCsv(event.target.value)}
+                        placeholder="09:00, 12:30, 18:00"
+                      />
+                    </label>
                   </div>
 
                   <h4 className="subsection-title" style={{ marginTop: '1rem' }}>Members & access</h4>
@@ -1860,6 +1910,7 @@ function App() {
               }
             : undefined
         }
+        schedulingPreferences={selectedTeam?.schedulingPreferences}
       />
 
       <nav className="mobile-nav">
@@ -1892,7 +1943,7 @@ function App() {
         </button>
         <button
           type="button"
-          className={(section === 'management' || section === 'teams' || section === 'accounts' || section === 'admin' || section === 'analytics' || section === 'archive') ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
+          className={(section === 'management' || section === 'teams' || section === 'recurringPosts' || section === 'accounts' || section === 'admin' || section === 'analytics' || section === 'archive') ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
           onClick={() => setSection('management')}
           aria-label="Management"
         >

@@ -7,6 +7,7 @@ export type AppSection =
   | 'mediaLibrary'
   | 'management'
   | 'teams'
+  | 'recurringPosts'
   | 'accounts'
   | 'settings'
   | 'admin'
@@ -55,6 +56,12 @@ export interface AccountRecord {
   maxChars: number
 }
 
+export interface TeamSchedulingPreferences {
+  timezone: string
+  posting_windows: Array<{ weekday: number; start: string; end: string }>
+  default_timeslots: string[]
+}
+
 export interface TeamRecord {
   id: string
   name: string
@@ -63,6 +70,7 @@ export interface TeamRecord {
   accountIds: string[]
   isPersonal: boolean
   personalForUserId?: string
+  schedulingPreferences?: TeamSchedulingPreferences
 }
 
 export interface PostRecord {

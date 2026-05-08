@@ -24,6 +24,12 @@ export interface BackendUser {
   created_at: string
 }
 
+export interface BackendTeamSchedulingPreferences {
+  timezone: string
+  posting_windows: Array<{ weekday: number; start: string; end: string }>
+  default_timeslots: string[]
+}
+
 export interface BackendTeam {
   id: string
   name: string
@@ -31,6 +37,25 @@ export interface BackendTeam {
   created_at: string
   is_personal: boolean
   personal_for_user_id?: string
+  scheduling_preferences?: BackendTeamSchedulingPreferences
+}
+
+export interface BackendPostTemplate {
+  id: string
+  team_id: string
+  author_user_id: string
+  title: string
+  content: string
+  recurrence_json: string
+  visibility: string
+  media_ids?: string[]
+  media_exclude_by_account?: Record<string, string[]>
+  target_account_ids: string[]
+  enabled: boolean
+  next_materialize_at?: string
+  counter_next: number
+  created_at: string
+  updated_at: string
 }
 
 export interface BackendMembership {
@@ -282,7 +307,14 @@ export function createApiClient(options: ApiClientOptions) {
         body: JSON.stringify(payload),
       })
     },
-    updateTeam(teamID: string, payload: { name: string; description: string }) {
+    updateTeam(
+      teamID: string,
+      payload: {
+        name: string
+        description: string
+        scheduling_preferences?: BackendTeamSchedulingPreferences
+      },
+    ) {
       return request<BackendTeam>(options, `/v1/teams/${teamID}`, {
         method: 'PATCH',
         headers: buildHeaders(options.token),
@@ -620,6 +652,64 @@ export function createApiClient(options: ApiClientOptions) {
         method: 'PATCH',
         headers: buildHeaders(options.token),
         body: JSON.stringify(payload),
+      })
+    },
+    getTeamEngagementHours(teamID: string, opts?: { days?: number }) {
+      const q = opts?.days != null && opts.days > 0 ? `?days=${encodeURIComponent(String(opts.days))}` : ''
+      return request<{ hours: { hour: number; score: number }[] }>(
+        options,
+        `/v1/teams/${teamID}/analytics/engagement-hours${q}`,
+        {
+          headers: buildHeaders(options.token, false),
+        },
+      )
+    },
+    listPostTemplates(teamID: string) {
+      return request<{ items: BackendPostTemplate[] }>(options, `/v1/teams/${teamID}/post-templates`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    createPostTemplate(
+      teamID: string,
+      payload: {
+        title: string
+        content: string
+        recurrence_json: string
+        visibility?: string
+        media_ids?: string[]
+        media_exclude_by_account?: Record<string, string[]>
+        target_account_ids: string[]
+        enabled?: boolean
+      },
+    ) {
+      return request<BackendPostTemplate>(options, `/v1/teams/${teamID}/post-templates`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    updatePostTemplate(
+      teamID: string,
+      templateID: string,
+      payload: Record<string, unknown>,
+    ) {
+      return request<BackendPostTemplate>(options, `/v1/teams/${teamID}/post-templates/${templateID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    deletePostTemplate(teamID: string, templateID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/post-templates/${templateID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    skipPostTemplateOccurrence(teamID: string, templateID: string, occurrenceAtIso: string) {
+      return request<void>(options, `/v1/teams/${teamID}/post-templates/${templateID}/skip`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify({ occurrence_at: occurrenceAtIso }),
       })
     },
   }

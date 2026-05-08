@@ -88,17 +88,17 @@ This roadmap outlines the logical progression for implementing the full feature 
 ## Phase 7: Advanced Scheduling & Dynamic Templates
 *Goal: Implement logic-based recurrence, smart scheduling defaults, and a factory-based template engine.*
 
-- [ ] **Dynamic Variable Engine**
+- [x] **Dynamic Variable Engine**
     - Implement server-side replacement of `{year}`, `{month}`, `{day}`, and `{counter}` at publish time.
     - [Ref: REQUIREMENTS.md (Section 5)](REQUIREMENTS.md#5-content-creation--optimization)
-- [ ] **Post Template & Recurrence Engine**
+- [x] **Post Template & Recurrence Engine**
     - Implement `PostTemplate` model and the logic-based resolver (e.g., "3 days before X").
     - Build the background worker that generates individual `ScheduledPost` instances.
     - [Ref: ADVANCED_SCHEDULING.md](ADVANCED_SCHEDULING.md)
-- [ ] **Smart Scheduling & Advanced UI**
+- [x] **Smart Scheduling & Advanced UI**
     - Support team-level "Preferred Posting Windows" and "Default Timeslots".
     - Build a custom clock selector with 12h/24h toggle and engagement heatmap visualization.
-- [ ] **Recurring Content Management View**
+- [x] **Recurring Content Management View**
     - Create a dedicated "Recurring Posts" view in the Workspace section for managing templates and skipping iterations.
 
 ---

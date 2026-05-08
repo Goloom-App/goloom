@@ -17,6 +17,7 @@ import type {
   RuntimeConfigRecord,
   TeamMemberRecord,
   TeamRecord,
+  TeamSchedulingPreferences,
   UserRecord,
 } from './types'
 
@@ -54,6 +55,14 @@ export function toUserRecord(user: BackendUser): UserRecord {
 }
 
 export function toTeamRecord(team: BackendTeam, members: TeamMemberRecord[], accountIds: string[]): TeamRecord {
+  let scheduling: TeamSchedulingPreferences | undefined
+  if (team.scheduling_preferences) {
+    scheduling = {
+      timezone: team.scheduling_preferences.timezone || 'UTC',
+      posting_windows: team.scheduling_preferences.posting_windows ?? [],
+      default_timeslots: team.scheduling_preferences.default_timeslots ?? [],
+    }
+  }
   return {
     id: team.id,
     name: team.name,
@@ -62,6 +71,7 @@ export function toTeamRecord(team: BackendTeam, members: TeamMemberRecord[], acc
     accountIds,
     isPersonal: Boolean(team.is_personal),
     personalForUserId: team.personal_for_user_id,
+    schedulingPreferences: scheduling,
   }
 }
 
