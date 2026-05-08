@@ -142,6 +142,9 @@ jobs:
           TAGS: ${{ steps.image-meta.outputs.tags }}
           REPOSITORY: ${{ github.repository }}
           GITHUB_WORKSPACE: ${{ github.workspace }}
+          SERVER_URL: ${{ github.server_url }}
+          SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           destinations=""
           for tag in ${TAGS}; do
@@ -170,6 +173,33 @@ jobs:
                 break
               fi
             done
+          fi
+
+          # Some runner/container combos do not mount checked-out repository files into
+          # this job container. Fallback: download source archive for current commit.
+          if [ -z "${context_dir}" ] || [ -z "${dockerfile_path}" ]; then
+            archive_dir="/workspace/src"
+            archive_file="/workspace/src.tar.gz"
+            archive_url="${SERVER_URL%/}/${REPOSITORY}/archive/${SHA}.tar.gz"
+
+            rm -rf "${archive_dir}" "${archive_file}"
+            mkdir -p "${archive_dir}"
+
+            if [ -n "${GITHUB_TOKEN}" ]; then
+              /busybox/wget \
+                --header "Authorization: token ${GITHUB_TOKEN}" \
+                -O "${archive_file}" \
+                "${archive_url}"
+            else
+              /busybox/wget -O "${archive_file}" "${archive_url}"
+            fi
+
+            tar -xzf "${archive_file}" -C "${archive_dir}" --strip-components=1
+
+            if [ -f "${archive_dir}/Dockerfile" ]; then
+              context_dir="${archive_dir}"
+              dockerfile_path="${archive_dir}/Dockerfile"
+            fi
           fi
 
           if [ -z "${context_dir}" ] || [ -z "${dockerfile_path}" ]; then
