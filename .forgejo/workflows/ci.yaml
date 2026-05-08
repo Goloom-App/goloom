@@ -3,6 +3,7 @@ name: CI/CD Workflow
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
 
@@ -73,9 +74,10 @@ jobs:
           pnpm --dir frontend install --frozen-lockfile
           pnpm --dir frontend build
 
-  build-docker:
-    name: Build Docker Image
+  publish-image:
+    name: Build and Publish Docker Image
     needs: [test]
+    if: github.event_name == 'push'
     runs-on: docker
     # Default job images have no `docker` binary. Use the official CLI image (via
     # Google’s Docker Hub mirror) and attach the host daemon socket so `docker build`
@@ -90,11 +92,105 @@ jobs:
       image: mirror.gcr.io/library/docker:cli
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
+    outputs:
+      image_ref: ${{ steps.image-meta.outputs.image_ref }}
     steps:
       - name: Install git and Node (for actions/checkout)
         run: apk add --no-cache git nodejs
 
       - uses: actions/checkout@v4
 
-      - name: Build Docker Image
-        run: docker build -t goloom:latest .
+      - name: Compute registry and tags
+        id: image-meta
+        env:
+          SERVER_URL: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          registry_host="${SERVER_URL#https://}"
+          registry_host="${registry_host#http://}"
+          registry_host="${registry_host%%/*}"
+          image_repo="${registry_host}/${REPOSITORY}"
+          sha_tag="sha-${SHA}"
+
+          if [ "${REF_TYPE}" = "tag" ]; then
+            release_tag="${REF_NAME}"
+            tags="${image_repo}:${sha_tag} ${image_repo}:${release_tag} ${image_repo}:latest"
+          else
+            tags="${image_repo}:${sha_tag} ${image_repo}:latest"
+          fi
+
+          image_ref="${image_repo}:${sha_tag}"
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Forgejo registry
+        env:
+          SERVER_URL: ${{ github.server_url }}
+          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          if [ -z "${REGISTRY_USER}" ] || [ -z "${REGISTRY_PASSWORD}" ]; then
+            echo "Missing REGISTRY_USER or REGISTRY_PASSWORD secret"
+            exit 1
+          fi
+
+          registry_host="${SERVER_URL#https://}"
+          registry_host="${registry_host#http://}"
+          registry_host="${registry_host%%/*}"
+          echo "${REGISTRY_PASSWORD}" | docker login "${registry_host}" -u "${REGISTRY_USER}" --password-stdin
+
+      - name: Build and push image tags
+        env:
+          TAGS: ${{ steps.image-meta.outputs.tags }}
+        run: |
+          first_tag="${TAGS%% *}"
+          docker build -t "${first_tag}" .
+          for tag in ${TAGS}; do
+            if [ "${tag}" != "${first_tag}" ]; then
+              docker tag "${first_tag}" "${tag}"
+            fi
+            docker push "${tag}"
+          done
+
+  deploy-dockhand:
+    name: Trigger Dockhand Deployment
+    needs: [publish-image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: docker
+    container:
+      image: mirror.gcr.io/library/alpine:3.22
+    steps:
+      - name: Trigger Dockhand webhook
+        env:
+          DOCKHAND_WEBHOOK_URL: ${{ secrets.DOCKHAND_WEBHOOK_URL }}
+          DOCKHAND_WEBHOOK_TOKEN: ${{ secrets.DOCKHAND_WEBHOOK_TOKEN }}
+          IMAGE_REF: ${{ needs.publish-image.outputs.image_ref }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -z "${DOCKHAND_WEBHOOK_URL}" ]; then
+            echo "Missing DOCKHAND_WEBHOOK_URL secret"
+            exit 1
+          fi
+
+          apk add --no-cache curl
+
+          payload="{\"repository\":\"${REPOSITORY}\",\"ref\":\"${REF_NAME}\",\"sha\":\"${SHA}\",\"image_ref\":\"${IMAGE_REF}\"}"
+
+          # Dockhand can use image_ref directly for compose update logic.
+          if [ -n "${DOCKHAND_WEBHOOK_TOKEN}" ]; then
+            curl --fail --show-error --silent \
+              -X POST "${DOCKHAND_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${DOCKHAND_WEBHOOK_TOKEN}" \
+              -d "${payload}"
+          else
+            curl --fail --show-error --silent \
+              -X POST "${DOCKHAND_WEBHOOK_URL}" \
+              -H "Content-Type: application/json" \
+              -d "${payload}"
+          fi
