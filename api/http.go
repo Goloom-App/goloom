@@ -108,6 +108,12 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePostAnalytics))))
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostVersions))))
 	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePatchPostVersions))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-hours", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamEngagementHourHistogram))))
+	mux.Handle("GET /v1/teams/{teamID}/post-templates", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostTemplates))))
+	mux.Handle("POST /v1/teams/{teamID}/post-templates", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreatePostTemplate))))
+	mux.Handle("PATCH /v1/teams/{teamID}/post-templates/{templateID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdatePostTemplate))))
+	mux.Handle("DELETE /v1/teams/{teamID}/post-templates/{templateID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeletePostTemplate))))
+	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/skip", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleSkipPostTemplateOccurrence))))
 
 	chain := security.CORSMiddleware(allowedOrigins)(limiter.Middleware(mux))
 	if a.log != nil {
