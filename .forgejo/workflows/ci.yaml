@@ -155,13 +155,10 @@ jobs:
             "https://${registry_host}/v2/" || true
 
       - name: Ensure container DNS works
-        env:
-          SERVER_URL: ${{ github.server_url }}
         run: |
-          if ! grep -q '^nameserver' /etc/resolv.conf 2>/dev/null; then
-            echo "No nameserver in /etc/resolv.conf, injecting public resolvers"
-            printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\n' > /etc/resolv.conf
-          fi
+          echo "Forcing internal resolver 192.168.10.1"
+          printf 'nameserver 192.168.10.1\n' > /etc/resolv.conf
+          cat /etc/resolv.conf
 
       - name: Login to Forgejo registry
         env:
