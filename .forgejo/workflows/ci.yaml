@@ -79,24 +79,14 @@ jobs:
     needs: [test]
     if: github.event_name == 'push'
     runs-on: docker
-    # Default job images have no `docker` binary. Use the official CLI image (via
-    # Google’s Docker Hub mirror) and attach the host daemon socket so `docker build`
-    # talks to the runner’s Docker.
-    #
-    # act_runner: allow this bind in config, e.g.
-    #   container:
-    #     valid_volumes:
-    #       - /var/run/docker.sock
-    #       - '**'   # only if you accept the security trade-offs
+    # Use daemonless build/push so runner does not need /var/run/docker.sock.
     container:
-      image: mirror.gcr.io/library/docker:cli
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
+      image: gcr.io/kaniko-project/executor:v1.23.2-debug
     outputs:
       image_ref: ${{ steps.image-meta.outputs.image_ref }}
     steps:
       - name: Install git and Node (for actions/checkout)
-        run: apk add --no-cache git nodejs
+        run: /busybox/sh -c "apk add --no-cache git nodejs"
 
       - uses: actions/checkout@v4
 
@@ -140,20 +130,33 @@ jobs:
           registry_host="${SERVER_URL#https://}"
           registry_host="${registry_host#http://}"
           registry_host="${registry_host%%/*}"
-          echo "${REGISTRY_PASSWORD}" | docker login "${registry_host}" -u "${REGISTRY_USER}" --password-stdin
+          auth_b64="$(printf '%s' "${REGISTRY_USER}:${REGISTRY_PASSWORD}" | base64 | tr -d '\n')"
+          mkdir -p /kaniko/.docker
+          cat > /kaniko/.docker/config.json <<EOF
+          {
+            "auths": {
+              "${registry_host}": {
+                "auth": "${auth_b64}"
+              }
+            }
+          }
+          EOF
 
-      - name: Build and push image tags
+      - name: Build and push image tags (kaniko)
         env:
           TAGS: ${{ steps.image-meta.outputs.tags }}
         run: |
-          first_tag="${TAGS%% *}"
-          docker build -t "${first_tag}" .
+          destinations=""
           for tag in ${TAGS}; do
-            if [ "${tag}" != "${first_tag}" ]; then
-              docker tag "${first_tag}" "${tag}"
-            fi
-            docker push "${tag}"
+            destinations="${destinations} --destination=${tag}"
           done
+
+          /kaniko/executor \
+            --context="${GITHUB_WORKSPACE}" \
+            --dockerfile="${GITHUB_WORKSPACE}/Dockerfile" \
+            --snapshot-mode=redo \
+            --use-new-run \
+            ${destinations}
 
   deploy-dockhand:
     name: Trigger Dockhand Deployment
