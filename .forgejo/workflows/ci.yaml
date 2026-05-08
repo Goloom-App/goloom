@@ -147,8 +147,8 @@ jobs:
           done
 
           /kaniko/executor \
-            --context="${GITHUB_WORKSPACE}" \
-            --dockerfile="${GITHUB_WORKSPACE}/Dockerfile" \
+            --context=. \
+            --dockerfile=Dockerfile \
             --snapshot-mode=redo \
             --use-new-run \
             ${destinations}
