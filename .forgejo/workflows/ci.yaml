@@ -16,7 +16,7 @@ jobs:
       matrix:
         include:
           - name: "Test Backend (Go)"
-            image: golang:1.22-alpine # Standard-Images nutzen, falls möglich
+            image: golang:1.22-alpine
             suite: backend
           - name: "Test Frontend (Node.js)"
             image: node:20-alpine
@@ -25,22 +25,19 @@ jobs:
     container:
       image: ${{ matrix.image }}
     steps:
-      # Zentrales Setup für Forgejo Runner (Node & Git werden für Actions benötigt)
-      - name: Install Runtime Deps
+      - name: Install Runtime Deps (Git/Node for Checkout)
         run: |
           apk add --no-cache git nodejs npm 2>/dev/null || \
           (apt-get update && apt-get install -y git nodejs)
 
       - uses: actions/checkout@v4
 
-      # Backend Logic
       - name: Go Tests
         if: matrix.suite == 'backend'
         run: |
           export GOCACHE=/tmp/go-build
           go test -v ./...
 
-      # Frontend Logic
       - name: Frontend Build
         if: matrix.suite == 'frontend'
         run: |
@@ -54,58 +51,57 @@ jobs:
     needs: [test]
     if: github.event_name == 'push'
     runs-on: docker
-    container:
-      image: quay.io/buildah/stable:v1.41
     outputs:
-      image_ref: ${{ steps.meta.outputs.image_ref }}
+      image_ref: ${{ steps.registry.outputs.image_ref }}
     steps:
-      - name: Install Node/Git
-        run: apk add --no-cache git nodejs
-      
       - uses: actions/checkout@v4
 
-      - name: Image Meta & Login
-        id: meta
-        env:
-          REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Set up Registry & Image Ref
+        id: registry
         run: |
-          REGISTRY="${GITHUB_SERVER_URL#*//}"
-          IMAGE_REPO="${REGISTRY}/${GITHUB_REPOSITORY}"
-          SHA_TAG="sha-${GITHUB_SHA::7}"
-          
-          echo "${REGISTRY_PASSWORD}" | buildah login -u "${REGISTRY_USER}" --password-stdin "${REGISTRY}"
-          
-          echo "image_ref=${IMAGE_REPO}:${SHA_TAG}" >> "$GITHUB_OUTPUT"
-          echo "repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=${SHA_TAG}" >> "$GITHUB_OUTPUT"
+          DOMAIN="${GITHUB_SERVER_URL#*//}"
+          echo "domain=${DOMAIN}" >> "$GITHUB_OUTPUT"
+          echo "image_ref=${DOMAIN}/${GITHUB_REPOSITORY}:sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and Push
-        run: |
-          export STORAGE_DRIVER=vfs
-          IMAGE="${{ steps.meta.outputs.image_ref }}"
-          LATEST="${{ steps.meta.outputs.repo }}:latest"
-          
-          buildah bud --format docker -t "$IMAGE" .
-          buildah tag "$IMAGE" "$LATEST"
-          
-          buildah push "$IMAGE" "docker://$IMAGE"
-          buildah push "$LATEST" "docker://$LATEST"
-          
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            TAG_REF="${{ steps.meta.outputs.repo }}:${{ github.ref_name }}"
-            buildah tag "$IMAGE" "$TAG_REF"
-            buildah push "$TAG_REF" "docker://$TAG_REF"
-          fi
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log into registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ steps.registry.outputs.domain }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.registry.outputs.domain }}/${{ github.repository }}
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
-    name: Deploy
+    name: Trigger Dockhand Deployment
     needs: [publish-image]
     if: github.ref == 'refs/heads/main'
     runs-on: docker
-    container: image: alpine:3.22
+    container:
+      image: alpine:3.22
     steps:
-      - name: Webhook
+      - name: Trigger Webhook
         run: |
           apk add --no-cache curl
           curl --fail -X POST "${{ secrets.DOCKHAND_WEBHOOK_URL }}" \
