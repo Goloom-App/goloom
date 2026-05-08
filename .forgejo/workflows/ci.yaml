@@ -16,10 +16,10 @@ jobs:
       matrix:
         include:
           - name: "Test Backend (Go)"
-            image: golang:1.26.2-alpine3.22
+            image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
             suite: backend
           - name: "Test Frontend (Node.js)"
-            image: node:lts-alpine
+            image: ghcr.io/psarossy/node:lts
             suite: frontend
 
     container:
