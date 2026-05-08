@@ -81,6 +81,10 @@ jobs:
     runs-on: docker
     container:
       image: quay.io/buildah/stable:v1.41
+      # quay.io/buildah/stable under act/docker: buildah login can get "socket: permission denied"
+      # on HTTPS to registry while git fetch works (SELinux/seccomp/cap interaction). Scoped
+      # to this job only. Tighten runner/image later if you switch off build-in-docker.
+      options: --privileged
     outputs:
       image_ref: ${{ steps.image-meta.outputs.image_ref }}
     steps:
