@@ -189,7 +189,7 @@ export function PostComposer({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className={`composer-container composer-container--enhanced ${isMobile ? 'composer-container--mobile' : ''}`} onClick={(event) => event.stopPropagation()}>
-        <div className="composer-main">
+        <div className={`composer-main ${isMobile ? 'composer-main--mobile' : ''}`}>
           <header>
             <p className="eyebrow">Composer</p>
             <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
@@ -197,10 +197,22 @@ export function PostComposer({
 
           {isMobile ? (
             <div className="composer-mobile-tabs" role="tablist" aria-label="Composer mobile panel">
-              <button type="button" role="tab" aria-selected={mobilePanel === 'edit'} className={`button button--secondary ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('edit')}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mobilePanel === 'edit'}
+                className={`composer-mobile-tab ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`}
+                onClick={() => setMobilePanel('edit')}
+              >
                 Edit
               </button>
-              <button type="button" role="tab" aria-selected={mobilePanel === 'preview'} className={`button button--secondary ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('preview')}>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mobilePanel === 'preview'}
+                className={`composer-mobile-tab ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`}
+                onClick={() => setMobilePanel('preview')}
+              >
                 Preview
               </button>
             </div>
@@ -357,7 +369,9 @@ export function PostComposer({
           </div>
         </div>
 
-        <aside className={`composer-sidebar composer-sidebar--stack ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}>
+        <aside
+          className={`composer-sidebar composer-sidebar--stack ${isMobile ? 'composer-sidebar--mobile' : ''} ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}
+        >
           <p className="eyebrow">Destinations</p>
           <div className="composer-destination-row" role="group" aria-label="Post destinations">
             {teamAccounts.map((account) => {

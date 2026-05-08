@@ -1,5 +1,5 @@
 import { addMonths, format, parseISO, startOfMonth, subMonths } from 'date-fns'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type TouchEvent } from 'react'
 import { Icon } from '../../icons'
 import type { PostRecord } from '../../types'
 import { calendarCellsForMonth } from './calendarUtils'
@@ -30,6 +30,7 @@ export function ContentCalendarView({
   handleCalendarPostDrop: (postId: string, targetDay: Date) => void | Promise<void>
 }) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(isMobile ? 'list' : 'grid')
+  const [calendarTouchStart, setCalendarTouchStart] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     setViewMode(isMobile ? 'list' : 'grid')
@@ -58,8 +59,44 @@ export function ContentCalendarView({
       .sort((left, right) => left.day.getTime() - right.day.getTime())
   }, [contentCalendarMonth, plannedPostsForContentCalendar])
 
+  function onTouchStart(event: TouchEvent) {
+    const point = event.touches[0]
+    if (point) {
+      setCalendarTouchStart({ x: point.clientX, y: point.clientY })
+    }
+  }
+
+  function onTouchEnd(event: TouchEvent) {
+    if (!calendarTouchStart) {
+      return
+    }
+    const point = event.changedTouches[0]
+    if (!point) {
+      setCalendarTouchStart(null)
+      return
+    }
+
+    const deltaX = point.clientX - calendarTouchStart.x
+    const deltaY = point.clientY - calendarTouchStart.y
+    const swipeDistance = Math.abs(deltaX)
+    const verticalDistance = Math.abs(deltaY)
+    if (swipeDistance > 56 && swipeDistance > verticalDistance * 1.4) {
+      setContentCalendarMonth((current) => (deltaX > 0 ? startOfMonth(subMonths(current, 1)) : startOfMonth(addMonths(current, 1))))
+    }
+    setCalendarTouchStart(null)
+  }
+
+  function onTouchCancel() {
+    setCalendarTouchStart(null)
+  }
+
   return (
-    <div className="content-calendar-view">
+    <div
+      className="content-calendar-view"
+      onTouchStart={isMobile ? onTouchStart : undefined}
+      onTouchEnd={isMobile ? onTouchEnd : undefined}
+      onTouchCancel={isMobile ? onTouchCancel : undefined}
+    >
       <div className="content-calendar__toolbar glass-panel">
         <button
           type="button"

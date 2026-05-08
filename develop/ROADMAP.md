@@ -79,6 +79,9 @@ This roadmap outlines the logical progression for implementing the full feature 
     - Add `manifest.json`, theme colors, and standalone display support.
 - [x] **Mobile-Specific Views**
     - Vertical list view for Calendar, full-screen composer.
+- [x] **Mobile UX Refinement**
+    - Implement sticky mobile header for workspace switching, swipe gestures for calendar, and app-like tabbing for composer.
+    - [Ref: PWA_MOBILE_PLAN.md (Section 5)](PWA_MOBILE_PLAN.md#5-mobile-ux-refinement-improvement-phase)
 - [x] **Cleanup**
     - Remove deprecated Giphy and Unsplash integrations.
 

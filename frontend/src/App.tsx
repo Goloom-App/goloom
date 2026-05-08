@@ -122,6 +122,7 @@ function App() {
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
   const [showAdminProviderAdvanced, setShowAdminProviderAdvanced] = useState(false)
   const [accountDraft, setAccountDraft] = useState<AccountConnectDraft>(() => defaultAccountConnectDraft())
+  const [mobileWorkspacePickerOpen, setMobileWorkspacePickerOpen] = useState(false)
 
   const api = useMemo(() => {
     const token = activeConnection.bearerToken.trim()
@@ -821,6 +822,16 @@ function App() {
     setComposerOpen(false)
   }
 
+  function closeMobileWorkspacePicker() {
+    setMobileWorkspacePickerOpen(false)
+  }
+
+  function selectMobileTeam(teamID: string) {
+    setSelectedTeamId(teamID)
+    setSection('dashboard')
+    closeMobileWorkspacePicker()
+  }
+
   function connectBackend() {
     setActiveConnection({
       apiBaseUrl: settings.general.apiBaseUrl.trim(),
@@ -1365,6 +1376,34 @@ function App() {
       />
 
       <main className="app-main">
+        {isMobile ? (
+          <header className="mobile-workspace-header">
+            <button type="button" className="mobile-workspace-header__team" onClick={() => setMobileWorkspacePickerOpen((current) => !current)} aria-label="Open workspace selector">
+              <span className="mobile-workspace-header__avatar">{initialsFromName(selectedTeam?.name)}</span>
+              <span className="mobile-workspace-header__meta">
+                <span className="mobile-workspace-header__team-label">{selectedTeam?.name || 'Select workspace'}</span>
+                <span className="mobile-workspace-header__team-role">{selectedTeam?.isPersonal ? 'Personal workspace' : 'Workspace'}</span>
+              </span>
+              <span className="mobile-workspace-header__chevron" aria-hidden="true">
+                <Icon name="chevron-right" className="inline-icon" />
+              </span>
+            </button>
+            <button
+              type="button"
+              className="mobile-workspace-header__theme"
+              onClick={() =>
+                setSettings((current) => ({
+                  ...current,
+                  ui: { ...current.ui, colorScheme: resolvedTheme === 'dark' ? 'light' : 'dark' },
+                }))
+              }
+              title={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}
+              aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <Icon name={resolvedTheme === 'dark' ? 'sun' : 'moon'} className="inline-icon" />
+            </button>
+          </header>
+        ) : (
           <button
             type="button"
             className="theme-floating-toggle"
@@ -1379,6 +1418,54 @@ function App() {
           >
             <Icon name={resolvedTheme === 'dark' ? 'sun' : 'moon'} className="inline-icon" />
           </button>
+        )}
+        {isMobile && mobileWorkspacePickerOpen ? (
+          <div className="mobile-workspace-sheet-backdrop" onClick={closeMobileWorkspacePicker} role="presentation">
+            <div className="mobile-workspace-sheet" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+              <div className="mobile-workspace-sheet__head">
+                <p className="eyebrow">Workspace</p>
+                <button
+                  type="button"
+                  className="mobile-workspace-sheet__close"
+                  onClick={closeMobileWorkspacePicker}
+                  aria-label="Close workspace selector"
+                >
+                  <Icon name="close" className="inline-icon" />
+                </button>
+              </div>
+              <p className="hint" style={{ marginBottom: '0.75rem' }}>
+                Choose where you are working.
+              </p>
+              <div className="mobile-workspace-sheet__list">
+                {teams.length === 0 ? (
+                  <p className="hint">No workspaces loaded. Connect to backend and return.</p>
+                ) : (
+                  teams.map((team) => (
+                    <button
+                      type="button"
+                      key={team.id}
+                      className={`button button--secondary mobile-workspace-sheet__item ${team.id === effectiveSelectedTeamId ? 'mobile-workspace-sheet__item--active' : ''}`}
+                      onClick={() => selectMobileTeam(team.id)}
+                    >
+                      <span>{team.name}</span>
+                      <span className="mobile-workspace-sheet__meta">{team.isPersonal ? 'Personal' : `${team.members.length} members`}</span>
+                    </button>
+                  ))
+                )}
+                <button
+                  type="button"
+                  className="button button--secondary mobile-workspace-sheet__item"
+                  onClick={() => {
+                    setMobileWorkspacePickerOpen(false)
+                    void handleCreateTeamFromSelector()
+                  }}
+                >
+                  + Create workspace
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
           <header className="page-header">
             <div>
               <p className="eyebrow">{section === 'dashboard' ? 'Workspace' : 'Social publishing'}</p>
@@ -1876,6 +1963,17 @@ function loadInitialTeamId(): string {
     return teamFromQuery
   }
   return window.localStorage.getItem(LAST_TEAM_STORAGE_KEY)?.trim() ?? ''
+}
+
+function initialsFromName(name: string | undefined): string {
+  const parts = name?.trim().split(/\s+/).filter(Boolean) ?? []
+  if (parts.length === 0) {
+    return '?'
+  }
+  if (parts.length === 1) {
+    return parts[0]?.slice(0, 2).toUpperCase() ?? '??'
+  }
+  return `${parts[0]?.[0] ?? ''}${parts[parts.length - 1]?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
 export default App
