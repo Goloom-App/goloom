@@ -45,7 +45,7 @@ jobs:
 
       - name: Go module and build cache
         if: matrix.suite == 'backend'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /root/.cache/go-build
