@@ -49,6 +49,7 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
   archive: 'Archive',
   analytics: 'Analytics',
   mediaLibrary: 'Media library',
+  management: 'Management',
   teams: 'Team settings',
   accounts: 'Accounts',
   settings: 'Settings',
@@ -59,6 +60,11 @@ const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archiv
 
 function App() {
   const [section, setSection] = useState<AppSection>(() => loadInitialSection())
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(max-width: 900px)').matches
+      : false,
+  )
   const [systemIsDark, setSystemIsDark] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -158,6 +164,29 @@ function App() {
     }
     return systemIsDark ? 'dark' : 'light'
   }, [settings.ui.colorScheme, systemIsDark])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+    const mediaQuery = window.matchMedia('(max-width: 900px)')
+    const syncMobile = (event?: MediaQueryListEvent) => {
+      setIsMobile(event ? event.matches : mediaQuery.matches)
+    }
+    syncMobile()
+    mediaQuery.addEventListener('change', syncMobile)
+    return () => mediaQuery.removeEventListener('change', syncMobile)
+  }, [])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+    const metaTheme = document.querySelector('meta[name="theme-color"]')
+    if (metaTheme) {
+      metaTheme.setAttribute('content', resolvedTheme === 'dark' ? '#000000' : '#ffffff')
+    }
+  }, [resolvedTheme])
 
   useEffect(() => {
     if (settings.ui.colorScheme !== 'system') {
@@ -1405,6 +1434,7 @@ function App() {
 
           {section === 'contentCalendar' && (
             <ContentCalendarView
+              isMobile={isMobile}
               contentCalendarMonth={contentCalendarMonth}
               setContentCalendarMonth={setContentCalendarMonth}
               contentCalendarCells={contentCalendarCells}
@@ -1417,6 +1447,29 @@ function App() {
               handleCalendarPostDrop={handleCalendarPostDrop}
             />
           )}
+          {section === 'management' && (
+            <div className="glass-panel">
+              <h2 className="section-card__title">Management</h2>
+              <p className="hint">Team, account, settings, and admin controls in one mobile-friendly list.</p>
+              <div className="management-hub">
+                <button type="button" className="button button--secondary management-hub__item" onClick={() => setSection('teams')}>
+                  Team settings
+                </button>
+                <button type="button" className="button button--secondary management-hub__item" onClick={() => setSection('accounts')}>
+                  Accounts
+                </button>
+                <button type="button" className="button button--secondary management-hub__item" onClick={() => setSection('settings')}>
+                  Settings
+                </button>
+                {principalUser?.globalRole === 'admin' ? (
+                  <button type="button" className="button button--secondary management-hub__item" onClick={() => setSection('admin')}>
+                    Admin
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )}
+
 
           {section === 'archive' && (
             <ArchiveView
@@ -1696,6 +1749,7 @@ function App() {
       <PostComposer
         open={composerOpen}
         mode={composerMode}
+        isMobile={isMobile}
         theme={resolvedTheme}
         teamAccounts={teamAccounts}
         draft={editorDraft}
@@ -1730,12 +1784,9 @@ function App() {
         >
           <Icon name="home" className="inline-icon" />
         </button>
-        <button type="button" className={section === 'calendar' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('calendar')}>
-          <Icon name="calendar" className="inline-icon" />
-        </button>
         <button
           type="button"
-          className={section === 'contentCalendar' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
+          className={(section === 'contentCalendar' || section === 'calendar') ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
           onClick={() => setSection('contentCalendar')}
           aria-label="Content calendar"
         >
@@ -1743,17 +1794,6 @@ function App() {
         </button>
         <button type="button" className="mobile-nav__item mobile-nav__item--primary" onClick={openCreateComposer}>
           <Icon name="edit" className="inline-icon" />
-        </button>
-        <button type="button" className={section === 'archive' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('archive')}>
-          <Icon name="archive" className="inline-icon" />
-        </button>
-        <button
-          type="button"
-          className={section === 'analytics' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
-          onClick={() => setSection('analytics')}
-          aria-label="Analytics"
-        >
-          <Icon name="chart" className="inline-icon" />
         </button>
         <button
           type="button"
@@ -1763,11 +1803,13 @@ function App() {
         >
           <Icon name="image" className="inline-icon" />
         </button>
-        <button type="button" className={section === 'accounts' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('accounts')}>
-          <Icon name="share" className="inline-icon" />
-        </button>
-        <button type="button" className={section === 'settings' ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'} onClick={() => setSection('settings')}>
-          <Icon name="settings" className="inline-icon" />
+        <button
+          type="button"
+          className={(section === 'management' || section === 'teams' || section === 'accounts' || section === 'admin' || section === 'analytics' || section === 'archive') ? 'mobile-nav__item mobile-nav__item--active' : 'mobile-nav__item'}
+          onClick={() => setSection('management')}
+          aria-label="Management"
+        >
+          <Icon name="teams" className="inline-icon" />
         </button>
       </nav>
     </div>

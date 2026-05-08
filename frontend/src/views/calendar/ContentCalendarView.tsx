@@ -1,9 +1,11 @@
 import { addMonths, format, parseISO, startOfMonth, subMonths } from 'date-fns'
+import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '../../icons'
 import type { PostRecord } from '../../types'
 import { calendarCellsForMonth } from './calendarUtils'
 
 export function ContentCalendarView({
+  isMobile,
   contentCalendarMonth,
   setContentCalendarMonth,
   contentCalendarCells,
@@ -15,6 +17,7 @@ export function ContentCalendarView({
   openEditor,
   handleCalendarPostDrop,
 }: {
+  isMobile: boolean
   contentCalendarMonth: Date
   setContentCalendarMonth: (updater: (m: Date) => Date) => void
   contentCalendarCells: ReturnType<typeof calendarCellsForMonth>
@@ -26,6 +29,35 @@ export function ContentCalendarView({
   openEditor: (postId: string) => void
   handleCalendarPostDrop: (postId: string, targetDay: Date) => void | Promise<void>
 }) {
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(isMobile ? 'list' : 'grid')
+
+  useEffect(() => {
+    setViewMode(isMobile ? 'list' : 'grid')
+  }, [isMobile])
+
+  const groupedByDay = useMemo(() => {
+    const map = new Map<string, { day: Date; posts: PostRecord[] }>()
+    for (const post of plannedPostsForContentCalendar) {
+      const scheduled = parseISO(post.scheduledAt)
+      if (scheduled.getMonth() !== contentCalendarMonth.getMonth() || scheduled.getFullYear() !== contentCalendarMonth.getFullYear()) {
+        continue
+      }
+      const key = format(scheduled, 'yyyy-MM-dd')
+      const existing = map.get(key)
+      if (existing) {
+        existing.posts.push(post)
+      } else {
+        map.set(key, { day: scheduled, posts: [post] })
+      }
+    }
+    return [...map.values()]
+      .map((group) => ({
+        ...group,
+        posts: [...group.posts].sort((left, right) => parseISO(left.scheduledAt).getTime() - parseISO(right.scheduledAt).getTime()),
+      }))
+      .sort((left, right) => left.day.getTime() - right.day.getTime())
+  }, [contentCalendarMonth, plannedPostsForContentCalendar])
+
   return (
     <div className="content-calendar-view">
       <div className="content-calendar__toolbar glass-panel">
@@ -47,6 +79,15 @@ export function ContentCalendarView({
           &gt;
         </button>
       </div>
+      <div className="content-calendar__view-toggle">
+        <button type="button" className={`button button--secondary ${viewMode === 'grid' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('grid')}>
+          Grid
+        </button>
+        <button type="button" className={`button button--secondary ${viewMode === 'list' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('list')}>
+          List
+        </button>
+      </div>
+      {viewMode === 'grid' ? (
       <div className="content-calendar__grid glass-panel" role="grid" aria-label="Scheduled posts by day">
         <div className="content-calendar__weekdays" role="row">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
@@ -135,6 +176,37 @@ export function ContentCalendarView({
           })}
         </div>
       </div>
+      ) : (
+        <div className="content-calendar__list glass-panel" role="list" aria-label="Scheduled posts list">
+          {groupedByDay.length === 0 ? (
+            <p className="hint">No scheduled posts for this month.</p>
+          ) : (
+            groupedByDay.map((group) => (
+              <section key={format(group.day, 'yyyy-MM-dd')} className="content-calendar__list-day">
+                <h3 className="content-calendar__list-day-title">{format(group.day, 'EEEE, MMM d')}</h3>
+                <ul className="content-calendar__list-posts">
+                  {group.posts.map((post) => (
+                    <li key={post.id}>
+                      <button type="button" className="content-calendar__list-card" onClick={() => setExpandedPostId(post.id)}>
+                        <span className="content-calendar__list-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
+                        <span className="content-calendar__list-title">{post.title || 'Untitled'}</span>
+                        {canEditScheduledPosts ? (
+                          <button type="button" className="content-calendar__list-edit" onClick={(event) => {
+                            event.stopPropagation()
+                            openEditor(post.id)
+                          }}>
+                            <Icon name="edit" className="inline-icon" />
+                          </button>
+                        ) : null}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))
+          )}
+        </div>
+      )}
       {plannedPostsForContentCalendar.length === 0 ? (
         <p className="hint" style={{ marginTop: '1rem' }}>
           No scheduled posts for this workspace. Create a post from the schedule view or the composer.

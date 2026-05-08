@@ -50,6 +50,7 @@ function maxCharsForAccounts(accounts: AccountRecord[]) {
 export function PostComposer({
   open,
   mode,
+  isMobile,
   theme,
   teamAccounts,
   draft,
@@ -65,6 +66,7 @@ export function PostComposer({
 }: {
   open: boolean
   mode: 'create' | 'edit'
+  isMobile: boolean
   theme: 'dark' | 'light'
   teamAccounts: AccountRecord[]
   draft: EditorDraftState
@@ -80,6 +82,7 @@ export function PostComposer({
   authHeader?: string
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
+  const [mobilePanel, setMobilePanel] = useState<'edit' | 'preview'>('edit')
   const [libraryItems, setLibraryItems] = useState<BackendMediaItem[]>([])
 
   useEffect(() => {
@@ -115,6 +118,12 @@ export function PostComposer({
       setActiveTab('default')
     }
   }, [activeTab, draft.targetAccountIds])
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobilePanel('edit')
+    }
+  }, [isMobile])
 
   const maxChars = useMemo(() => {
     if (activeTab === 'default') {
@@ -179,13 +188,25 @@ export function PostComposer({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="composer-container composer-container--enhanced" onClick={(event) => event.stopPropagation()}>
+      <div className={`composer-container composer-container--enhanced ${isMobile ? 'composer-container--mobile' : ''}`} onClick={(event) => event.stopPropagation()}>
         <div className="composer-main">
           <header>
             <p className="eyebrow">Composer</p>
             <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
           </header>
 
+          {isMobile ? (
+            <div className="composer-mobile-tabs" role="tablist" aria-label="Composer mobile panel">
+              <button type="button" role="tab" aria-selected={mobilePanel === 'edit'} className={`button button--secondary ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('edit')}>
+                Edit
+              </button>
+              <button type="button" role="tab" aria-selected={mobilePanel === 'preview'} className={`button button--secondary ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('preview')}>
+                Preview
+              </button>
+            </div>
+          ) : null}
+
+          <div className={isMobile && mobilePanel === 'preview' ? 'composer-mobile-panel composer-mobile-panel--hidden' : 'composer-mobile-panel'}>
           <label className="field">
             <span>Title</span>
             <input
@@ -333,9 +354,10 @@ export function PostComposer({
               Cancel
             </button>
           </footer>
+          </div>
         </div>
 
-        <aside className="composer-sidebar composer-sidebar--stack">
+        <aside className={`composer-sidebar composer-sidebar--stack ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}>
           <p className="eyebrow">Destinations</p>
           <div className="composer-destination-row" role="group" aria-label="Post destinations">
             {teamAccounts.map((account) => {

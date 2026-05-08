@@ -19,6 +19,8 @@ body,
 #root {
   height: 100%;
   overflow: hidden;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 body {
@@ -483,6 +485,7 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 2rem;
+  transition: transform 0.2s ease;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
@@ -1500,7 +1503,7 @@ input:focus, select:focus, textarea:focus {
   background: var(--surface-raised);
   backdrop-filter: blur(var(--glass-blur));
   border-top: 1px solid var(--border);
-  justify-content: space-around;
+  justify-content: space-between;
   align-items: center;
   gap: 0.25rem;
 }
@@ -1510,6 +1513,16 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   gap: 1rem;
   max-width: 1100px;
+}
+
+.content-calendar__view-toggle {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.content-calendar__view-toggle-btn--active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .content-calendar__toolbar {
@@ -1686,7 +1699,7 @@ input:focus, select:focus, textarea:focus {
 .mobile-nav__item {
   flex: 1;
   min-width: 0;
-  max-width: 3.25rem;
+  max-width: 4rem;
   height: 48px;
   border: none;
   border-radius: 12px;
@@ -1707,6 +1720,76 @@ input:focus, select:focus, textarea:focus {
   border-radius: 14px;
   background: var(--primary);
   color: var(--primary-text);
+}
+
+.management-hub {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.management-hub__item {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.content-calendar__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.content-calendar__list-day-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+}
+
+.content-calendar__list-posts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.content-calendar__list-card {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  text-align: left;
+}
+
+.content-calendar__list-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 3.25rem;
+}
+
+.content-calendar__list-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content-calendar__list-edit {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  display: grid;
+  place-items: center;
 }
 
 @media (max-width: 1200px) {
@@ -1731,6 +1814,7 @@ input:focus, select:focus, textarea:focus {
 
   .app-main {
     max-height: 100vh;
+    padding: 1rem;
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
   }
 
@@ -1740,6 +1824,56 @@ input:focus, select:focus, textarea:focus {
 
   .mobile-nav {
     display: flex;
+  }
+
+  .dashboard-scheduled-cards {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .dashboard-scheduled-cards__item {
+    width: 100%;
+  }
+
+  .dashboard-scheduled-card {
+    width: 100%;
+  }
+
+  .analytics-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .composer-container--mobile {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+    grid-template-columns: 1fr;
+    border: none;
+  }
+
+  .modal-backdrop {
+    padding: 0;
+  }
+
+  .composer-main,
+  .composer-sidebar {
+    padding: 1rem;
+  }
+
+  .composer-mobile-tabs {
+    display: inline-flex;
+    gap: 0.5rem;
+  }
+
+  .composer-mobile-tab--active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .composer-mobile-panel--hidden {
+    display: none;
   }
 }
 

@@ -5,6 +5,7 @@ export type AppSection =
   | 'archive'
   | 'analytics'
   | 'mediaLibrary'
+  | 'management'
   | 'teams'
   | 'accounts'
   | 'settings'
