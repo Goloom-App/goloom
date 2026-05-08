@@ -9,8 +9,8 @@ on:
 
 jobs:
   test:
-    runs-on: docker
     name: ${{ matrix.name }}
+    runs-on: docker
     strategy:
       fail-fast: false
       matrix:
@@ -69,8 +69,8 @@ jobs:
           pnpm --dir frontend build
 
   publish-image:
-    runs-on: docker
     name: Build and Publish Docker Image
+    runs-on: docker
     needs: [test]
     if: github.event_name == 'push'
     container:
@@ -144,12 +144,12 @@ jobs:
           done
 
   deploy-dockhand:
-    runs-on: docker
     name: Trigger Dockhand Deployment
+    runs-on: docker
     needs: [publish-image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     container:
-      image: mirror.gcr.io/library/alpine:3.22
+      image: alpine:3.22
     steps:
       - name: Trigger Dockhand webhook
         env:
@@ -161,15 +161,24 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           if [ -z "${DOCKHAND_WEBHOOK_URL}" ]; then
-            echo "Missing DOCKHAND_WEBHOOK_URL secret"
+            echo "Error: DOCKHAND_WEBHOOK_URL is not set"
             exit 1
           fi
 
-          apk add --no-cache curl
+          apk add --no-cache curl jq
 
-          payload="{\"repository\":\"${REPOSITORY}\",\"ref\":\"${REF_NAME}\",\"sha\":\"${SHA}\",\"image_ref\":\"${IMAGE_REF}\"}"
+          # Create a clean JSON payload
+          payload=$(jq -n \
+            --arg repo "$REPOSITORY" \
+            --arg ref "$REF_NAME" \
+            --arg sha "$SHA" \
+            --arg img "$IMAGE_REF" \
+            '{repository: $repo, ref: $ref, sha: $sha, image_ref: $img}')
 
+          echo "Triggering webhook to ${DOCKHAND_WEBHOOK_URL}"
+          
           if [ -n "${DOCKHAND_WEBHOOK_TOKEN}" ]; then
+            # Try Authorization header. If it fails with 401, check if the token expects a different format.
             curl --fail --show-error --silent \
               -X POST "${DOCKHAND_WEBHOOK_URL}" \
               -H "Content-Type: application/json" \
