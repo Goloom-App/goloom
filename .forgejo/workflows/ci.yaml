@@ -9,8 +9,8 @@ on:
 
 jobs:
   test:
-    name: ${{ matrix.name }}
     runs-on: docker
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
@@ -69,8 +69,8 @@ jobs:
           pnpm --dir frontend build
 
   publish-image:
-    name: Build and Publish Docker Image
     runs-on: docker
+    name: Build and Publish Docker Image
     needs: [test]
     if: github.event_name == 'push'
     container:
@@ -144,8 +144,8 @@ jobs:
           done
 
   deploy-dockhand:
-    name: Trigger Dockhand Deployment
     runs-on: docker
+    name: Trigger Dockhand Deployment
     needs: [publish-image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     container:
@@ -165,10 +165,10 @@ jobs:
             exit 1
           fi
 
-          apk add --no-cache curl jq
+          apk add --no-cache curl jq openssl
 
           # Create a clean JSON payload
-          payload=$(jq -n \
+          payload=$(jq -nc \
             --arg repo "$REPOSITORY" \
             --arg ref "$REF_NAME" \
             --arg sha "$SHA" \
@@ -178,11 +178,14 @@ jobs:
           echo "Triggering webhook to ${DOCKHAND_WEBHOOK_URL}"
           
           if [ -n "${DOCKHAND_WEBHOOK_TOKEN}" ]; then
-            # Try Authorization header. If it fails with 401, check if the token expects a different format.
+            # Calculate HMAC-SHA256 signature (X-Hub-Signature-256 style)
+            # The signature must be the hex digest of the HMAC of the payload using the token as key.
+            sig=$(echo -n "$payload" | openssl dgst -sha256 -hmac "${DOCKHAND_WEBHOOK_TOKEN}" | sed 's/^.* //')
+            
             curl --fail --show-error --silent \
               -X POST "${DOCKHAND_WEBHOOK_URL}" \
               -H "Content-Type: application/json" \
-              -H "Authorization: Bearer ${DOCKHAND_WEBHOOK_TOKEN}" \
+              -H "X-Hub-Signature-256: sha256=${sig}" \
               -d "${payload}"
           else
             curl --fail --show-error --silent \
