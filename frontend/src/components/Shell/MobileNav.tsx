@@ -11,22 +11,37 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ currentSection, setSection, openComposer, openDrawer }: BottomNavProps) {
+  const [homeNav, calendarNav, mediaNav] = MAIN_NAV
+
   return (
     <nav className="bottom-nav">
-      {MAIN_NAV.map((item) => (
-        <button
-          key={item.id}
-          className={`nav-item ${currentSection === item.id ? 'nav-item--active' : ''}`}
-          onClick={() => setSection(item.id)}
-        >
-          <item.icon />
-          <span>{item.label}</span>
-        </button>
-      ))}
+      <button
+        className={`nav-item ${currentSection === homeNav.id ? 'nav-item--active' : ''}`}
+        onClick={() => setSection(homeNav.id)}
+      >
+        <homeNav.icon />
+        <span>{homeNav.label}</span>
+      </button>
+
+      <button
+        className={`nav-item ${currentSection === calendarNav.id ? 'nav-item--active' : ''}`}
+        onClick={() => setSection(calendarNav.id)}
+      >
+        <calendarNav.icon />
+        <span>{calendarNav.label}</span>
+      </button>
 
       <button className="nav-item nav-item--fab" onClick={openComposer}>
         <Plus size={32} strokeWidth={3} />
         <span>Post</span>
+      </button>
+
+      <button
+        className={`nav-item ${currentSection === mediaNav.id ? 'nav-item--active' : ''}`}
+        onClick={() => setSection(mediaNav.id)}
+      >
+        <mediaNav.icon />
+        <span>{mediaNav.label}</span>
       </button>
 
       <button className="nav-item" onClick={openDrawer}>

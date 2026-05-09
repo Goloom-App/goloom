@@ -1249,10 +1249,24 @@ select {
   gap: var(--space-2);
 }
 
+.drawer-list .btn--ghost {
+  background: var(--surface-muted);
+}
+.drawer-list .btn--ghost:hover {
+  background: var(--surface-hover);
+}
+
 .drawer-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
+}
+
+.drawer-grid .btn--ghost {
+  background: var(--surface-muted);
+}
+.drawer-grid .btn--ghost:hover {
+  background: var(--surface-hover);
 }
 
 .drawer-item-label {
