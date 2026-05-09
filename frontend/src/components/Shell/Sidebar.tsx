@@ -46,18 +46,18 @@ export function Sidebar({
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content className="radix-dropdown-content">
+            <DropdownMenu.Content className="radix-dropdown-content" align="start">
               {teams.map((team) => (
                 <DropdownMenu.Item
                   key={team.id}
-                  className="sidebar-nav-item"
+                  className="radix-dropdown-item"
                   onSelect={() => onSelectTeam(team.id)}
                 >
                   {team.name}
                 </DropdownMenu.Item>
               ))}
               <DropdownMenu.Separator className="divider" />
-              <DropdownMenu.Item className="sidebar-nav-item">
+              <DropdownMenu.Item className="radix-dropdown-item">
                 + Create Team
               </DropdownMenu.Item>
             </DropdownMenu.Content>

@@ -3,6 +3,7 @@ import { addDays, format, parseISO, set, startOfDay, startOfMonth } from 'date-f
 
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
+import { ComposerPreviews } from './components/Composer/ComposerPreviews'
 import { buildMediaExcludePayload, defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
@@ -186,6 +187,8 @@ function App() {
     if (metaTheme) {
       metaTheme.setAttribute('content', resolvedTheme === 'dark' ? '#000000' : '#ffffff')
     }
+    // Sync theme to document element so Radix portals (rendered to body) inherit CSS variables
+    document.documentElement.setAttribute('data-theme', resolvedTheme)
   }, [resolvedTheme])
 
   useEffect(() => {
@@ -671,7 +674,7 @@ function App() {
     [contentCalendarMonth, plannedPostsForContentCalendar],
   )
 
-  const showPreviewColumn = section === 'calendar' || section === 'archive' || section === 'contentCalendar'
+  const showPreviewColumn = section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer'
 
   const myRoleInSelectedTeam = useMemo((): TeamRole | null => {
     if (!selectedTeam || !principalUser) {
@@ -1278,49 +1281,63 @@ function App() {
       resolvedTheme={resolvedTheme}
       showPreviewColumn={showPreviewColumn}
       previewColumn={
-        <>
-          <div className="preview-header">
-            <div className="preview-header__top">
-              <div>
-                <p className="eyebrow">Live Preview</p>
-                <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
-              </div>
-              {selectedPost &&
-              (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
-              canEditScheduledPosts ? (
-                <button type="button" className="btn btn--ghost preview-header__edit" onClick={() => openEditor(selectedPost.id)}>
-                  <Edit size={16} />
-                  <span>Edit</span>
-                </button>
-              ) : null}
-            </div>
-          </div>
+        section === 'composer' && !isMobile ? (
           <div className="preview-content">
-            {selectedPost ? (
-              sharedAccountLabels(selectedPost, accounts).map((account) => (
-                <SocialPreview
-                  key={account.id}
-                  account={account}
-                  content={selectedPost.content}
-                  scheduledAt={selectedPost.scheduledAt}
-                  theme={resolvedTheme}
-                  publishedPostUrl={
-                    selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
-                  }
-                  engagement={
-                    section === 'archive' && selectedPost.status === 'posted'
-                      ? engagementForAccount(archivePreviewMetrics, account.id)
-                      : null
-                  }
-                />
-              ))
-            ) : (
-              <div className="empty-state">
-                <p className="hint">Select a post from the timeline to see how it will look on different platforms.</p>
-              </div>
-            )}
+            <ComposerPreviews
+              draft={editorDraft}
+              teamAccounts={teamAccounts}
+              teamId={selectedTeam?.id}
+              api={api}
+              authHeader={activeConnection.bearerToken.trim() ? `Bearer ${activeConnection.bearerToken.trim()}` : undefined}
+              theme={resolvedTheme}
+              libraryItems={[]}
+            />
           </div>
-        </>
+        ) : (
+          <>
+            <div className="preview-header">
+              <div className="preview-header__top">
+                <div>
+                  <p className="eyebrow">Live Preview</p>
+                  <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
+                </div>
+                {selectedPost &&
+                (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
+                canEditScheduledPosts ? (
+                  <button type="button" className="btn btn--ghost preview-header__edit" onClick={() => openEditor(selectedPost.id)}>
+                    <Edit size={16} />
+                    <span>Edit</span>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="preview-content">
+              {selectedPost ? (
+                sharedAccountLabels(selectedPost, accounts).map((account) => (
+                  <SocialPreview
+                    key={account.id}
+                    account={account}
+                    content={selectedPost.content}
+                    scheduledAt={selectedPost.scheduledAt}
+                    theme={resolvedTheme}
+                    publishedPostUrl={
+                      selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
+                    }
+                    engagement={
+                      section === 'archive' && selectedPost.status === 'posted'
+                        ? engagementForAccount(archivePreviewMetrics, account.id)
+                        : null
+                    }
+                  />
+                ))
+              ) : (
+                <div className="empty-state">
+                  <p className="hint">Select a post from the timeline to see how it will look on different platforms.</p>
+                </div>
+              )}
+            </div>
+          </>
+        )
       }
     >
       {section !== 'composer' ? (
@@ -1385,6 +1402,7 @@ function App() {
             }
             schedulingPreferences={selectedTeam?.schedulingPreferences}
             standalone
+            previewColumnExternal={!isMobile}
           />
         )}
 

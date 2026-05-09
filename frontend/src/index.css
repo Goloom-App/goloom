@@ -59,7 +59,10 @@
    Dark Theme (Default)
    Warm dark surfaces with brand purple accents
    ========================================================================== */
-.app-shell[data-theme="dark"] {
+/* Default dark theme - defined at :root so Radix portals (rendered to document.body) can access them */
+:root,
+.app-shell[data-theme="dark"],
+[data-theme="dark"] {
   --canvas: #000000;
   --surface: #0a0a0a;
   --surface-raised: #141414;
@@ -106,7 +109,9 @@
    Light Theme
    Warm off-white canvas with same brand accents
    ========================================================================== */
-.app-shell[data-theme="light"] {
+/* Light theme - also defined at global scope so Radix portals can access them */
+.app-shell[data-theme="light"],
+[data-theme="light"] {
   --canvas: #f5f5f0;
   --surface: #ffffff;
   --surface-raised: #f0efec;
@@ -1344,6 +1349,10 @@ select {
 
 .composer-container--three-col {
   grid-template-columns: 260px 1fr 340px;
+}
+
+.composer-container--two-col {
+  grid-template-columns: 260px 1fr;
 }
 
 .composer-main {
@@ -3087,6 +3096,27 @@ select {
   box-shadow: var(--shadow-lg);
   z-index: var(--z-dropdown);
   animation: overlay-show 150ms var(--ease-out);
+}
+
+.radix-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-soft);
+  cursor: pointer;
+  outline: none;
+  transition: all var(--transition-fast);
+  min-height: 36px;
+}
+
+.radix-dropdown-item:hover,
+.radix-dropdown-item[data-highlighted] {
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 /* ==========================================================================

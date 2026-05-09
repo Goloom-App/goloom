@@ -5,41 +5,12 @@ import { Icon } from '../../icons'
 import type { AccountRecord, TeamSchedulingPreferences } from '../../types'
 import { ScheduleInsights } from './ScheduleInsights'
 import { DestinationAvatar } from '../post/DestinationAvatar'
-import { SocialPreview } from '../post/SocialPreview'
-import type { SocialPreviewAttachment } from '../post/SocialPreview.types'
 import { charCounterClass, pruneMediaExcludeAfterRemove } from './editorDraft'
 import { ComposerMedia } from './ComposerMedia'
+import { ComposerPreviews, effectiveBody } from './ComposerPreviews'
 import type { EditorDraftState } from './types'
 
 type Api = ReturnType<typeof createApiClient>
-
-function attachmentsForDestination(
-  draft: EditorDraftState,
-  accountId: string,
-  teamId: string | undefined | null,
-  api: Api | null | undefined,
-  meta: Record<string, Pick<BackendMediaItem, 'filename' | 'mime_type'>>,
-): SocialPreviewAttachment[] {
-  const ex = new Set(draft.mediaExcludeByAccount[accountId] ?? [])
-  if (!teamId || !api) {
-    return []
-  }
-  return draft.mediaIds
-    .filter((id) => !ex.has(id))
-    .map((id) => ({
-      id,
-      previewUrl: api.mediaPreviewUrl(teamId, id),
-      mimeType: meta[id]?.mime_type ?? 'image/jpeg',
-      filename: meta[id]?.filename,
-    }))
-}
-
-function effectiveBody(draft: EditorDraftState, accountId: string | null) {
-  if (!accountId || accountId === 'default') {
-    return draft.content
-  }
-  return draft.accountContentOverride[accountId] ?? draft.content
-}
 
 function maxCharsForAccounts(accounts: AccountRecord[]) {
   if (accounts.length === 0) {
@@ -86,6 +57,8 @@ export function PostComposer({
   schedulingPreferences?: TeamSchedulingPreferences | null
   /** When true, renders as a standalone page view instead of a modal overlay. */
   standalone?: boolean
+  /** When true (standalone desktop), the preview column is rendered externally by the parent */
+  previewColumnExternal?: boolean
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
   const [mobilePanel, setMobilePanel] = useState<'edit' | 'preview'>('edit')
@@ -224,28 +197,19 @@ export function PostComposer({
     </aside>
   )
 
-  const previewsPanel = (
+  const previewsPanel = !previewColumnExternal || isMobile ? (
     <aside className={`composer-sidebar composer-sidebar--previews ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}>
-      <p className="eyebrow">Live previews</p>
-      <div className="composer-preview-stack">
-        {selectedAccounts.length > 0 ? (
-          selectedAccounts.map((account) => (
-            <SocialPreview
-              key={account.id}
-              account={account}
-              content={effectiveBody(draft, account.id)}
-              scheduledAt={draft.scheduledAt}
-              theme={theme}
-              attachments={attachmentsForDestination(draft, account.id, teamId, api, libraryById)}
-              authHeader={authHeader}
-            />
-          ))
-        ) : (
-          <p className="hint">Select a destination to see previews.</p>
-        )}
-      </div>
+      <ComposerPreviews
+        draft={draft}
+        teamAccounts={teamAccounts}
+        teamId={teamId}
+        api={api}
+        authHeader={authHeader}
+        theme={theme}
+        libraryItems={libraryItems}
+      />
     </aside>
-  )
+  ) : null
 
   const composerHeader = (
     <header>
@@ -417,7 +381,7 @@ export function PostComposer({
       )
 
   const inner = (
-    <div className="composer-container composer-container--enhanced composer-container--three-col" onClick={(event) => event.stopPropagation()}>
+    <div className={`composer-container composer-container--enhanced ${previewsPanel ? 'composer-container--three-col' : 'composer-container--two-col'}`} onClick={(event) => event.stopPropagation()}>
       {destinationsPanel}
       <div className="composer-main">
         {composerHeader}
