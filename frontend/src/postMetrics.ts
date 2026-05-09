@@ -1,5 +1,5 @@
 import type { BackendPostMetric } from './api'
-import type { PreviewEngagement } from './components/post/SocialPreview'
+import type { PreviewEngagement } from './components/post/SocialPreview.types'
 
 /** Build per-account engagement from normalized API metric rows (likes, reposts, replies). */
 export function engagementForAccount(metrics: BackendPostMetric[], accountId: string): PreviewEngagement {

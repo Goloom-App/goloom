@@ -1,5 +1,5 @@
 import { format, parseISO } from 'date-fns'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
 import type { AccountRecord } from '../../types'
@@ -41,7 +41,7 @@ export function RecurringPostsView({
 
   const accountById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
 
-  async function refresh() {
+  const refresh = useCallback(async function refresh() {
     setLoading(true)
     try {
       const res = await api.listPostTemplates(teamId)
@@ -49,11 +49,11 @@ export function RecurringPostsView({
     } finally {
       setLoading(false)
     }
-  }
+  }, [api, teamId])
 
   useEffect(() => {
     void refresh()
-  }, [teamId])
+  }, [refresh])
 
   async function handleCreate() {
     if (!title.trim() || !content.trim() || targetIds.length === 0) {

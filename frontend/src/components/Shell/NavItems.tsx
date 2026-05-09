@@ -1,10 +1,10 @@
-import { Home, Calendar, Image, ChartBar, Settings, ShieldCheck, Users, RefreshCw, Share2, Archive } from 'lucide-react'
+import { Home, Calendar, Image, ChartBar, Settings, ShieldCheck, Users, RefreshCw, Share2, Archive, type LucideIcon } from 'lucide-react'
 import type { AppSection } from '../../types'
 
 export interface NavItem {
   id: AppSection
   label: string
-  icon: any
+  icon: LucideIcon
 }
 
 export const MAIN_NAV: NavItem[] = [

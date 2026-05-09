@@ -15,7 +15,7 @@ function labelHour(h: number, use24h: boolean): string {
 }
 
 /** Apply HH:mm to existing datetime-local value (preserves date part). */
-export function mergeTimeIntoDateTimeLocal(scheduledAt: string, timeHHMM: string): string {
+function mergeTimeIntoDateTimeLocal(scheduledAt: string, timeHHMM: string): string {
   const [hhS, mmS] = timeHHMM.split(':')
   const hh = Number(hhS)
   const mm = Number(mmS)

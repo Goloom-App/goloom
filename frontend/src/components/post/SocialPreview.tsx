@@ -3,15 +3,7 @@ import type { AccountRecord } from '../../types'
 import { Icon } from '../../icons'
 import { AuthMediaThumb } from '../Media/AuthMediaThumb'
 import { DestinationAvatar } from './DestinationAvatar'
-
-export type PreviewLayout = 'card' | 'mastodon' | 'bluesky' | 'friendica'
-
-export type SocialPreviewAttachment = {
-  id: string
-  previewUrl: string
-  mimeType: string
-  filename?: string
-}
+import type { PreviewLayout, SocialPreviewAttachment, PreviewEngagement } from './SocialPreview.types'
 
 function layoutClass(layout: PreviewLayout) {
   switch (layout) {
@@ -34,12 +26,6 @@ function resolveLayout(provider: AccountRecord['provider']): PreviewLayout {
     return 'friendica'
   }
   return 'mastodon'
-}
-
-export type PreviewEngagement = {
-  likes: number
-  reposts: number
-  replies: number
 }
 
 export function SocialPreview({
