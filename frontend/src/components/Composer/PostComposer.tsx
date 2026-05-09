@@ -65,6 +65,7 @@ export function PostComposer({
   api,
   authHeader,
   schedulingPreferences,
+  standalone,
 }: {
   open: boolean
   mode: 'create' | 'edit'
@@ -83,6 +84,8 @@ export function PostComposer({
   api?: Api | null
   authHeader?: string
   schedulingPreferences?: TeamSchedulingPreferences | null
+  /** When true, renders as a standalone page view instead of a modal overlay. */
+  standalone?: boolean
 }) {
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
   const [mobilePanel, setMobilePanel] = useState<'edit' | 'preview'>('edit')
@@ -189,9 +192,8 @@ export function PostComposer({
     return null
   }
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className={`composer-container composer-container--enhanced ${isMobile ? 'composer-container--mobile' : ''}`} onClick={(event) => event.stopPropagation()}>
+  const inner = (
+    <div className={`composer-container composer-container--enhanced ${isMobile ? 'composer-container--mobile' : ''}`} onClick={(event) => event.stopPropagation()}>
         <div className={`composer-main ${isMobile ? 'composer-main--mobile' : ''}`}>
           <header>
             <p className="eyebrow">Composer</p>
@@ -435,6 +437,15 @@ export function PostComposer({
           </div>
         </aside>
       </div>
+    )
+
+  if (standalone) {
+    return <div className="composer-page">{inner}</div>
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      {inner}
     </div>
   )
 }

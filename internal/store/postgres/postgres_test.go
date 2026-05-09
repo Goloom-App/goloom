@@ -292,3 +292,59 @@ func TestPostgres_GetScheduledPost_notFound(t *testing.T) {
 		t.Fatalf("want post not found, got %v", err)
 	}
 }
+
+func TestPostgres_GetScheduledPostByID_returnsFullPost(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "gspid-"+uuid.NewString(), "gspid@pg.test", "GSPID")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "gspid-"+uuid.NewString(), Description: "desc"})
+	acc, _ := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://x", Username: "x", AccessToken: "t",
+	})
+	principal := domain.AuthenticatedPrincipal{User: u}
+	tmplID := "tmpl-" + uuid.NewString()
+	tmplCtr := 3
+	post, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+		Content: "test body", ScheduledAt: time.Now().UTC(),
+		TargetAccounts:  []string{acc.ID},
+		PostTemplateID:  &tmplID,
+		TemplateCounter: &tmplCtr,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// GetScheduledPostByID must return without scan-column mismatch.
+	got, err := s.GetScheduledPostByID(ctx, post.ID)
+	if err != nil {
+		t.Fatalf("GetScheduledPostByID: %v", err)
+	}
+	if got.ID != post.ID {
+		t.Fatalf("ID: got %q, want %q", got.ID, post.ID)
+	}
+	if got.TeamID != team.ID {
+		t.Fatalf("TeamID: got %q, want %q", got.TeamID, team.ID)
+	}
+	if got.Content != "test body" {
+		t.Fatalf("Content: got %q, want %q", got.Content, "test body")
+	}
+	if len(got.TargetAccounts) != 1 || got.TargetAccounts[0] != acc.ID {
+		t.Fatalf("TargetAccounts: got %v, want [%q]", got.TargetAccounts, acc.ID)
+	}
+	if got.PostTemplateID == nil || *got.PostTemplateID != tmplID {
+		t.Fatalf("PostTemplateID: got %v, want %q", got.PostTemplateID, tmplID)
+	}
+	if got.TemplateCounter == nil || *got.TemplateCounter != tmplCtr {
+		t.Fatalf("TemplateCounter: got %v, want %d", got.TemplateCounter, tmplCtr)
+	}
+
+	// Also verify GetScheduledPost (by team+id) returns identical data.
+	byTeam, err := s.GetScheduledPost(ctx, team.ID, post.ID)
+	if err != nil {
+		t.Fatalf("GetScheduledPost: %v", err)
+	}
+	if byTeam.ID != got.ID || byTeam.TemplateCounter == nil || *byTeam.TemplateCounter != tmplCtr {
+		t.Fatalf("GetScheduledPost mismatch: %+v vs %+v", byTeam, got)
+	}
+}

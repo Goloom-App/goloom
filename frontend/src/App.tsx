@@ -53,6 +53,7 @@ const SECTION_HEADINGS: Record<AppSection, string> = {
   teams: 'Team settings',
   recurringPosts: 'Recurring posts',
   accounts: 'Accounts',
+  composer: 'Composer',
   settings: 'Settings',
   admin: 'Admin',
 }
@@ -75,6 +76,7 @@ function App() {
   const [contentCalendarMonth, setContentCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [calendarDragOverKey, setCalendarDragOverKey] = useState<string | null>(null)
   const prevSectionRef = useRef<AppSection | null>(null)
+  const prevSectionBeforeComposerRef = useRef<AppSection | null>(null)
   const [settings, setSettings] = useState<SettingsState>(() => loadStoredSettings())
   const [activeConnection, setActiveConnection] = useState(() => ({
     apiBaseUrl: loadStoredSettings().general.apiBaseUrl,
@@ -745,11 +747,12 @@ function App() {
   }
 
   function openCreateComposer() {
+    prevSectionBeforeComposerRef.current = section
     setComposerMode('create')
     setEditingPostId(null)
     setEditorDraft(defaultEditorDraft(currentDate, teamAccounts))
     setComposerOpen(true)
-    setSection('dashboard')
+    setSection('composer')
   }
 
   async function openEditor(postId: string) {
@@ -782,19 +785,16 @@ function App() {
     setEditingPostId(postId)
     setExpandedPostId(postId)
     setComposerOpen(true)
-    setSection(
-      targetPost.status === 'posted'
-        ? 'archive'
-        : section === 'contentCalendar'
-          ? 'contentCalendar'
-          : section === 'dashboard'
-            ? 'dashboard'
-            : 'calendar',
-    )
+    prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
+    setSection('composer')
   }
 
   function closeComposer() {
     setComposerOpen(false)
+    if (prevSectionBeforeComposerRef.current) {
+      setSection(prevSectionBeforeComposerRef.current)
+      prevSectionBeforeComposerRef.current = null
+    }
   }
 
   function connectBackend() {
@@ -1338,25 +1338,27 @@ function App() {
         </>
       }
     >
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">{section === 'dashboard' ? 'Workspace' : 'Social publishing'}</p>
-          <h1>{SECTION_HEADINGS[section]}</h1>
-        </div>
+      {section !== 'composer' ? (
+        <header className="page-header">
+          <div>
+            <p className="eyebrow">{section === 'dashboard' ? 'Workspace' : 'Social publishing'}</p>
+            <h1>{SECTION_HEADINGS[section]}</h1>
+          </div>
 
-        <button
-          type="button"
-          className="btn btn--ghost page-header__toggle"
-          onClick={() =>
-            setSettings((current) => ({
-              ...current,
-              ui: { ...current.ui, colorScheme: resolvedTheme === 'dark' ? 'light' : 'dark' },
-            }))
-          }
-        >
-          {resolvedTheme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-      </header>
+          <button
+            type="button"
+            className="btn btn--ghost page-header__toggle"
+            onClick={() =>
+              setSettings((current) => ({
+                ...current,
+                ui: { ...current.ui, colorScheme: resolvedTheme === 'dark' ? 'light' : 'dark' },
+              }))
+            }
+          >
+            {resolvedTheme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </header>
+      ) : null}
 
       {(error || statusMessage || loading) && dismissedNoticeKey !== noticeKey ? (
         <section className="glass-panel status-banner-panel">
@@ -1372,6 +1374,35 @@ function App() {
       ) : null}
 
       <div className="pb-section">
+        {section === 'composer' && (
+          <PostComposer
+            open={composerOpen}
+            mode={composerMode}
+            isMobile={isMobile}
+            theme={resolvedTheme}
+            teamAccounts={teamAccounts}
+            draft={editorDraft}
+            setDraft={setEditorDraft}
+            syncing={syncing}
+            onSave={() => void handleSavePost()}
+            onSaveDraft={() => void handleSaveDraft()}
+            onClose={closeComposer}
+            teamId={selectedTeam?.id}
+            api={api ?? undefined}
+            authHeader={activeConnection.bearerToken.trim() ? `Bearer ${activeConnection.bearerToken.trim()}` : undefined}
+            onMediaUpload={
+              api && selectedTeam
+                ? async (file) => {
+                    const item = await api.uploadTeamMediaToLibrary(selectedTeam.id, file)
+                    return item.id
+                  }
+                : undefined
+            }
+            schedulingPreferences={selectedTeam?.schedulingPreferences}
+            standalone
+          />
+        )}
+
         {section === 'dashboard' && selectedTeam && api ? (
           <DashboardView
             teamName={selectedTeam.name}
@@ -1409,6 +1440,8 @@ function App() {
             setCalendarDragOverKey={setCalendarDragOverKey}
             setExpandedPostId={setExpandedPostId}
             openEditor={(id) => void openEditor(id)}
+            deletePost={deletePost}
+            accounts={accounts}
             handleCalendarPostDrop={handleCalendarPostDrop}
           />
         )}
@@ -1472,6 +1505,15 @@ function App() {
                       <span>Team name</span>
                       <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
                     </label>
+                    <label className="field grow">
+                      <span>Description</span>
+                      <textarea
+                        rows={3}
+                        value={teamSettingsDescription}
+                        onChange={(event) => setTeamSettingsDescription(event.target.value)}
+                        placeholder="Describe your team's purpose and focus"
+                      />
+                    </label>
                     <button
                       type="button"
                       className="btn btn--primary"
@@ -1480,6 +1522,29 @@ function App() {
                     >
                       Save Changes
                     </button>
+                  </div>
+                </section>
+
+                <section className="stack">
+                  <h3 className="subsection-title">Scheduling</h3>
+                  <div className="flex-row--wrap">
+                    <label className="field" style={{ flex: '0 0 200px' }}>
+                      <span>Timezone</span>
+                      <input
+                        value={teamSchedulingTimezone}
+                        onChange={(event) => setTeamSchedulingTimezone(event.target.value)}
+                        placeholder="e.g. UTC, Europe/Berlin"
+                      />
+                    </label>
+                    <label className="field grow">
+                      <span>Default publishing timeslots</span>
+                      <input
+                        value={teamSchedulingSlotsCsv}
+                        onChange={(event) => setTeamSchedulingSlotsCsv(event.target.value)}
+                        placeholder="09:00, 12:00, 15:00"
+                      />
+                      <p className="hint">Comma-separated times (HH:mm) shown as quick-select buttons in the composer.</p>
+                    </label>
                   </div>
                 </section>
 
@@ -1616,31 +1681,33 @@ function App() {
         )}
       </div>
 
-      <PostComposer
-        open={composerOpen}
-        mode={composerMode}
-        isMobile={isMobile}
-        theme={resolvedTheme}
-        teamAccounts={teamAccounts}
-        draft={editorDraft}
-        setDraft={setEditorDraft}
-        syncing={syncing}
-        onSave={() => void handleSavePost()}
-        onSaveDraft={() => void handleSaveDraft()}
-        onClose={closeComposer}
-        teamId={selectedTeam?.id}
-        api={api ?? undefined}
-        authHeader={activeConnection.bearerToken.trim() ? `Bearer ${activeConnection.bearerToken.trim()}` : undefined}
-        onMediaUpload={
-          api && selectedTeam
-            ? async (file) => {
-                const item = await api.uploadTeamMediaToLibrary(selectedTeam.id, file)
-                return item.id
-              }
-            : undefined
-        }
-        schedulingPreferences={selectedTeam?.schedulingPreferences}
-      />
+      {section !== 'composer' && (
+        <PostComposer
+          open={composerOpen}
+          mode={composerMode}
+          isMobile={isMobile}
+          theme={resolvedTheme}
+          teamAccounts={teamAccounts}
+          draft={editorDraft}
+          setDraft={setEditorDraft}
+          syncing={syncing}
+          onSave={() => void handleSavePost()}
+          onSaveDraft={() => void handleSaveDraft()}
+          onClose={closeComposer}
+          teamId={selectedTeam?.id}
+          api={api ?? undefined}
+          authHeader={activeConnection.bearerToken.trim() ? `Bearer ${activeConnection.bearerToken.trim()}` : undefined}
+          onMediaUpload={
+            api && selectedTeam
+              ? async (file) => {
+                  const item = await api.uploadTeamMediaToLibrary(selectedTeam.id, file)
+                  return item.id
+                }
+              : undefined
+          }
+          schedulingPreferences={selectedTeam?.schedulingPreferences}
+        />
+      )}
     </AppShell>
   )
 }

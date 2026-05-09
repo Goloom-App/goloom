@@ -1,7 +1,8 @@
 import { addMonths, format, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { useEffect, useMemo, useState, type TouchEvent } from 'react'
 import { Icon } from '../../icons'
-import type { PostRecord } from '../../types'
+import type { AccountRecord, PostRecord } from '../../types'
+import { PostCard } from '../../components/post/PostCard'
 import { calendarCellsForMonth } from './calendarUtils'
 
 export function ContentCalendarView({
@@ -15,6 +16,8 @@ export function ContentCalendarView({
   setCalendarDragOverKey,
   setExpandedPostId,
   openEditor,
+  deletePost,
+  accounts,
   handleCalendarPostDrop,
 }: {
   isMobile: boolean
@@ -27,6 +30,8 @@ export function ContentCalendarView({
   setCalendarDragOverKey: (key: string | null | ((c: string | null) => string | null)) => void
   setExpandedPostId: (id: string) => void
   openEditor: (postId: string) => void
+  deletePost: (postId: string) => void
+  accounts: AccountRecord[]
   handleCalendarPostDrop: (postId: string, targetDay: Date) => void | Promise<void>
 }) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(isMobile ? 'list' : 'grid')
@@ -98,31 +103,35 @@ export function ContentCalendarView({
       onTouchCancel={isMobile ? onTouchCancel : undefined}
     >
       <div className="content-calendar__toolbar glass-panel">
-        <button
-          type="button"
-          className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
-          onClick={() => setContentCalendarMonth((m) => startOfMonth(subMonths(m, 1)))}
-          aria-label="Previous month"
-        >
-          &lt;
-        </button>
-        <h2 className="content-calendar__month-title">{format(contentCalendarMonth, 'MMMM yyyy')}</h2>
-        <button
-          type="button"
-          className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
-          onClick={() => setContentCalendarMonth((m) => startOfMonth(addMonths(m, 1)))}
-          aria-label="Next month"
-        >
-          &gt;
-        </button>
-      </div>
-      <div className="content-calendar__view-toggle">
-        <button type="button" className={`button button--secondary ${viewMode === 'grid' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('grid')}>
-          Grid
-        </button>
-        <button type="button" className={`button button--secondary ${viewMode === 'list' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('list')}>
-          List
-        </button>
+        <div className="content-calendar__toolbar-left">
+          <button
+            type="button"
+            className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
+            onClick={() => setContentCalendarMonth((m) => startOfMonth(subMonths(m, 1)))}
+            aria-label="Previous month"
+          >
+            &lt;
+          </button>
+          <h2 className="content-calendar__month-title">{format(contentCalendarMonth, 'MMMM yyyy')}</h2>
+          <button
+            type="button"
+            className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
+            onClick={() => setContentCalendarMonth((m) => startOfMonth(addMonths(m, 1)))}
+            aria-label="Next month"
+          >
+            &gt;
+          </button>
+        </div>
+        <div className="content-calendar__toolbar-right">
+          <div className="content-calendar__view-toggle">
+            <button type="button" className={`button button--secondary ${viewMode === 'grid' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('grid')}>
+              Grid
+            </button>
+            <button type="button" className={`button button--secondary ${viewMode === 'list' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('list')}>
+              List
+            </button>
+          </div>
+        </div>
       </div>
       {viewMode === 'grid' ? (
       <div className="content-calendar__grid glass-panel" role="grid" aria-label="Scheduled posts by day">
@@ -214,31 +223,26 @@ export function ContentCalendarView({
         </div>
       </div>
       ) : (
-        <div className="content-calendar__list glass-panel" role="list" aria-label="Scheduled posts list">
+        <div className="content-calendar__list" role="list" aria-label="Scheduled posts list">
           {groupedByDay.length === 0 ? (
             <p className="hint">No scheduled posts for this month.</p>
           ) : (
             groupedByDay.map((group) => (
               <section key={format(group.day, 'yyyy-MM-dd')} className="content-calendar__list-day">
                 <h3 className="content-calendar__list-day-title">{format(group.day, 'EEEE, MMM d')}</h3>
-                <ul className="content-calendar__list-posts">
+                <div className="content-calendar__list-posts">
                   {group.posts.map((post) => (
-                    <li key={post.id}>
-                      <button type="button" className="content-calendar__list-card" onClick={() => setExpandedPostId(post.id)}>
-                        <span className="content-calendar__list-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
-                        <span className="content-calendar__list-title">{post.title || 'Untitled'}</span>
-                        {canEditScheduledPosts ? (
-                          <button type="button" className="content-calendar__list-edit" onClick={(event) => {
-                            event.stopPropagation()
-                            openEditor(post.id)
-                          }}>
-                            <Icon name="edit" className="inline-icon" />
-                          </button>
-                        ) : null}
-                      </button>
-                    </li>
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      active={false}
+                      onClick={() => setExpandedPostId(post.id)}
+                      onEdit={() => openEditor(post.id)}
+                      onDelete={() => void deletePost(post.id)}
+                      accounts={accounts}
+                    />
                   ))}
-                </ul>
+                </div>
               </section>
             ))
           )}

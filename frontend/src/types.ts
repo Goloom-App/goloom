@@ -9,6 +9,7 @@ export type AppSection =
   | 'teams'
   | 'recurringPosts'
   | 'accounts'
+  | 'composer'
   | 'settings'
   | 'admin'
 

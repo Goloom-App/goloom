@@ -11,6 +11,10 @@ export const MAIN_NAV: NavItem[] = [
   { id: 'dashboard', label: 'Home', icon: Home },
   { id: 'contentCalendar', label: 'Calendar', icon: Calendar },
   { id: 'mediaLibrary', label: 'Media', icon: Image },
+]
+
+/** Additional nav items shown only in the mobile More drawer */
+export const MORE_NAV: NavItem[] = [
   { id: 'analytics', label: 'Analytics', icon: ChartBar },
 ]
 

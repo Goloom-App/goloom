@@ -164,6 +164,7 @@ func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
+		       p.post_template_id::text, p.template_counter,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id

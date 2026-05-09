@@ -28,17 +28,21 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <div className="sidebar-logo__mark" />
+          <div className="sidebar-logo__mark">
+            <span className="sidebar-logo__mark-layer sidebar-logo__mark-layer--a" />
+            <span className="sidebar-logo__mark-layer sidebar-logo__mark-layer--b" />
+            <span className="sidebar-logo__mark-layer sidebar-logo__mark-layer--c" />
+          </div>
           <span className="sidebar-logo__text">goloom</span>
         </div>
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
-            <button className="btn btn--ghost btn--full btn--justify-space">
+            <button className="sidebar-team-selector">
               <span className="sidebar-team-name">
                 {selectedTeam?.name || 'Select Team'}
               </span>
-              <ChevronDown size={16} />
+              <ChevronDown size={14} />
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>

@@ -80,11 +80,7 @@ export function TeamsView({
             <p className="hint mt-1">
               This is your personal workspace. Invite other users from a shared team instead.
             </p>
-          ) : (
-            <p className="hint mt-1">
-              Open workspace selector in sidebar to create a team or update members, access levels, ownership, and description.
-            </p>
-          )}
+          ) : null}
         </div>
       ) : null}
     </div>

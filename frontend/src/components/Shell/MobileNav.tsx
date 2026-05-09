@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Plus, Menu, X } from 'lucide-react'
-import { MAIN_NAV, WORKSPACE_NAV, CONFIG_NAV } from './NavItems'
+import { MAIN_NAV, MORE_NAV, WORKSPACE_NAV, CONFIG_NAV } from './NavItems'
 import type { AppSection, TeamRecord, UserRecord } from '../../types'
 
 interface BottomNavProps {
@@ -13,7 +13,7 @@ interface BottomNavProps {
 export function BottomNav({ currentSection, setSection, openComposer, openDrawer }: BottomNavProps) {
   return (
     <nav className="bottom-nav">
-      {MAIN_NAV.slice(0, 2).map((item) => (
+      {MAIN_NAV.map((item) => (
         <button
           key={item.id}
           className={`nav-item ${currentSection === item.id ? 'nav-item--active' : ''}`}
@@ -23,22 +23,11 @@ export function BottomNav({ currentSection, setSection, openComposer, openDrawer
           <span>{item.label}</span>
         </button>
       ))}
-      
+
       <button className="nav-item nav-item--fab" onClick={openComposer}>
         <Plus size={32} strokeWidth={3} />
         <span>Post</span>
       </button>
-
-      {MAIN_NAV.slice(2, 4).map((item) => (
-        <button
-          key={item.id}
-          className={`nav-item ${currentSection === item.id ? 'nav-item--active' : ''}`}
-          onClick={() => setSection(item.id)}
-        >
-          <item.icon />
-          <span>{item.label}</span>
-        </button>
-      ))}
 
       <button className="nav-item" onClick={openDrawer}>
         <Menu />
@@ -99,6 +88,25 @@ export function MobileDrawer({
                     }}
                   >
                     {team.name}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <p className="eyebrow drawer-section-label">Analytics</p>
+              <div className="drawer-list">
+                {MORE_NAV.map((item) => (
+                  <button
+                    key={item.id}
+                    className={`btn btn--ghost btn--full btn--justify-start ${currentSection === item.id ? 'btn--active' : ''}`}
+                    onClick={() => {
+                      setSection(item.id)
+                      onOpenChange(false)
+                    }}
+                  >
+                    <item.icon size={18} />
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>

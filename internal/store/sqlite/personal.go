@@ -245,7 +245,8 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status,
-		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account, created_at, updated_at
+		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
 		where id = ?`, postID)
 	if err != nil {
