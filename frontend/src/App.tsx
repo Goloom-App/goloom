@@ -1338,7 +1338,7 @@ function App() {
         </>
       }
     >
-      <header className="page-header" style={{ position: 'relative' }}>
+      <header className="page-header">
         <div>
           <p className="eyebrow">{section === 'dashboard' ? 'Workspace' : 'Social publishing'}</p>
           <h1>{SECTION_HEADINGS[section]}</h1>
@@ -1346,8 +1346,7 @@ function App() {
 
         <button
           type="button"
-          className="btn btn--ghost"
-          style={{ position: 'absolute', top: 0, right: 0 }}
+          className="btn btn--ghost page-header__toggle"
           onClick={() =>
             setSettings((current) => ({
               ...current,
@@ -1360,19 +1359,19 @@ function App() {
       </header>
 
       {(error || statusMessage || loading) && dismissedNoticeKey !== noticeKey ? (
-        <section className="glass-panel status-banner-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <section className="glass-panel status-banner-panel">
           <div>
             {loading ? <span className="hint">Loading data…</span> : null}
             {statusMessage ? <span className="status-banner__success">{statusMessage}</span> : null}
             {error ? <span className="status-banner__error">{error}</span> : null}
           </div>
-          <button className="btn btn--ghost" onClick={() => setDismissedNoticeKey(noticeKey)} style={{ padding: '0.25rem' }}>
+          <button className="btn btn--ghost btn--xs" onClick={() => setDismissedNoticeKey(noticeKey)}>
             <X size={16} />
           </button>
         </section>
       ) : null}
 
-      <div style={{ paddingBottom: 'var(--space-12)' }}>
+      <div className="pb-section">
         {section === 'dashboard' && selectedTeam && api ? (
           <DashboardView
             teamName={selectedTeam.name}
@@ -1456,9 +1455,9 @@ function App() {
         )}
 
         {section === 'teams' && selectedTeam && (
-          <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+          <div className="glass-panel stack stack--lg">
             <div>
-              <h2 style={{ marginBottom: 'var(--space-2)' }}>Team settings</h2>
+              <h2 className="mb-2">Team settings</h2>
               <p className="hint">Manage members, update access, and transfer ownership for <strong>{selectedTeam.name}</strong>.</p>
             </div>
 
@@ -1466,10 +1465,10 @@ function App() {
               <p className="hint">Personal workspace has no shared members.</p>
             ) : myRoleInSelectedTeam === 'owner' ? (
               <>
-                <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                <section className="stack">
                   <h3 className="subsection-title">General</h3>
-                  <div className="inline-cluster" style={{ flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                    <label className="field" style={{ flex: 1, minWidth: '200px' }}>
+                  <div className="flex-row--wrap">
+                    <label className="field grow">
                       <span>Team name</span>
                       <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
                     </label>
@@ -1484,19 +1483,19 @@ function App() {
                   </div>
                 </section>
 
-                <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                <section className="stack">
                   <h3 className="subsection-title">Members</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                  <div className="stack stack--sm">
                     {selectedTeam.members.map((m) => (
-                      <div key={m.userId} className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3)' }}>
+                      <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between">
                         <div>
-                          <div style={{ fontWeight: 600 }}>{directoryUserLabel(m.userId)}</div>
-                          <div className="eyebrow" style={{ fontSize: '0.65rem' }}>{m.role}</div>
+                          <strong>{directoryUserLabel(m.userId)}</strong>
+                          <p className="eyebrow">{m.role}</p>
                         </div>
                         <div className="inline-cluster">
                           <select
+                            className="select--sm"
                             value={memberRoleEdits[m.userId] ?? m.role}
-                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.85rem' }}
                             onChange={(event) =>
                               setMemberRoleEdits((current) => ({ ...current, [m.userId]: event.target.value as TeamRole }))
                             }
@@ -1506,8 +1505,7 @@ function App() {
                             <option value="viewer">Viewer</option>
                           </select>
                           <button 
-                            className="btn btn--ghost" 
-                            style={{ padding: '0.25rem 0.5rem' }}
+                            className="btn btn--ghost btn--xs"
                             onClick={() => void handleChangeTeamMemberRole(m.userId)}
                             disabled={syncing || (memberRoleEdits[m.userId] ?? m.role) === m.role}
                           >
@@ -1515,8 +1513,7 @@ function App() {
                           </button>
                           {m.userId !== principalUser?.id && (
                             <button 
-                              className="btn btn--ghost" 
-                              style={{ color: 'var(--danger)', padding: '0.25rem 0.5rem' }}
+                              className="btn btn--xs btn--danger-ghost"
                               onClick={() => void handleRemoveTeamMember(m.userId)}
                             >
                               Remove
@@ -1528,10 +1525,10 @@ function App() {
                   </div>
                 </section>
 
-                <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                <section className="stack">
                   <h3 className="subsection-title">Add Member</h3>
-                  <div className="inline-cluster" style={{ flexWrap: 'wrap' }}>
-                    <select value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)} style={{ flex: 1, minWidth: '200px' }}>
+                  <div className="inline-cluster flex-wrap">
+                    <select className="grow" value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
                       <option value="">Select user…</option>
                       {directoryUsers
                         .filter((u) => !selectedTeam.members.some((m) => m.userId === u.id))
@@ -1550,9 +1547,9 @@ function App() {
                 </section>
               </>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <div className="stack stack--sm">
                 {selectedTeam.members.map((m) => (
-                  <div key={m.userId} style={{ padding: 'var(--space-2)', borderBottom: '1px solid var(--border)' }}>
+                  <div key={m.userId} className="member-list-item">
                     {directoryUserLabel(m.userId)} ({m.role})
                   </div>
                 ))}

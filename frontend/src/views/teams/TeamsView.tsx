@@ -56,7 +56,7 @@ export function TeamsView({
             const plannedCount = teamPosts.filter((p) => p.status === 'scheduled').length
             const publishedCount = teamPosts.filter((p) => p.status === 'posted').length
             return (
-              <div className="stat-grid" style={{ marginTop: '1rem' }}>
+              <div className="stat-grid mt-1">
                 <div className="stat-tile">
                   <span className="stat-tile__label">Planned posts</span>
                   <span className="stat-tile__value">{plannedCount}</span>
@@ -77,11 +77,11 @@ export function TeamsView({
             )
           })()}
           {selectedTeam.isPersonal ? (
-            <p className="hint" style={{ marginTop: '1rem' }}>
+            <p className="hint mt-1">
               This is your personal workspace. Invite other users from a shared team instead.
             </p>
           ) : (
-            <p className="hint" style={{ marginTop: '1rem' }}>
+            <p className="hint mt-1">
               Open workspace selector in sidebar to create a team or update members, access levels, ownership, and description.
             </p>
           )}

@@ -24,7 +24,7 @@ export function BottomNav({ currentSection, setSection, openComposer, openDrawer
         </button>
       ))}
       
-      <button className="nav-item" onClick={openComposer} style={{ color: 'var(--accent)' }}>
+      <button className="nav-item nav-item--fab" onClick={openComposer}>
         <Plus size={32} strokeWidth={3} />
         <span>Post</span>
       </button>
@@ -76,29 +76,23 @@ export function MobileDrawer({
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
         <Dialog.Content className="dialog-content" data-side="bottom">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-6)' }}>
-            <Dialog.Title style={{ fontSize: '1.25rem' }}>Menu</Dialog.Title>
+          <div className="drawer-header">
+            <Dialog.Title className="drawer-title">Menu</Dialog.Title>
             <Dialog.Close asChild>
-              <button className="btn btn--ghost" style={{ padding: '0.5rem' }}>
+              <button className="btn btn--ghost btn--icon-sm">
                 <X size={20} />
               </button>
             </Dialog.Close>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
+          <div className="drawer-body">
             <section>
-              <p className="eyebrow" style={{ marginBottom: 'var(--space-2)' }}>Workspaces</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <p className="eyebrow drawer-section-label">Workspaces</p>
+              <div className="drawer-list">
                 {teams.map((team) => (
                   <button
                     key={team.id}
-                    className="btn btn--ghost"
-                    style={{ 
-                      justifyContent: 'flex-start', 
-                      width: '100%',
-                      background: team.id === selectedTeamId ? 'var(--accent-soft)' : 'transparent',
-                      color: team.id === selectedTeamId ? 'var(--accent)' : 'var(--text)'
-                    }}
+                    className={`btn btn--ghost btn--full btn--justify-start ${team.id === selectedTeamId ? 'btn--active' : ''}`}
                     onClick={() => {
                       onSelectTeam(team.id)
                       onOpenChange(false)
@@ -111,39 +105,31 @@ export function MobileDrawer({
             </section>
 
             <section>
-              <p className="eyebrow" style={{ marginBottom: 'var(--space-2)' }}>Management</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)' }}>
+              <p className="eyebrow drawer-section-label">Management</p>
+              <div className="drawer-grid">
                 {WORKSPACE_NAV.map((item) => (
                   <button
                     key={item.id}
-                    className="btn btn--ghost"
-                    style={{ 
-                      justifyContent: 'flex-start',
-                      background: currentSection === item.id ? 'var(--accent-soft)' : 'var(--surface-muted)' 
-                    }}
+                    className={`btn btn--ghost btn--justify-start ${currentSection === item.id ? 'btn--active' : ''}`}
                     onClick={() => {
                       setSection(item.id)
                       onOpenChange(false)
                     }}
                   >
                     <item.icon size={18} />
-                    <span style={{ fontSize: '0.85rem' }}>{item.label}</span>
+                    <span className="drawer-item-label">{item.label}</span>
                   </button>
                 ))}
               </div>
             </section>
 
             <section>
-              <p className="eyebrow" style={{ marginBottom: 'var(--space-2)' }}>Settings</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <p className="eyebrow drawer-section-label">Settings</p>
+              <div className="drawer-list">
                 {CONFIG_NAV.map((item) => (
                   <button
                     key={item.id}
-                    className="btn btn--ghost"
-                    style={{ 
-                      justifyContent: 'flex-start',
-                      background: currentSection === item.id ? 'var(--accent-soft)' : 'transparent'
-                    }}
+                    className={`btn btn--ghost btn--full btn--justify-start ${currentSection === item.id ? 'btn--active' : ''}`}
                     onClick={() => {
                       setSection(item.id)
                       onOpenChange(false)
@@ -156,17 +142,17 @@ export function MobileDrawer({
               </div>
             </section>
 
-            <footer style={{ paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)', display: 'grid', placeItems: 'center', fontWeight: 'bold', fontSize: '0.8rem' }}>
+            <footer className="drawer-footer">
+              <div className="drawer-user">
+                <div className="avatar avatar--sm">
                   {user?.name?.[0] || '?'}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{user?.name}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{user?.email}</span>
+                <div className="drawer-user-info">
+                  <span className="drawer-user-name">{user?.name}</span>
+                  <span className="drawer-user-email">{user?.email}</span>
                 </div>
               </div>
-              <button className="btn btn--ghost" onClick={onSignOut} style={{ color: 'var(--danger)' }}>
+              <button className="btn btn--ghost btn--danger-ghost" onClick={onSignOut}>
                 Sign Out
               </button>
             </footer>

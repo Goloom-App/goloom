@@ -131,8 +131,8 @@ export function ComposerMedia({
       ) : (
         <p className="hint">{uploadLabel ?? 'Select a workspace to attach media.'}</p>
       )}
-      {error ? <p className="status-banner__error" style={{ margin: 0 }}>{error}</p> : null}
-      {!pickerReady ? <p className="hint" style={{ margin: 0 }}>Connect with a bearer token and pick a workspace to browse the library.</p> : null}
+      {error ? <p className="status-banner__error m-0">{error}</p> : null}
+      {!pickerReady ? <p className="hint m-0">Connect with a bearer token and pick a workspace to browse the library.</p> : null}
       {mediaIds.length > 0 ? (
         <ul className="composer-media__gallery" aria-label="Attached media">
           {mediaIds.map((id) => {

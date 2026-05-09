@@ -57,7 +57,7 @@ export function SettingsView({
               onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, bearerToken: event.target.value } }))}
             />
           </label>
-          <div className="inline-cluster" style={{ marginTop: '1rem' }}>
+          <div className="inline-cluster mt-1">
             <button type="button" className="button button--primary" onClick={connectBackend}>
               Apply session
             </button>
@@ -84,12 +84,12 @@ export function SettingsView({
             </button>
           </div>
         ) : null}
-        <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '1rem', alignItems: 'flex-end' }}>
-          <label className="field" style={{ minWidth: '12rem' }}>
+        <div className="flex-row--wrap mt-1">
+          <label className="field min-w-12">
             <span>Label</span>
             <input value={newApiTokenName} onChange={(event) => setNewApiTokenName(event.target.value)} placeholder="e.g. CI, laptop" />
           </label>
-          <label className="field" style={{ minWidth: '11rem' }}>
+          <label className="field min-w-11">
             <span>Expires (UTC end of day)</span>
             <input type="date" value={newApiTokenExpiresYmd} onChange={(event) => setNewApiTokenExpiresYmd(event.target.value)} />
           </label>

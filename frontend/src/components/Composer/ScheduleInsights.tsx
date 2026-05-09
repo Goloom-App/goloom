@@ -112,7 +112,7 @@ export function ScheduleInsights({
       {slots.length > 0 ? (
         <div className="schedule-insights__slots">
           <span className="hint">Default timeslots</span>
-          <div className="inline-cluster" style={{ flexWrap: 'wrap', gap: '0.35rem' }}>
+          <div className="inline-cluster" style={{ gap: '0.35rem' }}>
             {slots.map((slot) => (
               <button
                 key={slot}

@@ -35,7 +35,7 @@ export function PostCard({
       </h3>
       <p className="post-card__content">{post.content}</p>
       {active && (
-        <div className="inline-cluster" style={{ marginTop: '1rem' }}>
+        <div className="inline-cluster mt-1">
           <button
             type="button"
             className="button button--secondary"

@@ -117,7 +117,7 @@ export function RecurringPostsView({
   return (
     <div className="recurring-posts-view two-column-detail">
       <div className="glass-panel">
-        <div className="inline-cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="flex-row--wrap" style={{ justifyContent: 'space-between' }}>
           <div>
             <h2 className="section-card__title">Recurring posts</h2>
             <p className="hint">
@@ -152,7 +152,7 @@ export function RecurringPostsView({
                 {t.target_account_ids.map((id) => accountById[id]?.username ?? id.slice(0, 8)).join(', ')}
               </p>
               {canEdit ? (
-                <div className="inline-cluster" style={{ marginTop: '0.75rem', flexWrap: 'wrap' }}>
+                <div className="inline-cluster mt-1" style={{ flexWrap: 'wrap' }}>
                   <button type="button" className="button button--secondary" onClick={() => void toggleEnabled(t.id, t.enabled)}>
                     {t.enabled ? 'Pause' : 'Resume'}
                   </button>
@@ -203,7 +203,7 @@ export function RecurringPostsView({
                 )
               })}
             </div>
-            <div className="inline-cluster" style={{ marginTop: '1rem' }}>
+            <div className="inline-cluster mt-1">
               <button type="button" className="button button--primary" onClick={() => void handleCreate()}>
                 Create
               </button>

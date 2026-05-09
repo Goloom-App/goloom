@@ -122,7 +122,7 @@ export function AccountsView({
 
             {accountDraft.provider === 'mastodon' ? (
               <>
-                <div className="inline-cluster" style={{ flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                <div className="flex-row--wrap" style={{ marginTop: '0.5rem' }}>
                   <button
                     type="button"
                     className="button button--primary"

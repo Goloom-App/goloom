@@ -141,7 +141,7 @@ export function AdminView({
           instance URL when credentials are omitted.
         </p>
 
-        <div className="inline-cluster" style={{ marginBottom: '1rem' }}>
+        <div className="inline-cluster mb-1">
           <select
             value={adminProviderDraft.provider}
             onChange={(event) => {
@@ -187,7 +187,7 @@ export function AdminView({
 
         <details className="advanced-config" open={showAdminProviderAdvanced} onToggle={(event) => setShowAdminProviderAdvanced(event.currentTarget.open)}>
           <summary className="advanced-config__summary">Advanced configuration</summary>
-          <p className="hint" style={{ marginTop: '0.75rem' }}>
+          <p className="hint mt-1">
             OAuth client credentials, scopes, and token endpoints. Mastodon can auto-register an app when these are left empty; set them manually for custom apps or
             strict instances.
           </p>
@@ -225,11 +225,11 @@ export function AdminView({
           </label>
         </details>
 
-        <button type="button" className="button button--primary" onClick={() => void onSaveAdminProvider()} disabled={syncing} style={{ marginTop: '1rem' }}>
+        <button type="button" className="button button--primary mt-1" onClick={() => void onSaveAdminProvider()} disabled={syncing}>
           {editingProviderId ? 'Update provider' : 'Register provider'}
         </button>
 
-        <h3 className="subsection-title" style={{ marginTop: '1.5rem' }}>
+        <h3 className="subsection-title mt-2">
           Registered instances
         </h3>
         <ul className="provider-admin-list">
@@ -247,7 +247,7 @@ export function AdminView({
                     {onboarded} account{onboarded === 1 ? '' : 's'} onboarded
                   </span>
                 </div>
-                <div className="inline-cluster" style={{ flexShrink: 0 }}>
+                <div className="inline-cluster flex-shrink-0">
                   <button
                     type="button"
                     className="button button--secondary"

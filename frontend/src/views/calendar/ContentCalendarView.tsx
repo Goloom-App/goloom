@@ -245,7 +245,7 @@ export function ContentCalendarView({
         </div>
       )}
       {plannedPostsForContentCalendar.length === 0 ? (
-        <p className="hint" style={{ marginTop: '1rem' }}>
+        <p className="hint mt-1">
           No scheduled posts for this workspace. Create a post from the schedule view or the composer.
         </p>
       ) : null}
