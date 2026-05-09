@@ -36,6 +36,7 @@ export function ContentCalendarView({
 }) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(isMobile ? 'list' : 'grid')
   const [calendarTouchStart, setCalendarTouchStart] = useState<{ x: number; y: number } | null>(null)
+  const [listExpandedPostId, setListExpandedPostId] = useState<string | null>(null)
 
   useEffect(() => {
     setViewMode(isMobile ? 'list' : 'grid')
@@ -235,8 +236,8 @@ export function ContentCalendarView({
                     <PostCard
                       key={post.id}
                       post={post}
-                      active={false}
-                      onClick={() => setExpandedPostId(post.id)}
+                      active={listExpandedPostId === post.id}
+                      onClick={() => setListExpandedPostId(listExpandedPostId === post.id ? null : post.id)}
                       onEdit={() => openEditor(post.id)}
                       onDelete={() => void deletePost(post.id)}
                       accounts={accounts}
