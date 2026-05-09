@@ -47,7 +47,6 @@ export function AppShell({
         teams={teams}
         selectedTeamId={selectedTeamId}
         onSelectTeam={onSelectTeam}
-        user={user}
         onSignOut={onSignOut}
         openComposer={openComposer}
       />

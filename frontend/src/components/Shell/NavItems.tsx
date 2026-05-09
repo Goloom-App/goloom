@@ -1,4 +1,4 @@
-import { Home, Calendar, Image, LayoutGrid, ChartBar, Settings, ShieldCheck, Users, RefreshCw, Share2, Archive } from 'lucide-react'
+import { Home, Calendar, Image, ChartBar, Settings, ShieldCheck, Users, RefreshCw, Share2, Archive } from 'lucide-react'
 import type { AppSection } from '../../types'
 
 export interface NavItem {

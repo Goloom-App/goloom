@@ -1,5 +1,5 @@
 import { MAIN_NAV, WORKSPACE_NAV, CONFIG_NAV } from './NavItems'
-import type { AppSection, TeamRecord, UserRecord } from '../../types'
+import type { AppSection, TeamRecord } from '../../types'
 import { LogOut, Plus, ChevronDown } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 
@@ -9,7 +9,6 @@ interface SidebarProps {
   teams: TeamRecord[]
   selectedTeamId: string
   onSelectTeam: (id: string) => void
-  user: UserRecord | null
   onSignOut: () => void
   openComposer: () => void
 }
@@ -20,7 +19,6 @@ export function Sidebar({
   teams, 
   selectedTeamId, 
   onSelectTeam,
-  user,
   onSignOut,
   openComposer
 }: SidebarProps) {
@@ -37,7 +35,7 @@ export function Sidebar({
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button className="btn btn--ghost" style={{ width: '100%', justifyContent: 'space-between', border: '1px solid var(--border)' }}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', white-space: 'nowrap' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {selectedTeam?.name || 'Select Team'}
               </span>
               <ChevronDown size={16} />
