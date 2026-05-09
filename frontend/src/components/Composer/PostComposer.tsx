@@ -192,39 +192,71 @@ export function PostComposer({
     return null
   }
 
-  const inner = (
-    <div className={`composer-container composer-container--enhanced ${isMobile ? 'composer-container--mobile' : ''}`} onClick={(event) => event.stopPropagation()}>
-        <div className={`composer-main ${isMobile ? 'composer-main--mobile' : ''}`}>
-          <header>
-            <p className="eyebrow">Composer</p>
-            <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
-          </header>
+  const destinationsPanel = (
+    <aside className="composer-sidebar composer-sidebar--destinations">
+      <p className="eyebrow">Destinations</p>
+      <div className="composer-destination-row" role="group" aria-label="Post destinations">
+        {teamAccounts.map((account) => {
+          const selected = draft.targetAccountIds.includes(account.id)
+          return (
+            <button
+              key={account.id}
+              type="button"
+              className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''}`}
+              aria-pressed={selected}
+              title={`${account.name} · ${account.provider}`}
+              onClick={() =>
+                setDraft((current) => {
+                  const has = current.targetAccountIds.includes(account.id)
+                  return {
+                    ...current,
+                    targetAccountIds: has ? current.targetAccountIds.filter((id) => id !== account.id) : [...current.targetAccountIds, account.id],
+                  }
+                })
+              }
+            >
+              <DestinationAvatar account={account} />
+            </button>
+          )
+        })}
+      </div>
+      {teamAccounts.length === 0 ? <p className="hint">No accounts for this workspace.</p> : null}
+    </aside>
+  )
 
-          {isMobile ? (
-            <div className="composer-mobile-tabs" role="tablist" aria-label="Composer mobile panel">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mobilePanel === 'edit'}
-                className={`composer-mobile-tab ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`}
-                onClick={() => setMobilePanel('edit')}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mobilePanel === 'preview'}
-                className={`composer-mobile-tab ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`}
-                onClick={() => setMobilePanel('preview')}
-              >
-                Preview
-              </button>
-            </div>
-          ) : null}
+  const previewsPanel = (
+    <aside className={`composer-sidebar composer-sidebar--previews ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}>
+      <p className="eyebrow">Live previews</p>
+      <div className="composer-preview-stack">
+        {selectedAccounts.length > 0 ? (
+          selectedAccounts.map((account) => (
+            <SocialPreview
+              key={account.id}
+              account={account}
+              content={effectiveBody(draft, account.id)}
+              scheduledAt={draft.scheduledAt}
+              theme={theme}
+              attachments={attachmentsForDestination(draft, account.id, teamId, api, libraryById)}
+              authHeader={authHeader}
+            />
+          ))
+        ) : (
+          <p className="hint">Select a destination to see previews.</p>
+        )}
+      </div>
+    </aside>
+  )
 
-          <div className={isMobile && mobilePanel === 'preview' ? 'composer-mobile-panel composer-mobile-panel--hidden' : 'composer-mobile-panel'}>
-          <label className="field">
+  const composerHeader = (
+    <header>
+      <p className="eyebrow">Composer</p>
+      <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+    </header>
+  )
+
+  const editingContent = (
+    <>
+      <label className="field">
             <span>Title</span>
             <input
               value={draft.title}
@@ -381,63 +413,44 @@ export function PostComposer({
               Cancel
             </button>
           </footer>
+        </>
+      )
+
+  const inner = (
+    <div className="composer-container composer-container--enhanced composer-container--three-col" onClick={(event) => event.stopPropagation()}>
+      {destinationsPanel}
+      <div className="composer-main">
+        {composerHeader}
+        {editingContent}
+      </div>
+      {previewsPanel}
+    </div>
+  )
+
+  if (isMobile) {
+    return (
+      <div className="composer-container composer-container--enhanced composer-container--mobile" onClick={(event) => event.stopPropagation()}>
+        <div className="composer-main composer-main--mobile">
+          <header>
+            <p className="eyebrow">Composer</p>
+            <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+          </header>
+          <div className="composer-mobile-tabs" role="tablist" aria-label="Composer mobile panel">
+            <button type="button" role="tab" aria-selected={mobilePanel === 'edit'} className={`composer-mobile-tab ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('edit')}>Edit</button>
+            <button type="button" role="tab" aria-selected={mobilePanel === 'preview'} className={`composer-mobile-tab ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('preview')}>Preview</button>
           </div>
+          {mobilePanel === 'edit' ? (
+            <>
+              {destinationsPanel}
+              {editingContent}
+            </>
+          ) : (
+            previewsPanel
+          )}
         </div>
-
-        <aside
-          className={`composer-sidebar composer-sidebar--stack ${isMobile ? 'composer-sidebar--mobile' : ''} ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}
-        >
-          <p className="eyebrow">Destinations</p>
-          <div className="composer-destination-row" role="group" aria-label="Post destinations">
-            {teamAccounts.map((account) => {
-              const selected = draft.targetAccountIds.includes(account.id)
-              return (
-                <button
-                  key={account.id}
-                  type="button"
-                  className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''}`}
-                  aria-pressed={selected}
-                  title={`${account.name} · ${account.provider}`}
-                  onClick={() =>
-                    setDraft((current) => {
-                      const has = current.targetAccountIds.includes(account.id)
-                      return {
-                        ...current,
-                        targetAccountIds: has ? current.targetAccountIds.filter((id) => id !== account.id) : [...current.targetAccountIds, account.id],
-                      }
-                    })
-                  }
-                >
-                  <DestinationAvatar account={account} />
-                </button>
-              )
-            })}
-          </div>
-          {teamAccounts.length === 0 ? <p className="hint">No accounts for this workspace.</p> : null}
-
-          <div className="divider" />
-
-          <p className="eyebrow">Live previews</p>
-          <div className="composer-preview-stack">
-            {selectedAccounts.length > 0 ? (
-              selectedAccounts.map((account) => (
-                <SocialPreview
-                  key={account.id}
-                  account={account}
-                  content={effectiveBody(draft, account.id)}
-                  scheduledAt={draft.scheduledAt}
-                  theme={theme}
-                  attachments={attachmentsForDestination(draft, account.id, teamId, api, libraryById)}
-                  authHeader={authHeader}
-                />
-              ))
-            ) : (
-              <p className="hint">Select a destination to see previews.</p>
-            )}
-          </div>
-        </aside>
       </div>
     )
+  }
 
   if (standalone) {
     return <div className="composer-page">{inner}</div>

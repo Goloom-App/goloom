@@ -19,6 +19,7 @@ export const MORE_NAV: NavItem[] = [
 ]
 
 export const WORKSPACE_NAV: NavItem[] = [
+  { id: 'analytics', label: 'Analytics', icon: ChartBar },
   { id: 'teams', label: 'Team', icon: Users },
   { id: 'accounts', label: 'Accounts', icon: Share2 },
   { id: 'recurringPosts', label: 'Recurring', icon: RefreshCw },

@@ -539,8 +539,8 @@ code, .mono {
 }
 
 .sidebar-team-selector {
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: 0.5rem 0.65rem;
   color: var(--text);
@@ -690,6 +690,63 @@ code, .mono {
 /* ==========================================================================
    Buttons (Unified)
    ========================================================================== */
+
+/* .button is used interchangeably with .btn across views */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+  line-height: 1;
+  white-space: nowrap;
+  min-height: 36px;
+}
+
+.button svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.button:active {
+  transform: scale(0.97);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button--primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.button--primary:hover:not(:disabled) {
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.button--secondary {
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+}
+
+.button--secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -890,6 +947,12 @@ code, .mono {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.field > span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-soft);
 }
 
 .field__label {
@@ -1265,6 +1328,10 @@ select {
   border: none;
 }
 
+.composer-container--three-col {
+  grid-template-columns: 260px 1fr 340px;
+}
+
 .composer-main {
   padding: var(--space-6);
   display: flex;
@@ -1288,6 +1355,17 @@ select {
     border-left: none;
     border-top: 1px solid var(--border);
   }
+}
+
+.composer-sidebar--destinations {
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+
+.composer-preview-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .composer-tabs {

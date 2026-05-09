@@ -115,8 +115,6 @@ function App() {
   const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
   const [teamSettingsName, setTeamSettingsName] = useState('')
   const [teamSettingsDescription, setTeamSettingsDescription] = useState('')
-  const [teamSchedulingTimezone, setTeamSchedulingTimezone] = useState('UTC')
-  const [teamSchedulingSlotsCsv, setTeamSchedulingSlotsCsv] = useState('')
   const [addMemberUserId, setAddMemberUserId] = useState('')
   const [memberRoleEdits, setMemberRoleEdits] = useState<Record<string, TeamRole>>({})
   const [newApiTokenName, setNewApiTokenName] = useState('')
@@ -689,15 +687,11 @@ function App() {
     if (!selectedTeam) {
       setTeamSettingsName('')
       setTeamSettingsDescription('')
-      setTeamSchedulingTimezone('UTC')
-      setTeamSchedulingSlotsCsv('')
       setMemberRoleEdits({})
       return
     }
     setTeamSettingsName(selectedTeam.name)
     setTeamSettingsDescription(selectedTeam.description ?? '')
-    setTeamSchedulingTimezone(selectedTeam.schedulingPreferences?.timezone ?? 'UTC')
-    setTeamSchedulingSlotsCsv((selectedTeam.schedulingPreferences?.default_timeslots ?? []).join(', '))
     setMemberRoleEdits(Object.fromEntries(selectedTeam.members.map((member) => [member.userId, member.role])))
   }, [selectedTeam])
 
@@ -821,18 +815,9 @@ function App() {
       return
     }
     await runAction(async () => {
-      const slots = teamSchedulingSlotsCsv
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
       await api.updateTeam(selectedTeam.id, {
         name,
         description: teamSettingsDescription.trim(),
-        scheduling_preferences: {
-          timezone: teamSchedulingTimezone.trim() || 'UTC',
-          default_timeslots: slots,
-          posting_windows: selectedTeam.schedulingPreferences?.posting_windows ?? [],
-        },
       })
       await loadDashboard({ silent: true })
     }, 'Team settings updated')
@@ -1500,20 +1485,20 @@ function App() {
               <>
                 <section className="stack">
                   <h3 className="subsection-title">General</h3>
-                  <div className="flex-row--wrap">
-                    <label className="field grow">
-                      <span>Team name</span>
-                      <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
-                    </label>
-                    <label className="field grow">
-                      <span>Description</span>
-                      <textarea
-                        rows={3}
-                        value={teamSettingsDescription}
-                        onChange={(event) => setTeamSettingsDescription(event.target.value)}
-                        placeholder="Describe your team's purpose and focus"
-                      />
-                    </label>
+                  <label className="field">
+                    <span>Team name</span>
+                    <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span>Description</span>
+                    <textarea
+                      rows={3}
+                      value={teamSettingsDescription}
+                      onChange={(event) => setTeamSettingsDescription(event.target.value)}
+                      placeholder="Describe your team's purpose and focus"
+                    />
+                  </label>
+                  <div>
                     <button
                       type="button"
                       className="btn btn--primary"
@@ -1522,29 +1507,6 @@ function App() {
                     >
                       Save Changes
                     </button>
-                  </div>
-                </section>
-
-                <section className="stack">
-                  <h3 className="subsection-title">Scheduling</h3>
-                  <div className="flex-row--wrap">
-                    <label className="field" style={{ flex: '0 0 200px' }}>
-                      <span>Timezone</span>
-                      <input
-                        value={teamSchedulingTimezone}
-                        onChange={(event) => setTeamSchedulingTimezone(event.target.value)}
-                        placeholder="e.g. UTC, Europe/Berlin"
-                      />
-                    </label>
-                    <label className="field grow">
-                      <span>Default publishing timeslots</span>
-                      <input
-                        value={teamSchedulingSlotsCsv}
-                        onChange={(event) => setTeamSchedulingSlotsCsv(event.target.value)}
-                        placeholder="09:00, 12:00, 15:00"
-                      />
-                      <p className="hint">Comma-separated times (HH:mm) shown as quick-select buttons in the composer.</p>
-                    </label>
                   </div>
                 </section>
 
