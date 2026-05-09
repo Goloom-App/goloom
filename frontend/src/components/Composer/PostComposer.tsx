@@ -37,6 +37,7 @@ export function PostComposer({
   authHeader,
   schedulingPreferences,
   standalone,
+  previewColumnExternal,
 }: {
   open: boolean
   mode: 'create' | 'edit'
