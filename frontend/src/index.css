@@ -544,7 +544,7 @@ code, .mono {
 }
 
 .sidebar-team-selector {
-  background: var(--surface-overlay);
+  background: var(--surface-overlay, #1c1c1c);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   padding: 0.5rem 0.65rem;
@@ -1182,7 +1182,7 @@ select {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--surface-raised);
+  background: var(--surface-raised, #141414);
   border-top-left-radius: var(--radius-xl);
   border-top-right-radius: var(--radius-xl);
   border: 1px solid var(--border-strong);
@@ -1255,10 +1255,10 @@ select {
 }
 
 .drawer-list .btn--ghost {
-  background: var(--surface-muted);
+  background: var(--surface-muted, #0e0e0e);
 }
 .drawer-list .btn--ghost:hover {
-  background: var(--surface-hover);
+  background: var(--surface-hover, #1a1a1a);
 }
 
 .drawer-grid {
@@ -1268,10 +1268,10 @@ select {
 }
 
 .drawer-grid .btn--ghost {
-  background: var(--surface-muted);
+  background: var(--surface-muted, #0e0e0e);
 }
 .drawer-grid .btn--ghost:hover {
-  background: var(--surface-hover);
+  background: var(--surface-hover, #1a1a1a);
 }
 
 .drawer-item-label {
@@ -3089,7 +3089,8 @@ select {
 /* Radix Dropdown Menu */
 .radix-dropdown-content {
   min-width: 200px;
-  background: var(--surface-overlay);
+  background: var(--surface-overlay, #1c1c1c);
+  color: var(--text, #ffffff);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   padding: var(--space-1);
