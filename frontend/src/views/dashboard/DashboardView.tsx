@@ -52,6 +52,7 @@ export function DashboardView({
   upcomingPosts,
   accounts,
   fetchSeries,
+  fetchGrowth,
   onOpenPost,
   onOpenSchedule,
   onOpenAccounts,
@@ -60,33 +61,46 @@ export function DashboardView({
   upcomingPosts: PostRecord[]
   accounts: AccountRecord[]
   fetchSeries: (metric: string) => Promise<{ series: BackendMetricHistoryPoint[] }>
+  fetchGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: import('../../api').BackendAccountGrowthPoint[] }>
   onOpenPost: (postId: string) => void
   onOpenSchedule: () => void
   onOpenAccounts: () => void
 }) {
   const [seriesByMetric, setSeriesByMetric] = useState<Record<string, BackendMetricHistoryPoint[]>>({})
+  const [reachSeries, setReachSeries] = useState<{ date: string; value: number }[]>([])
   const [loadingCharts, setLoadingCharts] = useState(false)
 
   const loadCharts = useCallback(async () => {
     setLoadingCharts(true)
     try {
-      const results = await Promise.all(
-        ENGAGEMENT_METRICS.map(async (m) => {
-          const res = await fetchSeries(m)
-          return [m, res.series ?? []] as const
-        }),
-      )
+      const [engagementResults, growthResult] = await Promise.all([
+        Promise.all(
+          ENGAGEMENT_METRICS.map(async (m) => {
+            const res = await fetchSeries(m)
+            return [m, res.series ?? []] as const
+          }),
+        ),
+        fetchGrowth('all', { days: 7 }),
+      ])
+
       const next: Record<string, BackendMetricHistoryPoint[]> = {}
-      for (const [k, v] of results) {
+      for (const [k, v] of engagementResults) {
         next[k] = v
       }
       setSeriesByMetric(next)
+
+      const reach = (growthResult.series ?? []).map((p) => ({
+        date: p.date,
+        value: p.followers + p.following,
+      }))
+      setReachSeries(reach)
     } catch {
       setSeriesByMetric({})
+      setReachSeries([])
     } finally {
       setLoadingCharts(false)
     }
-  }, [fetchSeries])
+  }, [fetchSeries, fetchGrowth])
 
   useEffect(() => {
     void loadCharts()
@@ -117,6 +131,12 @@ export function DashboardView({
         </button>
       </div>
       <div className="dashboard-spark-grid">
+        <MetricSparkline
+          title="Total Reach"
+          color="#38bdf8"
+          points={reachSeries}
+          loading={loadingCharts}
+        />
         {ENGAGEMENT_METRICS.map((m) => (
           <MetricSparkline
             key={m}

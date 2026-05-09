@@ -131,6 +131,17 @@ export function AnalyticsView({
     return summary.metrics.reduce((a, m) => a + m.total, 0)
   }, [summary])
 
+  const newFollowers7d = useMemo(() => {
+    if (accountGrowthSeries.length < 2) {
+      return 0
+    }
+    const latest = accountGrowthSeries[accountGrowthSeries.length - 1].followers
+    // Find point roughly 7 days ago or the oldest available if less than 7
+    const index = Math.max(0, accountGrowthSeries.length - 8)
+    const sevenDaysAgo = accountGrowthSeries[index].followers
+    return latest - sevenDaysAgo
+  }, [accountGrowthSeries])
+
   const lineData = useMemo(() => series.map((p) => ({ date: p.date, value: p.value })), [series])
   const growthData = useMemo(
     () =>
@@ -165,6 +176,11 @@ export function AnalyticsView({
               <p className="eyebrow">Total engagement</p>
               <p className="analytics-card__value">{totalEngagement.toLocaleString()}</p>
               <p className="hint">Sum of live metric totals on published posts in this workspace.</p>
+            </section>
+            <section className="glass-panel analytics-card">
+              <p className="eyebrow">New followers (7d)</p>
+              <p className="analytics-card__value">{(newFollowers7d >= 0 ? '+' : '') + newFollowers7d.toLocaleString()}</p>
+              <p className="hint">Growth over the last 7 snapshots.</p>
             </section>
             <section className="glass-panel analytics-card">
               <p className="eyebrow">Metric types</p>
