@@ -22,12 +22,23 @@ function MetricSparkline({
   loading: boolean
 }) {
   const data = useMemo(() => points.map((p) => ({ ...p, label: p.date })), [points])
+  const lastValue = useMemo(() => {
+    if (data.length === 0) return null
+    return data[data.length - 1].value
+  }, [data])
 
   return (
     <div className="dashboard-spark">
       <div className="dashboard-spark__head">
-        <span className="dashboard-spark__title">{title}</span>
-        <span className="dashboard-spark__subtitle">Last 7 days</span>
+        <div className="dashboard-spark__info">
+          <span className="dashboard-spark__title">{title}</span>
+          <span className="dashboard-spark__subtitle">Last 7 days</span>
+        </div>
+        {lastValue !== null && !loading && (
+          <div className="dashboard-spark__value" style={{ color: lastValue < 0 ? '#ef4444' : (lastValue > 0 ? '#22c55e' : 'inherit') }}>
+            {lastValue > 0 ? `+${lastValue}` : lastValue}
+          </div>
+        )}
       </div>
       <div className="dashboard-spark__chart">
         {loading ? (
@@ -89,10 +100,15 @@ export function DashboardView({
       }
       setSeriesByMetric(next)
 
-      const reach = (growthResult.series ?? []).map((p) => ({
-        date: p.date,
-        value: p.followers + p.following,
-      }))
+      const reach = (growthResult.series ?? []).map((p, i, arr) => {
+        const prev = arr[i - 1]
+        // Netto-Zuwachs: Heutige Follower minus gestrige Follower
+        const delta = prev ? p.followers - prev.followers : 0
+        return {
+          date: p.date,
+          value: delta,
+        }
+      })
       setReachSeries(reach)
     } catch {
       setSeriesByMetric({})
@@ -132,7 +148,7 @@ export function DashboardView({
       </div>
       <div className="dashboard-spark-grid">
         <MetricSparkline
-          title="Total Reach"
+          title="Follower Trend"
           color="#38bdf8"
           points={reachSeries}
           loading={loadingCharts}

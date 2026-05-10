@@ -28,6 +28,7 @@ export function AnalyticsView({
   fetchChart: (opts: { metric: string; days?: number }) => Promise<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>
   fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
 }) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'posts'>('overview')
   const [summary, setSummary] = useState<BackendTeamAnalyticsReport | null>(null)
   const [posts, setPosts] = useState<BackendPostAnalyticsListRow[]>([])
   const [series, setSeries] = useState<BackendMetricHistoryPoint[]>([])
@@ -161,254 +162,231 @@ export function AnalyticsView({
 
   return (
     <div className="analytics-view">
-      <div className="analytics-view__toolbar">
-        <button type="button" className="button button--secondary" onClick={() => void load()} disabled={loading}>
-          Refresh
-        </button>
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Analytics</p>
+          <h1>Team Performance</h1>
+        </div>
+        <div className="page-header__actions">
+          <div className="view-toggle">
+            <button
+              type="button"
+              className={`view-toggle__btn ${activeTab === 'overview' ? 'view-toggle__btn--active' : ''}`}
+              onClick={() => setActiveTab('overview')}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              className={`view-toggle__btn ${activeTab === 'accounts' ? 'view-toggle__btn--active' : ''}`}
+              onClick={() => setActiveTab('accounts')}
+            >
+              Accounts
+            </button>
+            <button
+              type="button"
+              className={`view-toggle__btn ${activeTab === 'posts' ? 'view-toggle__btn--active' : ''}`}
+              onClick={() => setActiveTab('posts')}
+            >
+              Posts
+            </button>
+          </div>
+          <button type="button" className="button button--secondary" onClick={() => void load()} disabled={loading}>
+            <Icon name="refresh" className="inline-icon" />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
+
       {error ? <p className="status-banner__error">{error}</p> : null}
       {loading && !summary ? <p className="hint">Loading analytics…</p> : null}
 
-      {summary ? (
+      {summary && activeTab === 'overview' && (
         <>
           <div className="analytics-cards">
             <section className="glass-panel analytics-card">
               <p className="eyebrow">Total engagement</p>
               <p className="analytics-card__value">{totalEngagement.toLocaleString()}</p>
-              <p className="hint">Sum of live metric totals on published posts in this workspace.</p>
+              <p className="hint">Sum of all likes, shares, and replies across all platforms.</p>
             </section>
             <section className="glass-panel analytics-card">
-              <p className="eyebrow">New followers (7d)</p>
-              <p className="analytics-card__value">{(newFollowers7d >= 0 ? '+' : '') + newFollowers7d.toLocaleString()}</p>
-              <p className="hint">Growth over the last 7 snapshots.</p>
-            </section>
-            <section className="glass-panel analytics-card">
-              <p className="eyebrow">Metric types</p>
-              <p className="analytics-card__value">{summary.metrics.length}</p>
-              <p className="hint">Distinct metric names (likes, reposts, …).</p>
-            </section>
-            <section className="glass-panel analytics-card">
-              <p className="eyebrow">Posts ranked</p>
-              <p className="analytics-card__value">{posts.length}</p>
-              <p className="hint">Published posts returned for the performance table.</p>
+              <p className="eyebrow">Follower Trend (7d)</p>
+              <p className="analytics-card__value" style={{ color: newFollowers7d < 0 ? '#ef4444' : (newFollowers7d > 0 ? '#22c55e' : 'inherit') }}>
+                {(newFollowers7d >= 0 ? '+' : '') + newFollowers7d.toLocaleString()}
+              </p>
+              <p className="hint">Net change in followers over the last 7 days.</p>
             </section>
           </div>
 
-          {summary.metrics.length > 0 ? (
-            <section className="glass-panel analytics-deltas-panel">
-              <h3 className="subsection-title">Totals and day-over-day</h3>
-              <p className="hint">Delta compares the latest and previous calendar day in metric history (requires two days of snapshots).</p>
-              <ul className="analytics-delta-grid">
-                {summary.metrics.map((m) => (
-                  <li key={m.metric} className="analytics-delta-card">
-                    <span className="analytics-delta-card__metric">{m.metric}</span>
-                    <span className="analytics-delta-card__total">{m.total.toLocaleString()}</span>
-                    <span
-                      className={`analytics-delta-card__delta ${
-                        m.delta_vs_prev_day > 0 ? 'analytics-delta-card__delta--up' : m.delta_vs_prev_day < 0 ? 'analytics-delta-card__delta--down' : ''
-                      }`}
-                    >
-                      {m.delta_vs_prev_day > 0 ? '+' : ''}
-                      {m.delta_vs_prev_day.toLocaleString()}
-                      {m.delta_percent != null ? ` · ${formatDeltaPct(m.delta_percent)}` : ''}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <section className="glass-panel analytics-chart-panel">
-            <h3 className="subsection-title">Metrics breakdown</h3>
-            {barData.length === 0 ? (
-              <p className="hint">No metrics yet. Published posts need a successful metric sync from the server.</p>
-            ) : (
-              <div className="analytics-chart-wrap">
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={barData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="name" tick={{ fill: 'var(--text-soft)', fontSize: 12 }} />
-                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--surface-raised)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        color: 'var(--text)',
-                      }}
-                    />
-                    <Bar dataKey="value" fill="var(--accent)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </section>
-
-          {summary.metrics.length > 0 ? (
-            <section className="glass-panel analytics-chart-panel">
-              <div className="analytics-chart-panel__head">
-                <h3 className="subsection-title">Trend (30 days)</h3>
-                <label className="analytics-metric-select">
-                  <span className="hint">Metric</span>
-                  <select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
-                    {summary.metrics.map((m) => (
-                      <option key={m.metric} value={m.metric}>
-                        {m.metric}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {lineData.length === 0 ? (
-                <p className="hint">No history points for this metric in the selected window yet.</p>
-              ) : (
+          <div className="analytics-grid">
+            {summary.metrics.length > 0 && (
+              <section className="glass-panel">
+                <h3 className="subsection-title">Platform Engagement</h3>
                 <div className="analytics-chart-wrap">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={lineData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                      <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 11 }} />
-                      <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} allowDecimals={false} />
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="var(--border)" />
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" tick={{ fill: 'var(--text-soft)', fontSize: 12 }} width={80} />
                       <Tooltip
-                        contentStyle={{
-                          background: 'var(--surface-raised)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 8,
-                          color: 'var(--text)',
-                        }}
+                        cursor={{ fill: 'var(--surface-hover)' }}
+                        contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }}
                       />
-                      <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={false} />
-                    </LineChart>
+                      <Bar dataKey="value" fill="var(--accent)" radius={[0, 4, 4, 0]} />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
-              )}
-            </section>
-          ) : null}
+                <ul className="analytics-delta-grid mt-4">
+                  {summary.metrics.map((m) => (
+                    <li key={m.metric} className="analytics-delta-card">
+                      <span className="analytics-delta-card__metric">{m.metric}</span>
+                      <span className="analytics-delta-card__total">{m.total.toLocaleString()}</span>
+                      <span
+                        className={`analytics-delta-card__delta ${
+                          m.delta_vs_prev_day > 0 ? 'analytics-delta-card__delta--up' : m.delta_vs_prev_day < 0 ? 'analytics-delta-card__delta--down' : ''
+                        }`}
+                      >
+                        {m.delta_vs_prev_day > 0 ? '+' : ''}
+                        {m.delta_vs_prev_day.toLocaleString()}
+                        {m.delta_percent != null ? ` · ${formatDeltaPct(m.delta_percent)}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-          <section className="glass-panel analytics-chart-panel">
-            <div className="analytics-chart-panel__head">
-              <h3 className="subsection-title">Follower growth (30 days)</h3>
-              <label className="analytics-metric-select">
-                <span className="hint">Account</span>
-                <select value={growthAccountId} onChange={(e) => setGrowthAccountId(e.target.value)}>
-                  <option value="all">All accounts</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
+            <section className="glass-panel">
+              <div className="analytics-chart-panel__head">
+                <h3 className="subsection-title">Metric Trend (30d)</h3>
+                <select className="select-sm" value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
+                  {summary.metrics.map((m) => (
+                    <option key={m.metric} value={m.metric}>{m.metric}</option>
                   ))}
                 </select>
-              </label>
-            </div>
-            {growthData.length === 0 ? (
-              <p className="hint">No account growth snapshots yet.</p>
-            ) : (
+              </div>
               <div className="analytics-chart-wrap">
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={growthData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 11 }} />
-                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--surface-raised)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        color: 'var(--text)',
-                      }}
-                    />
-                    <Line type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={lineData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} />
+                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} />
+                    <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
+                    <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            )}
-          </section>
-
-          <section className="glass-panel analytics-chart-panel">
-            <h3 className="subsection-title">Total reach (30 days)</h3>
-            {growthData.length === 0 ? (
-              <p className="hint">No account growth snapshots yet.</p>
-            ) : (
-              <div className="analytics-chart-wrap">
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={growthData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 11 }} />
-                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} allowDecimals={false} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'var(--surface-raised)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        color: 'var(--text)',
-                      }}
-                    />
-                    <Line type="monotone" dataKey="reach" stroke="#38bdf8" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </section>
-
-          <section className="glass-panel analytics-top-posts">
-            <h3 className="subsection-title">Post performance</h3>
-            {posts.length === 0 ? (
-              <p className="hint">No published posts with metrics in this workspace yet.</p>
-            ) : (
-              <div className="analytics-posts-table-wrap">
-                <table className="data-table analytics-posts-table">
-                  <thead>
-                    <tr>
-                      <th>Title</th>
-                      <th>Scheduled</th>
-                      <th>Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {posts.map((row) => (
-                      <tr key={row.post_id}>
-                        <td>
-                          <strong>{row.title || 'Untitled'}</strong>
-                          <div className="hint mono">{row.post_id}</div>
-                        </td>
-                        <td>
-                          {(() => {
-                            try {
-                              const d = parseISO(row.scheduled_at)
-                              return format(d, 'PPp')
-                            } catch {
-                              return row.scheduled_at
-                            }
-                          })()}
-                        </td>
-                        <td className="analytics-posts-table__score">{row.score.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <section className="glass-panel analytics-top-posts">
-            <h3 className="subsection-title">Top posts (summary)</h3>
-            {summary.top_posts.length === 0 ? (
-              <p className="hint">No ranked posts yet.</p>
-            ) : (
-              <ul className="analytics-top-list">
-                {summary.top_posts.map((row) => (
-                  <li key={row.post_id} className="analytics-top-list__row">
-                    <div>
-                      <strong>{row.title || 'Untitled'}</strong>
-                      <div className="hint mono">{row.post_id}</div>
-                    </div>
-                    <span className="analytics-top-list__score">{row.score.toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+            </section>
+          </div>
         </>
-      ) : null}
+      )}
+
+      {summary && activeTab === 'accounts' && (
+        <div className="analytics-accounts-view">
+          <section className="glass-panel">
+            <div className="analytics-chart-panel__head">
+              <h3 className="subsection-title">Account Growth</h3>
+              <select className="select-sm" value={growthAccountId} onChange={(e) => setGrowthAccountId(e.target.value)}>
+                <option value="all">All accounts</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.username})</option>
+                ))}
+              </select>
+            </div>
+            <div className="analytics-chart-wrap">
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={growthData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} />
+                  <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
+                  <Line name="Followers" type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  <Line name="Following" type="monotone" dataKey="following" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          <div className="analytics-accounts-grid mt-4">
+            {accounts.map(acc => (
+              <section key={acc.id} className="glass-panel account-stat-card">
+                <div className="flex-row--between mb-2">
+                  <div className="flex-row gap-2">
+                    <DestinationAvatar account={acc} compact />
+                    <strong>{acc.name}</strong>
+                  </div>
+                  <span className="hint mono">{acc.provider}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="eyebrow">Platform</p>
+                    <p>{acc.instance.replace('https://', '')}</p>
+                  </div>
+                  <div>
+                    <p className="eyebrow">Status</p>
+                    <span className="status-dot status-dot--active" /> Active
+                  </div>
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {summary && activeTab === 'posts' && (
+        <section className="glass-panel">
+          <h3 className="subsection-title">Post Performance</h3>
+          <div className="analytics-posts-table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Post</th>
+                  <th>Published</th>
+                  <th className="text-right">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {posts.map((row) => (
+                  <tr key={row.post_id}>
+                    <td>
+                      <div className="post-table-title">{row.title || 'Untitled'}</div>
+                      <div className="hint mono text-xs">{row.post_id}</div>
+                    </td>
+                    <td className="text-soft">
+                      {(() => {
+                        try {
+                          const d = parseISO(row.scheduled_at)
+                          return format(d, 'MMM d, HH:mm')
+                        } catch {
+                          return row.scheduled_at
+                        }
+                      })()}
+                    </td>
+                    <td className="text-right font-bold">{row.score.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function Icon({ name, className }: { name: string; className?: string }) {
+  // Simple helper if icons aren't globally available as components here
+  return <span className={className}>[{name}]</span>
+}
+
+function DestinationAvatar({ account, compact }: { account: AccountRecord; compact?: boolean }) {
+  return (
+    <div className={`avatar ${compact ? 'avatar--sm' : ''}`}>
+      {account.avatarUrl ? (
+        <img src={account.avatarUrl} alt="" className="avatar__img" />
+      ) : (
+        <div className="avatar__placeholder">{account.username[0]}</div>
+      )}
     </div>
   )
 }
