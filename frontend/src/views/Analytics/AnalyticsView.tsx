@@ -168,7 +168,7 @@ export function AnalyticsView({
           <h1>Team Performance</h1>
         </div>
         <div className="page-header__actions">
-          <div className="view-toggle">
+          <div className="view-toggle view-toggle--scrollable">
             <button
               type="button"
               className={`view-toggle__btn ${activeTab === 'overview' ? 'view-toggle__btn--active' : ''}`}
@@ -193,7 +193,7 @@ export function AnalyticsView({
           </div>
           <button type="button" className="button button--secondary" onClick={() => void load()} disabled={loading}>
             <Icon name="refresh" className="inline-icon" />
-            <span>Refresh</span>
+            <span className="hidden-mobile">Refresh</span>
           </button>
         </div>
       </div>
@@ -256,7 +256,7 @@ export function AnalyticsView({
               </section>
             )}
 
-            <section className="glass-panel">
+            <section className="glass-panel analytics-card-chart">
               <div className="analytics-chart-panel__head">
                 <h3 className="subsection-title">Metric Trend (30d)</h3>
                 <select className="select-sm" value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
@@ -269,8 +269,8 @@ export function AnalyticsView({
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={lineData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                    <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} />
-                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} />
+                    <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} minTickGap={20} />
+                    <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} width={35} />
                     <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
                     <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={false} />
                   </LineChart>
@@ -282,8 +282,8 @@ export function AnalyticsView({
       )}
 
       {summary && activeTab === 'accounts' && (
-        <div className="analytics-accounts-view">
-          <section className="glass-panel">
+        <div className="analytics-accounts-view stack">
+          <section className="glass-panel analytics-card-chart">
             <div className="analytics-chart-panel__head">
               <h3 className="subsection-title">Account Growth</h3>
               <select className="select-sm" value={growthAccountId} onChange={(e) => setGrowthAccountId(e.target.value)}>
@@ -297,8 +297,8 @@ export function AnalyticsView({
               <ResponsiveContainer width="100%" height={350}>
                 <LineChart data={growthData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} />
-                  <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} />
+                  <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} minTickGap={20} />
+                  <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} width={35} />
                   <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
                   <Line name="Followers" type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
                   <Line name="Following" type="monotone" dataKey="following" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" dot={false} />
@@ -313,18 +313,20 @@ export function AnalyticsView({
                 <div className="flex-row--between mb-2">
                   <div className="flex-row gap-2">
                     <DestinationAvatar account={acc} compact />
-                    <strong>{acc.name}</strong>
+                    <strong className="truncate">{acc.name}</strong>
                   </div>
-                  <span className="hint mono">{acc.provider}</span>
+                  <span className="hint mono text-xs">{acc.provider}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="eyebrow">Platform</p>
-                    <p>{acc.instance.replace('https://', '')}</p>
+                    <p className="truncate text-sm">{acc.instance.replace('https://', '')}</p>
                   </div>
                   <div>
                     <p className="eyebrow">Status</p>
-                    <span className="status-dot status-dot--active" /> Active
+                    <div className="flex-row gap-1 text-sm">
+                      <span className="status-dot status-dot--active" /> Active
+                    </div>
                   </div>
                 </div>
               </section>

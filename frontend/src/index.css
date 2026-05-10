@@ -2022,6 +2022,34 @@ select {
   gap: var(--space-5);
 }
 
+/* Mobile Fixes */
+@media (max-width: 640px) {
+  .hidden-mobile {
+    display: none;
+  }
+
+  .view-toggle--scrollable {
+    overflow-x: auto;
+    max-width: calc(100vw - 120px);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .view-toggle--scrollable::-webkit-scrollbar {
+    display: none;
+  }
+
+  .analytics-card-chart {
+    padding: var(--space-3) !important;
+  }
+
+  .truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .analytics-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
