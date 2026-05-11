@@ -38,6 +38,8 @@ export function AnalyticsView({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const viewGapStyle = { display: 'flex', flexDirection: 'column' as const, gap: 'var(--space-8)' }
+
   const load = useCallback(async () => {
     if (!teamId) {
       return
@@ -161,8 +163,8 @@ export function AnalyticsView({
   }
 
   return (
-    <div className="analytics-view">
-      <div className="page-header">
+    <div className="analytics-view" style={viewGapStyle}>
+      <div className="page-header" style={{ marginBottom: 0 }}>
         <div>
           <p className="eyebrow">Analytics</p>
           <h1>Team Performance</h1>
@@ -202,7 +204,7 @@ export function AnalyticsView({
       {loading && !summary ? <p className="hint">Loading analytics…</p> : null}
 
       {summary && activeTab === 'overview' && (
-        <>
+        <div style={viewGapStyle}>
           <div className="analytics-cards">
             <section className="glass-panel analytics-card">
               <p className="eyebrow">Total engagement</p>
@@ -218,7 +220,7 @@ export function AnalyticsView({
             </section>
           </div>
 
-          <div className="analytics-grid">
+          <div className="analytics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-8)' }}>
             {summary.metrics.length > 0 && (
               <section className="glass-panel">
                 <h3 className="subsection-title">Platform Engagement</h3>
@@ -278,11 +280,11 @@ export function AnalyticsView({
               </div>
             </section>
           </div>
-        </>
+        </div>
       )}
 
       {summary && activeTab === 'accounts' && (
-        <div className="analytics-accounts-view stack">
+        <div className="analytics-accounts-view" style={viewGapStyle}>
           <section className="glass-panel analytics-card-chart">
             <div className="analytics-chart-panel__head">
               <h3 className="subsection-title">Account Growth</h3>
@@ -307,7 +309,7 @@ export function AnalyticsView({
             </div>
           </section>
 
-          <div className="analytics-accounts-grid mt-4">
+          <div className="analytics-accounts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-8)' }}>
             {accounts.map(acc => (
               <section key={acc.id} className="glass-panel account-stat-card">
                 <div className="flex-row--between mb-2">

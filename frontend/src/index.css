@@ -2078,7 +2078,7 @@ select {
 .analytics-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--space-4);
+  gap: var(--space-8);
 }
 
 .analytics-card {
