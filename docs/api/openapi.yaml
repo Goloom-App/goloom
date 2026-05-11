@@ -210,6 +210,113 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PostValidationResponse"
+  /v1/teams/{teamID}/posts/{postID}:
+    get:
+      tags: [Posts]
+      summary: Get post details
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/postID"
+      responses:
+        "200":
+          description: Post details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledPost"
+        "404":
+          description: Post not found
+    patch:
+      tags: [Posts]
+      summary: Update scheduled post
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/postID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostInput"
+      responses:
+        "200":
+          description: Post updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledPost"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: Post not found
+    delete:
+      tags: [Posts]
+      summary: Delete scheduled post
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/postID"
+      responses:
+        "204":
+          description: Post deleted
+        "404":
+          description: Post not found
+  /v1/teams/{teamID}/posts/{postID}/versions:
+    get:
+      tags: [Posts]
+      summary: List per-account content overrides (versions)
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/postID"
+      responses:
+        "200":
+          description: List of post versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PostVersion"
+    patch:
+      tags: [Posts]
+      summary: Patch per-account content overrides
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/postID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                versions:
+                  type: array
+                  items:
+                    type: object
+                    required: [account_id, content]
+                    properties:
+                      account_id:
+                        type: string
+                        format: uuid
+                      content:
+                        type: string
+      responses:
+        "200":
+          description: Overrides updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PostVersion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /v1/teams/{teamID}/analytics:
     get:
       tags: [Analytics]
@@ -413,6 +520,22 @@ components:
           type: array
           items:
             type: string
+        account_content_override:
+          type: object
+          description: Per-account text overrides (Map AccountID -> Content)
+          additionalProperties:
+            type: string
+    PostVersion:
+      type: object
+      properties:
+        post_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        content:
+          type: string
     PostValidationResponse:
       type: object
       properties:
