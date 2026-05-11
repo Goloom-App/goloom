@@ -49,10 +49,22 @@ jobs:
         with:
           path: |
             /root/.cache/go-build
-            /go/pkg/mod
+            /root/go/pkg/mod
           key: forgejo-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             forgejo-go-
+
+      - name: Frontend install and build cache
+        if: matrix.suite == 'frontend'
+        uses: actions/cache@v5
+        with:
+          path: |
+            **/node_modules
+            /root/.local/share/pnpm/store
+            /root/.cache/pnpm
+          key: forgejo-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            forgejo-pnpm-
 
       - name: Run Go tests
         if: matrix.suite == 'backend'
