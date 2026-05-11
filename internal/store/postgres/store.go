@@ -921,11 +921,12 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
+	// Resolve status based on draft flag and previous status
 	newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, input)
 	_, err = tx.Exec(
 		ctx,
 		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, media_exclude_by_account = $6, status = $7, updated_at = now() where id = $8 and team_id = $9`,
-		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, excludeJSON, newStatus, postID, teamID,
+		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, excludeJSON, string(newStatus), postID, teamID,
 	)
 	if err != nil {
 		return domain.ScheduledPost{}, err
