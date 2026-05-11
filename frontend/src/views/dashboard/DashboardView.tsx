@@ -94,15 +94,9 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      const next: Record<string, BackendMetricHistoryPoint[]> = {}
-      for (const [k, v] of engagementResults) {
-        next[k] = v
-      }
-      setSeriesByMetric(next)
-
-      const reach = (growthResult.series ?? []).map((p, i, arr) => {
+      const reach = (growthResult.series ?? []).map((p: any, i: number, arr: any[]) => {
         const prev = arr[i - 1]
-        // Täglicher Zuwachs: Heutige Follower minus gestrige Follower
+        // Daily growth: Today's followers minus yesterday's followers
         const delta = prev ? p.followers - prev.followers : 0
         return {
           date: p.date,
@@ -110,6 +104,20 @@ export function DashboardView({
         }
       })
       setReachSeries(reach)
+
+      const next: Record<string, BackendMetricHistoryPoint[]> = {}
+      for (const [m, series] of engagementResults) {
+        next[m] = (series as BackendMetricHistoryPoint[]).map((p, i, arr) => {
+          const prev = arr[i - 1]
+          // Daily delta for engagement metrics
+          const delta = prev ? p.value - prev.value : 0
+          return {
+            date: p.date,
+            value: delta,
+          }
+        })
+      }
+      setSeriesByMetric(next)
     } catch {
       setSeriesByMetric({})
       setReachSeries([])
