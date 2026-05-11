@@ -23,6 +23,8 @@ export type IconName =
   | 'plus-circle'
   | 'chevron-left'
   | 'chevron-right'
+  | 'loader'
+  | 'refresh'
 
 const iconPaths: Record<IconName, ReactNode> = {
   home: (
@@ -149,6 +151,16 @@ const iconPaths: Record<IconName, ReactNode> = {
   ),
   'chevron-left': <path d="m14.5 5-7 7 7 7" />,
   'chevron-right': <path d="m9.5 5 7 7-7 7" />,
+  loader: (
+    <>
+      <path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M21 2v6h-6M3 22v-6h6M21 13a9 9 0 1 1-3-7.7L21 8M3 11a9 9 0 1 1 3 7.7L3 16" />
+    </>
+  ),
 }
 
 export function Icon({
