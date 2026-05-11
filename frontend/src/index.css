@@ -2765,8 +2765,9 @@ select {
   font-weight: 700;
   font-size: 0.75rem;
   color: white;
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
+  position: relative;
 }
 
 .destination-avatar--compact {
@@ -2775,10 +2776,77 @@ select {
   font-size: 0.6rem;
 }
 
-.destination-avatar img {
+.destination-avatar__disk {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.destination-avatar__inner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.destination-avatar img.destination-avatar__photo {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.destination-avatar__fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.destination-avatar__badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  z-index: 2;
+}
+
+.destination-avatar--compact .destination-avatar__badge {
+  width: 10px;
+  height: 10px;
+  padding: 1px;
+  bottom: -1px;
+  right: -1px;
+}
+
+.destination-avatar__badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.destination-avatar__badge-link {
+  display: contents;
+}
+
+/* Fix dashboard upcoming icons layout */
+.dashboard-scheduled-card__accounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
 }
 
 /* ==========================================================================
@@ -3139,7 +3207,20 @@ select {
   margin-bottom: var(--space-2);
 }
 
-/* Radix Dropdown Menu */
+.composer-tab--error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.composer-tab--error.composer-tab--active {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.input--danger {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px var(--danger-soft) !important;
+}
 .radix-dropdown-content {
   min-width: 200px;
   background: var(--surface-overlay, #1c1c1c);

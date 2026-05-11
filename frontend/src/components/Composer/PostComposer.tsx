@@ -162,6 +162,23 @@ export function PostComposer({
     return false
   }, [draft, teamAccounts])
 
+  const accountLimitStatus = useMemo(() => {
+    const status: Record<string, { len: number; max: number; over: boolean }> = {}
+    for (const id of draft.targetAccountIds) {
+      const acc = teamAccounts.find((a) => a.id === id)
+      if (!acc) continue
+      const body = effectiveBody(draft, id)
+      status[id] = {
+        len: body.length,
+        max: acc.maxChars,
+        over: acc.maxChars > 0 && body.length > acc.maxChars,
+      }
+    }
+    return status
+  }, [draft, teamAccounts])
+
+  const minMaxChars = useMemo(() => maxCharsForAccounts(selectedAccounts), [selectedAccounts])
+
   if (!open) {
     return null
   }
@@ -240,26 +257,35 @@ export function PostComposer({
             >
               Default
             </button>
-            {selectedAccounts.map((account) => (
-              <button
-                key={account.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === account.id}
-                className={`composer-tab ${activeTab === account.id ? 'composer-tab--active' : ''}`}
-                onClick={() => setActiveTab(account.id)}
-                title={account.name}
-              >
-                <DestinationAvatar account={account} compact />
-                <span className="composer-tab__label">{account.username.replace(/^@/, '').slice(0, 12)}</span>
-              </button>
-            ))}
+            {selectedAccounts.map((account) => {
+              const status = accountLimitStatus[account.id]
+              return (
+                <button
+                  key={account.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === account.id}
+                  className={`composer-tab ${activeTab === account.id ? 'composer-tab--active' : ''} ${status?.over ? 'composer-tab--error' : ''}`}
+                  onClick={() => setActiveTab(account.id)}
+                  title={status?.over ? `${account.name} exceeds character limit (${status.len}/${status.max})` : account.name}
+                >
+                  <DestinationAvatar account={account} compact />
+                  <span className="composer-tab__label">{account.username.replace(/^@/, '').slice(0, 12)}</span>
+                </button>
+              )
+            })}
           </div>
 
           <label className="field">
-            <span>{activeTab === 'default' ? 'Message (all destinations)' : `Override for ${selectedAccounts.find((a) => a.id === activeTab)?.name ?? 'account'}`}</span>
+            <div className="flex-row--between">
+              <span>{activeTab === 'default' ? 'Message (all destinations)' : `Override for ${selectedAccounts.find((a) => a.id === activeTab)?.name ?? 'account'}`}</span>
+              {activeTab === 'default' && minMaxChars > 0 && (
+                <span className="hint" style={{ fontSize: '0.7rem' }}>Aim for max {minMaxChars} chars</span>
+              )}
+            </div>
             <textarea
               rows={8}
+              className={activeTab !== 'default' && accountLimitStatus[activeTab]?.over ? 'input--danger' : ''}
               value={effectiveBody(draft, activeTab === 'default' ? null : activeTab)}
               onChange={(event) => {
                 const v = event.target.value
