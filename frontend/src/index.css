@@ -1839,7 +1839,7 @@ select {
 .content-calendar-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-8);
 }
 
 .content-calendar__toolbar {
@@ -1997,7 +1997,7 @@ select {
 .content-calendar__list-day {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-4);
 }
 
 .content-calendar__list-day-title {
