@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { addDays, format, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
+import { addDays, addHours, format, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
 
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
@@ -794,6 +794,39 @@ function App() {
     }
   }
 
+  async function duplicatePost(postId: string) {
+    const targetPost = posts.find((post) => post.id === postId)
+    if (!targetPost) return
+
+    let accountContentOverride: Record<string, string> = {}
+    if (api) {
+      try {
+        const res = await api.listPostVersions(targetPost.teamId, postId)
+        for (const row of res.items ?? []) {
+          accountContentOverride[row.account_id] = row.content
+        }
+      } catch {
+        accountContentOverride = {}
+      }
+    }
+
+    setEditorDraft({
+      title: `${targetPost.title} (Copy)`,
+      content: targetPost.content,
+      scheduledAt: toInputDateTime(addHours(currentDate, 1)),
+      targetAccountIds: [...targetPost.targetAccountIds],
+      status: 'draft',
+      accountContentOverride,
+      mediaIds: targetPost.mediaIds ? [...targetPost.mediaIds] : [],
+      mediaExcludeByAccount: targetPost.mediaExcludeByAccount ? { ...targetPost.mediaExcludeByAccount } : {},
+    })
+    setComposerMode('create')
+    setEditingPostId(null)
+    setComposerOpen(true)
+    prevSectionBeforeComposerRef.current = section
+    setSection('composer')
+  }
+
   function connectBackend() {
     setActiveConnection({
       apiBaseUrl: settings.general.apiBaseUrl.trim(),
@@ -1436,6 +1469,7 @@ function App() {
             expandedPostId={expandedPostId}
             setExpandedPostId={setExpandedPostId}
             openEditor={(id) => void openEditor(id)}
+            duplicatePost={duplicatePost}
             deletePost={deletePost}
             accounts={accounts}
           />

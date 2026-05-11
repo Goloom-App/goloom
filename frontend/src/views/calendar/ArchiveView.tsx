@@ -6,6 +6,7 @@ export function ArchiveView({
   expandedPostId,
   setExpandedPostId,
   openEditor,
+  duplicatePost,
   deletePost,
   accounts,
 }: {
@@ -13,11 +14,12 @@ export function ArchiveView({
   expandedPostId: string | null
   setExpandedPostId: (id: string) => void
   openEditor: (postId: string) => void
+  duplicatePost: (postId: string) => void
   deletePost: (postId: string) => void
   accounts: AccountRecord[]
 }) {
   return (
-    <div className="archive-view">
+    <div className="archive-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
       {archivedPosts.map((post) => (
         <PostCard
           key={post.id}
@@ -25,6 +27,7 @@ export function ArchiveView({
           active={expandedPostId === post.id}
           onClick={() => setExpandedPostId(post.id)}
           onEdit={() => openEditor(post.id)}
+          onDuplicate={() => duplicatePost(post.id)}
           onDelete={() => void deletePost(post.id)}
           accounts={accounts}
           isArchived
