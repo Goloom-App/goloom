@@ -639,6 +639,16 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		return domain.ScheduledPost{}, err
 	}
 
+	for accountID, content := range input.AccountContentOverride {
+		if _, err := tx.ExecContext(ctx, `
+			insert into post_versions (post_id, account_id, content)
+			values (?, ?, ?)`,
+			postID, accountID, content,
+		); err != nil {
+			return domain.ScheduledPost{}, err
+		}
+	}
+
 	for _, accountID := range input.TargetAccounts {
 		if _, err := tx.ExecContext(ctx, `
 			insert into scheduled_post_targets (post_id, account_id, status)
@@ -726,6 +736,19 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 		input.Title, input.Content, formatTime(input.ScheduledAt), visibility, mediaJSON, excludeJSON, string(newStatus), nowString(), postID, teamID,
 	); err != nil {
 		return domain.ScheduledPost{}, err
+	}
+
+	if _, err := tx.ExecContext(ctx, `delete from post_versions where post_id = ?`, postID); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	for accountID, content := range input.AccountContentOverride {
+		if _, err := tx.ExecContext(ctx, `
+			insert into post_versions (post_id, account_id, content)
+			values (?, ?, ?)`,
+			postID, accountID, content,
+		); err != nil {
+			return domain.ScheduledPost{}, err
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `delete from scheduled_post_targets where post_id = ?`, postID); err != nil {
 		return domain.ScheduledPost{}, err

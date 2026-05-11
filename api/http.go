@@ -902,9 +902,12 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 		return strings.Compare(a.AccountID, b.AccountID)
 	})
 
+	// Calculate global content length for reporting
+	globalContentLen := len([]rune(input.Content))
+
 	return validationResponse{
 		MaxChars:      maxChars,
-		ContentLength: len([]rune(input.Content)),
+		ContentLength: globalContentLen,
 		Valid:         allValid,
 		Destinations:  destinations,
 	}, effectiveTeam, nil

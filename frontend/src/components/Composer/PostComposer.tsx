@@ -197,7 +197,12 @@ export function PostComposer({
         setSyncing(false)
         return
       }
-      await onSave()
+      if (mode === 'create') {
+        await api!.createPost(teamId!, payload)
+      } else {
+        await api!.updatePost(teamId!, draft.id, payload)
+      }
+      onClose()
     } catch (err) {
       console.error('Failed to save post', err)
     } finally {
