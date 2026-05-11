@@ -180,14 +180,15 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Smooth theme transition */
-.app-shell,
-.app-shell * {
-  transition: background-color var(--transition-fast),
-              border-color var(--transition-fast),
-              color var(--transition-fast),
-              box-shadow var(--transition-fast);
+/* Reload button rotation animation */
+@keyframes reload-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
+.reload-spin {
+  animation: reload-spin 0.8s linear infinite;
+}
+
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {

@@ -102,7 +102,7 @@ export function DashboardView({
 
       const reach = (growthResult.series ?? []).map((p, i, arr) => {
         const prev = arr[i - 1]
-        // Netto-Zuwachs: Heutige Follower minus gestrige Follower
+        // Täglicher Zuwachs: Heutige Follower minus gestrige Follower
         const delta = prev ? p.followers - prev.followers : 0
         return {
           date: p.date,
@@ -143,7 +143,8 @@ export function DashboardView({
           <p className="hint">Team totals from synced analytics</p>
         </div>
         <button type="button" className="button button--secondary" onClick={() => void loadCharts()} disabled={loadingCharts}>
-          Refresh
+          {loadingCharts ? <Icon name="loader" className="reload-spin" /> : <Icon name="refresh" />}
+          <span>Refresh</span>
         </button>
       </div>
       <div className="dashboard-spark-grid">
