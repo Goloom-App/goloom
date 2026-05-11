@@ -7,7 +7,8 @@ import { ScheduleInsights } from './ScheduleInsights'
 import { DestinationAvatar } from '../post/DestinationAvatar'
 import { charCounterClass, pruneMediaExcludeAfterRemove } from './editorDraft'
 import { ComposerMedia } from './ComposerMedia'
-import { ComposerPreviews, effectiveBody } from './ComposerPreviews'
+import { ComposerPreviews } from './ComposerPreviews'
+import { effectiveBody } from './composerUtils'
 import type { EditorDraftState } from './types'
 
 type Api = ReturnType<typeof createApiClient>

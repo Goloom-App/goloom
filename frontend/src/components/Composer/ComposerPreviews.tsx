@@ -1,17 +1,15 @@
 import { useMemo } from 'react'
 import { SocialPreview } from '../post/SocialPreview'
 import type { SocialPreviewAttachment } from '../post/SocialPreview.types'
-import type { AccountRecord } from '../../types'
-import type { BackendMediaItem, createApiClient } from '../../api'
+import type { BackendMediaItem } from '../../api'
 import type { EditorDraftState } from './types'
-
-type Api = ReturnType<typeof createApiClient>
+import { effectiveBody, type ComposerPreviewsProps } from './composerUtils'
 
 function attachmentsForDestination(
   draft: EditorDraftState,
   accountId: string,
   teamId: string | undefined | null,
-  api: Api | null | undefined,
+  api: { mediaPreviewUrl: (teamId: string, mediaId: string) => string } | null | undefined,
   meta: Record<string, Pick<BackendMediaItem, 'filename' | 'mime_type'>>,
 ): SocialPreviewAttachment[] {
   const ex = new Set(draft.mediaExcludeByAccount[accountId] ?? [])
@@ -26,23 +24,6 @@ function attachmentsForDestination(
       mimeType: meta[id]?.mime_type ?? 'image/jpeg',
       filename: meta[id]?.filename,
     }))
-}
-
-export function effectiveBody(draft: EditorDraftState, accountId: string | null) {
-  if (!accountId || accountId === 'default') {
-    return draft.content
-  }
-  return draft.accountContentOverride[accountId] ?? draft.content
-}
-
-interface ComposerPreviewsProps {
-  draft: EditorDraftState
-  teamAccounts: AccountRecord[]
-  teamId?: string | null
-  api?: Api | null
-  authHeader?: string
-  theme: 'dark' | 'light'
-  libraryItems: BackendMediaItem[]
 }
 
 export function ComposerPreviews({ draft, teamAccounts, teamId, api, authHeader, theme, libraryItems }: ComposerPreviewsProps) {

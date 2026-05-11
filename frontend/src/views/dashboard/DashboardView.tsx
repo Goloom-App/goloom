@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
-import type { BackendMetricHistoryPoint } from '../../api'
+import type { BackendMetricHistoryPoint, BackendAccountGrowthPoint } from '../../api'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import { Icon } from '../../icons'
 import { accountConnectionStatus } from '../../mappers'
@@ -94,7 +94,7 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      const reach = (growthResult.series ?? []).map((p: any, i: number, arr: any[]) => {
+      const reach = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint, i: number, arr: BackendAccountGrowthPoint[]) => {
         const prev = arr[i - 1]
         // Daily growth: Today's followers minus yesterday's followers
         const delta = prev ? p.followers - prev.followers : 0
