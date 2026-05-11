@@ -195,7 +195,7 @@ export function PostComposer({
         media_ids: draft.mediaIds,
         media_exclude_by_account: draft.mediaExcludeByAccount,
         account_content_override: draft.accountContentOverride,
-        draft: draft.status === 'draft',
+        draft: false,
       }
       const val = await api!.validatePost(teamId!, payload)
       if (!val.valid) {
