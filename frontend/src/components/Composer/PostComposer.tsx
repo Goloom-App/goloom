@@ -190,11 +190,12 @@ export function PostComposer({
       const payload = {
         title: draft.title,
         content: draft.content,
-        scheduled_at: draft.scheduledAt,
+        scheduled_at: new Date(draft.scheduledAt).toISOString(),
         target_accounts: draft.targetAccountIds,
         media_ids: draft.mediaIds,
         media_exclude_by_account: draft.mediaExcludeByAccount,
         account_content_override: draft.accountContentOverride,
+        draft: draft.status === 'draft',
       }
       const val = await api!.validatePost(teamId!, payload)
       if (!val.valid) {

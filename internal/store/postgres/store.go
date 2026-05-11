@@ -832,6 +832,16 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		return domain.ScheduledPost{}, err
 	}
 
+	for accountID, content := range input.AccountContentOverride {
+		if _, err := tx.Exec(ctx, `
+			insert into post_versions (post_id, account_id, content)
+			values ($1, $2, $3)`,
+			post.ID, accountID, content,
+		); err != nil {
+			return domain.ScheduledPost{}, err
+		}
+	}
+
 	post.TargetAccounts = make([]string, 0, len(input.TargetAccounts))
 	for _, accountID := range input.TargetAccounts {
 		if _, err := tx.Exec(
@@ -919,6 +929,19 @@ func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, 
 	)
 	if err != nil {
 		return domain.ScheduledPost{}, err
+	}
+
+	if _, err := tx.Exec(ctx, `delete from post_versions where post_id = $1`, postID); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	for accountID, content := range input.AccountContentOverride {
+		if _, err := tx.Exec(ctx, `
+			insert into post_versions (post_id, account_id, content)
+			values ($1, $2, $3)`,
+			postID, accountID, content,
+		); err != nil {
+			return domain.ScheduledPost{}, err
+		}
 	}
 
 	if _, err := tx.Exec(ctx, `delete from scheduled_post_targets where post_id = $1`, postID); err != nil {
