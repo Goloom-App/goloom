@@ -203,7 +203,7 @@ export function PostComposer({
         return
       }
       // When saving/scheduling, we always want to move out of draft
-      setDraft(prev => ({ ...prev, status: 'pending' }))
+      setDraft(prev => ({ ...prev, status: 'scheduled' }))
       await onSave()
     } catch (err) {
       console.error('Failed to save post', err)
