@@ -502,6 +502,7 @@ export function createApiClient(options: ApiClientOptions) {
         target_accounts: string[]
         media_ids?: string[]
         media_exclude_by_account?: Record<string, string[]>
+        account_content_override?: Record<string, string>
         draft?: boolean
       },
     ) {
@@ -521,6 +522,7 @@ export function createApiClient(options: ApiClientOptions) {
         target_accounts: string[]
         media_ids?: string[]
         media_exclude_by_account?: Record<string, string[]>
+        account_content_override?: Record<string, string>
         draft?: boolean
       },
     ) {
@@ -710,6 +712,36 @@ export function createApiClient(options: ApiClientOptions) {
         method: 'POST',
         headers: buildHeaders(options.token),
         body: JSON.stringify({ occurrence_at: occurrenceAtIso }),
+      })
+    },
+    validatePost(
+      teamID: string,
+      payload: {
+        title: string
+        content: string
+        scheduled_at: string
+        target_accounts: string[]
+        media_ids?: string[]
+        media_exclude_by_account?: Record<string, string[]>
+        account_content_override?: Record<string, string>
+        draft?: boolean
+      },
+    ) {
+      return request<{
+        max_chars: number
+        content_length: number
+        valid: boolean
+        destinations: Array<{
+          account_id: string
+          provider: string
+          max_chars: number
+          length: number
+          valid: boolean
+        }>
+      }>(options, `/v1/teams/${teamID}/posts/validate`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
       })
     },
   }

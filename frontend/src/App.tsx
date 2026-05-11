@@ -1106,24 +1106,15 @@ function App() {
         target_accounts: editorDraft.targetAccountIds,
         media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
         media_exclude_by_account: mediaExclude,
+        account_content_override: editorDraft.accountContentOverride,
         draft: false,
       }
 
-      let savedPostId: string
       if (composerMode === 'edit' && editTargetPost) {
         await api.updatePost(selectedTeam.id, editTargetPost.id, payload)
-        savedPostId = editTargetPost.id
       } else {
-        const created = await api.createPost(selectedTeam.id, payload)
-        savedPostId = created.id
+        await api.createPost(selectedTeam.id, payload)
       }
-
-      const versions = editorDraft.targetAccountIds.map((aid) => {
-        const override = (editorDraft.accountContentOverride[aid] ?? '').trim()
-        const content = override && override !== defaultContent ? override : ''
-        return { account_id: aid, content }
-      })
-      await api.patchPostVersions(selectedTeam.id, savedPostId, { versions })
 
       setComposerOpen(false)
       await loadDashboard({ silent: true })
@@ -1144,25 +1135,14 @@ function App() {
         target_accounts: editorDraft.targetAccountIds,
         media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
         media_exclude_by_account: mediaExclude,
+        account_content_override: editorDraft.accountContentOverride,
         draft: true,
       }
 
-      let savedPostId: string
       if (composerMode === 'edit' && editTargetPost) {
         await api.updatePost(selectedTeam.id, editTargetPost.id, payload)
-        savedPostId = editTargetPost.id
       } else {
-        const created = await api.createPost(selectedTeam.id, payload)
-        savedPostId = created.id
-      }
-
-      const versions = editorDraft.targetAccountIds.map((aid) => {
-        const override = (editorDraft.accountContentOverride[aid] ?? '').trim()
-        const content = override && override !== defaultContent.trim() ? override : ''
-        return { account_id: aid, content }
-      })
-      if (versions.some((v) => v.content.length > 0)) {
-        await api.patchPostVersions(selectedTeam.id, savedPostId, { versions })
+        await api.createPost(selectedTeam.id, payload)
       }
 
       setComposerOpen(false)

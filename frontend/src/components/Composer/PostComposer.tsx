@@ -184,29 +184,24 @@ export function PostComposer({
   }
 
   const onSaveInternal = async () => {
-    if (syncing) return
-    setSyncing(true)
+    if (syncing || !onSave) return
     try {
       const payload = {
-        ...draft,
+        title: draft.title,
+        content: draft.content,
+        scheduled_at: draft.scheduledAt,
         target_accounts: draft.targetAccountIds,
+        media_ids: draft.mediaIds,
+        media_exclude_by_account: draft.mediaExcludeByAccount,
         account_content_override: draft.accountContentOverride,
       }
       const val = await api!.validatePost(teamId!, payload)
       if (!val.valid) {
-        setSyncing(false)
         return
       }
-      if (mode === 'create') {
-        await api!.createPost(teamId!, payload)
-      } else {
-        await api!.updatePost(teamId!, draft.id, payload)
-      }
-      onClose()
+      await onSave()
     } catch (err) {
       console.error('Failed to save post', err)
-    } finally {
-      setSyncing(false)
     }
   }
 
