@@ -183,6 +183,28 @@ export function PostComposer({
     return null
   }
 
+  const onSaveInternal = async () => {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      const payload = {
+        ...draft,
+        target_accounts: draft.targetAccountIds,
+        account_content_override: draft.accountContentOverride,
+      }
+      const val = await api!.validatePost(teamId!, payload)
+      if (!val.valid) {
+        setSyncing(false)
+        return
+      }
+      await onSave()
+    } catch (err) {
+      console.error('Failed to save post', err)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const destinationsPanel = (
     <aside className="composer-sidebar composer-sidebar--destinations">
       <p className="eyebrow">Destinations</p>
@@ -392,7 +414,7 @@ export function PostComposer({
               type="button"
               className="button button--primary"
               disabled={syncing || draft.targetAccountIds.length === 0 || overAnyLimit}
-              onClick={() => void onSave()}
+              onClick={() => void onSaveInternal()}
             >
               <Icon name="calendar" className="inline-icon" />
               <span>{mode === 'edit' ? 'Save changes' : 'Schedule post'}</span>

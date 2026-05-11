@@ -39,6 +39,8 @@ type destinationInfo struct {
 	AccountID string `json:"account_id"`
 	Provider  string `json:"provider"`
 	MaxChars  int    `json:"max_chars"`
+	Length    int    `json:"length"`
+	Valid     bool   `json:"valid"`
 }
 
 func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config) *API {
@@ -647,6 +649,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
 	input.MediaExcludeByAccount = domain.NormalizeMediaExcludeByAccount(input.MediaExcludeByAccount, input.MediaIDs)
+	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
 	if input.ScheduledAt.IsZero() {
 		input.ScheduledAt = time.Now().UTC()
 	}
@@ -708,6 +711,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
 	input.MediaExcludeByAccount = domain.NormalizeMediaExcludeByAccount(input.MediaExcludeByAccount, input.MediaIDs)
+	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
 	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
 	if err != nil {
@@ -796,6 +800,7 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	input.Content = sanitizeContent(a.sanitizer, input.Content)
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
+	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
 	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
 	if err != nil {
@@ -856,6 +861,7 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 
 	destinations := make([]destinationInfo, 0, len(accounts))
 	maxChars := 0
+	allValid := true
 	for _, account := range accounts {
 		if account.TeamID != effectiveTeam {
 			return validationResponse{}, "", errors.New("target accounts must belong to one team")
@@ -872,10 +878,20 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 		if err != nil {
 			return validationResponse{}, "", err
 		}
+
+		effectiveContent := input.EffectiveContent(account.ID)
+		contentLen := len([]rune(effectiveContent))
+		isValid := capabilities.MaxChars == 0 || contentLen <= capabilities.MaxChars
+		if !isValid {
+			allValid = false
+		}
+
 		destinations = append(destinations, destinationInfo{
 			AccountID: account.ID,
 			Provider:  account.Provider,
 			MaxChars:  capabilities.MaxChars,
+			Length:    contentLen,
+			Valid:     isValid,
 		})
 		if maxChars == 0 || capabilities.MaxChars < maxChars {
 			maxChars = capabilities.MaxChars
@@ -889,7 +905,7 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 	return validationResponse{
 		MaxChars:      maxChars,
 		ContentLength: len([]rune(input.Content)),
-		Valid:         len([]rune(input.Content)) <= maxChars,
+		Valid:         allValid,
 		Destinations:  destinations,
 	}, effectiveTeam, nil
 }

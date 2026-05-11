@@ -60,6 +60,32 @@ func NormalizePostVisibility(v string) string {
 	}
 }
 
+// NormalizeAccountContentOverride keeps only overrides for accounts targeted by this post.
+func NormalizeAccountContentOverride(over map[string]string, targetAccounts []string) map[string]string {
+	if len(over) == 0 {
+		return nil
+	}
+	targets := make(map[string]struct{})
+	for _, id := range targetAccounts {
+		targets[id] = struct{}{}
+	}
+	out := make(map[string]string)
+	for accountID, content := range over {
+		content = strings.TrimSpace(content)
+		if content == "" {
+			continue
+		}
+		if _, ok := targets[accountID]; !ok {
+			continue
+		}
+		out[accountID] = content
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // NormalizeMediaIDs trims and drops empty platform media IDs.
 func NormalizeMediaIDs(ids []string) []string {
 	out := make([]string, 0, len(ids))
@@ -499,10 +525,19 @@ type CreatePostInput struct {
 	MediaIDs              []string            `json:"media_ids,omitempty"`
 	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
 	Draft                 bool                `json:"draft,omitempty"`
+	// AccountContentOverride allows per-account overrides for text validation and storage.
+	AccountContentOverride map[string]string `json:"account_content_override,omitempty"`
 	// Internal-only (workers): optional author override and template lineage for dynamic variables.
-	AuthorUserID          *string `json:"-"`
-	PostTemplateID        *string `json:"-"`
-	TemplateCounter       *int    `json:"-"`
+	AuthorUserID    *string `json:"-"`
+	PostTemplateID  *string `json:"-"`
+	TemplateCounter *int    `json:"-"`
+}
+
+func (in CreatePostInput) EffectiveContent(accountID string) string {
+	if over, ok := in.AccountContentOverride[accountID]; ok && strings.TrimSpace(over) != "" {
+		return over
+	}
+	return in.Content
 }
 
 func (in CreatePostInput) Validate() error {
