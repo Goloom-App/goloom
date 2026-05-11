@@ -199,8 +199,11 @@ export function PostComposer({
       }
       const val = await api!.validatePost(teamId!, payload)
       if (!val.valid) {
+        // TODO: UI feedback for validation failure
         return
       }
+      // When saving/scheduling, we always want to move out of draft
+      setDraft(prev => ({ ...prev, status: 'pending' }))
       await onSave()
     } catch (err) {
       console.error('Failed to save post', err)
