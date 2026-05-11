@@ -261,7 +261,7 @@ body,
 }
 
 .app-main > * + * {
-  margin-top: var(--space-4);
+  margin-top: var(--space-8);
 }
 
 /* ==========================================================================
@@ -1538,11 +1538,11 @@ select {
 .dashboard-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-8);
 }
 
 .dashboard-welcome {
-  margin-bottom: var(--space-2);
+  margin-bottom: 0;
 }
 
 .dashboard-welcome h1 {
@@ -1557,7 +1557,7 @@ select {
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: var(--space-5);
+  gap: var(--space-8);
 }
 
 @media (min-width: 900px) {
