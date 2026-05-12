@@ -625,27 +625,6 @@ func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	}
 	auth.WriteJSON(w, http.StatusOK, post)
 }
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
-	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	if err := a.attachPublishedLinks(r, []domain.ScheduledPost{post}); err == nil {
-		postLinks, linksErr := a.store.LoadPublishedLinksByPostIDs(r.Context(), []string{post.ID})
-		if linksErr == nil {
-			post.PublishedLinks = postLinks[post.ID]
-		}
-	}
-	auth.WriteJSON(w, http.StatusOK, post)
-}
 
 func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	principal, err := a.auth.CurrentPrincipal(r)
