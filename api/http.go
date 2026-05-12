@@ -16,7 +16,6 @@ import (
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store"
-	"github.com/microcosm-cc/bluemonday"
 )
 
 type API struct {
@@ -24,7 +23,6 @@ type API struct {
 	store     store.Store
 	auth      *auth.Service
 	providers *provider.Registry
-	sanitizer *bluemonday.Policy
 	config    config.Config
 }
 
@@ -49,7 +47,6 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		store:     store,
 		auth:      authService,
 		providers: providers,
-		sanitizer: bluemonday.UGCPolicy(),
 		config:    cfg,
 	}
 }
@@ -1009,11 +1006,6 @@ func (a *API) handleAcceptTeamInvitation(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, membership)
-}
-
-func sanitizeContent(policy *bluemonday.Policy, content string) string {
-	clean := policy.Sanitize(content)
-	return strings.TrimSpace(clean)
 }
 
 func (a *API) attachPublishedLinks(r *http.Request, posts []domain.ScheduledPost) error {
