@@ -50,7 +50,7 @@ func (a *API) handleCreatePostTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Title = strings.TrimSpace(input.Title)
-	input.Content = sanitizeContent(a.sanitizer, input.Content)
+	input.Content = strings.TrimSpace(input.Content)
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
 	input.MediaExcludeByAccount = domain.NormalizeMediaExcludeByAccount(input.MediaExcludeByAccount, input.MediaIDs)
@@ -85,7 +85,7 @@ func (a *API) handleUpdatePostTemplate(w http.ResponseWriter, r *http.Request) {
 		input.Title = &t
 	}
 	if input.Content != nil {
-		c := sanitizeContent(a.sanitizer, *input.Content)
+		c := strings.TrimSpace(*input.Content)
 		input.Content = &c
 	}
 	if input.Visibility != nil {

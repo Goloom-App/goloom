@@ -22,6 +22,15 @@ func (a *API) handleTeamAnalyticsSummary(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	for i := range report.TopPosts {
+		report.TopPosts[i].Title = strings.ReplaceAll(report.TopPosts[i].Title, "&amp;", "&")
+		report.TopPosts[i].Title = strings.ReplaceAll(report.TopPosts[i].Title, "&lt;", "<")
+		report.TopPosts[i].Title = strings.ReplaceAll(report.TopPosts[i].Title, "&gt;", ">")
+		report.TopPosts[i].Title = strings.ReplaceAll(report.TopPosts[i].Title, "&#39;", "'")
+		report.TopPosts[i].Title = strings.ReplaceAll(report.TopPosts[i].Title, "&#34;", "\"")
+	}
+
 	auth.WriteJSON(w, http.StatusOK, report)
 }
 
@@ -44,6 +53,15 @@ func (a *API) handleTeamAnalyticsPosts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	for i := range items {
+		items[i].Title = strings.ReplaceAll(items[i].Title, "&amp;", "&")
+		items[i].Title = strings.ReplaceAll(items[i].Title, "&lt;", "<")
+		items[i].Title = strings.ReplaceAll(items[i].Title, "&gt;", ">")
+		items[i].Title = strings.ReplaceAll(items[i].Title, "&#39;", "'")
+		items[i].Title = strings.ReplaceAll(items[i].Title, "&#34;", "\"")
+	}
+
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
 }
 
@@ -104,6 +122,15 @@ func (a *API) handleTeamAnalytics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	for i := range summary.TopPosts {
+		summary.TopPosts[i].Title = strings.ReplaceAll(summary.TopPosts[i].Title, "&amp;", "&")
+		summary.TopPosts[i].Title = strings.ReplaceAll(summary.TopPosts[i].Title, "&lt;", "<")
+		summary.TopPosts[i].Title = strings.ReplaceAll(summary.TopPosts[i].Title, "&gt;", ">")
+		summary.TopPosts[i].Title = strings.ReplaceAll(summary.TopPosts[i].Title, "&#39;", "'")
+		summary.TopPosts[i].Title = strings.ReplaceAll(summary.TopPosts[i].Title, "&#34;", "\"")
+	}
+
 	auth.WriteJSON(w, http.StatusOK, summary)
 }
 
@@ -165,7 +192,7 @@ func (a *API) handlePatchPostVersions(w http.ResponseWriter, r *http.Request) {
 		patches = append(patches, domain.PostVersion{
 			PostID:    postID,
 			AccountID: aid,
-			Content:   sanitizeContent(a.sanitizer, row.Content),
+			Content:   strings.TrimSpace(row.Content),
 		})
 	}
 	if err := a.store.ApplyPostVersionsPatch(r.Context(), teamID, postID, patches); err != nil {

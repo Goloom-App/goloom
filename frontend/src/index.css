@@ -2848,6 +2848,11 @@ select {
   display: contents;
 }
 
+.destination-avatar__badge-link:hover .destination-avatar {
+  transform: scale(1.1);
+  transition: transform var(--transition-fast);
+}
+
 /* Fix dashboard upcoming icons layout */
 .dashboard-scheduled-card__accounts {
   display: flex;

@@ -17,7 +17,7 @@ export function DestinationAvatar({
       <img src={`/icons/platforms/${account.provider}.svg`} alt="" />
     </span>
   )
-  return (
+  const avatar = (
     <div className={`destination-avatar ${compact ? 'destination-avatar--compact' : ''}`}>
       <div className="destination-avatar__disk">
         <div className="destination-avatar__inner">
@@ -29,22 +29,27 @@ export function DestinationAvatar({
             </div>
           )}
         </div>
-        {publishedPostUrl ? (
-          <a
-            href={publishedPostUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="destination-avatar__badge-link"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {badge}
-          </a>
-        ) : (
-          badge
-        )}
+        {badge}
       </div>
     </div>
   )
+
+  if (publishedPostUrl) {
+    return (
+      <a
+        href={publishedPostUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="destination-avatar__badge-link"
+        title={`Open on ${account.provider}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {avatar}
+      </a>
+    )
+  }
+
+  return avatar
 }
 
 export function DestinationStack({

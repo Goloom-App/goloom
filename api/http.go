@@ -614,6 +614,25 @@ func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	}
 	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
 	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if err := a.attachPublishedLinks(r, []domain.ScheduledPost{post}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, post)
+}
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
@@ -644,7 +663,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Content = sanitizeContent(a.sanitizer, input.Content)
+	input.Content = strings.TrimSpace(input.Content)
 	input.Title = strings.TrimSpace(input.Title)
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
@@ -706,7 +725,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Content = sanitizeContent(a.sanitizer, input.Content)
+	input.Content = strings.TrimSpace(input.Content)
 	input.Title = strings.TrimSpace(input.Title)
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
@@ -797,7 +816,7 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Content = sanitizeContent(a.sanitizer, input.Content)
+	input.Content = strings.TrimSpace(input.Content)
 	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
 	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
 	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
