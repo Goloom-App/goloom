@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: Install git and Node (backend image)
         if: matrix.suite == 'backend'
-        run: apk add --no-cache git nodejs
+        run: apk add --no-cache git nodejs tar zstd
 
       - name: Install git (frontend image)
         if: matrix.suite == 'frontend'
@@ -35,7 +35,7 @@ jobs:
             apk add --no-cache git
           elif command -v apt-get >/dev/null 2>&1; then
             apt-get update
-            apt-get install -y --no-install-recommends git
+            apt-get install -y --no-install-recommends git tar zstd
             rm -rf /var/lib/apt/lists/*
           else
             command -v git
@@ -48,8 +48,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            /root/.cache/go-build
-            /root/go/pkg/mod
+            ~/.cache/go-build
+            ~/go/pkg/mod
           key: forgejo-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             forgejo-go-
@@ -58,10 +58,7 @@ jobs:
         if: matrix.suite == 'frontend'
         uses: actions/cache@v5
         with:
-          path: |
-            **/node_modules
-            /root/.local/share/pnpm/store
-            /root/.cache/pnpm
+          path: ~/.local/share/pnpm/store/v3
           key: forgejo-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             forgejo-pnpm-
