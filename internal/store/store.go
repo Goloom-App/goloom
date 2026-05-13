@@ -100,6 +100,8 @@ type Store interface {
 	GetMediaProviderMapping(ctx context.Context, mediaID, accountID string) (domain.MediaProviderMapping, error)
 	UpsertMediaProviderMapping(ctx context.Context, mapping domain.MediaProviderMapping) error
 
+	TryAcquireLock(ctx context.Context, lockID string, duration time.Duration) (bool, error)
+
 	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
 	RepairFuturePostedPosts(ctx context.Context) (int64, error)
 	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (plaintext string, meta domain.APIToken, err error)

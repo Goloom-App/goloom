@@ -110,7 +110,9 @@ func (s *Service) runAccountMetricsLoop(ctx context.Context) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for {
-		s.accountMetricsJob(ctx)
+		if s.tryLock(ctx, "account_metrics", 23*time.Hour) {
+			s.accountMetricsJob(ctx)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -257,7 +259,9 @@ func (s *Service) runMetricSyncLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.metricSyncInterval)
 	defer ticker.Stop()
 	for {
-		s.fetchMetricsJob(ctx)
+		if s.tryLock(ctx, "metric_sync", s.metricSyncInterval-1*time.Minute) {
+			s.fetchMetricsJob(ctx)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -272,7 +276,9 @@ func (s *Service) runAccountHealthLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.accountHealthInterval)
 	defer ticker.Stop()
 	for {
-		s.accountHealthJob(ctx)
+		if s.tryLock(ctx, "account_health", s.accountHealthInterval-1*time.Minute) {
+			s.accountHealthJob(ctx)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -472,6 +478,15 @@ func (s *Service) syncMediaToProvider(ctx context.Context, teamID string, localM
 	}
 
 	return remoteIDs, nil
+}
+
+func (s *Service) tryLock(ctx context.Context, lockID string, duration time.Duration) bool {
+	locked, err := s.store.TryAcquireLock(ctx, lockID, duration)
+	if err != nil {
+		s.logger.Error("failed to acquire lock", "lock_id", lockID, "error", err)
+		return false
+	}
+	return locked
 }
 
 func (s *Service) materializePostTemplates(ctx context.Context) error {

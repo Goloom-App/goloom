@@ -115,6 +115,29 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 	}, nil
 }
 
+func (s *Store) TryAcquireLock(ctx context.Context, lockID string, duration time.Duration) (bool, error) {
+	now := nowString()
+	expiresAt := time.Now().UTC().Add(duration).Format(time.RFC3339)
+
+	const query = `
+		insert into job_locks (lock_id, locked_at, expires_at)
+		values (?, ?, ?)
+		on conflict (lock_id) do update
+		set locked_at = excluded.locked_at, expires_at = excluded.expires_at
+		where job_locks.expires_at < ?
+		returning lock_id
+	`
+	var returnedID string
+	err := s.db.QueryRowContext(ctx, query, lockID, now, expiresAt, now).Scan(&returnedID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return returnedID == lockID, nil
+}
+
 func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
 	if ttl <= 0 {
 		ttl = 12 * time.Hour

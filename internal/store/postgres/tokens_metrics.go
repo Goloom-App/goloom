@@ -113,6 +113,26 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 	}, nil
 }
 
+func (s *Store) TryAcquireLock(ctx context.Context, lockID string, duration time.Duration) (bool, error) {
+	const query = `
+		insert into job_locks (lock_id, expires_at)
+		values ($1, now() + $2)
+		on conflict (lock_id) do update
+		set locked_at = now(), expires_at = now() + $2
+		where job_locks.expires_at < now()
+		returning lock_id
+	`
+	var returnedID string
+	err := s.pool.QueryRow(ctx, query, lockID, duration).Scan(&returnedID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return returnedID == lockID, nil
+}
+
 func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
 	if ttl <= 0 {
 		ttl = 12 * time.Hour

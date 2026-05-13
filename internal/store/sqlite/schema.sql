@@ -217,3 +217,9 @@ create table if not exists post_template_skips (
     occurrence_at text not null,
     primary key (template_id, occurrence_at)
 );
+
+create table if not exists job_locks (
+    lock_id text primary key,
+    locked_at text not null,
+    expires_at text not null
+);

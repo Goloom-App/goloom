@@ -290,3 +290,9 @@ create table if not exists post_template_skips (
 
 alter table scheduled_posts add column if not exists post_template_id uuid references post_templates(id) on delete set null;
 alter table scheduled_posts add column if not exists template_counter integer;
+
+create table if not exists job_locks (
+    lock_id text primary key,
+    locked_at timestamptz not null default now(),
+    expires_at timestamptz not null
+);
