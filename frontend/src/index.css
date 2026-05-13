@@ -2800,6 +2800,13 @@ select {
 .destination-stack {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
+}
+
+@media (min-width: 1024px) {
+  .destination-stack {
+    gap: var(--space-1);
+  }
 }
 
 .destination-stack__item {
