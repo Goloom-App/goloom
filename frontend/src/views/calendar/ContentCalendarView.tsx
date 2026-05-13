@@ -14,8 +14,6 @@ export function ContentCalendarView({
   canEditScheduledPosts,
   calendarDragOverKey,
   setCalendarDragOverKey,
-  setExpandedPostId,
-  openEditor,
   deletePost,
   onPreview,
   accounts,
@@ -29,8 +27,6 @@ export function ContentCalendarView({
   canEditScheduledPosts: boolean
   calendarDragOverKey: string | null
   setCalendarDragOverKey: (key: string | null | ((c: string | null) => string | null)) => void
-  setExpandedPostId: (id: string) => void
-  openEditor: (postId: string) => void
   deletePost: (postId: string) => void
   onPreview?: (postId: string) => void
   accounts: AccountRecord[]
@@ -38,7 +34,6 @@ export function ContentCalendarView({
 }) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(isMobile ? 'list' : 'grid')
   const [calendarTouchStart, setCalendarTouchStart] = useState<{ x: number; y: number } | null>(null)
-  const [listExpandedPostId, setListExpandedPostId] = useState<string | null>(null)
 
   useEffect(() => {
     setViewMode(isMobile ? 'list' : 'grid')
@@ -193,11 +188,11 @@ export function ContentCalendarView({
                           event.dataTransfer.effectAllowed = 'move'
                         }}
                         onDragEnd={() => setCalendarDragOverKey(null)}
-                        onClick={() => setExpandedPostId(post.id)}
+                        onClick={() => onPreview?.(post.id)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
-                            setExpandedPostId(post.id)
+                            onPreview?.(post.id)
                           }
                         }}
                       >
@@ -208,13 +203,13 @@ export function ContentCalendarView({
                         <button
                           type="button"
                           className="content-calendar__chip-edit"
-                          aria-label="Edit post"
+                          aria-label="Preview post"
                           onClick={(event) => {
                             event.stopPropagation()
-                            openEditor(post.id)
+                            onPreview?.(post.id)
                           }}
                         >
-                          <Icon name="edit" className="inline-icon" />
+                          <Icon name="eye" className="inline-icon" />
                         </button>
                       ) : null}
                     </div>
@@ -238,9 +233,6 @@ export function ContentCalendarView({
                     <PostCard
                       key={post.id}
                       post={post}
-                      active={listExpandedPostId === post.id}
-                      onClick={() => setListExpandedPostId(listExpandedPostId === post.id ? null : post.id)}
-                      onEdit={() => openEditor(post.id)}
                       onDelete={() => void deletePost(post.id)}
                       onPreview={onPreview ? () => onPreview(post.id) : undefined}
                       accounts={accounts}

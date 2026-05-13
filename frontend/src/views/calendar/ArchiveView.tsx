@@ -3,19 +3,11 @@ import { PostCard } from '../../components/post/PostCard'
 
 export function ArchiveView({
   archivedPosts,
-  expandedPostId,
-  setExpandedPostId,
-  openEditor,
-  duplicatePost,
   deletePost,
   onPreview,
   accounts,
 }: {
   archivedPosts: PostRecord[]
-  expandedPostId: string | null
-  setExpandedPostId: (id: string) => void
-  openEditor: (postId: string) => void
-  duplicatePost: (postId: string) => void
   deletePost: (postId: string) => void
   onPreview?: (postId: string) => void
   accounts: AccountRecord[]
@@ -26,10 +18,6 @@ export function ArchiveView({
         <PostCard
           key={post.id}
           post={post}
-          active={expandedPostId === post.id}
-          onClick={() => setExpandedPostId(post.id)}
-          onEdit={() => openEditor(post.id)}
-          onDuplicate={() => duplicatePost(post.id)}
           onDelete={() => void deletePost(post.id)}
           onPreview={onPreview ? () => onPreview(post.id) : undefined}
           accounts={accounts}

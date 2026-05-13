@@ -1,4 +1,5 @@
 import { format, parseISO } from 'date-fns'
+import { useState, useRef, type TouchEvent } from 'react'
 import { Icon } from '../../icons'
 import type { AccountRecord, PostRecord } from '../../types'
 import { sharedAccountLabels } from '../../schedule'
@@ -6,10 +7,6 @@ import { DestinationStack } from './DestinationAvatar'
 
 export function PostCard({
   post,
-  active,
-  onClick,
-  onEdit,
-  onDuplicate,
   onDelete,
   onPreview,
   accounts,
@@ -17,72 +14,92 @@ export function PostCard({
   publishedLinks,
 }: {
   post: PostRecord
-  active: boolean
-  onClick: () => void
-  onEdit: () => void
-  onDuplicate?: () => void
   onDelete: () => void
   onPreview?: () => void
   accounts: AccountRecord[]
   isArchived?: boolean
   publishedLinks?: Record<string, string>
 }) {
+  const [swipeX, setSwipeX] = useState(0)
+  const touchStart = useRef<number | null>(null)
+  const isSwiping = useRef(false)
+
+  const onTouchStart = (e: TouchEvent) => {
+    touchStart.current = e.touches[0].clientX
+    isSwiping.current = true
+  }
+
+  const onTouchMove = (e: TouchEvent) => {
+    if (touchStart.current === null) return
+    const delta = e.touches[0].clientX - touchStart.current
+    // Only allow swiping to the left
+    if (delta < 0) {
+      setSwipeX(delta)
+    }
+  }
+
+  const onTouchEnd = () => {
+    if (swipeX < -100) {
+      if (window.confirm('Delete this post?')) {
+        onDelete()
+      }
+    }
+    setSwipeX(0)
+    touchStart.current = null
+    isSwiping.current = false
+  }
+
   return (
-    <article className={`post-card ${active ? 'post-card--active' : ''}`} onClick={onPreview || onClick}>
-      <div className="post-card__header">
-        <span className="post-card__meta">
-          {isArchived ? format(parseISO(post.scheduledAt), 'EEEE, MMM d · HH:mm') : format(parseISO(post.scheduledAt), 'HH:mm')}
-        </span>
-        <div className="flex-row--center gap-2">
-          <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
+    <div className="post-card-container" style={{ position: 'relative', overflow: 'hidden', borderRadius: 'var(--radius-lg)' }}>
+      <div
+        className="post-card-delete-bg"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'var(--danger)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          paddingRight: 'var(--space-6)',
+          color: 'white',
+          opacity: Math.min(1, Math.abs(swipeX) / 100),
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+          <Icon name="trash" style={{ width: '24px', height: '24px' }} />
+          <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>DELETE</span>
         </div>
       </div>
-      <h3 className="post-card__title">
-        {post.status === 'draft' ? <span className="post-card__badge">Draft</span> : null}
-        {post.title || 'Untitled Post'}
-      </h3>
-      <p className="post-card__content">{post.content}</p>
-      {active && (
-        <div className="inline-cluster mt-1" onClick={(e) => e.stopPropagation()}>
-          {!isArchived && (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit()
-              }}
-            >
-              <Icon name="edit" className="inline-icon" />
-              <span>Edit</span>
-            </button>
-          )}
-          {isArchived && onDuplicate && (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDuplicate()
-              }}
-            >
-              <Icon name="plus" className="inline-icon" />
-              <span>Re-use as draft</span>
-            </button>
-          )}
-          <button
-            type="button"
-            className="button button--secondary"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete()
-            }}
-          >
-            <Icon name="trash" className="inline-icon" />
-            <span>Delete</span>
-          </button>
+      <article
+        className="post-card"
+        style={{
+          transform: `translateX(${swipeX}px)`,
+          transition: isSwiping.current ? 'none' : 'transform 0.3s var(--ease-out)',
+          position: 'relative',
+          zIndex: 1,
+        }}
+        onClick={(e) => {
+          e.stopPropagation()
+          onPreview?.()
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        <div className="post-card__header">
+          <span className="post-card__meta">
+            {isArchived ? format(parseISO(post.scheduledAt), 'EEEE, MMM d · HH:mm') : format(parseISO(post.scheduledAt), 'HH:mm')}
+          </span>
+          <div className="flex-row--center gap-2">
+            <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
+          </div>
         </div>
-      )}
-    </article>
+        <h3 className="post-card__title">
+          {post.status === 'draft' ? <span className="post-card__badge">Draft</span> : null}
+          {post.title || 'Untitled Post'}
+        </h3>
+        <p className="post-card__content">{post.content}</p>
+      </article>
+    </div>
   )
 }

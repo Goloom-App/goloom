@@ -1480,27 +1480,62 @@ function App() {
                   </button>
                   <h3 style={{ margin: 0 }}>Preview</h3>
                 </div>
-                {(() => {
-                  const p = posts.find((p) => p.id === mobilePreviewPostId)
-                  if (p && p.status !== 'posted') {
+                <div className="flex-row--center gap-2">
+                  {(() => {
+                    const p = posts.find((p) => p.id === mobilePreviewPostId)
+                    if (!p) return null
                     return (
-                      <button
-                        type="button"
-                        className="button button--secondary button--sm"
-                        onClick={() => {
-                          const id = mobilePreviewPostId
-                          setMobilePreviewPostId(null)
-                          setPreviewTranslateY(0)
-                          void openEditor(id)
-                        }}
-                      >
-                        <Icon name="edit" className="inline-icon" />
-                        <span>Edit</span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="button button--secondary button--sm"
+                          style={{ color: 'var(--danger)' }}
+                          onClick={() => {
+                            if (window.confirm('Are you sure you want to delete this post?')) {
+                              const id = mobilePreviewPostId
+                              setMobilePreviewPostId(null)
+                              setPreviewTranslateY(0)
+                              void deletePost(id)
+                            }
+                          }}
+                        >
+                          <Icon name="trash" className="inline-icon" />
+                          <span className="desktop-only">Delete</span>
+                        </button>
+                        {p.status !== 'posted' && (
+                          <button
+                            type="button"
+                            className="button button--secondary button--sm"
+                            onClick={() => {
+                              const id = mobilePreviewPostId
+                              setMobilePreviewPostId(null)
+                              setPreviewTranslateY(0)
+                              void openEditor(id)
+                            }}
+                          >
+                            <Icon name="edit" className="inline-icon" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                        {p.status === 'posted' && (
+                          <button
+                            type="button"
+                            className="button button--secondary button--sm"
+                            onClick={() => {
+                              const id = mobilePreviewPostId
+                              setMobilePreviewPostId(null)
+                              setPreviewTranslateY(0)
+                              void duplicatePost(id)
+                            }}
+                          >
+                            <Icon name="plus" className="inline-icon" />
+                            <span>Re-use</span>
+                          </button>
+                        )}
+                      </>
                     )
-                  }
-                  return null
-                })()}
+                  })()}
+                </div>
               </header>
               <div className="mobile-preview-scrollable">
                 {(() => {
@@ -1540,9 +1575,6 @@ function App() {
         {section === 'calendar' && (
           <ScheduleView
             upcomingPosts={upcomingPosts}
-            expandedPostId={expandedPostId}
-            setExpandedPostId={setExpandedPostId}
-            openEditor={(id) => void openEditor(id)}
             deletePost={deletePost}
             onPreview={(id) => setMobilePreviewPostId(id)}
             accounts={accounts}
@@ -1559,8 +1591,6 @@ function App() {
             canEditScheduledPosts={canEditScheduledPosts}
             calendarDragOverKey={calendarDragOverKey}
             setCalendarDragOverKey={setCalendarDragOverKey}
-            setExpandedPostId={setExpandedPostId}
-            openEditor={(id) => void openEditor(id)}
             deletePost={deletePost}
             onPreview={(id) => setMobilePreviewPostId(id)}
             accounts={accounts}
@@ -1571,10 +1601,6 @@ function App() {
         {section === 'archive' && (
           <ArchiveView
             archivedPosts={archivedPosts}
-            expandedPostId={expandedPostId}
-            setExpandedPostId={setExpandedPostId}
-            openEditor={(id) => void openEditor(id)}
-            duplicatePost={duplicatePost}
             deletePost={deletePost}
             onPreview={(id) => setMobilePreviewPostId(id)}
             accounts={accounts}

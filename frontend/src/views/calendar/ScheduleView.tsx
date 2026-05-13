@@ -5,17 +5,11 @@ import { groupUpcomingIntoMonths } from './calendarUtils'
 
 export function ScheduleView({
   upcomingPosts,
-  expandedPostId,
-  setExpandedPostId,
-  openEditor,
   deletePost,
   onPreview,
   accounts,
 }: {
   upcomingPosts: PostRecord[]
-  expandedPostId: string | null
-  setExpandedPostId: (id: string) => void
-  openEditor: (postId: string) => void
   deletePost: (postId: string) => void
   onPreview?: (postId: string) => void
   accounts: AccountRecord[]
@@ -52,9 +46,6 @@ export function ScheduleView({
                   <PostCard
                     key={post.id}
                     post={post}
-                    active={expandedPostId === post.id}
-                    onClick={() => setExpandedPostId(post.id)}
-                    onEdit={() => openEditor(post.id)}
                     onDelete={() => void deletePost(post.id)}
                     onPreview={onPreview ? () => onPreview(post.id) : undefined}
                     accounts={accounts}
