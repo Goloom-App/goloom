@@ -156,7 +156,7 @@ export function AnalyticsView({
         followers: point.followers,
         following: point.following,
         posts: point.posts,
-        reach: point.followers + point.following,
+        networkSize: point.followers + point.following,
       })),
     [accountGrowthSeries],
   )
@@ -307,6 +307,7 @@ export function AnalyticsView({
                   <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
                   <Line name="Followers" type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
                   <Line name="Following" type="monotone" dataKey="following" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+                  <Line name="Network Size" type="monotone" dataKey="networkSize" stroke="var(--accent)" strokeWidth={1} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

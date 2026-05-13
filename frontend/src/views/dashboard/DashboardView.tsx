@@ -78,7 +78,7 @@ export function DashboardView({
   onOpenAccounts: () => void
 }) {
   const [seriesByMetric, setSeriesByMetric] = useState<Record<string, BackendMetricHistoryPoint[]>>({})
-  const [reachSeries, setReachSeries] = useState<{ date: string; value: number }[]>([])
+  const [networkSeries, setNetworkSeries] = useState<{ date: string; value: number }[]>([])
   const [loadingCharts, setLoadingCharts] = useState(false)
 
   const loadCharts = useCallback(async () => {
@@ -94,16 +94,18 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      const reach = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint, i: number, arr: BackendAccountGrowthPoint[]) => {
+      const network = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint, i: number, arr: BackendAccountGrowthPoint[]) => {
         const prev = arr[i - 1]
-        // Daily delta: Today's followers minus yesterday's followers
-        const delta = prev ? p.followers - prev.followers : 0
+        // Daily delta: Today's network size (followers + following) minus yesterday's
+        const currentNetwork = p.followers + p.following
+        const prevNetwork = prev ? prev.followers + prev.following : currentNetwork
+        const delta = currentNetwork - prevNetwork
         return {
           date: p.date,
           value: delta,
         }
       })
-      setReachSeries(reach)
+      setNetworkSeries(network)
 
       const next: Record<string, { date: string; value: number }[]> = {}
       for (const [m, series] of engagementResults) {
@@ -120,7 +122,7 @@ export function DashboardView({
       setSeriesByMetric(next)
     } catch {
       setSeriesByMetric({})
-      setReachSeries([])
+      setNetworkSeries([])
     } finally {
       setLoadingCharts(false)
     }
@@ -157,9 +159,9 @@ export function DashboardView({
       </div>
       <div className="dashboard-spark-grid">
         <MetricSparkline
-          title="Follower Trend"
+          title="Network Trend"
           color="#38bdf8"
-          points={reachSeries}
+          points={networkSeries}
           loading={loadingCharts}
         />
         {ENGAGEMENT_METRICS.map((m) => (
