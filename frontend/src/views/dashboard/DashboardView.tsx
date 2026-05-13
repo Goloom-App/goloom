@@ -96,8 +96,8 @@ export function DashboardView({
 
       const reach = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint, i: number, arr: BackendAccountGrowthPoint[]) => {
         const prev = arr[i - 1]
-        // Daily gain: Today's followers minus yesterday's followers, clamped to 0
-        const delta = prev ? Math.max(0, p.followers - prev.followers) : 0
+        // Daily delta: Today's followers minus yesterday's followers
+        const delta = prev ? p.followers - prev.followers : 0
         return {
           date: p.date,
           value: delta,
@@ -109,8 +109,8 @@ export function DashboardView({
       for (const [m, series] of engagementResults) {
         next[m] = (series as BackendMetricHistoryPoint[]).map((p, i, arr) => {
           const prev = arr[i - 1]
-          // Daily gain: Today's value minus yesterday's value, clamped to 0
-          const delta = prev ? Math.max(0, p.value - prev.value) : 0
+          // Daily delta for engagement metrics
+          const delta = prev ? p.value - prev.value : 0
           return {
             date: p.date,
             value: delta,
