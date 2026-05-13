@@ -117,7 +117,16 @@ export function SettingsView({
                 <td>{t.expires_at && isValid(parseISO(t.expires_at)) ? format(parseISO(t.expires_at), 'PPp') : '—'}</td>
                 <td>{t.last_used_at ? format(parseISO(t.last_used_at), 'PPp') : '—'}</td>
                 <td>
-                  <button type="button" className="button button--secondary" onClick={() => void onRevokeApiToken(t.id)} disabled={syncing}>
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to revoke the token "${t.name}"?`)) {
+                        void onRevokeApiToken(t.id)
+                      }
+                    }}
+                    disabled={syncing}
+                  >
                     Revoke
                   </button>
                 </td>

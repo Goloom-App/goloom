@@ -271,7 +271,11 @@ export function AdminView({
                   <button
                     type="button"
                     className="button button--secondary"
-                    onClick={() => void onDeleteProviderInstance(p.id)}
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to remove the provider instance "${p.name}"?`)) {
+                        void onDeleteProviderInstance(p.id)
+                      }
+                    }}
                     disabled={syncing || onboarded > 0}
                     title={onboarded > 0 ? 'Disconnect every account using this instance first' : 'Remove provider instance'}
                   >
