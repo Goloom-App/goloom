@@ -28,7 +28,7 @@ export function PostCard({
   publishedLinks?: Record<string, string>
 }) {
   return (
-    <article className={`post-card ${active ? 'post-card--active' : ''}`} onClick={onClick}>
+    <article className={`post-card ${active ? 'post-card--active' : ''}`} onClick={onPreview || onClick}>
       <div className="post-card__header">
         <span className="post-card__meta">
           {isArchived ? format(parseISO(post.scheduledAt), 'EEEE, MMM d · HH:mm') : format(parseISO(post.scheduledAt), 'HH:mm')}
@@ -43,20 +43,7 @@ export function PostCard({
       </h3>
       <p className="post-card__content">{post.content}</p>
       {active && (
-        <div className="inline-cluster mt-1">
-          {onPreview && (
-            <button
-              type="button"
-              className="button button--secondary"
-              onClick={(e) => {
-                e.stopPropagation()
-                onPreview()
-              }}
-            >
-              <Icon name="eye" className="inline-icon" />
-              <span>Preview</span>
-            </button>
-          )}
+        <div className="inline-cluster mt-1" onClick={(e) => e.stopPropagation()}>
           {!isArchived && (
             <button
               type="button"

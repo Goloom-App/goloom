@@ -9,6 +9,7 @@ import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
 import { AppShell } from './components/Shell/AppShell'
 import { Sun, Moon, Edit, X } from 'lucide-react'
+import { Icon } from './icons'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
 import { DashboardView } from './views/dashboard/DashboardView'
@@ -126,6 +127,8 @@ function App() {
   const [showAdminProviderAdvanced, setShowAdminProviderAdvanced] = useState(false)
   const [accountDraft, setAccountDraft] = useState<AccountConnectDraft>(() => defaultAccountConnectDraft())
   const [mobilePreviewPostId, setMobilePreviewPostId] = useState<string | null>(null)
+  const [previewTouchStart, setPreviewTouchStart] = useState<number | null>(null)
+  const [previewTranslateY, setPreviewTranslateY] = useState(0)
 
   const api = useMemo(() => {
     const token = activeConnection.bearerToken.trim()
@@ -1434,13 +1437,70 @@ function App() {
         )}
 
         {mobilePreviewPostId && (
-          <div className="mobile-preview-overlay" onClick={() => setMobilePreviewPostId(null)}>
-            <div className="mobile-preview-container glass-panel" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="mobile-preview-overlay"
+            style={{ opacity: Math.max(0, 1 - previewTranslateY / 300) }}
+            onClick={() => {
+              setMobilePreviewPostId(null)
+              setPreviewTranslateY(0)
+            }}
+          >
+            <div
+              className="mobile-preview-container glass-panel"
+              style={{
+                transform: `translateY(${previewTranslateY}px)`,
+                transition: previewTouchStart === null ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={(e) => setPreviewTouchStart(e.touches[0].clientY)}
+              onTouchMove={(e) => {
+                if (previewTouchStart === null) return
+                const delta = e.touches[0].clientY - previewTouchStart
+                if (delta > 0) setPreviewTranslateY(delta)
+              }}
+              onTouchEnd={() => {
+                if (previewTranslateY > 120) {
+                  setMobilePreviewPostId(null)
+                }
+                setPreviewTouchStart(null)
+                setPreviewTranslateY(0)
+              }}
+            >
               <header className="mobile-preview-header">
-                <h3>Post Preview</h3>
-                <button type="button" className="btn btn--ghost btn--xs" onClick={() => setMobilePreviewPostId(null)}>
-                  <X size={20} />
-                </button>
+                <div className="flex-row--center gap-3">
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--xs"
+                    onClick={() => {
+                      setMobilePreviewPostId(null)
+                      setPreviewTranslateY(0)
+                    }}
+                  >
+                    <X size={20} />
+                  </button>
+                  <h3 style={{ margin: 0 }}>Preview</h3>
+                </div>
+                {(() => {
+                  const p = posts.find((p) => p.id === mobilePreviewPostId)
+                  if (p && p.status !== 'posted') {
+                    return (
+                      <button
+                        type="button"
+                        className="button button--secondary button--sm"
+                        onClick={() => {
+                          const id = mobilePreviewPostId
+                          setMobilePreviewPostId(null)
+                          setPreviewTranslateY(0)
+                          void openEditor(id)
+                        }}
+                      >
+                        <Icon name="edit" className="inline-icon" />
+                        <span>Edit</span>
+                      </button>
+                    )
+                  }
+                  return null
+                })()}
               </header>
               <div className="mobile-preview-scrollable">
                 {(() => {
