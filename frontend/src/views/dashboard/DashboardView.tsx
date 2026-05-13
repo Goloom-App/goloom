@@ -94,35 +94,28 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      const reach = (growthResult.series ?? []).reduce((acc: { date: string; value: number }[], p: BackendAccountGrowthPoint, i: number, arr: BackendAccountGrowthPoint[]) => {
+      const reach = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint, i: number, arr: BackendAccountGrowthPoint[]) => {
         const prev = arr[i - 1]
+        // Daily gain: Today's followers minus yesterday's followers, clamped to 0
         const delta = prev ? Math.max(0, p.followers - prev.followers) : 0
-        const cumulative = (acc.length > 0 ? acc[acc.length - 1].value : 0) + delta
-        
-        if (i === 0) {
-            // Start at 0 for the first day in the window
-            acc.push({ date: p.date, value: 0 })
-        } else {
-            acc.push({ date: p.date, value: cumulative })
+        return {
+          date: p.date,
+          value: delta,
         }
-        return acc
-      }, [])
+      })
       setReachSeries(reach)
 
       const next: Record<string, { date: string; value: number }[]> = {}
       for (const [m, series] of engagementResults) {
-        next[m] = (series as BackendMetricHistoryPoint[]).reduce((acc: { date: string; value: number }[], p, i, arr) => {
+        next[m] = (series as BackendMetricHistoryPoint[]).map((p, i, arr) => {
           const prev = arr[i - 1]
+          // Daily gain: Today's value minus yesterday's value, clamped to 0
           const delta = prev ? Math.max(0, p.value - prev.value) : 0
-          const cumulative = (acc.length > 0 ? acc[acc.length - 1].value : 0) + delta
-          
-          if (i === 0) {
-              acc.push({ date: p.date, value: 0 })
-          } else {
-              acc.push({ date: p.date, value: cumulative })
+          return {
+            date: p.date,
+            value: delta,
           }
-          return acc
-        }, [])
+        })
       }
       setSeriesByMetric(next)
     } catch {
