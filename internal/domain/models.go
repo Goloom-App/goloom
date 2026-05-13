@@ -527,6 +527,8 @@ type CreatePostInput struct {
 	Draft                 bool                `json:"draft,omitempty"`
 	// AccountContentOverride allows per-account overrides for text validation and storage.
 	AccountContentOverride map[string]string `json:"account_content_override,omitempty"`
+	// UseVersions allows per-account content overrides to bypass global character limit validation.
+	UseVersions bool `json:"use_versions,omitempty"`
 	// Internal-only (workers): optional author override and template lineage for dynamic variables.
 	AuthorUserID    *string `json:"-"`
 	PostTemplateID  *string `json:"-"`
