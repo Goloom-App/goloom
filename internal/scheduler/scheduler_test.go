@@ -300,6 +300,10 @@ func (m *mockStore) ListPostVersionsForTeamPost(ctx context.Context, teamID, pos
 	return m.listPostVersionsForTeamPost, nil
 }
 
+func (m *mockStore) ListAllPostVersionsForTeam(ctx context.Context, teamID string) ([]domain.PostVersion, error) {
+	return nil, nil
+}
+
 func (m *mockStore) ApplyPostVersionsPatch(ctx context.Context, teamID, postID string, versions []domain.PostVersion) error {
 	return nil
 }
