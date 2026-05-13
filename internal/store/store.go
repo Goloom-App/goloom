@@ -100,6 +100,7 @@ type Store interface {
 	UpsertMediaProviderMapping(ctx context.Context, mapping domain.MediaProviderMapping) error
 
 	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
+	RepairFuturePostedPosts(ctx context.Context) (int64, error)
 	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (plaintext string, meta domain.APIToken, err error)
 	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)

@@ -72,6 +72,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("PATCH /v1/admin/users/{userID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateUser))))
 	mux.Handle("GET /v1/admin/runtime-config", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleRuntimeConfig))))
 	mux.Handle("GET /v1/admin/metrics", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminMetrics))))
+	mux.Handle("POST /v1/admin/repair-future-posted", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminRepairFuturePosted))))
 	mux.Handle("GET /v1/provider-instances", a.auth.RequireAuth(http.HandlerFunc(a.handleListProviderInstances)))
 	mux.Handle("GET /v1/provider-instances/{instanceID}", a.auth.RequireAuth(http.HandlerFunc(a.handleGetProviderInstance)))
 	mux.Handle("GET /v1/admin/provider-instances", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListProviderInstances))))
@@ -619,11 +620,12 @@ func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if err := a.attachPublishedLinks(r, []domain.ScheduledPost{post}); err != nil {
+	posts := []domain.ScheduledPost{post}
+	if err := a.attachPublishedLinks(r, posts); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, post)
+	auth.WriteJSON(w, http.StatusOK, posts[0])
 }
 
 func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {

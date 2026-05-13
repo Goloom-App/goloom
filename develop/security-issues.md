@@ -39,4 +39,4 @@ This document lists identified security concerns in the Goloom codebase, along w
 - **Data Encryption:** Sensitive tokens and secrets are encrypted using AES-GCM before being stored in the database, which is a strong practice.
 - **Password/Token Hashing:** API tokens and invitation tokens are stored as SHA-256 hashes, preventing plain-text exposure in case of a database leak.
 - **CSRF Protection:** The API uses Bearer tokens and does not rely on cookies for authentication, making it inherently resistant to Cross-Site Request Forgery (CSRF).
-- **XSS Prevention:** The application uses `bluemonday` for HTML sanitization of user-generated content in posts, reducing the risk of stored XSS.
+- **XSS Prevention:** HTML sanitization was removed to fix character encoding issues. The application now relies on platform-native sanitization and frontend-side protections.

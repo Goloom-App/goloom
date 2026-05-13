@@ -63,6 +63,21 @@ func (s *Store) AdminMetrics(ctx context.Context) (domain.AdminMetrics, error) {
 	return m, rows.Err()
 }
 
+func (s *Store) RepairFuturePostedPosts(ctx context.Context) (int64, error) {
+	now := nowString()
+	res, err := s.db.ExecContext(ctx, `
+		update scheduled_posts
+		set status = ?
+		where status = ?
+		  and scheduled_at > ?`,
+		domain.PostStatusPending, domain.PostStatusPosted, now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (string, domain.APIToken, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
