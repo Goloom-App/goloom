@@ -246,6 +246,95 @@ body,
   }
 }
 
+/* Account Analytics Cards (Social Style) */
+.account-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  transition: transform var(--transition-fast);
+}
+
+.account-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+
+.account-stat-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  position: relative;
+}
+
+.account-stat-card__identity {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.account-stat-card__name {
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-stat-card__metrics {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.account-stat-card__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.account-stat-card__metric-value {
+  font-weight: 750;
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.account-stat-card__metric-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+
+.account-stat-card__footer {
+  display: flex;
+  justify-content: center;
+}
+
+.status-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+}
+
+.status-pill--active {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.status-pill--needs_reauth {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,

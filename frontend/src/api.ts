@@ -134,6 +134,7 @@ export interface BackendMetricHistoryPoint {
 }
 
 export interface BackendAccountGrowthPoint {
+  account_id: string
   date: string
   followers: number
   following: number

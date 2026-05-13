@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { DestinationAvatar } from '../../components/post/DestinationAvatar'
+import { Icon } from '../../icons'
 import type { BackendAccountGrowthPoint, BackendMetricHistoryPoint, BackendPostAnalyticsListRow, BackendTeamAnalyticsReport } from '../../api'
 import type { AccountRecord } from '../../types'
+import { accountConnectionStatus } from '../../mappers'
 
 function formatDeltaPct(n: number | undefined): string {
   if (n == null || Number.isNaN(n)) {
@@ -309,30 +312,51 @@ export function AnalyticsView({
             </div>
           </section>
 
-          <div className="analytics-accounts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-8)' }}>
-            {accounts.map(acc => (
-              <section key={acc.id} className="glass-panel account-stat-card">
-                <div className="flex-row--between mb-2">
-                  <div className="flex-row gap-2">
-                    <DestinationAvatar account={acc} compact />
-                    <strong className="truncate">{acc.name}</strong>
+          <div className="analytics-accounts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
+            {accounts.map(acc => {
+              const status = accountConnectionStatus(acc)
+              const latestGrowth = accountGrowthSeries.findLast(p => p.account_id === acc.id)
+              
+              return (
+                <section key={acc.id} className="glass-panel account-stat-card">
+                  <div className="account-stat-card__header">
+                    <DestinationAvatar account={acc} />
+                    <div className="account-stat-card__identity">
+                      <strong className="account-stat-card__name">{acc.name}</strong>
+                      <span className="hint">@{acc.username}</span>
+                    </div>
+                    <span className={`status-pill status-pill--${status}`}>
+                      {status === 'active' ? 'Active' : 'Re-auth'}
+                    </span>
                   </div>
-                  <span className="hint mono text-xs">{acc.provider}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="eyebrow">Platform</p>
-                    <p className="truncate text-sm">{acc.instance.replace('https://', '')}</p>
-                  </div>
-                  <div>
-                    <p className="eyebrow">Status</p>
-                    <div className="flex-row gap-1 text-sm">
-                      <span className="status-dot status-dot--active" /> Active
+                  
+                  <div className="account-stat-card__metrics">
+                    <div className="account-stat-card__metric">
+                      <span className="account-stat-card__metric-value">
+                        {latestGrowth?.followers?.toLocaleString() ?? '—'}
+                      </span>
+                      <span className="account-stat-card__metric-label">Followers</span>
+                    </div>
+                    <div className="account-stat-card__metric">
+                      <span className="account-stat-card__metric-value">
+                        {latestGrowth?.posts?.toLocaleString() ?? '—'}
+                      </span>
+                      <span className="account-stat-card__metric-label">Posts</span>
+                    </div>
+                    <div className="account-stat-card__metric">
+                      <span className="account-stat-card__metric-value">
+                        {latestGrowth?.following?.toLocaleString() ?? '—'}
+                      </span>
+                      <span className="account-stat-card__metric-label">Following</span>
                     </div>
                   </div>
-                </div>
-              </section>
-            ))}
+
+                  <div className="account-stat-card__footer">
+                    <span className="hint mono text-xs">{acc.provider} · {acc.instance.replace('https://', '')}</span>
+                  </div>
+                </section>
+              )
+            })}
           </div>
         </div>
       )}
@@ -378,19 +402,3 @@ export function AnalyticsView({
   )
 }
 
-function Icon({ name, className }: { name: string; className?: string }) {
-  // Simple helper if icons aren't globally available as components here
-  return <span className={className}>[{name}]</span>
-}
-
-function DestinationAvatar({ account, compact }: { account: AccountRecord; compact?: boolean }) {
-  return (
-    <div className={`avatar ${compact ? 'avatar--sm' : ''}`}>
-      {account.avatarUrl ? (
-        <img src={account.avatarUrl} alt="" className="avatar__img" />
-      ) : (
-        <div className="avatar__placeholder">{account.username[0]}</div>
-      )}
-    </div>
-  )
-}
