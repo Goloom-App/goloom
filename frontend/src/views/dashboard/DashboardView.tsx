@@ -64,7 +64,7 @@ export function DashboardView({
   accounts,
   fetchSeries,
   fetchGrowth,
-  onOpenPost,
+  onOpenPreview,
   onOpenSchedule,
   onOpenAccounts,
 }: {
@@ -73,7 +73,7 @@ export function DashboardView({
   accounts: AccountRecord[]
   fetchSeries: (metric: string) => Promise<{ series: BackendMetricHistoryPoint[] }>
   fetchGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: import('../../api').BackendAccountGrowthPoint[] }>
-  onOpenPost: (postId: string) => void
+  onOpenPreview: (postId: string) => void
   onOpenSchedule: () => void
   onOpenAccounts: () => void
 }) {
@@ -234,7 +234,7 @@ export function DashboardView({
             const snippet = post.title?.trim() || post.content.slice(0, 80) || 'Untitled'
             return (
               <li key={post.id} className="dashboard-scheduled-cards__item">
-                <button type="button" className="dashboard-scheduled-card" onClick={() => onOpenPost(post.id)}>
+                <button type="button" className="dashboard-scheduled-card" onClick={() => onOpenPreview(post.id)}>
                   <div className="dashboard-scheduled-card__top">
                     <time className="dashboard-scheduled-card__time" dateTime={post.scheduledAt}>
                       <span className="dashboard-scheduled-card__date">{format(when, 'MMM d')}</span>

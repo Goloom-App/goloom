@@ -1564,7 +1564,7 @@ function App() {
             accounts={teamAccounts}
             fetchSeries={(metric) => api.getTeamAnalyticsChart(selectedTeam.id, { metric, days: 7 })}
             fetchGrowth={(accountID, opts) => api.getTeamAccountGrowth(selectedTeam.id, accountID, opts)}
-            onOpenPost={(id) => void openEditor(id)}
+            onOpenPreview={(id) => setMobilePreviewPostId(id)}
             onOpenSchedule={() => setSection('calendar')}
             onOpenAccounts={() => setSection('accounts')}
           />
