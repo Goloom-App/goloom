@@ -30,12 +30,13 @@ import {
   type BackendAPIToken,
   type BackendAdminMetrics,
   type BackendPostMetric,
+  type BackendPostVersion,
 } from './api'
 import { initialSettings } from './data'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { engagementForAccount } from './postMetrics'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
-import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, ProviderInstanceRecord, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
+import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, PostVersionRecord, ProviderInstanceRecord, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 /** Survives React Strict Mode remounts: hash is promoted here, then one reload applies the session. */
@@ -93,6 +94,7 @@ function App() {
   const [teams, setTeams] = useState<TeamRecord[]>([])
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
   const [posts, setPosts] = useState<PostRecord[]>([])
+  const [postVersions, setPostVersions] = useState<PostVersionRecord[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState(() => loadInitialTeamId())
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
   const [archivePreviewMetrics, setArchivePreviewMetrics] = useState<BackendPostMetric[]>([])
@@ -472,20 +474,27 @@ function App() {
 
       const teamPayloads = await Promise.all(
         (teamsResponse.items ?? []).map(async (team) => {
-          const [membersResponse, accountsResponse, postsResponse] = await Promise.all([
+          const [membersResponse, accountsResponse, postsResponse, versionsResponse] = await Promise.all([
             api.listTeamMembers(team.id),
             api.listAccounts(team.id),
             api.listPosts(team.id),
+            api.listAllPostVersions(team.id),
           ])
 
           const mappedAccounts = (accountsResponse.items ?? []).map((account) => toAccountRecord(account, mappedProviderInstances))
           const mappedPosts = (postsResponse.items ?? []).map(toPostRecord)
           const mappedMembers = (membersResponse.items ?? []).map(toTeamMemberRecord)
+          const mappedVersions = (versionsResponse.items ?? []).map((v: BackendPostVersion) => ({
+            postId: v.post_id,
+            accountId: v.account_id,
+            content: v.content,
+          }))
 
           return {
             team: toTeamRecord(team, mappedMembers, mappedAccounts.map((account) => account.id)),
             accounts: mappedAccounts,
             posts: mappedPosts,
+            versions: mappedVersions,
           }
         }),
       )
@@ -493,6 +502,7 @@ function App() {
       setTeams(teamPayloads.map((payload) => payload.team))
       setAccounts(teamPayloads.flatMap((payload) => payload.accounts))
       setPosts(teamPayloads.flatMap((payload) => payload.posts))
+      setPostVersions(teamPayloads.flatMap((payload) => payload.versions))
       setExpandedPostId((current) => (current && teamPayloads.flatMap((payload) => payload.posts).some((post) => post.id === current) ? current : null))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
@@ -1327,11 +1337,14 @@ function App() {
             <div className="preview-content">
               {selectedPost ? (
                 sharedAccountLabels(selectedPost, accounts).map((account) => (
-                  <SocialPreview
-                    key={account.id}
-                    account={account}
-                    content={selectedPost.content}
-                    scheduledAt={selectedPost.scheduledAt}
+                    <SocialPreview
+                      key={account.id}
+                      account={account}
+                      content={
+                        postVersions.find((v) => v.postId === selectedPost.id && v.accountId === account.id)?.content ||
+                        selectedPost.content
+                      }
+                      scheduledAt={selectedPost.scheduledAt}
                     theme={resolvedTheme}
                     publishedPostUrl={
                       selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined

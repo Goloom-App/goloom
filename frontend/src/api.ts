@@ -671,6 +671,11 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    listAllPostVersions(teamID: string) {
+      return request<{ items: BackendPostVersion[] }>(options, `/v1/teams/${teamID}/versions`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
     createPostTemplate(
       teamID: string,
       payload: {

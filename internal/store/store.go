@@ -86,6 +86,7 @@ type Store interface {
 	GetTeamMetricHistorySeries(ctx context.Context, teamID, metric string, days int) ([]domain.MetricHistoryPoint, error)
 	GetTeamAccountMetricHistorySeries(ctx context.Context, teamID, accountID string, days int) ([]domain.AccountMetricHistoryPoint, error)
 	ListPostMetricsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostMetric, error)
+	ListAllPostVersionsForTeam(ctx context.Context, teamID string) ([]domain.PostVersion, error)
 	ListPostVersionsForTeamPost(ctx context.Context, teamID, postID string) ([]domain.PostVersion, error)
 	ApplyPostVersionsPatch(ctx context.Context, teamID, postID string, versions []domain.PostVersion) error
 	EnsureBootstrapAdmin(ctx context.Context, email, name, token string) error

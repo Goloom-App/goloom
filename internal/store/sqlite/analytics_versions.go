@@ -125,6 +125,31 @@ func (s *Store) ListPostVersionsForTeamPost(ctx context.Context, teamID, postID 
 	return out, rows.Err()
 }
 
+func (s *Store) ListAllPostVersionsForTeam(ctx context.Context, teamID string) ([]domain.PostVersion, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select v.post_id, v.account_id, v.content
+		from post_versions v
+		inner join scheduled_posts p on p.id = v.post_id
+		where p.team_id = ?
+		order by v.post_id, v.account_id`,
+		teamID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.PostVersion
+	for rows.Next() {
+		var v domain.PostVersion
+		if err := rows.Scan(&v.PostID, &v.AccountID, &v.Content); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) ApplyPostVersionsPatch(ctx context.Context, teamID, postID string, versions []domain.PostVersion) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

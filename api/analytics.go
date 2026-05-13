@@ -164,6 +164,16 @@ func (a *API) handleListPostVersions(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
 }
 
+func (a *API) handleListAllTeamPostVersions(w http.ResponseWriter, r *http.Request) {
+	teamID := r.PathValue("teamID")
+	items, err := a.store.ListAllPostVersionsForTeam(r.Context(), teamID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
+}
+
 type patchPostVersionsRequest struct {
 	Versions []struct {
 		AccountID string `json:"account_id"`
