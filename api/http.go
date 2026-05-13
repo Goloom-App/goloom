@@ -54,6 +54,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.handleHealth)
+	mux.HandleFunc("GET /v1/discovery", a.handleDiscovery)
 	mux.HandleFunc("GET /v1/providers", a.handleProviders)
 	mux.HandleFunc("GET /v1/auth/status", a.handleAuthStatus)
 	mux.HandleFunc("POST /v1/auth/oidc/start", a.handleStartOIDCLogin)
