@@ -34,19 +34,6 @@ export function PostCard({
           {isArchived ? format(parseISO(post.scheduledAt), 'EEEE, MMM d · HH:mm') : format(parseISO(post.scheduledAt), 'HH:mm')}
         </span>
         <div className="flex-row--center gap-2">
-          {onPreview && (
-            <button
-              type="button"
-              className="button button--icon button--ghost mobile-only"
-              onClick={(e) => {
-                e.stopPropagation()
-                onPreview()
-              }}
-              title="Preview"
-            >
-              <Icon name="eye" className="icon--sm" />
-            </button>
-          )}
           <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
         </div>
       </div>
@@ -57,6 +44,19 @@ export function PostCard({
       <p className="post-card__content">{post.content}</p>
       {active && (
         <div className="inline-cluster mt-1">
+          {onPreview && (
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={(e) => {
+                e.stopPropagation()
+                onPreview()
+              }}
+            >
+              <Icon name="eye" className="inline-icon" />
+              <span>Preview</span>
+            </button>
+          )}
           {!isArchived && (
             <button
               type="button"
