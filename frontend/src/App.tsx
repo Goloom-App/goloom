@@ -125,6 +125,7 @@ function App() {
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
   const [showAdminProviderAdvanced, setShowAdminProviderAdvanced] = useState(false)
   const [accountDraft, setAccountDraft] = useState<AccountConnectDraft>(() => defaultAccountConnectDraft())
+  const [mobilePreviewPostId, setMobilePreviewPostId] = useState<string | null>(null)
 
   const api = useMemo(() => {
     const token = activeConnection.bearerToken.trim()
@@ -1432,6 +1433,35 @@ function App() {
           />
         )}
 
+        {mobilePreviewPostId && (
+          <div className="mobile-preview-overlay" onClick={() => setMobilePreviewPostId(null)}>
+            <div className="mobile-preview-container glass-panel" onClick={(e) => e.stopPropagation()}>
+              <header className="mobile-preview-header">
+                <h3>Post Preview</h3>
+                <button type="button" className="btn btn--ghost btn--xs" onClick={() => setMobilePreviewPostId(null)}>
+                  <X size={20} />
+                </button>
+              </header>
+              <div className="mobile-preview-scrollable">
+                {(() => {
+                  const p = posts.find((p) => p.id === mobilePreviewPostId)
+                  if (!p) return null
+                  return sharedAccountLabels(p, accounts).map((account) => (
+                    <SocialPreview
+                      key={account.id}
+                      account={account}
+                      content={postVersions.find((v) => v.postId === p.id && v.accountId === account.id)?.content || p.content}
+                      scheduledAt={p.scheduledAt}
+                      theme={resolvedTheme}
+                      publishedPostUrl={p.status === 'posted' ? p.publishedLinks?.[account.id] : undefined}
+                    />
+                  ))
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
         {section === 'dashboard' && selectedTeam && api ? (
           <DashboardView
             teamName={selectedTeam.name}
@@ -1454,6 +1484,7 @@ function App() {
             setExpandedPostId={setExpandedPostId}
             openEditor={(id) => void openEditor(id)}
             deletePost={deletePost}
+            onPreview={(id) => setMobilePreviewPostId(id)}
             accounts={accounts}
           />
         )}
@@ -1471,6 +1502,7 @@ function App() {
             setExpandedPostId={setExpandedPostId}
             openEditor={(id) => void openEditor(id)}
             deletePost={deletePost}
+            onPreview={(id) => setMobilePreviewPostId(id)}
             accounts={accounts}
             handleCalendarPostDrop={handleCalendarPostDrop}
           />
@@ -1484,6 +1516,7 @@ function App() {
             openEditor={(id) => void openEditor(id)}
             duplicatePost={duplicatePost}
             deletePost={deletePost}
+            onPreview={(id) => setMobilePreviewPostId(id)}
             accounts={accounts}
           />
         )}

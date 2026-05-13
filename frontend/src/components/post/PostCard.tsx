@@ -11,6 +11,7 @@ export function PostCard({
   onEdit,
   onDuplicate,
   onDelete,
+  onPreview,
   accounts,
   isArchived = false,
   publishedLinks,
@@ -21,6 +22,7 @@ export function PostCard({
   onEdit: () => void
   onDuplicate?: () => void
   onDelete: () => void
+  onPreview?: () => void
   accounts: AccountRecord[]
   isArchived?: boolean
   publishedLinks?: Record<string, string>
@@ -31,7 +33,22 @@ export function PostCard({
         <span className="post-card__meta">
           {isArchived ? format(parseISO(post.scheduledAt), 'EEEE, MMM d · HH:mm') : format(parseISO(post.scheduledAt), 'HH:mm')}
         </span>
-        <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
+        <div className="flex-row--center gap-2">
+          {onPreview && (
+            <button
+              type="button"
+              className="button button--icon button--ghost mobile-only"
+              onClick={(e) => {
+                e.stopPropagation()
+                onPreview()
+              }}
+              title="Preview"
+            >
+              <Icon name="eye" className="icon--sm" />
+            </button>
+          )}
+          <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
+        </div>
       </div>
       <h3 className="post-card__title">
         {post.status === 'draft' ? <span className="post-card__badge">Draft</span> : null}

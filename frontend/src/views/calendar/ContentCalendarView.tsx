@@ -17,6 +17,7 @@ export function ContentCalendarView({
   setExpandedPostId,
   openEditor,
   deletePost,
+  onPreview,
   accounts,
   handleCalendarPostDrop,
 }: {
@@ -31,6 +32,7 @@ export function ContentCalendarView({
   setExpandedPostId: (id: string) => void
   openEditor: (postId: string) => void
   deletePost: (postId: string) => void
+  onPreview?: (postId: string) => void
   accounts: AccountRecord[]
   handleCalendarPostDrop: (postId: string, targetDay: Date) => void | Promise<void>
 }) {
@@ -240,6 +242,7 @@ export function ContentCalendarView({
                       onClick={() => setListExpandedPostId(listExpandedPostId === post.id ? null : post.id)}
                       onEdit={() => openEditor(post.id)}
                       onDelete={() => void deletePost(post.id)}
+                      onPreview={onPreview ? () => onPreview(post.id) : undefined}
                       accounts={accounts}
                     />
                   ))}

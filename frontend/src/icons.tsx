@@ -25,6 +25,7 @@ export type IconName =
   | 'chevron-right'
   | 'loader'
   | 'refresh'
+  | 'eye'
 
 const iconPaths: Record<IconName, ReactNode> = {
   home: (
@@ -159,6 +160,12 @@ const iconPaths: Record<IconName, ReactNode> = {
   refresh: (
     <>
       <path d="M21 2v6h-6M3 22v-6h6M21 13a9 9 0 1 1-3-7.7L21 8M3 11a9 9 0 1 1 3 7.7L3 16" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
     </>
   ),
 }

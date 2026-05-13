@@ -9,6 +9,7 @@ export function ScheduleView({
   setExpandedPostId,
   openEditor,
   deletePost,
+  onPreview,
   accounts,
 }: {
   upcomingPosts: PostRecord[]
@@ -16,6 +17,7 @@ export function ScheduleView({
   setExpandedPostId: (id: string) => void
   openEditor: (postId: string) => void
   deletePost: (postId: string) => void
+  onPreview?: (postId: string) => void
   accounts: AccountRecord[]
 }) {
   if (upcomingPosts.length === 0) {
@@ -54,6 +56,7 @@ export function ScheduleView({
                     onClick={() => setExpandedPostId(post.id)}
                     onEdit={() => openEditor(post.id)}
                     onDelete={() => void deletePost(post.id)}
+                    onPreview={onPreview ? () => onPreview(post.id) : undefined}
                     accounts={accounts}
                   />
                 ))}

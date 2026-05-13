@@ -8,6 +8,7 @@ export function ArchiveView({
   openEditor,
   duplicatePost,
   deletePost,
+  onPreview,
   accounts,
 }: {
   archivedPosts: PostRecord[]
@@ -16,6 +17,7 @@ export function ArchiveView({
   openEditor: (postId: string) => void
   duplicatePost: (postId: string) => void
   deletePost: (postId: string) => void
+  onPreview?: (postId: string) => void
   accounts: AccountRecord[]
 }) {
   return (
@@ -29,6 +31,7 @@ export function ArchiveView({
           onEdit={() => openEditor(post.id)}
           onDuplicate={() => duplicatePost(post.id)}
           onDelete={() => void deletePost(post.id)}
+          onPreview={onPreview ? () => onPreview(post.id) : undefined}
           accounts={accounts}
           isArchived
           publishedLinks={post.publishedLinks}
