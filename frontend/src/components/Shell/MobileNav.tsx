@@ -1,3 +1,4 @@
+import React, { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Plus, Menu, X } from 'lucide-react'
 import { MAIN_NAV, MORE_NAV, WORKSPACE_NAV, CONFIG_NAV } from './NavItems'
@@ -75,11 +76,48 @@ export function MobileDrawer({
   user,
   onSignOut
 }: MobileDrawerProps) {
+  const [touchStart, setTouchStart] = useState<number | null>(null)
+  const [translateY, setTranslateY] = useState(0)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStart(e.touches[0].clientY)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStart === null) return
+    const delta = e.touches[0].clientY - touchStart
+    if (delta > 0) {
+      setTranslateY(delta)
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (translateY > 150) {
+      onOpenChange(false)
+    }
+    setTouchStart(null)
+    setTranslateY(0)
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content" data-side="bottom">
+        <Dialog.Overlay 
+          className="dialog-overlay" 
+          style={{ opacity: Math.max(0, 1 - translateY / 300) }}
+        />
+        <Dialog.Content 
+          className="dialog-content" 
+          data-side="bottom"
+          style={{ 
+            transform: `translateY(${translateY}px)`,
+            transition: touchStart === null ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="drawer-handle" aria-hidden="true" />
           <div className="drawer-header">
             <Dialog.Title className="drawer-title">Menu</Dialog.Title>
             <Dialog.Close asChild>

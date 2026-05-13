@@ -229,6 +229,15 @@ body,
   border-bottom: 1px solid var(--border);
 }
 
+.drawer-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+  margin: var(--space-3) auto 0;
+  opacity: 0.4;
+}
+
 .mobile-preview-scrollable {
   flex: 1;
   overflow-y: auto;
