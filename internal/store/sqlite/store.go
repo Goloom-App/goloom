@@ -610,7 +610,10 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		return domain.ScheduledPost{}, err
 	}
 	st := domain.PostStatusPending
-	if input.Draft {
+	// Safety check: if the post is in the future, it must be pending or draft.
+	if !input.Draft && input.ScheduledAt.After(time.Now().Add(5*time.Minute)) {
+		st = domain.PostStatusPending
+	} else if input.Draft {
 		st = domain.PostStatusDraft
 	}
 	authorID := principal.User.ID

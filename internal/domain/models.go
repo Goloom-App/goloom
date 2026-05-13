@@ -555,13 +555,20 @@ func (in CreatePostInput) Validate() error {
 
 // ResolvePostStatusOnUpdate returns the post row status after an update from CreatePostInput.
 func ResolvePostStatusOnUpdate(was PostStatus, in CreatePostInput) PostStatus {
+	// If the post was already posted, processing or cancelled, do not change status back to pending/draft.
+	if was == PostStatusPosted || was == PostStatusProcessing || was == PostStatusCancelled {
+		return was
+	}
+
+	// Safety check: if the scheduled date is more than 5 minutes in the future,
+	// and it's not explicitly a draft, ensure it's pending (or stays as it was if valid).
+	// This prevents accidentally marking future posts as "posted" via API.
+	if !in.Draft && in.ScheduledAt.After(time.Now().Add(5*time.Minute)) {
+		return PostStatusPending
+	}
+
 	if in.Draft {
-		switch was {
-		case PostStatusPosted, PostStatusProcessing, PostStatusCancelled:
-			return was
-		default:
-			return PostStatusDraft
-		}
+		return PostStatusDraft
 	}
 	if was == PostStatusDraft {
 		return PostStatusPending
