@@ -2833,9 +2833,17 @@ select {
 }
 
 .destination-avatar--compact {
-  width: 20px;
-  height: 20px;
-  font-size: 0.6rem;
+  width: 24px;
+  height: 24px;
+  font-size: 0.65rem;
+}
+
+@media (min-width: 1024px) {
+  .destination-avatar--compact {
+    width: 20px;
+    height: 20px;
+    font-size: 0.6rem;
+  }
 }
 
 .destination-avatar__disk {
@@ -2874,8 +2882,8 @@ select {
   position: absolute;
   bottom: -2px;
   right: -2px;
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   background: var(--surface);
   border-radius: 50%;
   display: flex;
@@ -2884,14 +2892,25 @@ select {
   padding: 2px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   z-index: 2;
+  border: 1px solid var(--border-soft);
 }
 
 .destination-avatar--compact .destination-avatar__badge {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   padding: 1px;
-  bottom: -1px;
-  right: -1px;
+  bottom: -2px;
+  right: -2px;
+}
+
+@media (min-width: 1024px) {
+  .destination-avatar--compact .destination-avatar__badge {
+    width: 10px;
+    height: 10px;
+    padding: 1px;
+    bottom: -1px;
+    right: -1px;
+  }
 }
 
 .destination-avatar__badge img {
