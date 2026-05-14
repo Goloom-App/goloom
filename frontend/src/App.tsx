@@ -722,6 +722,26 @@ function App() {
   const selectedPost = useMemo(() => posts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, posts])
   const editTargetPost = useMemo(() => posts.find((post) => post.id === editingPostId) ?? null, [editingPostId, posts])
 
+  const openPostPreview = useCallback(
+    (postId: string) => {
+      if (isMobile) {
+        setMobilePreviewPostId(postId)
+      } else {
+        setExpandedPostId(postId)
+        setMobilePreviewPostId(null)
+      }
+    },
+    [isMobile],
+  )
+
+  useEffect(() => {
+    if (isMobile || !mobilePreviewPostId) {
+      return
+    }
+    setExpandedPostId(mobilePreviewPostId)
+    setMobilePreviewPostId(null)
+  }, [isMobile, mobilePreviewPostId])
+
   useEffect(() => {
     if (!api || !selectedPost || selectedPost.status !== 'posted' || section !== 'archive') {
       setArchivePreviewMetrics([])
@@ -1445,7 +1465,7 @@ function App() {
           />
         )}
 
-        {mobilePreviewPostId && (
+        {isMobile && mobilePreviewPostId && (
           <div
             className="mobile-preview-overlay"
             style={{ opacity: Math.max(0, 1 - previewTranslateY / 300) }}
@@ -1573,7 +1593,7 @@ function App() {
             accounts={teamAccounts}
             fetchSeries={(metric) => api.getTeamAnalyticsChart(selectedTeam.id, { metric, days: 7 })}
             fetchGrowth={(accountID, opts) => api.getTeamAccountGrowth(selectedTeam.id, accountID, opts)}
-            onOpenPreview={(id) => setMobilePreviewPostId(id)}
+            onOpenPreview={openPostPreview}
             onOpenSchedule={() => setSection('calendar')}
             onOpenAccounts={() => setSection('accounts')}
           />
@@ -1585,7 +1605,7 @@ function App() {
           <ScheduleView
             upcomingPosts={upcomingPosts}
             deletePost={deletePost}
-            onPreview={(id) => setMobilePreviewPostId(id)}
+            onPreview={openPostPreview}
             accounts={accounts}
           />
         )}
@@ -1601,7 +1621,7 @@ function App() {
             calendarDragOverKey={calendarDragOverKey}
             setCalendarDragOverKey={setCalendarDragOverKey}
             deletePost={deletePost}
-            onPreview={(id) => setMobilePreviewPostId(id)}
+            onPreview={openPostPreview}
             accounts={accounts}
             handleCalendarPostDrop={handleCalendarPostDrop}
           />
@@ -1611,7 +1631,7 @@ function App() {
           <ArchiveView
             archivedPosts={archivedPosts}
             deletePost={deletePost}
-            onPreview={(id) => setMobilePreviewPostId(id)}
+            onPreview={openPostPreview}
             accounts={accounts}
           />
         )}
