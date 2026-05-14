@@ -1409,7 +1409,7 @@ function App() {
       ) : null}
 
       <div className="pb-section">
-        {section === 'composer' && (
+        {section === 'composer' && !isMobile && (
           <PostComposer
             open={composerOpen}
             mode={composerMode}
@@ -1435,7 +1435,7 @@ function App() {
             }
             schedulingPreferences={selectedTeam?.schedulingPreferences}
             standalone
-            previewColumnExternal={!isMobile}
+            previewColumnExternal={true}
           />
         )}
 
@@ -1811,7 +1811,7 @@ function App() {
         )}
       </div>
 
-      {section !== 'composer' && (
+      {section !== 'composer' && isMobile && (
         <PostComposer
           open={composerOpen}
           mode={composerMode}
