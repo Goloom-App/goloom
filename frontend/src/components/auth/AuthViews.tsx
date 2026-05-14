@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
 import { GoloomLogo } from '../brand/GoloomLogo'
 import type { AuthStatusRecord } from '../../types'
+import { MeshBackground } from './MeshBackground'
 
 export function AuthShell({ theme, children }: { theme: 'dark' | 'light'; children: ReactNode }) {
   return (
     <div className="app-shell auth-shell" data-theme={theme}>
+      <MeshBackground />
       <div className="auth-screen-center">
         <section className="auth-card">
           <div className="auth-card__hero auth-card__hero--compact">

@@ -688,7 +688,7 @@ function App() {
     [contentCalendarMonth, plannedPostsForContentCalendar],
   )
 
-  const showPreviewColumn = section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer'
+  const showPreviewColumn = (section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer') && !isMobile
 
   const myRoleInSelectedTeam = useMemo((): TeamRole | null => {
     if (!selectedTeam || !principalUser) {

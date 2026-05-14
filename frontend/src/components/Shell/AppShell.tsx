@@ -56,7 +56,7 @@ export function AppShell({
       </main>
 
       {showPreviewColumn && (
-        <aside className="preview-column">
+        <aside className={`preview-column ${section === 'composer' ? 'preview-column--composer' : ''}`}>
           {previewColumn}
         </aside>
       )}

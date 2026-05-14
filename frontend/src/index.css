@@ -374,6 +374,12 @@ body,
   .app-shell--triple {
     grid-template-columns: 240px 1fr 380px;
   }
+  .preview-column--composer {
+    width: 440px;
+  }
+  .app-shell--triple:has(.preview-column--composer) {
+    grid-template-columns: 240px 1fr 440px;
+  }
 }
 
 @media (max-width: 1023px) {
@@ -1992,6 +1998,80 @@ select {
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
+
+.auth-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas);
+  min-height: 100vh;
+}
+
+.auth-screen-center {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-4);
+}
+
+.auth-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(10px);
+}
+
+.auth-card__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.auth-card__logo {
+  margin-bottom: var(--space-4);
+}
+
+.auth-card__copy h1 {
+  font-size: 2rem;
+  letter-spacing: -0.05em;
+  margin-bottom: var(--space-1);
+}
+
+.auth-panel__content h2 {
+  font-size: 1.5rem;
+  margin-bottom: var(--space-2);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.auth-form__divider-label {
+  text-align: center;
+  position: relative;
+  margin: var(--space-2) 0;
+}
+
+.auth-form__divider-label::before,
+.auth-form__divider-label::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 30%;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-form__divider-label::before { left: 0; }
+.auth-form__divider-label::after { right: 0; }
 
 /* ==========================================================================
    Content Calendar
