@@ -690,6 +690,8 @@ function App() {
 
   const showPreviewColumn = (section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer') && !isMobile
 
+  const isComposer = section === 'composer' && !isMobile
+
   const myRoleInSelectedTeam = useMemo((): TeamRole | null => {
     if (!selectedTeam || !principalUser) {
       return null
@@ -1307,6 +1309,7 @@ function App() {
       openComposer={openCreateComposer}
       resolvedTheme={resolvedTheme}
       showPreviewColumn={showPreviewColumn}
+      isComposer={isComposer}
       previewColumn={
         section === 'composer' && !isMobile ? (
           <div className="preview-content">

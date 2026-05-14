@@ -16,6 +16,7 @@ interface AppShellProps {
   resolvedTheme: 'light' | 'dark'
   showPreviewColumn?: boolean
   previewColumn?: React.ReactNode
+  isComposer?: boolean
 }
 
 export function AppShell({
@@ -30,13 +31,14 @@ export function AppShell({
   openComposer,
   resolvedTheme,
   showPreviewColumn,
-  previewColumn
+  previewColumn,
+  isComposer
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
     <div 
-      className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'}`} 
+      className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'} ${isComposer ? 'app-shell--composer' : ''}`} 
       data-theme={resolvedTheme}
     >
       <div className="mesh-bg" />
