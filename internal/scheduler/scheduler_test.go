@@ -438,6 +438,10 @@ func (m *mockStore) AdvancePostTemplateSchedule(ctx context.Context, templateID 
 	return nil
 }
 
+func (m *mockStore) TryAcquireLock(ctx context.Context, lockID string, duration time.Duration) (bool, error) {
+	return true, nil
+}
+
 var _ store.Store = (*mockStore)(nil)
 
 type fakeProvider struct {

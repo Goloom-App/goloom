@@ -562,10 +562,10 @@ func ResolvePostStatusOnUpdate(was PostStatus, in CreatePostInput) PostStatus {
 		return was
 	}
 
-	// Safety check: if the scheduled date is more than 5 minutes in the future,
+	// Safety check: if the scheduled date is in the future,
 	// and it's not explicitly a draft, ensure it's pending (or stays as it was if valid).
 	// This prevents accidentally marking future posts as "posted" via API.
-	if !in.Draft && in.ScheduledAt.After(time.Now().Add(5*time.Minute)) {
+	if !in.Draft && in.ScheduledAt.After(time.Now()) {
 		return PostStatusPending
 	}
 
