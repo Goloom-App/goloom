@@ -48,7 +48,7 @@ jobs:
 
       - name: Set up Go (E2E)
         if: matrix.suite == 'e2e'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
