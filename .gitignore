@@ -4,11 +4,16 @@
 /dist
 /coverage.out
 /frontend/node_modules
+/frontend/test-results/
+/frontend/playwright-report/
 /frontend/dist
 /.pnpm-store
 /data/
+/.e2e/
 /goloom
 /server
+/test-results/
+
 # Keep internal/webui/dist/index.html tracked for go:embed; ignore Vite output
 /internal/webui/dist/assets/
 /internal/webui/dist/icons/

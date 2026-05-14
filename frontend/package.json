@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "pnpm run build && cd .. && go build -o bin/goloom ./cmd/server && cd frontend && playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -37,6 +40,7 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.11",
+    "@playwright/test": "^1.60.0",
     "vite-plugin-pwa": "^1.3.0",
     "workbox-precaching": "^7.4.1",
     "workbox-window": "^7.4.1"

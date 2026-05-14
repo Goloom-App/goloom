@@ -1355,7 +1355,9 @@ function App() {
               <div className="preview-header__top">
                 <div>
                   <p className="eyebrow">Live Preview</p>
-                  <h3>{selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}</h3>
+                  <h3 data-testid="live-preview-title">
+                    {selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}
+                  </h3>
                 </div>
                 {selectedPost &&
                 (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
@@ -1468,6 +1470,7 @@ function App() {
         {isMobile && mobilePreviewPostId && (
           <div
             className="mobile-preview-overlay"
+            data-testid="mobile-preview-overlay"
             style={{ opacity: Math.max(0, 1 - previewTranslateY / 300) }}
             onClick={() => {
               setMobilePreviewPostId(null)

@@ -72,6 +72,7 @@ export function PostCard({
       </div>
       <article
         className="post-card"
+        data-testid="post-card"
         style={{
           transform: `translateX(${swipeX}px)`,
           transition: isSwiping.current ? 'none' : 'transform 0.3s var(--ease-out)',

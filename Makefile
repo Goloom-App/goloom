@@ -1,6 +1,6 @@
 APP_NAME := goloom
 
-.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint docs-api-lint docs-api-build
+.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build
 
 fmt:
 	go fmt ./...
@@ -32,6 +32,12 @@ frontend-build:
 
 frontend-lint:
 	pnpm --dir frontend lint
+
+# End-to-end UI tests (Playwright): installs browsers, builds UI + server, runs tests (see frontend/package.json test:e2e).
+frontend-e2e:
+	pnpm --dir frontend install --frozen-lockfile
+	pnpm --dir frontend exec playwright install chromium
+	pnpm --dir frontend test:e2e
 
 docs-api-lint:
 	pnpm --package=@redocly/cli dlx redocly lint docs/api/openapi.yaml
