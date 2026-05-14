@@ -760,12 +760,14 @@ function App() {
   }
 
   function openCreateComposer() {
-    prevSectionBeforeComposerRef.current = section
+    prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
     setComposerMode('create')
     setEditingPostId(null)
     setEditorDraft(defaultEditorDraft(currentDate, teamAccounts))
     setComposerOpen(true)
-    setSection('composer')
+    if (!isMobile) {
+      setSection('composer')
+    }
   }
 
   async function openEditor(postId: string) {
@@ -799,12 +801,14 @@ function App() {
     setExpandedPostId(postId)
     setComposerOpen(true)
     prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
-    setSection('composer')
+    if (!isMobile) {
+      setSection('composer')
+    }
   }
 
   function closeComposer() {
     setComposerOpen(false)
-    if (prevSectionBeforeComposerRef.current) {
+    if (!isMobile && prevSectionBeforeComposerRef.current) {
       setSection(prevSectionBeforeComposerRef.current)
       prevSectionBeforeComposerRef.current = null
     }
@@ -839,8 +843,10 @@ function App() {
     setComposerMode('create')
     setEditingPostId(null)
     setComposerOpen(true)
-    prevSectionBeforeComposerRef.current = section
-    setSection('composer')
+    prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
+    if (!isMobile) {
+      setSection('composer')
+    }
   }
 
   function connectBackend() {
@@ -1411,9 +1417,9 @@ function App() {
       <div className="pb-section">
         {section === 'composer' && !isMobile && (
           <PostComposer
-            open={composerOpen}
+            open={true}
             mode={composerMode}
-            isMobile={isMobile}
+            isMobile={false}
             theme={resolvedTheme}
             teamAccounts={teamAccounts}
             draft={editorDraft}
@@ -1815,7 +1821,7 @@ function App() {
         <PostComposer
           open={composerOpen}
           mode={composerMode}
-          isMobile={isMobile}
+          isMobile={true}
           theme={resolvedTheme}
           teamAccounts={teamAccounts}
           draft={editorDraft}
