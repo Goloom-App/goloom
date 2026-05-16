@@ -2434,6 +2434,32 @@ select {
   overflow-x: auto;
 }
 
+.analytics-post-row--clickable {
+  cursor: pointer;
+}
+
+.analytics-post-row--clickable[data-selected] td {
+  background: var(--surface-hover);
+}
+
+.analytics-post-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.analytics-post-detail__by-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.analytics-post-detail__account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;

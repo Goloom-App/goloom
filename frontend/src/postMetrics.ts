@@ -26,3 +26,12 @@ export function engagementForAccount(metrics: BackendPostMetric[], accountId: st
   }
   return { likes, reposts, replies }
 }
+
+/** Sum metric values across all accounts (for analytics post breakdown). */
+export function aggregatePostMetrics(metrics: BackendPostMetric[]): Record<string, number> {
+  const totals: Record<string, number> = {}
+  for (const row of metrics) {
+    totals[row.metric] = (totals[row.metric] ?? 0) + row.value
+  }
+  return totals
+}

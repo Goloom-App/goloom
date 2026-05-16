@@ -98,7 +98,7 @@ function App() {
   const [postVersions, setPostVersions] = useState<PostVersionRecord[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState(() => loadInitialTeamId())
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
-  const [archivePreviewMetrics, setArchivePreviewMetrics] = useState<BackendPostMetric[]>([])
+  const [previewPostMetrics, setPreviewPostMetrics] = useState<BackendPostMetric[]>([])
   const [editingPostId, setEditingPostId] = useState<string | null>(null)
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
   const [composerOpen, setComposerOpen] = useState(false)
@@ -743,8 +743,8 @@ function App() {
   }, [isMobile, mobilePreviewPostId])
 
   useEffect(() => {
-    if (!api || !selectedPost || selectedPost.status !== 'posted' || section !== 'archive') {
-      setArchivePreviewMetrics([])
+    if (!api || !selectedPost || selectedPost.status !== 'posted') {
+      setPreviewPostMetrics([])
       return
     }
     let cancelled = false
@@ -752,18 +752,18 @@ function App() {
       .getPostAnalytics(selectedPost.teamId, selectedPost.id)
       .then((r) => {
         if (!cancelled) {
-          setArchivePreviewMetrics(r.items ?? [])
+          setPreviewPostMetrics(r.items ?? [])
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setArchivePreviewMetrics([])
+          setPreviewPostMetrics([])
         }
       })
     return () => {
       cancelled = true
     }
-  }, [api, section, selectedPost])
+  }, [api, selectedPost])
 
   async function runAction(work: () => Promise<void>, successMessage: string) {
     setSyncing(true)
@@ -1385,8 +1385,8 @@ function App() {
                       selectedPost.status === 'posted' ? selectedPost.publishedLinks?.[account.id] : undefined
                     }
                     engagement={
-                      section === 'archive' && selectedPost.status === 'posted'
-                        ? engagementForAccount(archivePreviewMetrics, account.id)
+                      selectedPost.status === 'posted'
+                        ? engagementForAccount(previewPostMetrics, account.id)
                         : null
                     }
                   />
@@ -1657,6 +1657,7 @@ function App() {
             fetchPosts={(opts) => api.getTeamAnalyticsPosts(effectiveSelectedTeamId, opts)}
             fetchChart={(opts) => api.getTeamAnalyticsChart(effectiveSelectedTeamId, opts)}
             fetchAccountGrowth={(accountID, opts) => api.getTeamAccountGrowth(effectiveSelectedTeamId, accountID, opts)}
+            fetchPostMetrics={(postID) => api.getPostAnalytics(effectiveSelectedTeamId, postID)}
           />
         ) : null}
 

@@ -3,9 +3,22 @@ import { format, parseISO } from 'date-fns'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import { Icon } from '../../icons'
-import type { BackendAccountGrowthPoint, BackendMetricHistoryPoint, BackendPostAnalyticsListRow, BackendTeamAnalyticsReport } from '../../api'
+import type {
+  BackendAccountGrowthPoint,
+  BackendMetricHistoryPoint,
+  BackendPostAnalyticsListRow,
+  BackendPostMetric,
+  BackendTeamAnalyticsReport,
+} from '../../api'
 import type { AccountRecord } from '../../types'
 import { accountConnectionStatus } from '../../mappers'
+import { aggregatePostMetrics, engagementForAccount } from '../../postMetrics'
+
+const METRIC_LABELS: Record<string, string> = {
+  likes: 'Likes',
+  reposts: 'Shares',
+  replies: 'Replies',
+}
 
 function formatDeltaPct(n: number | undefined): string {
   if (n == null || Number.isNaN(n)) {
@@ -23,6 +36,7 @@ export function AnalyticsView({
   fetchPosts,
   fetchChart,
   fetchAccountGrowth,
+  fetchPostMetrics,
 }: {
   teamId: string
   accounts: AccountRecord[]
@@ -30,6 +44,7 @@ export function AnalyticsView({
   fetchPosts: (opts?: { sort?: string; limit?: number; offset?: number }) => Promise<{ items: BackendPostAnalyticsListRow[] }>
   fetchChart: (opts: { metric: string; days?: number }) => Promise<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>
   fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
+  fetchPostMetrics?: (postId: string) => Promise<{ items: BackendPostMetric[] }>
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'posts'>('overview')
   const [summary, setSummary] = useState<BackendTeamAnalyticsReport | null>(null)
@@ -38,10 +53,15 @@ export function AnalyticsView({
   const [chartMetric, setChartMetric] = useState<string>('')
   const [growthAccountId, setGrowthAccountId] = useState<string>('all')
   const [accountGrowthSeries, setAccountGrowthSeries] = useState<BackendAccountGrowthPoint[]>([])
+  const [accountLatestGrowth, setAccountLatestGrowth] = useState<Record<string, BackendAccountGrowthPoint>>({})
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
+  const [selectedPostMetrics, setSelectedPostMetrics] = useState<BackendPostMetric[]>([])
+  const [postMetricsLoading, setPostMetricsLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const viewGapStyle = { display: 'flex', flexDirection: 'column' as const, gap: 'var(--space-8)' }
+  const metrics = summary?.metrics ?? []
 
   const load = useCallback(async () => {
     if (!teamId) {
@@ -121,21 +141,82 @@ export function AnalyticsView({
     }
   }, [fetchAccountGrowth, growthAccountId, teamId])
 
+  useEffect(() => {
+    if (!teamId || activeTab !== 'accounts' || accounts.length === 0) {
+      setAccountLatestGrowth({})
+      return
+    }
+    let cancelled = false
+    void Promise.all(
+      accounts.map(async (acc) => {
+        try {
+          const res = await fetchAccountGrowth(acc.id, { days: 7 })
+          const last = res.series?.[res.series.length - 1]
+          return { id: acc.id, last }
+        } catch {
+          return { id: acc.id, last: undefined }
+        }
+      }),
+    ).then((rows) => {
+      if (cancelled) {
+        return
+      }
+      const next: Record<string, BackendAccountGrowthPoint> = {}
+      for (const row of rows) {
+        if (row.last) {
+          next[row.id] = row.last
+        }
+      }
+      setAccountLatestGrowth(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [accounts, activeTab, fetchAccountGrowth, teamId])
+
+  useEffect(() => {
+    if (!fetchPostMetrics || !selectedPostId) {
+      setSelectedPostMetrics([])
+      return
+    }
+    let cancelled = false
+    setPostMetricsLoading(true)
+    void fetchPostMetrics(selectedPostId)
+      .then((res) => {
+        if (!cancelled) {
+          setSelectedPostMetrics(res.items ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedPostMetrics([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPostMetricsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchPostMetrics, selectedPostId])
+
   const barData = useMemo(() => {
-    if (!summary?.metrics?.length) {
+    if (!metrics.length) {
       return []
     }
-    return [...summary.metrics]
+    return [...metrics]
       .map((m) => ({ name: m.metric, value: m.total }))
       .sort((a, b) => b.value - a.value)
-  }, [summary])
+  }, [metrics])
 
   const totalEngagement = useMemo(() => {
-    if (!summary?.metrics?.length) {
+    if (!metrics.length) {
       return 0
     }
-    return summary.metrics.reduce((a, m) => a + m.total, 0)
-  }, [summary])
+    return metrics.reduce((a, m) => a + m.total, 0)
+  }, [metrics])
 
   const newFollowers7d = useMemo(() => {
     if (accountGrowthSeries.length < 2) {
@@ -160,6 +241,8 @@ export function AnalyticsView({
       })),
     [accountGrowthSeries],
   )
+
+  const selectedPostTotals = useMemo(() => aggregatePostMetrics(selectedPostMetrics), [selectedPostMetrics])
 
   if (!teamId) {
     return <p className="hint">Select a team to view analytics.</p>
@@ -224,7 +307,7 @@ export function AnalyticsView({
           </div>
 
           <div className="analytics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-8)' }}>
-            {summary.metrics.length > 0 && (
+            {metrics.length > 0 && (
               <section className="glass-panel">
                 <h3 className="subsection-title">Platform Engagement</h3>
                 <div className="analytics-chart-wrap">
@@ -242,7 +325,7 @@ export function AnalyticsView({
                   </ResponsiveContainer>
                 </div>
                 <ul className="analytics-delta-grid mt-4">
-                  {summary.metrics.map((m) => (
+                  {metrics.map((m) => (
                     <li key={m.metric} className="analytics-delta-card">
                       <span className="analytics-delta-card__metric">{m.metric}</span>
                       <span className="analytics-delta-card__total">{m.total.toLocaleString()}</span>
@@ -265,7 +348,7 @@ export function AnalyticsView({
               <div className="analytics-chart-panel__head">
                 <h3 className="subsection-title">Metric Trend (30d)</h3>
                 <select className="select-sm" value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
-                  {summary.metrics.map((m) => (
+                  {metrics.map((m) => (
                     <option key={m.metric} value={m.metric}>{m.metric}</option>
                   ))}
                 </select>
@@ -316,7 +399,7 @@ export function AnalyticsView({
           <div className="analytics-accounts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
             {accounts.map(acc => {
               const status = accountConnectionStatus(acc)
-              const latestGrowth = accountGrowthSeries.findLast(p => p.account_id === acc.id)
+              const latestGrowth = accountLatestGrowth[acc.id]
               
               return (
                 <section key={acc.id} className="glass-panel account-stat-card">
@@ -363,8 +446,11 @@ export function AnalyticsView({
       )}
 
       {summary && activeTab === 'posts' && (
-        <section className="glass-panel">
+        <section className="glass-panel" style={viewGapStyle}>
           <h3 className="subsection-title">Post Performance</h3>
+          {posts.length === 0 ? (
+            <p className="hint">No published posts yet. Metrics appear after posts are published and synced from connected accounts.</p>
+          ) : (
           <div className="analytics-posts-table-wrap">
             <table className="data-table">
               <thead>
@@ -375,28 +461,78 @@ export function AnalyticsView({
                 </tr>
               </thead>
               <tbody>
-                {posts.map((row) => (
-                  <tr key={row.post_id}>
-                    <td>
-                      <div className="post-table-title">{row.title || 'Untitled'}</div>
-                      <div className="hint mono text-xs">{row.post_id}</div>
-                    </td>
-                    <td className="text-soft">
-                      {(() => {
-                        try {
-                          const d = parseISO(row.scheduled_at)
-                          return format(d, 'MMM d, HH:mm')
-                        } catch {
-                          return row.scheduled_at
-                        }
-                      })()}
-                    </td>
-                    <td className="text-right font-bold">{row.score.toLocaleString()}</td>
-                  </tr>
-                ))}
+                {posts.map((row) => {
+                  const isSelected = selectedPostId === row.post_id
+                  return (
+                    <tr
+                      key={row.post_id}
+                      className={fetchPostMetrics ? 'analytics-post-row--clickable' : undefined}
+                      data-selected={isSelected || undefined}
+                      onClick={
+                        fetchPostMetrics
+                          ? () => setSelectedPostId(isSelected ? null : row.post_id)
+                          : undefined
+                      }
+                    >
+                      <td>
+                        <div className="post-table-title">{row.title || 'Untitled'}</div>
+                        <div className="hint mono text-xs">{row.post_id}</div>
+                      </td>
+                      <td className="text-soft">
+                        {(() => {
+                          try {
+                            const d = parseISO(row.scheduled_at)
+                            return format(d, 'MMM d, HH:mm')
+                          } catch {
+                            return row.scheduled_at
+                          }
+                        })()}
+                      </td>
+                      <td className="text-right font-bold">{row.score.toLocaleString()}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
+          )}
+          {fetchPostMetrics && selectedPostId ? (
+            <section className="glass-panel glass-panel--compact analytics-post-detail">
+              <h4 className="subsection-title">Post metrics</h4>
+              {postMetricsLoading ? (
+                <p className="hint">Loading post metrics…</p>
+              ) : selectedPostMetrics.length === 0 ? (
+                <p className="hint">No engagement metrics synced for this post yet.</p>
+              ) : (
+                <>
+                  <ul className="analytics-delta-grid">
+                    {Object.entries(selectedPostTotals).map(([metric, total]) => (
+                      <li key={metric} className="analytics-delta-card">
+                        <span className="analytics-delta-card__metric">{METRIC_LABELS[metric] ?? metric}</span>
+                        <span className="analytics-delta-card__total">{total.toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="analytics-post-detail__by-account">
+                    {accounts.map((acc) => {
+                      const engagement = engagementForAccount(selectedPostMetrics, acc.id)
+                      if (engagement.likes === 0 && engagement.reposts === 0 && engagement.replies === 0) {
+                        return null
+                      }
+                      return (
+                        <div key={acc.id} className="analytics-post-detail__account">
+                          <DestinationAvatar account={acc} />
+                          <span className="hint">
+                            {engagement.likes} likes · {engagement.reposts} shares · {engagement.replies} replies
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </section>
+          ) : null}
         </section>
       )}
     </div>

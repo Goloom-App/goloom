@@ -204,6 +204,76 @@ func TestAPI_TeamAnalytics_and_PostAnalytics(t *testing.T) {
 		}
 	})
 
+	t.Run("post analytics empty for posted post without metrics", func(t *testing.T) {
+		ctx := context.Background()
+		u, err := s.UpsertOIDCUser(ctx, "empty-"+uuid.NewString(), "empty@example.test", "Empty")
+		if err != nil {
+			t.Fatal(err)
+		}
+		team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "empty-" + uuid.NewString(), Description: ""})
+		if err != nil {
+			t.Fatal(err)
+		}
+		plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "empty-metrics", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		acc, err := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+			Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+			InstanceURL: "https://social.example", Username: "x", AccessToken: "t",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		principal := domain.AuthenticatedPrincipal{User: u}
+		post, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+			Content: "no metrics yet", ScheduledAt: time.Now().UTC(), TargetAccounts: []string{acc.ID},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+			t.Fatal(err)
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+team.ID+"/posts/"+post.ID+"/analytics", nil)
+		req.Header.Set("Authorization", "Bearer "+plain)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+		}
+		var body struct {
+			Items []domain.PostMetric `json:"items"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if len(body.Items) != 0 {
+			t.Fatalf("expected empty items, got %#v", body.Items)
+		}
+
+		listReq := httptest.NewRequest(http.MethodGet, "/v1/teams/"+team.ID+"/analytics/posts?limit=10", nil)
+		listReq.Header.Set("Authorization", "Bearer "+plain)
+		listRec := httptest.NewRecorder()
+		h.ServeHTTP(listRec, listReq)
+		if listRec.Code != http.StatusOK {
+			t.Fatalf("list status %d body %s", listRec.Code, listRec.Body.String())
+		}
+		var listBody struct {
+			Items []struct {
+				PostID string `json:"post_id"`
+				Score  int64  `json:"score"`
+			} `json:"items"`
+		}
+		if err := json.NewDecoder(listRec.Body).Decode(&listBody); err != nil {
+			t.Fatal(err)
+		}
+		if len(listBody.Items) != 1 || listBody.Items[0].PostID != post.ID {
+			t.Fatalf("list items: %#v", listBody.Items)
+		}
+	})
+
 	t.Run("analytics chart", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+teamID+"/analytics/chart?metric=likes&days=14", nil)
 		req.Header.Set("Authorization", "Bearer "+token)

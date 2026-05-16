@@ -123,3 +123,54 @@ func TestGetTeamMetricHistorySeries(t *testing.T) {
 		t.Fatalf("expected value 7 in series: %#v", series)
 	}
 }
+
+func TestListTeamPostAnalyticsRanking_includesPostsWithoutMetrics(t *testing.T) {
+	ctx := context.Background()
+	s := memoryStoreAgg(t)
+	u, _ := s.UpsertOIDCUser(ctx, "rank", "rank@x", "Rank")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "rank-" + uuid.NewString(), Description: ""})
+	acc, _ := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://x", Username: "x", AccessToken: "t",
+	})
+	principal := domain.AuthenticatedPrincipal{User: u}
+
+	withMetrics, _ := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+		Title: "With metrics", Content: "c", ScheduledAt: time.Now().UTC(), TargetAccounts: []string{acc.ID},
+	})
+	withoutMetrics, _ := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+		Title: "No metrics", Content: "c2", ScheduledAt: time.Now().UTC().Add(-time.Hour), TargetAccounts: []string{acc.ID},
+	})
+	_ = s.MarkPostResult(ctx, withMetrics.ID, 1, domain.PostStatusPosted, "", nil)
+	_ = s.MarkPostResult(ctx, withoutMetrics.ID, 1, domain.PostStatusPosted, "", nil)
+	_ = s.UpsertPostMetrics(ctx, withMetrics.ID, acc.ID, map[string]int64{"likes": 5})
+
+	rows, err := s.ListTeamPostAnalyticsRanking(ctx, team.ID, "score", 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows: %#v", rows)
+	}
+	if rows[0].PostID != withMetrics.ID || rows[0].Score != 5 {
+		t.Fatalf("expected scored post first: %#v", rows[0])
+	}
+	foundZero := false
+	for _, row := range rows {
+		if row.PostID == withoutMetrics.ID && row.Score == 0 {
+			foundZero = true
+		}
+	}
+	if !foundZero {
+		t.Fatalf("expected post without metrics in ranking: %#v", rows)
+	}
+
+	metrics, err := s.ListPostMetricsForTeamPost(ctx, team.ID, withMetrics.ID)
+	if err != nil || len(metrics) < 1 {
+		t.Fatalf("metrics: %v %#v", err, metrics)
+	}
+	empty, err := s.ListPostMetricsForTeamPost(ctx, team.ID, withoutMetrics.ID)
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("empty metrics: %v %#v", err, empty)
+	}
+}
