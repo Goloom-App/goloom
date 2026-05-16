@@ -19,11 +19,12 @@ import (
 )
 
 type API struct {
-	log       *slog.Logger
-	store     store.Store
-	auth      *auth.Service
-	providers *provider.Registry
-	config    config.Config
+	log         *slog.Logger
+	store       store.Store
+	auth        *auth.Service
+	providers   *provider.Registry
+	config      config.Config
+	metricsSync metricsSyncRunner
 }
 
 type validationResponse struct {
@@ -41,13 +42,14 @@ type destinationInfo struct {
 	Valid     bool   `json:"valid"`
 }
 
-func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config) *API {
+func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner) *API {
 	return &API{
-		log:       logger,
-		store:     store,
-		auth:      authService,
-		providers: providers,
-		config:    cfg,
+		log:         logger,
+		store:       store,
+		auth:        authService,
+		providers:   providers,
+		config:      cfg,
+		metricsSync: metricsSync,
 	}
 }
 
@@ -73,6 +75,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("PATCH /v1/admin/users/{userID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateUser))))
 	mux.Handle("GET /v1/admin/runtime-config", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleRuntimeConfig))))
 	mux.Handle("GET /v1/admin/metrics", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminMetrics))))
+	mux.Handle("GET /v1/admin/sync-status", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncStatus))))
+	mux.Handle("POST /v1/admin/sync-metrics", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncMetrics))))
 	mux.Handle("POST /v1/admin/repair-future-posted", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminRepairFuturePosted))))
 	mux.Handle("GET /v1/provider-instances", a.auth.RequireAuth(http.HandlerFunc(a.handleListProviderInstances)))
 	mux.Handle("GET /v1/provider-instances/{instanceID}", a.auth.RequireAuth(http.HandlerFunc(a.handleGetProviderInstance)))
@@ -318,9 +322,10 @@ func (a *API) handleRuntimeConfig(w http.ResponseWriter, _ *http.Request) {
 			"encryption_configured":               a.config.EncryptionKey != "",
 		},
 		"scheduler": map[string]any{
-			"poll_interval":         a.config.SchedulerPollInterval.String(),
-			"metrics_sync_interval": a.config.SchedulerMetricsSyncInterval.String(),
-			"workers":               a.config.SchedulerWorkers,
+			"poll_interval":           a.config.SchedulerPollInterval.String(),
+			"metrics_sync_interval":   a.config.SchedulerMetricsSyncInterval.String(),
+			"account_health_interval": a.config.SchedulerAccountHealthInterval.String(),
+			"workers":                 a.config.SchedulerWorkers,
 		},
 		"oidc": map[string]any{
 			"enabled":    a.config.OIDCIssuerURL != "" && a.config.OIDCClientID != "",
@@ -459,6 +464,10 @@ func (a *API) handleDeleteProviderInstance(w http.ResponseWriter, r *http.Reques
 func (a *API) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 	accounts, err := a.store.ListTeamAccounts(r.Context(), r.PathValue("teamID"))
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := a.store.FillAccountSyncTimestamps(r.Context(), accounts); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

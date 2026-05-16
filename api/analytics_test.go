@@ -88,7 +88,7 @@ func analyticsTestHandler(t *testing.T, s *sqlitestore.Store) http.Handler {
 		provider.NewMastodonProvider(provider.MastodonRegistrationConfig{}),
 	)
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
-	h := api.New(logger, s, authSvc, reg, config.Config{})
+	h := api.New(logger, s, authSvc, reg, config.Config{}, nil)
 	return h.Handler(security.NewLimiter(10_000, 10_000), nil)
 }
 

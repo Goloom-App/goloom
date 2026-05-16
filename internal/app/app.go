@@ -115,7 +115,7 @@ func Run(ctx context.Context) error {
 	)
 	go schedulerService.Start(ctx)
 
-	apiHandler := api.New(logger, dataStore, authService, providers, cfg)
+	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService)
 	apiChain := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute, cfg.RateLimitAuthenticatedPerMinute), cfg.AllowedOrigins)
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/healthz", apiChain)

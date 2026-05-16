@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -22,7 +23,7 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 	}
 	_ = utcDay
 	const query = `
-		select t.post_id, t.published_url,
+		select t.post_id, t.published_url, t.publish_metadata,
 		       a.id, a.team_id, a.provider, a.auth_type, coalesce(a.provider_instance_id::text, ''), a.instance_url, a.username, a.remote_account_id,
 		       a.avatar_url,
 		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.created_at
@@ -32,7 +33,7 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		where t.status = 'posted'
 		  and p.status = 'posted'
 		  and t.published_url is not null and trim(t.published_url) <> ''
-		  and p.updated_at >= $1
+		  and (p.updated_at >= $1 or p.scheduled_at >= $1)
 		  and (
 			t.metrics_last_sync_at is null
 			or (
@@ -48,7 +49,7 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		limit $5
 	`
 
-	rows, err := s.pool.Query(ctx, query, notBefore, recentPostCutoff, recentSyncCutoff, olderSyncCutoff, limit)
+	rows, err := s.pool.Query(ctx, query, notBefore.UTC(), recentPostCutoff, recentSyncCutoff, olderSyncCutoff, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -57,9 +58,11 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 	var out []domain.PostedTargetForMetricSync
 	for rows.Next() {
 		var row domain.PostedTargetForMetricSync
+		var publishMetadataJSON []byte
 		if err := rows.Scan(
 			&row.PostID,
 			&row.PublishedURL,
+			&publishMetadataJSON,
 			&row.Account.ID,
 			&row.Account.TeamID,
 			&row.Account.Provider,
@@ -76,9 +79,21 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		); err != nil {
 			return nil, err
 		}
+		row.PublishMetadata = decodePublishMetadata(publishMetadataJSON)
 		out = append(out, row)
 	}
 	return out, rows.Err()
+}
+
+func decodePublishMetadata(raw []byte) map[string]string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var meta map[string]string
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return nil
+	}
+	return meta
 }
 
 func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error {

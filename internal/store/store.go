@@ -103,6 +103,8 @@ type Store interface {
 	TryAcquireLock(ctx context.Context, lockID string, duration time.Duration) (bool, error)
 
 	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
+	AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error)
+	FillAccountSyncTimestamps(ctx context.Context, accounts []domain.SocialAccount) error
 	RepairFuturePostedPosts(ctx context.Context) (int64, error)
 	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (plaintext string, meta domain.APIToken, err error)
 	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)

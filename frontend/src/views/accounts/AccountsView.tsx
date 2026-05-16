@@ -1,9 +1,22 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { format, formatDistanceToNow, isValid, parseISO } from 'date-fns'
 import { Icon } from '../../icons'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import type { AccountRecord, ProviderInstanceRecord, ProviderName, TeamRecord } from '../../types'
 import type { AccountConnectDraft } from './accountConnectTypes'
 import { defaultAccountConnectDraft } from './accountConnectTypes'
+
+function formatSyncAt(iso?: string): string {
+  const raw = iso?.trim()
+  if (!raw) {
+    return 'Never'
+  }
+  const parsed = parseISO(raw)
+  if (!isValid(parsed)) {
+    return 'Never'
+  }
+  return `${format(parsed, 'PPp')} (${formatDistanceToNow(parsed, { addSuffix: true })})`
+}
 
 export function AccountsView({
   selectedTeam,
@@ -48,6 +61,9 @@ export function AccountsView({
                     <strong>{account.name}</strong>
                     <div className="hint">
                       {account.provider} · @{account.username} · {account.instance}
+                    </div>
+                    <div className="hint account-sync-hint">
+                      Engagement: {formatSyncAt(account.postEngagementSyncedAt)} · Followers: {formatSyncAt(account.accountMetricsSyncedAt)}
                     </div>
                   </div>
                 </div>

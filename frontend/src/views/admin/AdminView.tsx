@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { format, isValid, parseISO } from 'date-fns'
 import { Icon } from '../../icons'
-import type { BackendAdminMetrics } from '../../api'
+import type { BackendAdminMetrics, BackendAdminSyncStatus } from '../../api'
 import type { AccountRecord, ProviderInstanceRecord, ProviderName, RuntimeConfigRecord, UserRecord } from '../../types'
 import type { AdminProviderDraft } from './adminTypes'
 import { defaultAdminProviderDraft } from './adminTypes'
@@ -10,6 +10,9 @@ export function AdminView({
   adminMetrics,
   adminMetricsLoading,
   adminRuntime,
+  adminSyncStatus,
+  adminSyncLoading,
+  onTriggerMetricsSync,
   directoryUsers,
   providerInstances,
   accounts,
@@ -26,6 +29,9 @@ export function AdminView({
   adminMetrics: BackendAdminMetrics | null
   adminMetricsLoading: boolean
   adminRuntime: RuntimeConfigRecord | null
+  adminSyncStatus: BackendAdminSyncStatus | null
+  adminSyncLoading: boolean
+  onTriggerMetricsSync: () => void | Promise<void>
   directoryUsers: UserRecord[]
   providerInstances: ProviderInstanceRecord[]
   accounts: AccountRecord[]
@@ -122,6 +128,10 @@ export function AdminView({
             <dd>{adminRuntime.scheduler.workers}</dd>
             <dt>Poll interval</dt>
             <dd>{adminRuntime.scheduler.pollInterval}</dd>
+            <dt>Post metrics sync</dt>
+            <dd>{adminRuntime.scheduler.metricsSyncInterval ?? '—'}</dd>
+            <dt>Account health check</dt>
+            <dd>{adminRuntime.scheduler.accountHealthInterval ?? '—'}</dd>
             <dt>HTTP listen</dt>
             <dd>
               <code className="inline-code">{adminRuntime.general.httpAddr}</code>
@@ -133,6 +143,44 @@ export function AdminView({
           </dl>
         </div>
       ) : null}
+
+      <div className="glass-panel">
+        <h2 className="section-card__title">Metrics sync</h2>
+        <p className="hint">
+          Post engagement (likes, reposts) and account follower counts are pulled from connected providers on a schedule.
+          Intervals are configured via server environment variables (<code className="inline-code">SCHEDULER_METRICS_SYNC_INTERVAL</code>, etc.).
+        </p>
+        {adminSyncLoading ? <p className="hint">Loading sync state…</p> : null}
+        {adminSyncStatus ? (
+          <>
+            <dl className="kv-list">
+              <dt>Post engagement interval</dt>
+              <dd>{adminSyncStatus.post_metrics_sync_interval}</dd>
+              <dt>Account followers interval</dt>
+              <dd>{adminSyncStatus.account_metrics_sync_interval}</dd>
+              <dt>Targets waiting for sync</dt>
+              <dd>{adminSyncStatus.posted_targets_pending_sync}</dd>
+              <dt>Never synced (posted)</dt>
+              <dd>{adminSyncStatus.posted_targets_never_synced}</dd>
+              <dt>Targets with stored metrics</dt>
+              <dd>{adminSyncStatus.posted_targets_with_metrics}</dd>
+              <dt>Accounts with follower snapshots</dt>
+              <dd>{adminSyncStatus.accounts_with_follower_metrics}</dd>
+            </dl>
+            <button
+              type="button"
+              className="button button--primary mt-1"
+              onClick={() => void onTriggerMetricsSync()}
+              disabled={syncing}
+            >
+              Sync metrics now
+            </button>
+            <p className="hint mt-1">
+              Runs post engagement and account follower sync in the background. Refresh after about a minute to see updated counts.
+            </p>
+          </>
+        ) : null}
+      </div>
 
       <div className="glass-panel">
         <h2 className="section-card__title">Provider onboarding</h2>

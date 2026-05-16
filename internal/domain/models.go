@@ -226,6 +226,8 @@ type SocialAccount struct {
 	RefreshTokenCiphertext string          `json:"-"`
 	MaxCharsOverride       *int            `json:"max_chars_override,omitempty"`
 	AccessTokenExpiresAt   *time.Time      `json:"access_token_expires_at,omitempty"`
+	AccountMetricsSyncedAt *time.Time      `json:"account_metrics_synced_at,omitempty"`
+	PostEngagementSyncedAt *time.Time      `json:"post_engagement_synced_at,omitempty"`
 	CreatedAt              time.Time       `json:"created_at"`
 }
 
@@ -323,9 +325,21 @@ type PostVersion struct {
 
 // PostedTargetForMetricSync is a posted target row with the linked social account for metric polling.
 type PostedTargetForMetricSync struct {
-	PostID       string
-	PublishedURL string
-	Account      SocialAccount
+	PostID          string
+	PublishedURL    string
+	PublishMetadata map[string]string
+	Account         SocialAccount
+}
+
+// AdminSyncStatus summarizes metrics sync scheduler state for the admin dashboard.
+type AdminSyncStatus struct {
+	PostMetricsSyncInterval      string `json:"post_metrics_sync_interval"`
+	AccountMetricsSyncInterval   string `json:"account_metrics_sync_interval"`
+	AccountHealthInterval        string `json:"account_health_interval"`
+	PostedTargetsPendingSync     int    `json:"posted_targets_pending_sync"`
+	PostedTargetsNeverSynced     int    `json:"posted_targets_never_synced"`
+	PostedTargetsWithMetrics     int    `json:"posted_targets_with_metrics"`
+	AccountsWithFollowerMetrics  int    `json:"accounts_with_follower_metrics"`
 }
 
 // PostEngagementSummary ranks a posted scheduled post by summed metrics.

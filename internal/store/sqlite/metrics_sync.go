@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -24,7 +25,7 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 	}
 	_ = utcDay
 	rows, err := s.db.QueryContext(ctx, `
-		select t.post_id, t.published_url,
+		select t.post_id, t.published_url, t.publish_metadata,
 		       a.id, a.team_id, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
 		       a.avatar_url,
 		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.created_at
@@ -34,7 +35,7 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		where t.status = 'posted'
 		  and p.status = 'posted'
 		  and t.published_url is not null and trim(t.published_url) <> ''
-		  and p.updated_at >= ?
+		  and (p.updated_at >= ? or p.scheduled_at >= ?)
 		  and (
 			t.metrics_last_sync_at is null
 			or (
@@ -48,7 +49,7 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		  )
 		order by p.updated_at desc
 		limit ?`,
-		since, recentPostCutoff, recentSyncCutoff, recentPostCutoff, olderSyncCutoff, limit,
+		since, since, recentPostCutoff, recentSyncCutoff, recentPostCutoff, olderSyncCutoff, limit,
 	)
 	if err != nil {
 		return nil, err
@@ -58,12 +59,14 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 	var out []domain.PostedTargetForMetricSync
 	for rows.Next() {
 		var row domain.PostedTargetForMetricSync
+		var publishMetadataJSON string
 		var providerInstanceID sql.NullString
 		var maxChars sql.NullInt64
 		var createdAt string
 		if err := rows.Scan(
 			&row.PostID,
 			&row.PublishedURL,
+			&publishMetadataJSON,
 			&row.Account.ID,
 			&row.Account.TeamID,
 			&row.Account.Provider,
@@ -90,9 +93,22 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 			return nil, err
 		}
 		row.Account.CreatedAt = parsed
+		row.PublishMetadata = decodePublishMetadata(publishMetadataJSON)
 		out = append(out, row)
 	}
 	return out, rows.Err()
+}
+
+func decodePublishMetadata(raw string) map[string]string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	var meta map[string]string
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		return nil
+	}
+	return meta
 }
 
 func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error {

@@ -352,6 +352,14 @@ func (m *mockStore) AdminMetrics(ctx context.Context) (domain.AdminMetrics, erro
 	return domain.AdminMetrics{}, nil
 }
 
+func (m *mockStore) AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error) {
+	return domain.AdminSyncStatus{}, nil
+}
+
+func (m *mockStore) FillAccountSyncTimestamps(ctx context.Context, accounts []domain.SocialAccount) error {
+	return nil
+}
+
 func (m *mockStore) RepairFuturePostedPosts(ctx context.Context) (int64, error) {
 	return 0, nil
 }

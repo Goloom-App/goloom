@@ -77,7 +77,19 @@ export interface BackendAccount {
   avatar_url?: string
   max_chars_override?: number
   access_token_expires_at?: string
+  account_metrics_synced_at?: string
+  post_engagement_synced_at?: string
   created_at: string
+}
+
+export interface BackendAdminSyncStatus {
+  post_metrics_sync_interval: string
+  account_metrics_sync_interval: string
+  account_health_interval: string
+  posted_targets_pending_sync: number
+  posted_targets_never_synced: number
+  posted_targets_with_metrics: number
+  accounts_with_follower_metrics: number
 }
 
 export interface BackendPost {
@@ -195,6 +207,7 @@ export interface BackendRuntimeConfig {
   scheduler: {
     poll_interval: string
     metrics_sync_interval?: string
+    account_health_interval?: string
     workers: number
   }
   oidc: {
@@ -341,6 +354,17 @@ export function createApiClient(options: ApiClientOptions) {
     },
     adminMetrics() {
       return request<BackendAdminMetrics>(options, '/v1/admin/metrics', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    adminSyncStatus() {
+      return request<BackendAdminSyncStatus>(options, '/v1/admin/sync-status', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    adminSyncMetrics() {
+      return request<{ status: string; message: string }>(options, '/v1/admin/sync-metrics', {
+        method: 'POST',
         headers: buildHeaders(options.token, false),
       })
     },

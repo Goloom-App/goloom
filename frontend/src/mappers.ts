@@ -96,6 +96,8 @@ export function toAccountRecord(account: BackendAccount, instances: ProviderInst
     authType: account.auth_type,
     avatarUrl: account.avatar_url?.trim() || undefined,
     accessTokenExpiresAt: account.access_token_expires_at?.trim() || undefined,
+    accountMetricsSyncedAt: account.account_metrics_synced_at?.trim() || undefined,
+    postEngagementSyncedAt: account.post_engagement_synced_at?.trim() || undefined,
     color: colorForProvider(account.provider),
     maxChars: account.max_chars_override ?? maxCharsForProvider(account.provider),
   }
@@ -160,6 +162,8 @@ export function toRuntimeConfigRecord(runtimeConfig: BackendRuntimeConfig): Runt
     },
     scheduler: {
       pollInterval: runtimeConfig.scheduler.poll_interval,
+      metricsSyncInterval: runtimeConfig.scheduler.metrics_sync_interval,
+      accountHealthInterval: runtimeConfig.scheduler.account_health_interval,
       workers: runtimeConfig.scheduler.workers,
     },
     oidc: {

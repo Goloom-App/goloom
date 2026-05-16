@@ -30,6 +30,7 @@ import {
   requestStartOIDCLogin,
   type BackendAPIToken,
   type BackendAdminMetrics,
+  type BackendAdminSyncStatus,
   type BackendPostMetric,
   type BackendPostVersion,
 } from './api'
@@ -114,6 +115,8 @@ function App() {
   const [adminMetrics, setAdminMetrics] = useState<BackendAdminMetrics | null>(null)
   const [adminMetricsLoading, setAdminMetricsLoading] = useState(false)
   const [adminRuntime, setAdminRuntime] = useState<RuntimeConfigRecord | null>(null)
+  const [adminSyncStatus, setAdminSyncStatus] = useState<BackendAdminSyncStatus | null>(null)
+  const [adminSyncLoading, setAdminSyncLoading] = useState(false)
   const [apiTokens, setApiTokens] = useState<BackendAPIToken[]>([])
   const [apiTokensLoading, setApiTokensLoading] = useState(false)
   const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
@@ -594,22 +597,26 @@ function App() {
     }
     let cancelled = false
     setAdminMetricsLoading(true)
-    void Promise.all([api.adminMetrics(), api.runtimeConfig()])
-      .then(([m, r]) => {
+    setAdminSyncLoading(true)
+    void Promise.all([api.adminMetrics(), api.runtimeConfig(), api.adminSyncStatus()])
+      .then(([m, r, sync]) => {
         if (!cancelled) {
           setAdminMetrics(m)
           setAdminRuntime(toRuntimeConfigRecord(r))
+          setAdminSyncStatus(sync)
         }
       })
       .catch(() => {
         if (!cancelled) {
           setAdminMetrics(null)
           setAdminRuntime(null)
+          setAdminSyncStatus(null)
         }
       })
       .finally(() => {
         if (!cancelled) {
           setAdminMetricsLoading(false)
+          setAdminSyncLoading(false)
         }
       })
     return () => {
@@ -999,6 +1006,19 @@ function App() {
       }
       await loadDashboard({ silent: true })
     }, 'Provider instance removed')
+  }
+
+  async function handleAdminSyncMetrics() {
+    if (!api) {
+      return
+    }
+    await runAction(async () => {
+      const result = await api.adminSyncMetrics()
+      const sync = await api.adminSyncStatus()
+      setAdminSyncStatus(sync)
+      await loadDashboard({ silent: true })
+      setStatusMessage(result.message)
+    }, 'Metrics sync started')
   }
 
   async function handleDeleteTeamAccount(accountId: string) {
@@ -1825,6 +1845,9 @@ function App() {
             adminMetrics={adminMetrics}
             adminMetricsLoading={adminMetricsLoading}
             adminRuntime={adminRuntime}
+            adminSyncStatus={adminSyncStatus}
+            adminSyncLoading={adminSyncLoading}
+            onTriggerMetricsSync={handleAdminSyncMetrics}
             directoryUsers={directoryUsers}
             providerInstances={providerInstances}
             accounts={accounts}

@@ -366,9 +366,19 @@ func (s *Service) accountMetricsJob(ctx context.Context) {
 	}
 }
 
-// fetchMetricsJob pulls provider metrics for posted targets at most once per UTC calendar day per target.
+// SyncPostMetricsNow pulls engagement metrics for eligible posted targets (admin trigger; bypasses job lock).
+func (s *Service) SyncPostMetricsNow(ctx context.Context) {
+	s.fetchMetricsJob(ctx)
+}
+
+// SyncAccountMetricsNow refreshes follower counts for all connected accounts (admin trigger).
+func (s *Service) SyncAccountMetricsNow(ctx context.Context) {
+	s.accountMetricsJob(ctx)
+}
+
+// fetchMetricsJob pulls provider engagement metrics for posted targets due for refresh.
 func (s *Service) fetchMetricsJob(ctx context.Context) {
-	since := time.Now().Add(-7 * 24 * time.Hour)
+	since := time.Now().Add(-30 * 24 * time.Hour)
 	utcDay := time.Now().UTC().Format("2006-01-02")
 	rows, err := s.store.ListPostedTargetsForMetricSync(ctx, since, utcDay, 500)
 	if err != nil {
@@ -376,43 +386,60 @@ func (s *Service) fetchMetricsJob(ctx context.Context) {
 		return
 	}
 	for _, row := range rows {
-		pImpl, ok := s.providers.Get(row.Account.Provider)
-		if !ok {
+		s.syncOnePostTargetMetrics(ctx, row, utcDay)
+	}
+}
+
+func (s *Service) syncOnePostTargetMetrics(ctx context.Context, row domain.PostedTargetForMetricSync, utcDay string) {
+	pImpl, ok := s.providers.Get(row.Account.Provider)
+	if !ok {
+		return
+	}
+	account := row.Account
+	accFresh, err := socialtokens.EnsureMastodonFresh(ctx, s.store, s.providers, account)
+	if err == nil {
+		account = accFresh
+	}
+	token, err := s.store.DecryptAccessToken(account)
+	if err != nil {
+		s.logger.Warn("metric sync decrypt access failed", "post_id", row.PostID, "account_id", account.ID, "error", err)
+		return
+	}
+	refreshToken, err := s.store.DecryptRefreshToken(account)
+	if err != nil {
+		s.logger.Warn("metric sync decrypt refresh failed", "post_id", row.PostID, "account_id", account.ID, "error", err)
+		return
+	}
+	metricsURL := provider.MetricsPublishedURL(account, row.PublishedURL, row.PublishMetadata)
+	readings, err := pImpl.GetMetrics(ctx, account, provider.PublishAuth{
+		AccessToken:  token,
+		RefreshToken: refreshToken,
+	}, metricsURL)
+	if err != nil {
+		s.logger.Warn("metric sync fetch failed", "post_id", row.PostID, "account_id", account.ID, "provider", account.Provider, "published_url", metricsURL, "error", err)
+		return
+	}
+	if len(readings) == 0 {
+		s.logger.Warn("metric sync returned no readings", "post_id", row.PostID, "account_id", account.ID, "provider", account.Provider)
+		return
+	}
+	m := make(map[string]int64, len(readings))
+	for _, x := range readings {
+		name := strings.TrimSpace(x.Name)
+		if name == "" {
 			continue
 		}
-		token, err := s.store.DecryptAccessToken(row.Account)
-		if err != nil {
-			s.logger.Warn("metric sync decrypt access failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
-			continue
-		}
-		refreshToken, err := s.store.DecryptRefreshToken(row.Account)
-		if err != nil {
-			s.logger.Warn("metric sync decrypt refresh failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
-			continue
-		}
-		readings, err := pImpl.GetMetrics(ctx, row.Account, provider.PublishAuth{
-			AccessToken:  token,
-			RefreshToken: refreshToken,
-		}, row.PublishedURL)
-		if err != nil {
-			s.logger.Warn("metric sync fetch failed", "post_id", row.PostID, "account_id", row.Account.ID, "provider", row.Account.Provider, "error", err)
-			continue
-		}
-		m := make(map[string]int64, len(readings))
-		for _, x := range readings {
-			name := strings.TrimSpace(x.Name)
-			if name == "" {
-				continue
-			}
-			m[name] = x.Value
-		}
-		if err := s.store.UpsertPostMetrics(ctx, row.PostID, row.Account.ID, m); err != nil {
-			s.logger.Warn("metric sync upsert failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
-			continue
-		}
-		if err := s.store.MarkScheduledPostTargetMetricsSynced(ctx, row.PostID, row.Account.ID, utcDay); err != nil {
-			s.logger.Warn("metric sync mark daily cursor failed", "post_id", row.PostID, "account_id", row.Account.ID, "error", err)
-		}
+		m[name] = x.Value
+	}
+	if len(m) == 0 {
+		return
+	}
+	if err := s.store.UpsertPostMetrics(ctx, row.PostID, account.ID, m); err != nil {
+		s.logger.Warn("metric sync upsert failed", "post_id", row.PostID, "account_id", account.ID, "error", err)
+		return
+	}
+	if err := s.store.MarkScheduledPostTargetMetricsSynced(ctx, row.PostID, account.ID, utcDay); err != nil {
+		s.logger.Warn("metric sync mark cursor failed", "post_id", row.PostID, "account_id", account.ID, "error", err)
 	}
 }
 

@@ -53,6 +53,10 @@ export interface AccountRecord {
   avatarUrl?: string
   /** OAuth access token expiry when known (ISO); app-password accounts omit this */
   accessTokenExpiresAt?: string
+  /** Last follower/following snapshot from the scheduler */
+  accountMetricsSyncedAt?: string
+  /** Last post engagement pull for any published target on this account */
+  postEngagementSyncedAt?: string
   color: string
   maxChars: number
 }
@@ -176,6 +180,8 @@ export interface RuntimeConfigRecord {
   }
   scheduler: {
     pollInterval: string
+    metricsSyncInterval?: string
+    accountHealthInterval?: string
     workers: number
   }
   oidc: {
