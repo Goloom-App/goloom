@@ -347,10 +347,10 @@ func (p *BlueskyProvider) GetMetrics(ctx context.Context, account domain.SocialA
 	}
 
 	token := strings.TrimSpace(auth.AccessToken)
-	if token == "" {
-		return nil, errors.New("missing bluesky credential")
-	}
 	if account.AuthType == domain.AccountAuthTypeAppPassword {
+		if token == "" {
+			return nil, errors.New("missing bluesky app password")
+		}
 		session, err := p.createSession(ctx, account.InstanceURL, account.Username, token)
 		if err != nil {
 			return nil, err
@@ -358,42 +358,25 @@ func (p *BlueskyProvider) GetMetrics(ctx context.Context, account domain.SocialA
 		token = session.AccessJWT
 	}
 
-	q := url.Values{}
-	q.Set("uris", atURI)
-	endpoint := strings.TrimRight(account.InstanceURL, "/") + "/xrpc/app.bsky.feed.getPosts?" + q.Encode()
-	resp, err := doJSONRequest(ctx, http.MethodGet, endpoint, token, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("bluesky getPosts failed with status %d", resp.StatusCode)
+	pds := strings.TrimRight(account.InstanceURL, "/")
+	var lastErr error
+	if token != "" {
+		counts, err := blueskyFetchPostCounts(ctx, pds, token, atURI)
+		if err == nil {
+			return blueskyEngagementFromCounts(counts), nil
+		}
+		lastErr = err
 	}
 
-	var payload struct {
-		Posts []struct {
-			Post *struct {
-				LikeCount   int64 `json:"likeCount"`
-				RepostCount int64 `json:"repostCount"`
-				ReplyCount  int64 `json:"replyCount"`
-				QuoteCount  int64 `json:"quoteCount"`
-			} `json:"post"`
-		} `json:"posts"`
+	// Public AppView exposes like/repost counts without auth (works when JWT expired or for public posts).
+	counts, err := blueskyFetchPostCounts(ctx, blueskyPublicAppView, "", atURI)
+	if err == nil {
+		return blueskyEngagementFromCounts(counts), nil
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decode getPosts: %w", err)
+	if lastErr != nil {
+		return nil, lastErr
 	}
-	if len(payload.Posts) == 0 || payload.Posts[0].Post == nil {
-		return nil, fmt.Errorf("getPosts returned no post")
-	}
-	post := payload.Posts[0].Post
-	return []EngagementMetric{
-		{Name: "likes", Value: post.LikeCount},
-		{Name: "reposts", Value: post.RepostCount},
-		{Name: "replies", Value: post.ReplyCount},
-		{Name: "quotes", Value: post.QuoteCount},
-	}, nil
+	return nil, err
 }
 
 func (p *BlueskyProvider) GetAccountMetrics(ctx context.Context, account domain.SocialAccount, auth PublishAuth) ([]AccountMetric, error) {

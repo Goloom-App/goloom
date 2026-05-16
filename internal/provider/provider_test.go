@@ -278,15 +278,15 @@ func TestBlueskyProvider_GetMetrics(t *testing.T) {
 			t.Errorf("uris=%q want %q", r.URL.Query().Get("uris"), want)
 		}
 		w.Header().Set("Content-Type", "application/json")
+		// app.bsky.feed.getPosts returns postView objects directly (not feedViewPost).
 		json.NewEncoder(w).Encode(map[string]any{
 			"posts": []any{
 				map[string]any{
-					"post": map[string]any{
-						"likeCount":   3,
-						"repostCount": 4,
-						"replyCount":  5,
-						"quoteCount":  6,
-					},
+					"uri":         want,
+					"likeCount":   3,
+					"repostCount": 4,
+					"replyCount":  5,
+					"quoteCount":  6,
 				},
 			},
 		})
