@@ -1162,7 +1162,7 @@ function App() {
     }, 'API token created. Copy the secret below; it is not stored in plain text.')
   }
 
-  async function handleRevokeApiToken(tokenID: string) {
+  async function handleRemoveApiToken(tokenID: string, expired: boolean) {
     if (!api) {
       return
     }
@@ -1170,7 +1170,7 @@ function App() {
       await api.revokeMyApiToken(tokenID)
       const list = await api.listMyApiTokens()
       setApiTokens(list.items ?? [])
-    }, 'API token revoked')
+    }, expired ? 'Token deleted' : 'API token revoked')
   }
 
   async function handleSavePost() {
@@ -1834,7 +1834,7 @@ function App() {
             newApiTokenExpiresYmd={newApiTokenExpiresYmd}
             setNewApiTokenExpiresYmd={setNewApiTokenExpiresYmd}
             onCreateApiToken={handleCreateApiToken}
-            onRevokeApiToken={handleRevokeApiToken}
+            onRemoveApiToken={handleRemoveApiToken}
             apiTokens={apiTokens}
             apiTokensLoading={apiTokensLoading}
           />

@@ -143,10 +143,22 @@ func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl ti
 		ttl = 12 * time.Hour
 	}
 	expires := time.Now().UTC().Add(ttl)
-	return s.CreateUserAPIToken(ctx, userID, "__web_session", &expires)
+	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires)
 }
 
 func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {
+	now := nowString()
+	if _, err := s.db.ExecContext(ctx, `
+		delete from api_tokens
+		where user_id = ?
+		  and name = ?
+		  and expires_at != ''
+		  and expires_at <= ?`,
+		userID, domain.WebSessionAPITokenName, now,
+	); err != nil {
+		return nil, err
+	}
+
 	rows, err := s.db.QueryContext(ctx, `
 		select id, user_id, name, last_used_at, expires_at, created_at
 		from api_tokens

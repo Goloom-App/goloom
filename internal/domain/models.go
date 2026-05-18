@@ -410,6 +410,17 @@ type AccountMetricHistoryPoint struct {
 	Posts     int64  `json:"posts"`
 }
 
+// WebSessionAPITokenName is the reserved api_tokens.name for browser session bearer tokens.
+const WebSessionAPITokenName = "__web_session"
+
+// APITokenExpired reports whether a token is past its expires_at (tokens without expiry never expire).
+func APITokenExpired(expiresAt *time.Time, now time.Time) bool {
+	if expiresAt == nil {
+		return false
+	}
+	return !expiresAt.After(now)
+}
+
 type APIToken struct {
 	ID         string     `json:"id"`
 	UserID     string     `json:"user_id"`

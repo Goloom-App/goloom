@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { format, isValid, parseISO } from 'date-fns'
 import { SettingsCard } from '../../components/settings/SettingsCard'
 import type { BackendAPIToken } from '../../api'
+import { apiTokenDisplayName, isApiTokenExpired } from './apiTokens'
 import type { SettingsState } from '../../types'
 
 export function SettingsView({
@@ -19,7 +20,7 @@ export function SettingsView({
   newApiTokenExpiresYmd,
   setNewApiTokenExpiresYmd,
   onCreateApiToken,
-  onRevokeApiToken,
+  onRemoveApiToken,
   apiTokens,
   apiTokensLoading,
 }: {
@@ -37,7 +38,7 @@ export function SettingsView({
   newApiTokenExpiresYmd: string
   setNewApiTokenExpiresYmd: (v: string) => void
   onCreateApiToken: () => void | Promise<void>
-  onRevokeApiToken: (tokenID: string) => void | Promise<void>
+  onRemoveApiToken: (tokenID: string, expired: boolean) => void | Promise<void>
   apiTokens: BackendAPIToken[]
   apiTokensLoading: boolean
 }) {
@@ -110,28 +111,33 @@ export function SettingsView({
             </tr>
           </thead>
           <tbody>
-            {apiTokens.map((t) => (
-              <tr key={t.id}>
-                <td>{t.name}</td>
-                <td>{format(parseISO(t.created_at), 'PPp')}</td>
-                <td>{t.expires_at && isValid(parseISO(t.expires_at)) ? format(parseISO(t.expires_at), 'PPp') : '—'}</td>
-                <td>{t.last_used_at ? format(parseISO(t.last_used_at), 'PPp') : '—'}</td>
-                <td>
-                  <button
-                    type="button"
-                    className="button button--secondary"
-                    onClick={() => {
-                      if (window.confirm(`Are you sure you want to revoke the token "${t.name}"?`)) {
-                        void onRevokeApiToken(t.id)
-                      }
-                    }}
-                    disabled={syncing}
-                  >
-                    Revoke
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {apiTokens.map((t) => {
+              const expired = isApiTokenExpired(t)
+              const label = apiTokenDisplayName(t.name)
+              return (
+                <tr key={t.id}>
+                  <td>{label}</td>
+                  <td>{format(parseISO(t.created_at), 'PPp')}</td>
+                  <td>{t.expires_at && isValid(parseISO(t.expires_at)) ? format(parseISO(t.expires_at), 'PPp') : '—'}</td>
+                  <td>{t.last_used_at ? format(parseISO(t.last_used_at), 'PPp') : '—'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => {
+                        const action = expired ? 'delete' : 'revoke'
+                        if (window.confirm(`Are you sure you want to ${action} the token "${label}"?`)) {
+                          void onRemoveApiToken(t.id, expired)
+                        }
+                      }}
+                      disabled={syncing}
+                    >
+                      {expired ? 'Delete' : 'Revoke'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
         {apiTokens.length === 0 && !apiTokensLoading ? <p className="hint">No API tokens yet.</p> : null}

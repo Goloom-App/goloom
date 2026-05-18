@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
+	"git.f4mily.net/goloom/internal/domain"
 )
 
 type createAPITokenRequest struct {
@@ -38,6 +40,10 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 	var input createAPITokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(input.Name) == domain.WebSessionAPITokenName {
+		http.Error(w, "token name is reserved", http.StatusBadRequest)
 		return
 	}
 	var expires *time.Time
