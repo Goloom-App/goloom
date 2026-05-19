@@ -525,6 +525,11 @@ components:
           description: Per-account text overrides (Map AccountID -> Content)
           additionalProperties:
             type: string
+        use_versions:
+          type: boolean
+          description: >-
+            When true, validate character limits per account using overrides (or default content)
+            instead of failing on default content length alone.
     PostVersion:
       type: object
       properties:
