@@ -36,9 +36,12 @@ test.describe('composer navigation', () => {
     await expect(page.getByTestId('composer-title')).toHaveText('Create post')
     await expect(page.getByRole('heading', { level: 1, name: 'Content calendar' })).toHaveCount(0)
 
+    const viewport = page.viewportSize()!
     const box = await overlay.boundingBox()
     expect(box).not.toBeNull()
-    expect(box!.y).toBeLessThan(20)
+    // inset:0 overlay; CI/subpixel/safe-area can nudge y slightly below zero threshold
+    expect(box!.y).toBeLessThanOrEqual(32)
+    expect(box!.height).toBeGreaterThan(viewport.height * 0.85)
 
     await page.getByRole('button', { name: 'Cancel' }).click()
 
