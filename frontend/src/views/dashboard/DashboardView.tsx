@@ -10,6 +10,16 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts'
 
 const ENGAGEMENT_METRICS = ['likes', 'reposts', 'replies'] as const
 
+type SparkPoint = { date: string; value: number }
+
+function formatSparkDate(date: string): string {
+  try {
+    return format(parseISO(date), 'MMM d, yyyy')
+  } catch {
+    return date
+  }
+}
+
 function MetricSparkline({
   title,
   color,
@@ -18,10 +28,10 @@ function MetricSparkline({
 }: {
   title: string
   color: string
-  points: { date: string; value: number }[]
+  points: SparkPoint[]
   loading: boolean
 }) {
-  const data = useMemo(() => points.map((p) => ({ ...p, label: p.date })), [points])
+  const data = useMemo(() => points, [points])
   const lastValue = useMemo(() => {
     if (data.length === 0) return null
     return data[data.length - 1].value
@@ -35,9 +45,7 @@ function MetricSparkline({
           <span className="dashboard-spark__subtitle">Last 7 days</span>
         </div>
         {lastValue !== null && !loading && (
-          <div className="dashboard-spark__value" style={{ color: lastValue < 0 ? '#ef4444' : (lastValue > 0 ? '#22c55e' : 'inherit') }}>
-            {lastValue > 0 ? `+${lastValue}` : lastValue}
-          </div>
+          <div className="dashboard-spark__value">{lastValue.toLocaleString()}</div>
         )}
       </div>
       <div className="dashboard-spark__chart">
@@ -48,7 +56,22 @@ function MetricSparkline({
         ) : (
           <ResponsiveContainer width="100%" height={88}>
             <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-              <Tooltip contentStyle={{ fontSize: '12px', borderRadius: '8px' }} />
+              <Tooltip
+                contentStyle={{
+                  fontSize: '12px',
+                  borderRadius: '8px',
+                  background: 'var(--surface-raised)',
+                  border: '1px solid var(--border)',
+                }}
+                labelFormatter={(_, items) => {
+                  const point = items?.[0]?.payload as SparkPoint | undefined
+                  return point ? formatSparkDate(point.date) : ''
+                }}
+                formatter={(value) => {
+                  const n = typeof value === 'number' ? value : Number(value)
+                  return Number.isFinite(n) ? n.toLocaleString() : String(value ?? '')
+                }}
+              />
               <Area type="monotone" dataKey="value" stroke={color} fill={color} fillOpacity={0.12} strokeWidth={1.75} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
@@ -78,7 +101,7 @@ export function DashboardView({
   onOpenAccounts: () => void
 }) {
   const [seriesByMetric, setSeriesByMetric] = useState<Record<string, BackendMetricHistoryPoint[]>>({})
-  const [networkSeries, setNetworkSeries] = useState<{ date: string; value: number }[]>([])
+  const [networkSeries, setNetworkSeries] = useState<SparkPoint[]>([])
   const [loadingCharts, setLoadingCharts] = useState(false)
 
   const loadCharts = useCallback(async () => {
@@ -94,30 +117,15 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      const network = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint, i: number, arr: BackendAccountGrowthPoint[]) => {
-        const prev = arr[i - 1]
-        // Daily delta: Today's network size (followers + following) minus yesterday's
-        const currentNetwork = p.followers + p.following
-        const prevNetwork = prev ? prev.followers + prev.following : currentNetwork
-        const delta = currentNetwork - prevNetwork
-        return {
-          date: p.date,
-          value: delta,
-        }
-      })
+      const network = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint) => ({
+        date: p.date,
+        value: p.followers + p.following,
+      }))
       setNetworkSeries(network)
 
-      const next: Record<string, { date: string; value: number }[]> = {}
+      const next: Record<string, BackendMetricHistoryPoint[]> = {}
       for (const [m, series] of engagementResults) {
-        next[m] = (series as BackendMetricHistoryPoint[]).map((p, i, arr) => {
-          const prev = arr[i - 1]
-          // Daily delta for engagement metrics
-          const delta = prev ? p.value - prev.value : 0
-          return {
-            date: p.date,
-            value: delta,
-          }
-        })
+        next[m] = series as BackendMetricHistoryPoint[]
       }
       setSeriesByMetric(next)
     } catch {
@@ -169,7 +177,7 @@ export function DashboardView({
             key={m}
             title={chartTitles[m]}
             color={chartColors[m] ?? 'var(--accent)'}
-            points={(seriesByMetric[m] ?? []).map((p) => ({ date: p.date, value: p.value }))}
+            points={seriesByMetric[m] ?? []}
             loading={loadingCharts}
           />
         ))}
