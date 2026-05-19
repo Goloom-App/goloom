@@ -62,7 +62,7 @@ func Load() (Config, error) {
 		RateLimitPerMinute:               getInt("RATE_LIMIT_PER_MINUTE", 120),
 		RateLimitAuthenticatedPerMinute:  getInt("RATE_LIMIT_AUTHENTICATED_PER_MINUTE", 0),
 		SchedulerPollInterval:            getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
-		SchedulerMetricsSyncInterval:     getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", 30*time.Minute),
+		SchedulerMetricsSyncInterval:     getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", 10*time.Minute),
 		SchedulerAccountHealthInterval:   getDuration("SCHEDULER_ACCOUNT_HEALTH_INTERVAL", time.Hour),
 		SchedulerWorkers:                 getInt("SCHEDULER_WORKERS", 4),
 		LogLevel:                         strings.TrimSpace(getEnv("LOG_LEVEL", "")),

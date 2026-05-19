@@ -2442,6 +2442,21 @@ select {
   background: var(--surface-hover);
 }
 
+.analytics-post-detail-row td {
+  padding: var(--space-3);
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.analytics-post-detail-row:hover td {
+  background: var(--surface-muted);
+}
+
+.analytics-post-detail-row .glass-panel {
+  margin: 0;
+}
+
 .analytics-post-detail {
   display: flex;
   flex-direction: column;

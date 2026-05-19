@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
@@ -18,6 +18,56 @@ const METRIC_LABELS: Record<string, string> = {
   likes: 'Likes',
   reposts: 'Shares',
   replies: 'Replies',
+}
+
+function PostMetricsDetailPanel({
+  loading,
+  metrics,
+  totals,
+  accounts,
+}: {
+  loading: boolean
+  metrics: BackendPostMetric[]
+  totals: Record<string, number>
+  accounts: AccountRecord[]
+}) {
+  return (
+    <section className="glass-panel glass-panel--compact analytics-post-detail">
+      <h4 className="subsection-title">Post metrics</h4>
+      {loading ? (
+        <p className="hint">Loading post metrics…</p>
+      ) : metrics.length === 0 ? (
+        <p className="hint">No engagement metrics synced for this post yet.</p>
+      ) : (
+        <>
+          <ul className="analytics-delta-grid">
+            {Object.entries(totals).map(([metric, total]) => (
+              <li key={metric} className="analytics-delta-card">
+                <span className="analytics-delta-card__metric">{METRIC_LABELS[metric] ?? metric}</span>
+                <span className="analytics-delta-card__total">{total.toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="analytics-post-detail__by-account">
+            {accounts.map((acc) => {
+              const engagement = engagementForAccount(metrics, acc.id)
+              if (engagement.likes === 0 && engagement.reposts === 0 && engagement.replies === 0) {
+                return null
+              }
+              return (
+                <div key={acc.id} className="analytics-post-detail__account">
+                  <DestinationAvatar account={acc} />
+                  <span className="hint">
+                    {engagement.likes} likes · {engagement.reposts} shares · {engagement.replies} replies
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </section>
+  )
 }
 
 function formatDeltaPct(n: number | undefined): string {
@@ -464,8 +514,8 @@ export function AnalyticsView({
                 {posts.map((row) => {
                   const isSelected = selectedPostId === row.post_id
                   return (
-                    <tr
-                      key={row.post_id}
+                    <Fragment key={row.post_id}>
+                      <tr
                       className={fetchPostMetrics ? 'analytics-post-row--clickable' : undefined}
                       data-selected={isSelected || undefined}
                       onClick={
@@ -489,50 +539,26 @@ export function AnalyticsView({
                         })()}
                       </td>
                       <td className="text-right font-bold">{row.score.toLocaleString()}</td>
-                    </tr>
+                      </tr>
+                      {fetchPostMetrics && isSelected ? (
+                        <tr className="analytics-post-detail-row">
+                          <td colSpan={3}>
+                            <PostMetricsDetailPanel
+                              loading={postMetricsLoading}
+                              metrics={selectedPostMetrics}
+                              totals={selectedPostTotals}
+                              accounts={accounts}
+                            />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   )
                 })}
               </tbody>
             </table>
           </div>
           )}
-          {fetchPostMetrics && selectedPostId ? (
-            <section className="glass-panel glass-panel--compact analytics-post-detail">
-              <h4 className="subsection-title">Post metrics</h4>
-              {postMetricsLoading ? (
-                <p className="hint">Loading post metrics…</p>
-              ) : selectedPostMetrics.length === 0 ? (
-                <p className="hint">No engagement metrics synced for this post yet.</p>
-              ) : (
-                <>
-                  <ul className="analytics-delta-grid">
-                    {Object.entries(selectedPostTotals).map(([metric, total]) => (
-                      <li key={metric} className="analytics-delta-card">
-                        <span className="analytics-delta-card__metric">{METRIC_LABELS[metric] ?? metric}</span>
-                        <span className="analytics-delta-card__total">{total.toLocaleString()}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="analytics-post-detail__by-account">
-                    {accounts.map((acc) => {
-                      const engagement = engagementForAccount(selectedPostMetrics, acc.id)
-                      if (engagement.likes === 0 && engagement.reposts === 0 && engagement.replies === 0) {
-                        return null
-                      }
-                      return (
-                        <div key={acc.id} className="analytics-post-detail__account">
-                          <DestinationAvatar account={acc} />
-                          <span className="hint">
-                            {engagement.likes} likes · {engagement.reposts} shares · {engagement.replies} replies
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
-            </section>
-          ) : null}
         </section>
       )}
     </div>

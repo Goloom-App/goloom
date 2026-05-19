@@ -9,9 +9,9 @@ import (
 
 func (s *Store) AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error) {
 	now := time.Now().UTC()
-	recentPostCutoff := now.Add(-24 * time.Hour)
-	recentSyncCutoff := now.Add(-30 * time.Minute)
-	olderSyncCutoff := now.Add(-6 * time.Hour)
+	recentPostCutoff := now.Add(-72 * time.Hour)
+	recentSyncCutoff := now.Add(-10 * time.Minute)
+	olderSyncCutoff := now.Add(-2 * time.Hour)
 
 	var st domain.AdminSyncStatus
 	const eligible = `
@@ -21,8 +21,8 @@ func (s *Store) AdminSyncStatus(ctx context.Context, notBefore time.Time) (domai
 		and (p.updated_at >= $1 or p.scheduled_at >= $1)
 		and (
 			t.metrics_last_sync_at is null
-			or (p.updated_at >= $2 and t.metrics_last_sync_at <= $3)
-			or (p.updated_at < $2 and t.metrics_last_sync_at <= $4)
+			or (greatest(p.updated_at, p.scheduled_at) >= $2 and t.metrics_last_sync_at <= $3)
+			or (greatest(p.updated_at, p.scheduled_at) < $2 and t.metrics_last_sync_at <= $4)
 		)`
 
 	if err := s.pool.QueryRow(ctx, `

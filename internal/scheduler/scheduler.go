@@ -242,6 +242,16 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		if err := s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusPosted, result.URL, "", result.Metadata); err != nil {
 			s.logger.Warn("failed to mark post target result", "post_id", post.ID, "account_id", account.ID, "error", err)
+			continue
+		}
+		if strings.TrimSpace(result.URL) != "" {
+			utcDay := time.Now().UTC().Format("2006-01-02")
+			s.syncOnePostTargetMetrics(ctx, domain.PostedTargetForMetricSync{
+				PostID:          post.ID,
+				PublishedURL:    result.URL,
+				PublishMetadata: result.Metadata,
+				Account:         account,
+			}, utcDay)
 		}
 	}
 

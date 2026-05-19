@@ -14,9 +14,9 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		limit = 500
 	}
 	now := time.Now().UTC()
-	recentPostCutoff := now.Add(-24 * time.Hour)
-	recentSyncCutoff := now.Add(-30 * time.Minute)
-	olderSyncCutoff := now.Add(-6 * time.Hour)
+	recentPostCutoff := now.Add(-72 * time.Hour)
+	recentSyncCutoff := now.Add(-10 * time.Minute)
+	olderSyncCutoff := now.Add(-2 * time.Hour)
 	utcDay = strings.TrimSpace(utcDay)
 	if utcDay == "" {
 		utcDay = time.Now().UTC().Format("2006-01-02")
@@ -37,15 +37,15 @@ func (s *Store) ListPostedTargetsForMetricSync(ctx context.Context, notBefore ti
 		  and (
 			t.metrics_last_sync_at is null
 			or (
-				p.updated_at >= $2
+				greatest(p.updated_at, p.scheduled_at) >= $2
 				and t.metrics_last_sync_at <= $3
 			)
 			or (
-				p.updated_at < $2
+				greatest(p.updated_at, p.scheduled_at) < $2
 				and t.metrics_last_sync_at <= $4
 			)
 		  )
-		order by p.updated_at desc
+		order by (t.metrics_last_sync_at is null) desc, p.updated_at desc
 		limit $5
 	`
 
