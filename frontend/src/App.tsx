@@ -102,7 +102,6 @@ function App() {
   const [previewPostMetrics, setPreviewPostMetrics] = useState<BackendPostMetric[]>([])
   const [editingPostId, setEditingPostId] = useState<string | null>(null)
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
-  const [composerOpen, setComposerOpen] = useState(false)
   const [editorDraft, setEditorDraft] = useState<EditorDraftState>(() => defaultEditorDraft(currentDate, []))
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -392,7 +391,8 @@ function App() {
     setSelectedTeamId('')
     setExpandedPostId(null)
     setEditingPostId(null)
-    setComposerOpen(false)
+    prevSectionBeforeComposerRef.current = null
+    setSection('calendar')
     setLoading(false)
     if (message) {
       setStatusMessage(message)
@@ -697,7 +697,17 @@ function App() {
 
   const showPreviewColumn = (section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer') && !isMobile
 
-  const isComposer = section === 'composer' && !isMobile
+  const isComposer = section === 'composer'
+
+  useEffect(() => {
+    if (section !== 'composer') {
+      return
+    }
+    const main = document.querySelector('.app-main')
+    if (main instanceof HTMLElement) {
+      main.scrollTop = 0
+    }
+  }, [section])
 
   const myRoleInSelectedTeam = useMemo((): TeamRole | null => {
     if (!selectedTeam || !principalUser) {
@@ -727,6 +737,13 @@ function App() {
   )
 
   const selectedPost = useMemo(() => posts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, posts])
+  const previewPostForMetrics = useMemo(() => {
+    const id = expandedPostId ?? mobilePreviewPostId
+    if (!id) {
+      return null
+    }
+    return posts.find((post) => post.id === id) ?? null
+  }, [expandedPostId, mobilePreviewPostId, posts])
   const editTargetPost = useMemo(() => posts.find((post) => post.id === editingPostId) ?? null, [editingPostId, posts])
 
   const openPostPreview = useCallback(
@@ -750,13 +767,13 @@ function App() {
   }, [isMobile, mobilePreviewPostId])
 
   useEffect(() => {
-    if (!api || !selectedPost || selectedPost.status !== 'posted') {
+    if (!api || !previewPostForMetrics || previewPostForMetrics.status !== 'posted') {
       setPreviewPostMetrics([])
       return
     }
     let cancelled = false
     void api
-      .getPostAnalytics(selectedPost.teamId, selectedPost.id)
+      .getPostAnalytics(previewPostForMetrics.teamId, previewPostForMetrics.id)
       .then((r) => {
         if (!cancelled) {
           setPreviewPostMetrics(r.items ?? [])
@@ -770,7 +787,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [api, selectedPost])
+  }, [api, previewPostForMetrics])
 
   async function runAction(work: () => Promise<void>, successMessage: string) {
     setSyncing(true)
@@ -791,10 +808,8 @@ function App() {
     setComposerMode('create')
     setEditingPostId(null)
     setEditorDraft(defaultEditorDraft(currentDate, teamAccounts))
-    setComposerOpen(true)
-    if (!isMobile) {
-      setSection('composer')
-    }
+    setMobilePreviewPostId(null)
+    setSection('composer')
   }
 
   async function openEditor(postId: string) {
@@ -826,18 +841,17 @@ function App() {
     setComposerMode('edit')
     setEditingPostId(postId)
     setExpandedPostId(postId)
-    setComposerOpen(true)
+    setMobilePreviewPostId(null)
     prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
-    if (!isMobile) {
-      setSection('composer')
-    }
+    setSection('composer')
   }
 
   function closeComposer() {
-    setComposerOpen(false)
-    if (!isMobile && prevSectionBeforeComposerRef.current) {
+    if (prevSectionBeforeComposerRef.current) {
       setSection(prevSectionBeforeComposerRef.current)
       prevSectionBeforeComposerRef.current = null
+    } else if (section === 'composer') {
+      setSection('calendar')
     }
   }
 
@@ -869,11 +883,9 @@ function App() {
     })
     setComposerMode('create')
     setEditingPostId(null)
-    setComposerOpen(true)
+    setMobilePreviewPostId(null)
     prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
-    if (!isMobile) {
-      setSection('composer')
-    }
+    setSection('composer')
   }
 
   function connectBackend() {
@@ -1211,7 +1223,7 @@ function App() {
         await api.createPost(selectedTeam.id, payload)
       }
 
-      setComposerOpen(false)
+      closeComposer()
       await loadDashboard({ silent: true })
     }, composerMode === 'edit' ? 'Post updated' : 'Post scheduled')
   }
@@ -1240,7 +1252,7 @@ function App() {
         await api.createPost(selectedTeam.id, payload)
       }
 
-      setComposerOpen(false)
+      closeComposer()
       await loadDashboard({ silent: true })
     }, 'Draft saved')
   }
@@ -1253,7 +1265,7 @@ function App() {
       await api.deletePost(selectedTeam.id, postId)
       setExpandedPostId((current) => (current === postId ? null : current))
       setEditingPostId((current) => (current === postId ? null : current))
-      setComposerOpen(false)
+      closeComposer()
       await loadDashboard({ silent: true })
     }, 'Post deleted')
   }
@@ -1457,11 +1469,11 @@ function App() {
       ) : null}
 
       <div className="pb-section">
-        {section === 'composer' && !isMobile && (
+        {section === 'composer' ? (
           <PostComposer
             open={true}
             mode={composerMode}
-            isMobile={false}
+            isMobile={isMobile}
             theme={resolvedTheme}
             teamAccounts={teamAccounts}
             draft={editorDraft}
@@ -1483,11 +1495,11 @@ function App() {
             }
             schedulingPreferences={selectedTeam?.schedulingPreferences}
             standalone
-            previewColumnExternal={true}
+            previewColumnExternal={!isMobile}
           />
-        )}
+        ) : null}
 
-        {isMobile && mobilePreviewPostId && (
+        {isMobile && mobilePreviewPostId && section !== 'composer' && (
           <div
             className="mobile-preview-overlay"
             data-testid="mobile-preview-overlay"
@@ -1601,6 +1613,9 @@ function App() {
                       scheduledAt={p.scheduledAt}
                       theme={resolvedTheme}
                       publishedPostUrl={p.status === 'posted' ? p.publishedLinks?.[account.id] : undefined}
+                      engagement={
+                        p.status === 'posted' ? engagementForAccount(previewPostMetrics, account.id) : null
+                      }
                     />
                   ))
                 })()}
@@ -1864,33 +1879,6 @@ function App() {
         )}
       </div>
 
-      {section !== 'composer' && isMobile && (
-        <PostComposer
-          open={composerOpen}
-          mode={composerMode}
-          isMobile={true}
-          theme={resolvedTheme}
-          teamAccounts={teamAccounts}
-          draft={editorDraft}
-          setDraft={setEditorDraft}
-          syncing={syncing}
-          onSave={() => void handleSavePost()}
-          onSaveDraft={() => void handleSaveDraft()}
-          onClose={closeComposer}
-          teamId={selectedTeam?.id}
-          api={api ?? undefined}
-          authHeader={activeConnection.bearerToken.trim() ? `Bearer ${activeConnection.bearerToken.trim()}` : undefined}
-          onMediaUpload={
-            api && selectedTeam
-              ? async (file) => {
-                  const item = await api.uploadTeamMediaToLibrary(selectedTeam.id, file)
-                  return item.id
-                }
-              : undefined
-          }
-          schedulingPreferences={selectedTeam?.schedulingPreferences}
-        />
-      )}
     </AppShell>
   )
 }

@@ -447,11 +447,17 @@ export function PostComposer({
 
   if (isMobile) {
     return (
-      <div className="composer-container composer-container--enhanced composer-container--mobile" onClick={(event) => event.stopPropagation()}>
+      <div className="composer-overlay" onClick={(event) => event.stopPropagation()}>
+        <div className="composer-container composer-container--enhanced composer-container--mobile">
         <div className="composer-main composer-main--mobile">
-          <header>
-            <p className="eyebrow">Composer</p>
-            <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+          <header className="composer-mobile-header">
+            <button type="button" className="btn btn--ghost btn--xs" onClick={onClose} aria-label="Close composer">
+              <Icon name="close" className="inline-icon" />
+            </button>
+            <div>
+              <p className="eyebrow">Composer</p>
+              <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+            </div>
           </header>
           <div className="composer-mobile-tabs" role="tablist" aria-label="Composer mobile panel">
             <button type="button" role="tab" aria-selected={mobilePanel === 'edit'} className={`composer-mobile-tab ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('edit')}>Edit</button>
@@ -465,6 +471,7 @@ export function PostComposer({
           ) : (
             previewsPanel
           )}
+          </div>
         </div>
       </div>
     )
