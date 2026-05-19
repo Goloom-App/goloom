@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/store/seriesfill"
 )
 
 func prevISODate(yyyyMMdd string) (string, bool) {
@@ -198,5 +199,8 @@ func (s *Store) GetTeamMetricHistorySeries(ctx context.Context, teamID, metric s
 		pt.Date = strings.TrimSpace(pt.Date)
 		out = append(out, pt)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return seriesfill.FillMetricHistory(out, days, time.Now().UTC()), nil
 }

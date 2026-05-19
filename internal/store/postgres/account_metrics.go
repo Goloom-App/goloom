@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/store/seriesfill"
 )
 
 func (s *Store) ListAccountsForMetricsSync(ctx context.Context, limit int) ([]domain.SocialAccount, error) {
@@ -125,5 +126,8 @@ func (s *Store) GetTeamAccountMetricHistorySeries(ctx context.Context, teamID, a
 		row.Date = strings.TrimSpace(row.Date)
 		points = append(points, row)
 	}
-	return points, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return seriesfill.FillAccountGrowth(points, days, time.Now().UTC()), nil
 }
