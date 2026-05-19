@@ -12,6 +12,17 @@ const ENGAGEMENT_METRICS = ['likes', 'reposts', 'replies'] as const
 
 type SparkPoint = { date: string; value: number }
 
+function toDailyDeltas(series: BackendMetricHistoryPoint[], clampAtZero = false): SparkPoint[] {
+  return series.map((p, i, arr) => {
+    const prev = arr[i - 1]
+    const delta = prev ? p.value - prev.value : 0
+    return {
+      date: p.date,
+      value: clampAtZero ? Math.max(0, delta) : delta,
+    }
+  })
+}
+
 function formatSparkDate(date: string): string {
   try {
     return format(parseISO(date), 'MMM d, yyyy')
@@ -20,16 +31,25 @@ function formatSparkDate(date: string): string {
   }
 }
 
+function formatSparkValue(value: number, mode: 'total' | 'delta'): string {
+  if (mode === 'delta' && value > 0) {
+    return `+${value.toLocaleString()}`
+  }
+  return value.toLocaleString()
+}
+
 function MetricSparkline({
   title,
   color,
   points,
   loading,
+  valueMode = 'delta',
 }: {
   title: string
   color: string
   points: SparkPoint[]
   loading: boolean
+  valueMode?: 'total' | 'delta'
 }) {
   const data = useMemo(() => points, [points])
   const lastValue = useMemo(() => {
@@ -45,7 +65,16 @@ function MetricSparkline({
           <span className="dashboard-spark__subtitle">Last 7 days</span>
         </div>
         {lastValue !== null && !loading && (
-          <div className="dashboard-spark__value">{lastValue.toLocaleString()}</div>
+          <div
+            className="dashboard-spark__value"
+            style={
+              valueMode === 'delta'
+                ? { color: lastValue < 0 ? '#ef4444' : lastValue > 0 ? '#22c55e' : 'inherit' }
+                : undefined
+            }
+          >
+            {formatSparkValue(lastValue, valueMode)}
+          </div>
         )}
       </div>
       <div className="dashboard-spark__chart">
@@ -69,7 +98,7 @@ function MetricSparkline({
                 }}
                 formatter={(value) => {
                   const n = typeof value === 'number' ? value : Number(value)
-                  return Number.isFinite(n) ? n.toLocaleString() : String(value ?? '')
+                  return Number.isFinite(n) ? formatSparkValue(n, valueMode) : String(value ?? '')
                 }}
               />
               <Area type="monotone" dataKey="value" stroke={color} fill={color} fillOpacity={0.12} strokeWidth={1.75} isAnimationActive={false} />
@@ -100,7 +129,7 @@ export function DashboardView({
   onOpenSchedule: () => void
   onOpenAccounts: () => void
 }) {
-  const [seriesByMetric, setSeriesByMetric] = useState<Record<string, BackendMetricHistoryPoint[]>>({})
+  const [seriesByMetric, setSeriesByMetric] = useState<Record<string, SparkPoint[]>>({})
   const [networkSeries, setNetworkSeries] = useState<SparkPoint[]>([])
   const [loadingCharts, setLoadingCharts] = useState(false)
 
@@ -117,15 +146,17 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      const network = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint) => ({
-        date: p.date,
-        value: p.followers + p.following,
-      }))
+      const network = toDailyDeltas(
+        (growthResult.series ?? []).map((p: BackendAccountGrowthPoint) => ({
+          date: p.date,
+          value: p.followers + p.following,
+        })),
+      )
       setNetworkSeries(network)
 
-      const next: Record<string, BackendMetricHistoryPoint[]> = {}
+      const next: Record<string, SparkPoint[]> = {}
       for (const [m, series] of engagementResults) {
-        next[m] = series as BackendMetricHistoryPoint[]
+        next[m] = toDailyDeltas(series as BackendMetricHistoryPoint[], true)
       }
       setSeriesByMetric(next)
     } catch {
@@ -158,7 +189,7 @@ export function DashboardView({
         <div>
           <p className="eyebrow">Performance</p>
           <h2 className="dashboard-panel__title">Recent engagement</h2>
-          <p className="hint">Team totals from synced analytics</p>
+          <p className="hint">Daily change from synced analytics</p>
         </div>
         <button type="button" className="button button--secondary" onClick={() => void loadCharts()} disabled={loadingCharts}>
           {loadingCharts ? <Icon name="loader" className="reload-spin" /> : <Icon name="refresh" />}
