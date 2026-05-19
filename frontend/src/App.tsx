@@ -736,7 +736,7 @@ function App() {
     [accountDraft.provider, providerInstances],
   )
 
-  const selectedPost = useMemo(() => posts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, posts])
+  const selectedPost = useMemo(() => teamPosts.find((post) => post.id === expandedPostId) ?? null, [expandedPostId, teamPosts])
   const previewPostForMetrics = useMemo(() => {
     const id = expandedPostId ?? mobilePreviewPostId
     if (!id) {
@@ -744,7 +744,7 @@ function App() {
     }
     return posts.find((post) => post.id === id) ?? null
   }, [expandedPostId, mobilePreviewPostId, posts])
-  const editTargetPost = useMemo(() => posts.find((post) => post.id === editingPostId) ?? null, [editingPostId, posts])
+  const editTargetPost = useMemo(() => teamPosts.find((post) => post.id === editingPostId) ?? null, [editingPostId, teamPosts])
 
   const openPostPreview = useCallback(
     (postId: string) => {
@@ -813,7 +813,7 @@ function App() {
   }
 
   async function openEditor(postId: string) {
-    const targetPost = posts.find((post) => post.id === postId)
+    const targetPost = teamPosts.find((post) => post.id === postId)
     if (!targetPost) {
       return
     }
@@ -832,7 +832,7 @@ function App() {
       title: targetPost.title,
       content: targetPost.content,
       scheduledAt: toInputDateTime(parseISO(targetPost.scheduledAt)),
-      targetAccountIds: targetPost.targetAccountIds,
+      targetAccountIds: targetPost.targetAccountIds ?? [],
       status: targetPost.status,
       accountContentOverride,
       mediaIds: targetPost.mediaIds ? [...targetPost.mediaIds] : [],
@@ -875,7 +875,7 @@ function App() {
       title: `${targetPost.title} (Copy)`,
       content: targetPost.content,
       scheduledAt: toInputDateTime(addHours(currentDate, 1)),
-      targetAccountIds: [...targetPost.targetAccountIds],
+      targetAccountIds: [...(targetPost.targetAccountIds ?? [])],
       status: 'draft',
       accountContentOverride,
       mediaIds: targetPost.mediaIds ? [...targetPost.mediaIds] : [],
@@ -1394,7 +1394,12 @@ function App() {
                 {selectedPost &&
                 (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
                 canEditScheduledPosts ? (
-                  <button type="button" className="btn btn--ghost preview-header__edit" onClick={() => openEditor(selectedPost.id)}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost preview-header__edit"
+                    data-testid="preview-edit-button"
+                    onClick={() => void openEditor(selectedPost.id)}
+                  >
                     <Edit size={16} />
                     <span>Edit</span>
                   </button>
@@ -1570,6 +1575,7 @@ function App() {
                           <button
                             type="button"
                             className="button button--secondary button--sm"
+                            data-testid="preview-edit-button"
                             onClick={() => {
                               const id = mobilePreviewPostId
                               setMobilePreviewPostId(null)

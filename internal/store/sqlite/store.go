@@ -989,6 +989,9 @@ func (s *Store) loadTargetAccountIDs(ctx context.Context, postIDs []string) (map
 	defer rows.Close()
 
 	targetsByPostID := make(map[string][]string, len(postIDs))
+	for _, postID := range postIDs {
+		targetsByPostID[postID] = []string{}
+	}
 	for rows.Next() {
 		var postID, accountID string
 		if err := rows.Scan(&postID, &accountID); err != nil {

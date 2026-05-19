@@ -259,7 +259,7 @@ export function PostComposer({
   const composerHeader = (
     <header>
       <p className="eyebrow">Composer</p>
-      <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+      <h2 data-testid="composer-title">{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
     </header>
   )
 
@@ -447,7 +447,7 @@ export function PostComposer({
 
   if (isMobile) {
     return (
-      <div className="composer-overlay" onClick={(event) => event.stopPropagation()}>
+      <div className="composer-overlay" data-testid="composer-overlay" onClick={(event) => event.stopPropagation()}>
         <div className="composer-container composer-container--enhanced composer-container--mobile">
         <div className="composer-main composer-main--mobile">
           <header className="composer-mobile-header">
@@ -456,7 +456,7 @@ export function PostComposer({
             </button>
             <div>
               <p className="eyebrow">Composer</p>
-              <h2>{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+              <h2 data-testid="composer-title">{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
             </div>
           </header>
           <div className="composer-mobile-tabs" role="tablist" aria-label="Composer mobile panel">
@@ -478,7 +478,11 @@ export function PostComposer({
   }
 
   if (standalone) {
-    return <div className="composer-page">{inner}</div>
+    return (
+      <div className="composer-page" data-testid="composer-view">
+        {inner}
+      </div>
+    )
   }
 
   return (

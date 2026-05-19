@@ -127,7 +127,7 @@ export function toPostRecord(post: BackendPost): PostRecord {
     content: post.content,
     scheduledAt: post.scheduled_at,
     durationMinutes: 30,
-    targetAccountIds: post.target_accounts,
+    targetAccountIds: post.target_accounts ?? [],
     status: mapStatus(post.status),
     publishedLinks: post.published_links,
     mediaIds: post.media_ids?.length ? post.media_ids : undefined,
