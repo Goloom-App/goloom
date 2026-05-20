@@ -170,6 +170,10 @@ Use when you need external DB operations and scale patterns:
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/goloom?sslmode=disable
 ```
 
+## Production migration (Docker → Kubernetes)
+
+If you run Goloom with Docker PostgreSQL and want to move to the homelab CNPG deployment, see [`docs/migrations/docker-to-kubernetes-homelab.md`](docs/migrations/docker-to-kubernetes-homelab.md).
+
 ## Docker
 
 Build:
