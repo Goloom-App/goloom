@@ -1,19 +1,21 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { format, formatDistanceToNow, isValid, parseISO } from 'date-fns'
+import { useTranslation } from 'react-i18next'
+
 import { Icon } from '../../icons'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import type { AccountRecord, ProviderInstanceRecord, ProviderName, TeamRecord } from '../../types'
 import type { AccountConnectDraft } from './accountConnectTypes'
 import { defaultAccountConnectDraft } from './accountConnectTypes'
 
-function formatSyncAt(iso?: string): string {
+function formatSyncAt(iso: string | undefined, neverLabel: string): string {
   const raw = iso?.trim()
   if (!raw) {
-    return 'Never'
+    return neverLabel
   }
   const parsed = parseISO(raw)
   if (!isValid(parsed)) {
-    return 'Never'
+    return neverLabel
   }
   return `${format(parsed, 'PPp')} (${formatDistanceToNow(parsed, { addSuffix: true })})`
 }
@@ -41,16 +43,16 @@ export function AccountsView({
   onConnectSocialAccount: () => void | Promise<void>
   onMastodonOAuthConnect: () => void | Promise<void>
 }) {
+  const { t } = useTranslation()
+  const neverLabel = t('common.never')
+
   return (
     <div className="accounts-view two-column-detail">
       <div className="glass-panel">
-        <h2 className="section-card__title">Connected accounts</h2>
-        <p className="hint">
-          Social accounts are attached to the workspace selected in the header — including your personal workspace. Use them as post
-          destinations in the composer.
-        </p>
+        <h2 className="section-card__title">{t('accounts.connectedTitle')}</h2>
+        <p className="hint">{t('accounts.connectedHint')}</p>
         {teamAccounts.length === 0 ? (
-          <p className="hint">No accounts connected for this workspace yet.</p>
+          <p className="hint">{t('accounts.noAccounts')}</p>
         ) : (
           <ul className="account-connect-list">
             {teamAccounts.map((account) => (
@@ -63,33 +65,36 @@ export function AccountsView({
                       {account.provider} · @{account.username} · {account.instance}
                     </div>
                     <div className="hint account-sync-hint">
-                      Engagement: {formatSyncAt(account.postEngagementSyncedAt)} · Followers: {formatSyncAt(account.accountMetricsSyncedAt)}
+                      {t('accounts.engagementSync', {
+                        engagement: formatSyncAt(account.postEngagementSyncedAt, neverLabel),
+                        followers: formatSyncAt(account.accountMetricsSyncedAt, neverLabel),
+                      })}
                     </div>
                   </div>
                 </div>
                 {canEditTeamAccounts ? (
                   <button type="button" className="button button--secondary" onClick={() => void onDeleteTeamAccount(account.id)} disabled={syncing}>
                     <Icon name="trash" className="inline-icon" />
-                    <span>Remove</span>
+                    <span>{t('common.remove')}</span>
                   </button>
                 ) : null}
               </li>
             ))}
           </ul>
         )}
-        {!canEditTeamAccounts && selectedTeam ? <p className="hint">View-only members cannot connect or remove accounts.</p> : null}
+        {!canEditTeamAccounts && selectedTeam ? <p className="hint">{t('accounts.viewOnlyHint')}</p> : null}
       </div>
 
       <div className="glass-panel">
-        <h2 className="section-card__title">Connect an account</h2>
+        <h2 className="section-card__title">{t('accounts.connectTitle')}</h2>
         {!selectedTeam ? (
-          <p className="hint">Select or create a team first.</p>
+          <p className="hint">{t('accounts.selectTeamFirst')}</p>
         ) : !canEditTeamAccounts ? (
-          <p className="hint">You need editor or owner access on this workspace to connect accounts.</p>
+          <p className="hint">{t('accounts.needEditorAccess')}</p>
         ) : (
           <>
             <label className="field">
-              <span>Provider</span>
+              <span>{t('common.provider')}</span>
               <select
                 value={accountDraft.provider}
                 onChange={(event) => {
@@ -97,20 +102,20 @@ export function AccountsView({
                   setAccountDraft({ ...defaultAccountConnectDraft(), provider: p })
                 }}
               >
-                <option value="mastodon">Mastodon</option>
-                <option value="friendica">Friendica</option>
-                <option value="bluesky">Bluesky</option>
+                <option value="mastodon">{t('accounts.providerMastodon')}</option>
+                <option value="friendica">{t('accounts.providerFriendica')}</option>
+                <option value="bluesky">{t('accounts.providerBluesky')}</option>
               </select>
             </label>
 
             {instancesForAccountConnect.length > 0 ? (
               <label className="field">
-                <span>Registered instance</span>
+                <span>{t('accounts.registeredInstance')}</span>
                 <select
                   value={accountDraft.providerInstanceId}
                   onChange={(event) => setAccountDraft((c) => ({ ...c, providerInstanceId: event.target.value }))}
                 >
-                  <option value="">— Custom URL (below) —</option>
+                  <option value="">{t('accounts.customUrlOption')}</option>
                   {instancesForAccountConnect.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} ({p.instanceUrl})
@@ -119,19 +124,16 @@ export function AccountsView({
                 </select>
               </label>
             ) : (
-              <p className="hint">
-                No {accountDraft.provider} instance is registered yet. Ask an administrator to add one under Admin, or use the instance URL
-                field when the provider allows it.
-              </p>
+              <p className="hint">{t('accounts.noInstanceRegistered', { provider: accountDraft.provider })}</p>
             )}
 
             {!accountDraft.providerInstanceId.trim() ? (
               <label className="field">
-                <span>{accountDraft.provider === 'bluesky' ? 'PDS URL (optional)' : 'Instance base URL'}</span>
+                <span>{accountDraft.provider === 'bluesky' ? t('accounts.pdsUrlOptional') : t('accounts.instanceBaseUrl')}</span>
                 <input
                   value={accountDraft.instanceUrl}
                   onChange={(event) => setAccountDraft((c) => ({ ...c, instanceUrl: event.target.value }))}
-                  placeholder={accountDraft.provider === 'bluesky' ? 'https://bsky.social' : 'https://social.example'}
+                  placeholder={accountDraft.provider === 'bluesky' ? t('accounts.placeholderBsky') : t('accounts.placeholderInstance')}
                 />
               </label>
             ) : null}
@@ -145,22 +147,22 @@ export function AccountsView({
                     onClick={() => void onMastodonOAuthConnect()}
                     disabled={syncing || !accountDraft.providerInstanceId.trim()}
                   >
-                    Authorize in browser
+                    {t('accounts.authorizeInBrowser')}
                   </button>
                 </div>
-                <p className="hint">Browser login requires a registered Mastodon instance with OAuth. Or paste an access token below.</p>
+                <p className="hint">{t('accounts.mastodonOAuthHint')}</p>
                 <label className="field">
-                  <span>Access token (manual)</span>
+                  <span>{t('accounts.accessTokenManual')}</span>
                   <input
                     type="password"
                     autoComplete="off"
                     value={accountDraft.accessToken}
                     onChange={(event) => setAccountDraft((c) => ({ ...c, accessToken: event.target.value }))}
-                    placeholder="OAuth access token"
+                    placeholder={t('accounts.placeholderOAuthToken')}
                   />
                 </label>
                 <label className="field">
-                  <span>Refresh token (optional)</span>
+                  <span>{t('accounts.refreshTokenOptional')}</span>
                   <input
                     type="password"
                     autoComplete="off"
@@ -169,7 +171,7 @@ export function AccountsView({
                   />
                 </label>
                 <button type="button" className="button button--secondary" onClick={() => void onConnectSocialAccount()} disabled={syncing}>
-                  Connect with token
+                  {t('accounts.connectWithToken')}
                 </button>
               </>
             ) : null}
@@ -177,15 +179,15 @@ export function AccountsView({
             {accountDraft.provider === 'friendica' ? (
               <>
                 <label className="field">
-                  <span>Username</span>
+                  <span>{t('accounts.username')}</span>
                   <input
                     value={accountDraft.identifier}
                     onChange={(event) => setAccountDraft((c) => ({ ...c, identifier: event.target.value }))}
-                    placeholder="Local username"
+                    placeholder={t('accounts.placeholderLocalUsername')}
                   />
                 </label>
                 <label className="field">
-                  <span>Access token</span>
+                  <span>{t('accounts.accessToken')}</span>
                   <input
                     type="password"
                     autoComplete="off"
@@ -194,7 +196,7 @@ export function AccountsView({
                   />
                 </label>
                 <button type="button" className="button button--primary" onClick={() => void onConnectSocialAccount()} disabled={syncing}>
-                  Connect Friendica
+                  {t('accounts.connectFriendica')}
                 </button>
               </>
             ) : null}
@@ -202,29 +204,29 @@ export function AccountsView({
             {accountDraft.provider === 'bluesky' ? (
               <>
                 <label className="field">
-                  <span>Sign-in method</span>
+                  <span>{t('accounts.signInMethod')}</span>
                   <select
                     value={accountDraft.blueskyAuthMode}
                     onChange={(event) =>
                       setAccountDraft((c) => ({ ...c, blueskyAuthMode: event.target.value as 'app_password' | 'access_token' }))
                     }
                   >
-                    <option value="app_password">App password</option>
-                    <option value="access_token">Access token (JWT)</option>
+                    <option value="app_password">{t('accounts.optionAppPassword')}</option>
+                    <option value="access_token">{t('accounts.optionAccessToken')}</option>
                   </select>
                 </label>
                 {accountDraft.blueskyAuthMode === 'app_password' ? (
                   <>
                     <label className="field">
-                      <span>Handle</span>
+                      <span>{t('accounts.handle')}</span>
                       <input
                         value={accountDraft.identifier}
                         onChange={(event) => setAccountDraft((c) => ({ ...c, identifier: event.target.value }))}
-                        placeholder="you.bsky.social"
+                        placeholder={t('accounts.placeholderHandle')}
                       />
                     </label>
                     <label className="field">
-                      <span>App password</span>
+                      <span>{t('accounts.appPassword')}</span>
                       <input
                         type="password"
                         autoComplete="off"
@@ -236,7 +238,7 @@ export function AccountsView({
                 ) : (
                   <>
                     <label className="field">
-                      <span>Access token</span>
+                      <span>{t('accounts.accessToken')}</span>
                       <input
                         type="password"
                         autoComplete="off"
@@ -245,7 +247,7 @@ export function AccountsView({
                       />
                     </label>
                     <label className="field">
-                      <span>Refresh token (optional)</span>
+                      <span>{t('accounts.refreshTokenOptional')}</span>
                       <input
                         type="password"
                         autoComplete="off"
@@ -256,7 +258,7 @@ export function AccountsView({
                   </>
                 )}
                 <button type="button" className="button button--primary" onClick={() => void onConnectSocialAccount()} disabled={syncing}>
-                  Connect Bluesky
+                  {t('accounts.connectBluesky')}
                 </button>
               </>
             ) : null}

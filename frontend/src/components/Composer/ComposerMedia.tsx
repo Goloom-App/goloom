@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { BackendMediaItem, createApiClient } from '../../api'
+import { translateApiError } from '../../i18n/translateApiError'
 import { Icon } from '../../icons'
 import { AuthMediaThumb } from '../Media/AuthMediaThumb'
 import { MediaLibraryPickerModal } from '../Media/MediaLibraryPickerModal'
@@ -31,6 +33,7 @@ export function ComposerMedia({
   uploadLabel?: string
   disabled?: boolean
 }) {
+  const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -52,12 +55,12 @@ export function ComposerMedia({
           onAddIds([id])
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Upload failed')
+        setError(translateApiError(e instanceof Error ? e.message : t('common.uploadFailed'), t))
       } finally {
         setUploading(false)
       }
     },
-    [disabled, onAddIds, onUpload],
+    [disabled, onAddIds, onUpload, t],
   )
 
   const onInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,11 +88,11 @@ export function ComposerMedia({
 
   return (
     <div className="composer-media">
-      <p className="eyebrow">Media</p>
+      <p className="eyebrow">{t('eyebrow.media')}</p>
       <div className="composer-media__actions">
         <button type="button" className="button button--secondary" disabled={!pickerReady || disabled || uploading} onClick={openPicker}>
           <Icon name="image" className="inline-icon" />
-          <span>Browse library…</span>
+          <span>{t('media.browseLibrary')}</span>
         </button>
         {pickerReady && api && teamId && authHeader ? (
           <MediaLibraryPickerModal
@@ -124,17 +127,17 @@ export function ComposerMedia({
           <input ref={inputRef} type="file" className="composer-media__file-input" accept="image/*,video/*" disabled={disabled || uploading} onChange={onInputChange} />
           <button type="button" className="composer-media__pick" disabled={disabled || uploading} onClick={() => inputRef.current?.click()}>
             <Icon name="plus" className="inline-icon" />
-            <span>{uploading ? 'Uploading…' : 'Upload new file'}</span>
+            <span>{uploading ? t('common.uploading') : t('media.uploadNewFile')}</span>
           </button>
-          <p className="hint composer-media__drop-hint">or drop a file here · added to workspace library automatically</p>
+          <p className="hint composer-media__drop-hint">{t('media.dropHint')}</p>
         </div>
       ) : (
-        <p className="hint">{uploadLabel ?? 'Select a workspace to attach media.'}</p>
+        <p className="hint">{uploadLabel ?? t('media.selectWorkspaceMedia')}</p>
       )}
       {error ? <p className="status-banner__error m-0">{error}</p> : null}
-      {!pickerReady ? <p className="hint m-0">Connect with a bearer token and pick a workspace to browse the library.</p> : null}
+      {!pickerReady ? <p className="hint m-0">{t('media.connectForLibrary')}</p> : null}
       {mediaIds.length > 0 ? (
-        <ul className="composer-media__gallery" aria-label="Attached media">
+        <ul className="composer-media__gallery" aria-label={t('media.attachedMediaAria')}>
           {mediaIds.map((id) => {
             const meta = libraryById[id]
             const mime = meta?.mime_type ?? 'application/octet-stream'
@@ -165,7 +168,7 @@ export function ComposerMedia({
                   <button
                     type="button"
                     className="composer-media__tile-remove"
-                    aria-label={`Remove ${meta?.filename ?? 'attachment'}`}
+                    aria-label={t('common.removeAttachment', { name: meta?.filename ?? 'attachment' })}
                     onClick={() => onRemove(id)}
                   >
                     <Icon name="close" className="inline-icon" />

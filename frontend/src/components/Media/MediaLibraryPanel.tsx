@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Icon } from '../../icons'
 import type { BackendMediaItem, createApiClient } from '../../api'
 
@@ -105,6 +106,7 @@ export function MediaLibraryPanel({
   uploadHint?: string
   api: Api
 }) {
+  const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const authHeader = api.authorizationHeader()
@@ -128,10 +130,8 @@ export function MediaLibraryPanel({
   return (
     <div className="media-library media-library--page">
       <div className="media-library__header">
-        <p className="eyebrow">Media library</p>
-        <p className="hint">
-          Persistent uploads for {teamLabel}. These files are stored on Goloom and synced to providers when you publish.
-        </p>
+        <p className="eyebrow">{t('media.libraryTitle')}</p>
+        <p className="hint">{t('media.libraryHint', { team: teamLabel })}</p>
       </div>
 
       <div
@@ -160,22 +160,22 @@ export function MediaLibraryPanel({
           }}
         />
         <Icon name="image" className="media-library__drop-icon" />
-        <p className="media-library__drop-title">{uploading ? 'Uploading…' : 'Drop files here'}</p>
+        <p className="media-library__drop-title">{uploading ? t('common.uploading') : t('media.dropFiles')}</p>
         <button
           type="button"
           className="button button--secondary"
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
         >
-          Choose file
+          {t('common.chooseFile')}
         </button>
         {uploadHint ? <p className="hint media-library__drop-hint">{uploadHint}</p> : null}
       </div>
 
       <div className="media-library__body">
-        <div className="media-library__grid" aria-label="Media library items">
+        <div className="media-library__grid" aria-label={t('media.libraryItemsAria')}>
           {entries.length === 0 ? (
-            <p className="hint media-library__empty">No media in library yet. Upload an image or video above.</p>
+            <p className="hint media-library__empty">{t('media.emptyLibrary')}</p>
           ) : (
             entries.map((entry) => (
               <div key={entry.id} className="media-library__tile">
@@ -197,7 +197,7 @@ export function MediaLibraryPanel({
                       type="button"
                       className="media-library__delete-btn"
                       onClick={() => void onDelete(entry.id)}
-                      title="Delete from library"
+                      title={t('common.deleteFromLibrary')}
                     >
                       <Icon name="trash" />
                     </button>

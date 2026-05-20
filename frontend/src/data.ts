@@ -157,6 +157,7 @@ export const initialPosts: PostRecord[] = [
 export const initialSettings: SettingsState = {
   ui: {
     colorScheme: 'system',
+    language: 'en',
   },
   general: {
     apiBaseUrl: '',

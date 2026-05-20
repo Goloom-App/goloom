@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import type { BackendMediaItem, createApiClient } from '../../api'
 import { Icon } from '../../icons'
@@ -63,6 +64,7 @@ export function PostComposer({
   /** When true (standalone desktop), the preview column is rendered externally by the parent */
   previewColumnExternal?: boolean
 }) {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
   const [mobilePanel, setMobilePanel] = useState<'edit' | 'preview'>('edit')
   const [libraryItems, setLibraryItems] = useState<BackendMediaItem[]>([])
@@ -224,11 +226,11 @@ export function PostComposer({
   }
 
   const destinationsPanel = isMobile ? (
-    <section className="composer-destinations-mobile" aria-label="Post destinations">
-      <p className="eyebrow">Destinations</p>
-      <p className="hint composer-destinations-mobile__hint">Tap accounts to include. Per-account text tabs appear below.</p>
+    <section className="composer-destinations-mobile" aria-label={t('composer.postDestinationsAria')}>
+      <p className="eyebrow">{t('eyebrow.destinations')}</p>
+      <p className="hint composer-destinations-mobile__hint">{t('composer.destinationsHint')}</p>
       {teamAccounts.length === 0 ? (
-        <p className="hint">No accounts for this workspace.</p>
+        <p className="hint">{t('composer.noAccountsWorkspace')}</p>
       ) : (
         <div className="composer-destination-row composer-destination-row--mobile" role="group">
           {teamAccounts.map((account) => {
@@ -255,8 +257,8 @@ export function PostComposer({
     </section>
   ) : (
     <aside className="composer-sidebar composer-sidebar--destinations">
-      <p className="eyebrow">Destinations</p>
-      <div className="composer-destination-row" role="group" aria-label="Post destinations">
+      <p className="eyebrow">{t('eyebrow.destinations')}</p>
+      <div className="composer-destination-row" role="group" aria-label={t('composer.postDestinationsAria')}>
         {teamAccounts.map((account) => {
           const selected = draft.targetAccountIds.includes(account.id)
           return (
@@ -273,7 +275,7 @@ export function PostComposer({
           )
         })}
       </div>
-      {teamAccounts.length === 0 ? <p className="hint">No accounts for this workspace.</p> : null}
+      {teamAccounts.length === 0 ? <p className="hint">{t('composer.noAccountsWorkspace')}</p> : null}
     </aside>
   )
 
@@ -295,27 +297,27 @@ export function PostComposer({
 
   const composerHeader = (
     <header>
-      <p className="eyebrow">Composer</p>
-      <h2 data-testid="composer-title">{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+      <p className="eyebrow">{t('eyebrow.composer')}</p>
+      <h2 data-testid="composer-title">{mode === 'edit' ? t('composer.editPost') : t('composer.createPost')}</h2>
     </header>
   )
 
   const editingContent = (
     <>
       <label className="field">
-            <span>Title</span>
+            <span>{t('composer.title')}</span>
             <input
               value={draft.title}
               onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-              placeholder="Post title for internal reference"
+              placeholder={t('composer.titlePlaceholder')}
             />
           </label>
 
           {isMobile && selectedAccounts.length === 0 ? (
-            <p className="hint composer-tabs__hint">Select at least one destination to add per-account text overrides.</p>
+            <p className="hint composer-tabs__hint">{t('composer.selectDestinationOverrides')}</p>
           ) : null}
 
-          <div className={`composer-tabs ${isMobile ? 'composer-tabs--mobile' : ''}`} role="tablist" aria-label="Content scope">
+          <div className={`composer-tabs ${isMobile ? 'composer-tabs--mobile' : ''}`} role="tablist" aria-label={t('composer.contentScopeAria')}>
             <button
               type="button"
               role="tab"
@@ -323,7 +325,7 @@ export function PostComposer({
               className={`composer-tab ${activeTab === 'default' ? 'composer-tab--active' : ''}`}
               onClick={() => setActiveTab('default')}
             >
-              Default
+              {t('common.default')}
             </button>
             {selectedAccounts.map((account) => {
               const status = accountLimitStatus[account.id]
@@ -335,7 +337,7 @@ export function PostComposer({
                   aria-selected={activeTab === account.id}
                   className={`composer-tab ${activeTab === account.id ? 'composer-tab--active' : ''} ${status?.over ? 'composer-tab--error' : ''}`}
                   onClick={() => setActiveTab(account.id)}
-                  title={status?.over ? `${account.name} exceeds character limit (${status.len}/${status.max})` : account.name}
+                  title={status?.over ? t('composer.exceedsLimit', { name: account.name, len: status.len, max: status.max }) : account.name}
                 >
                   <DestinationAvatar account={account} compact />
                   <span className="composer-tab__label">{account.username.replace(/^@/, '').slice(0, 12)}</span>
@@ -346,9 +348,9 @@ export function PostComposer({
 
           <label className="field">
             <div className="flex-row--between">
-              <span>{activeTab === 'default' ? 'Message (all destinations)' : `Override for ${selectedAccounts.find((a) => a.id === activeTab)?.name ?? 'account'}`}</span>
+              <span>{activeTab === 'default' ? t('composer.messageAll') : t('composer.overrideFor', { name: selectedAccounts.find((a) => a.id === activeTab)?.name ?? 'account' })}</span>
               {activeTab === 'default' && minMaxChars > 0 && (
-                <span className="hint" style={{ fontSize: '0.7rem' }}>Aim for max {minMaxChars} chars</span>
+                <span className="hint" style={{ fontSize: '0.7rem' }}>{t('composer.aimForMaxChars', { count: minMaxChars })}</span>
               )}
             </div>
             <textarea
@@ -366,13 +368,13 @@ export function PostComposer({
                   }))
                 }
               }}
-              placeholder={activeTab === 'default' ? "What's on your mind?" : 'Leave aligned with default, or type a custom version for this account.'}
+              placeholder={activeTab === 'default' ? t('composer.placeholderDefault') : t('composer.placeholderOverride')}
             />
           </label>
 
           <div className={`char-counter ${charCounterClass(bodyLen, maxChars)}`}>
             <strong>{bodyLen}</strong>
-            <span>/ {maxChars || '—'}</span>
+            <span>/ {maxChars || t('common.emDash')}</span>
           </div>
 
           <ComposerMedia
@@ -402,14 +404,14 @@ export function PostComposer({
             teamId={teamId ?? undefined}
             api={api ?? undefined}
             authHeader={authHeader}
-            uploadLabel={onMediaUpload ? undefined : 'Select a workspace to attach media files.'}
+            uploadLabel={onMediaUpload ? undefined : t('media.selectWorkspaceMedia')}
             disabled={syncing}
           />
 
           {activeTab !== 'default' && draft.mediaIds.length > 0 ? (
             <div className="composer-override-media">
-              <p className="eyebrow">Media for this destination</p>
-              <p className="hint">Uncheck to skip an attachment only for this account.</p>
+              <p className="eyebrow">{t('composer.mediaForDestination')}</p>
+              <p className="hint">{t('composer.skipAttachmentHint')}</p>
               <ul className="composer-override-media__list">
                 {draft.mediaIds.map((mid) => {
                   const excluded = (draft.mediaExcludeByAccount[activeTab] ?? []).includes(mid)
@@ -437,7 +439,7 @@ export function PostComposer({
           ) : null}
 
           <label className="field">
-            <span>Scheduled at</span>
+            <span>{t('composer.scheduledAt')}</span>
             <input
               type="datetime-local"
               value={draft.scheduledAt}
@@ -463,13 +465,13 @@ export function PostComposer({
               onClick={() => void onSaveInternal()}
             >
               <Icon name="calendar" className="inline-icon" />
-              <span>{mode === 'edit' ? 'Save changes' : 'Schedule post'}</span>
+              <span>{mode === 'edit' ? t('composer.saveChanges') : t('composer.schedulePost')}</span>
             </button>
             <button type="button" className="button button--secondary" disabled={syncing} onClick={() => void onSaveDraft()}>
-              Save draft
+              {t('composer.saveDraft')}
             </button>
             <button type="button" className="button button--secondary" onClick={onClose}>
-              Cancel
+              {t('common.cancel')}
             </button>
           </footer>
         </>
@@ -492,17 +494,17 @@ export function PostComposer({
         <div className="composer-container composer-container--enhanced composer-container--mobile">
           <div className="composer-main composer-main--mobile">
           <header className="composer-mobile-header">
-            <button type="button" className="btn btn--ghost btn--xs" onClick={onClose} aria-label="Close composer">
+            <button type="button" className="btn btn--ghost btn--xs" onClick={onClose} aria-label={t('composer.closeComposer')}>
               <Icon name="close" className="inline-icon" />
             </button>
             <div>
-              <p className="eyebrow">Composer</p>
-              <h2 data-testid="composer-title">{mode === 'edit' ? 'Edit post' : 'Create post'}</h2>
+              <p className="eyebrow">{t('eyebrow.composer')}</p>
+              <h2 data-testid="composer-title">{mode === 'edit' ? t('composer.editPost') : t('composer.createPost')}</h2>
             </div>
           </header>
-          <div className="composer-mobile-tabs" role="tablist" aria-label="Composer mobile panel">
-            <button type="button" role="tab" aria-selected={mobilePanel === 'edit'} className={`composer-mobile-tab ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('edit')}>Edit</button>
-            <button type="button" role="tab" aria-selected={mobilePanel === 'preview'} className={`composer-mobile-tab ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('preview')}>Preview</button>
+          <div className="composer-mobile-tabs" role="tablist" aria-label={t('composer.mobilePanelAria')}>
+            <button type="button" role="tab" aria-selected={mobilePanel === 'edit'} className={`composer-mobile-tab ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('edit')}>{t('composer.mobileEdit')}</button>
+            <button type="button" role="tab" aria-selected={mobilePanel === 'preview'} className={`composer-mobile-tab ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('preview')}>{t('composer.mobilePreview')}</button>
           </div>
           {mobilePanel === 'edit' ? (
             <div className="composer-mobile-edit-scroll">

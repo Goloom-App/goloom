@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { GoloomLogo } from '../brand/GoloomLogo'
 import type { AuthStatusRecord } from '../../types'
 import { MeshBackground } from './MeshBackground'
 
 export function AuthShell({ theme, children }: { theme: 'dark' | 'light'; children: ReactNode }) {
+  const { t } = useTranslation()
   return (
     <div className="app-shell auth-shell" data-theme={theme}>
       <MeshBackground />
@@ -13,7 +16,7 @@ export function AuthShell({ theme, children }: { theme: 'dark' | 'light'; childr
             <GoloomLogo size="lg" className="auth-card__logo" />
             <div className="auth-card__copy">
               <h1>goloom</h1>
-              <p className="hint auth-card__tagline">Social scheduling for teams</p>
+              <p className="hint auth-card__tagline">{t('auth.tagline')}</p>
             </div>
           </div>
           {children}
@@ -44,6 +47,7 @@ export function AuthPanel({
   onSubmit: (mode: 'bootstrap' | 'login') => void
   onStartOIDCLogin: () => void
 }) {
+  const { t } = useTranslation()
   const initial = Boolean(authStatus?.initialSetupRequired)
   const recovery = Boolean(authStatus?.bootstrapRecoveryEnabled && !initial)
   const isBootstrap = view === 'bootstrap'
@@ -52,7 +56,7 @@ export function AuthPanel({
   if (!authStatus && !authSubmitting) {
     return (
       <div className="auth-panel">
-        <p className="hint auth-panel__solo">Could not reach the server. Check that the app is running and try again.</p>
+        <p className="hint auth-panel__solo">{t('auth.serverUnreachable')}</p>
       </div>
     )
   }
@@ -60,28 +64,28 @@ export function AuthPanel({
   if (!authStatus) {
     return (
       <div className="auth-panel">
-        <p className="hint auth-panel__solo">Connecting…</p>
+        <p className="hint auth-panel__solo">{t('auth.connecting')}</p>
       </div>
     )
   }
 
   const submitMode: 'bootstrap' | 'login' = initial || isBootstrap ? 'bootstrap' : 'login'
-  const tokenLabel = initial || isBootstrap ? 'Administrator token' : 'Access token'
+  const tokenLabel = initial || isBootstrap ? t('auth.administratorToken') : t('auth.accessToken')
   const tokenHint = initial
-    ? 'On first start the server prints a one-time token to stdout (for example container logs). Paste it here.'
+    ? t('auth.tokenHintInitial')
     : isBootstrap
-      ? 'Paste the bootstrap token from BOOTSTRAP_ADMIN_TOKEN (recovery mode).'
-      : 'Paste an API token, OIDC ID token, or other bearer token issued for your account.'
+      ? t('auth.tokenHintBootstrap')
+      : t('auth.tokenHintLogin')
 
   return (
     <div className="auth-panel">
       {recovery ? (
-        <div className="auth-tabs" role="tablist" aria-label="Sign-in mode">
+        <div className="auth-tabs" role="tablist" aria-label={t('auth.signInMode')}>
           <button type="button" className={view === 'login' ? 'button button--prominent' : 'button button--secondary'} onClick={() => onViewChange('login')}>
-            Sign in
+            {t('auth.signIn')}
           </button>
           <button type="button" className={view === 'bootstrap' ? 'button button--prominent' : 'button button--secondary'} onClick={() => onViewChange('bootstrap')}>
-            Bootstrap recovery
+            {t('auth.bootstrapRecovery')}
           </button>
         </div>
       ) : null}
@@ -89,13 +93,13 @@ export function AuthPanel({
       <div className="auth-panel__content">
         <div className="auth-panel__header auth-panel__header--solo">
           <div>
-            <p className="eyebrow">{initial ? 'First start' : isBootstrap ? 'Recovery' : 'Sign in'}</p>
-            <h2>{initial ? 'Welcome' : isBootstrap ? 'Bootstrap recovery' : 'Sign in'}</h2>
+            <p className="eyebrow">{initial ? t('auth.firstStart') : isBootstrap ? t('auth.recovery') : t('auth.signIn')}</p>
+            <h2>{initial ? t('auth.welcome') : isBootstrap ? t('auth.bootstrapRecovery') : t('auth.signIn')}</h2>
             <p className="hint">
               {initial
-                ? 'Complete setup with OpenID Connect or the administrator token from your server log.'
+                ? t('auth.welcomeHint')
                 : authStatus.oidcOAuthEnabled && !isBootstrap
-                  ? 'Use your identity provider, or sign in with a token.'
+                  ? t('auth.signInHintOidc')
                   : tokenHint}
             </p>
           </div>
@@ -106,12 +110,12 @@ export function AuthPanel({
             {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? (
               <div className="inline-cluster">
                 <button type="button" className="button button--prominent" onClick={onStartOIDCLogin} disabled={authSubmitting}>
-                  {authSubmitting ? 'Redirecting…' : 'Continue with OpenID Connect'}
+                  {authSubmitting ? t('auth.redirecting') : t('auth.continueOidc')}
                 </button>
               </div>
             ) : null}
 
-            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? <p className="hint auth-form__divider-label">or use a token</p> : null}
+            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? <p className="hint auth-form__divider-label">{t('auth.orUseToken')}</p> : null}
 
             <label className="field">
               <span>{tokenLabel}</span>
@@ -120,7 +124,9 @@ export function AuthPanel({
                 autoComplete="off"
                 value={authTokenDraft}
                 onChange={(event) => onTokenChange(event.target.value)}
-                placeholder={initial ? 'Paste token from server log' : isBootstrap ? 'Bootstrap token' : 'Bearer token'}
+                placeholder={
+                  initial ? t('auth.placeholderInitial') : isBootstrap ? t('auth.placeholderBootstrap') : t('auth.placeholderBearer')
+                }
               />
             </label>
             <p className="hint">{tokenHint}</p>
@@ -133,18 +139,16 @@ export function AuthPanel({
 
             <div className="inline-cluster">
               <button type="button" className="button button--prominent" onClick={() => onSubmit(submitMode)} disabled={authSubmitting}>
-                {authSubmitting ? 'Signing in…' : 'Sign in with token'}
+                {authSubmitting ? t('auth.signingIn') : t('auth.signInWithToken')}
               </button>
             </div>
 
-            {showDevHints ? <p className="hint">API base URL can be changed later under Settings if this UI is not served from the same host as the API.</p> : null}
+            {showDevHints ? <p className="hint">{t('auth.settingsApiHint')}</p> : null}
           </div>
         ) : null}
 
         {authStatus.hasUsers && !authStatus.oidcOAuthEnabled && !authStatus.bootstrapRecoveryEnabled ? (
-          <p className="hint">
-            OIDC browser login is not configured. Use an API token or ask an admin to set OIDC_ISSUER_URL, OIDC_CLIENT_ID, OIDC_REDIRECT_URI, and PUBLIC_BASE_URL.
-          </p>
+          <p className="hint">{t('auth.oidcNotConfigured')}</p>
         ) : null}
       </div>
     </div>

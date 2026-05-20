@@ -1,4 +1,6 @@
 import { format, parseISO } from 'date-fns'
+import { useTranslation } from 'react-i18next'
+
 import type { AccountRecord } from '../../types'
 import { Icon } from '../../icons'
 import { AuthMediaThumb } from '../Media/AuthMediaThumb'
@@ -52,6 +54,7 @@ export function SocialPreview({
   attachments?: SocialPreviewAttachment[]
   authHeader?: string
 }) {
+  const { t } = useTranslation()
   const resolved = layout ?? resolveLayout(account.provider)
   const canLoadMedia = Boolean(authHeader?.trim())
   return (
@@ -69,10 +72,10 @@ export function SocialPreview({
         </div>
       </div>
       <div className="social-preview__body">
-        {content || <span className="hint">Post content will appear here...</span>}
+        {content || <span className="hint">{t('post.contentPlaceholder')}</span>}
       </div>
       {attachments && attachments.length > 0 ? (
-        <div className={`social-preview__media social-preview__media--${resolved}`} aria-label="Media attachments">
+        <div className={`social-preview__media social-preview__media--${resolved}`} aria-label={t('post.mediaAttachmentsAria')}>
           {attachments.map((item) => {
             const isVideo = item.mimeType.startsWith('video/')
             return (
@@ -80,7 +83,7 @@ export function SocialPreview({
                 {isVideo ? (
                   <span className="social-preview__media-video">
                     <Icon name="film" className="inline-icon" aria-hidden />
-                    <span className="social-preview__media-video-label">{item.filename ?? 'Video'}</span>
+                    <span className="social-preview__media-video-label">{item.filename ?? t('common.video')}</span>
                   </span>
                 ) : canLoadMedia ? (
                   <AuthMediaThumb
@@ -100,23 +103,23 @@ export function SocialPreview({
         </div>
       ) : null}
       {engagement ? (
-        <div className="social-preview__stats" aria-label="Engagement">
-          <span title="Likes">
+        <div className="social-preview__stats" aria-label={t('post.engagementAria')}>
+          <span title={t('post.likesTitle')}>
             <span className="social-preview__stat-value">{engagement.likes}</span>
-            <span className="social-preview__stat-label">likes</span>
+            <span className="social-preview__stat-label">{t('post.likes')}</span>
           </span>
-          <span title="Reposts / shares">
+          <span title={t('post.sharesTitle')}>
             <span className="social-preview__stat-value">{engagement.reposts}</span>
-            <span className="social-preview__stat-label">shares</span>
+            <span className="social-preview__stat-label">{t('post.shares')}</span>
           </span>
-          <span title="Replies">
+          <span title={t('post.repliesTitle')}>
             <span className="social-preview__stat-value">{engagement.replies}</span>
-            <span className="social-preview__stat-label">replies</span>
+            <span className="social-preview__stat-label">{t('post.replies')}</span>
           </span>
         </div>
       ) : null}
       <div className="social-preview__footer">
-        {scheduledAt ? format(parseISO(scheduledAt), 'PPpp') : 'Not scheduled'}
+        {scheduledAt ? format(parseISO(scheduledAt), 'PPpp') : t('common.notScheduled')}
       </div>
     </div>
   )

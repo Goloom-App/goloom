@@ -1,4 +1,6 @@
-import { MAIN_NAV, WORKSPACE_NAV, CONFIG_NAV } from './NavItems'
+import { useTranslation } from 'react-i18next'
+
+import { CONFIG_NAV_DEF, localizeNav, MAIN_NAV_DEF, WORKSPACE_NAV_DEF } from '../../i18n/nav'
 import type { AppSection, TeamRecord } from '../../types'
 import { LogOut, Plus, ChevronDown } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
@@ -22,6 +24,10 @@ export function Sidebar({
   onSignOut,
   openComposer
 }: SidebarProps) {
+  const { t } = useTranslation()
+  const mainNav = localizeNav(MAIN_NAV_DEF, t)
+  const workspaceNav = localizeNav(WORKSPACE_NAV_DEF, t)
+  const configNav = localizeNav(CONFIG_NAV_DEF, t)
   const selectedTeam = teams.find(t => t.id === selectedTeamId)
 
   return (
@@ -40,7 +46,7 @@ export function Sidebar({
           <DropdownMenu.Trigger asChild>
             <button className="sidebar-team-selector">
               <span className="sidebar-team-name">
-                {selectedTeam?.name || 'Select Team'}
+                {selectedTeam?.name || t('sidebarShell.selectTeam')}
               </span>
               <ChevronDown size={14} />
             </button>
@@ -58,7 +64,7 @@ export function Sidebar({
               ))}
               <DropdownMenu.Separator className="divider" />
               <DropdownMenu.Item className="radix-dropdown-item">
-                + Create Team
+                {t('sidebarShell.createTeam')}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -67,14 +73,14 @@ export function Sidebar({
 
       <button className="btn btn--primary btn--full" onClick={openComposer}>
         <Plus size={18} />
-        New Post
+        {t('sidebarShell.newPost')}
       </button>
 
       <nav className="sidebar-nav">
         <div className="sidebar-section">
-          <p className="sidebar-section__label">Main</p>
+          <p className="sidebar-section__label">{t('sidebarShell.main')}</p>
           <div className="sidebar-nav">
-            {MAIN_NAV.map(item => (
+            {mainNav.map(item => (
               <button
                 key={item.id}
                 className={`sidebar-nav-item ${currentSection === item.id ? 'sidebar-nav-item--active' : ''}`}
@@ -88,9 +94,9 @@ export function Sidebar({
         </div>
 
         <div className="sidebar-section">
-          <p className="sidebar-section__label">Workspace</p>
+          <p className="sidebar-section__label">{t('sidebar.workspace')}</p>
           <div className="sidebar-nav">
-            {WORKSPACE_NAV.map(item => (
+            {workspaceNav.map(item => (
               <button
                 key={item.id}
                 className={`sidebar-nav-item ${currentSection === item.id ? 'sidebar-nav-item--active' : ''}`}
@@ -105,7 +111,7 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
-        {CONFIG_NAV.map(item => (
+        {configNav.map(item => (
           <button
             key={item.id}
             className={`sidebar-footer-item ${currentSection === item.id ? 'sidebar-nav-item--active' : ''}`}
@@ -120,7 +126,7 @@ export function Sidebar({
           onClick={onSignOut}
         >
           <LogOut size={18} />
-          <span>Sign Out</span>
+          <span>{t('sidebar.signOut')}</span>
         </button>
       </div>
     </aside>

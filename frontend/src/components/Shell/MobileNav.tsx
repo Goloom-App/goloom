@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Plus, Menu, X } from 'lucide-react'
-import { MAIN_NAV, MORE_NAV, WORKSPACE_NAV, CONFIG_NAV } from './NavItems'
+import { useTranslation } from 'react-i18next'
+
+import { CONFIG_NAV_DEF, localizeNav, MAIN_NAV_DEF, MORE_NAV_DEF, WORKSPACE_NAV_DEF } from '../../i18n/nav'
 import type { AppSection, TeamRecord, UserRecord } from '../../types'
 
 interface BottomNavProps {
@@ -12,7 +14,8 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ currentSection, setSection, openComposer, openDrawer }: BottomNavProps) {
-  const [homeNav, calendarNav, mediaNav] = MAIN_NAV
+  const { t } = useTranslation()
+  const [homeNav, calendarNav, mediaNav] = localizeNav(MAIN_NAV_DEF, t)
 
   return (
     <nav className="bottom-nav">
@@ -34,7 +37,7 @@ export function BottomNav({ currentSection, setSection, openComposer, openDrawer
 
       <button className="nav-item nav-item--fab" onClick={openComposer}>
         <Plus size={32} strokeWidth={3} />
-        <span>Post</span>
+        <span>{t('sidebarShell.post')}</span>
       </button>
 
       <button
@@ -47,7 +50,7 @@ export function BottomNav({ currentSection, setSection, openComposer, openDrawer
 
       <button className="nav-item" onClick={openDrawer}>
         <Menu />
-        <span>More</span>
+        <span>{t('nav.more')}</span>
       </button>
     </nav>
   )
@@ -76,6 +79,10 @@ export function MobileDrawer({
   user,
   onSignOut
 }: MobileDrawerProps) {
+  const { t } = useTranslation()
+  const moreNav = localizeNav(MORE_NAV_DEF, t)
+  const workspaceNav = localizeNav(WORKSPACE_NAV_DEF, t)
+  const configNav = localizeNav(CONFIG_NAV_DEF, t)
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [translateY, setTranslateY] = useState(0)
 
@@ -119,7 +126,7 @@ export function MobileDrawer({
         >
           <div className="drawer-handle" aria-hidden="true" />
           <div className="drawer-header">
-            <Dialog.Title className="drawer-title">Menu</Dialog.Title>
+            <Dialog.Title className="drawer-title">{t('sidebarShell.menu')}</Dialog.Title>
             <Dialog.Close asChild>
               <button className="btn btn--ghost btn--icon-sm">
                 <X size={20} />
@@ -129,7 +136,7 @@ export function MobileDrawer({
 
           <div className="drawer-body">
             <section>
-              <p className="eyebrow drawer-section-label">Workspaces</p>
+              <p className="eyebrow drawer-section-label">{t('mobileNav.workspaces')}</p>
               <div className="drawer-list">
                 {teams.map((team) => (
                   <button
@@ -147,9 +154,9 @@ export function MobileDrawer({
             </section>
 
             <section>
-              <p className="eyebrow drawer-section-label">Analytics</p>
+              <p className="eyebrow drawer-section-label">{t('nav.analytics')}</p>
               <div className="drawer-list">
-                {MORE_NAV.map((item) => (
+                {moreNav.map((item) => (
                   <button
                     key={item.id}
                     className={`btn btn--ghost btn--full btn--justify-start ${currentSection === item.id ? 'btn--active' : ''}`}
@@ -166,9 +173,9 @@ export function MobileDrawer({
             </section>
 
             <section>
-              <p className="eyebrow drawer-section-label">Management</p>
+              <p className="eyebrow drawer-section-label">{t('sidebarShell.management')}</p>
               <div className="drawer-grid">
-                {WORKSPACE_NAV.map((item) => (
+                {workspaceNav.map((item) => (
                   <button
                     key={item.id}
                     className={`btn btn--ghost btn--justify-start ${currentSection === item.id ? 'btn--active' : ''}`}
@@ -185,9 +192,9 @@ export function MobileDrawer({
             </section>
 
             <section>
-              <p className="eyebrow drawer-section-label">Settings</p>
+              <p className="eyebrow drawer-section-label">{t('mobileNav.settings')}</p>
               <div className="drawer-list">
-                {CONFIG_NAV.map((item) => (
+                {configNav.map((item) => (
                   <button
                     key={item.id}
                     className={`btn btn--ghost btn--full btn--justify-start ${currentSection === item.id ? 'btn--active' : ''}`}

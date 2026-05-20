@@ -36,17 +36,17 @@ type oidcLoginState struct {
 
 func (a *API) handleStartOIDCLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		a.writeError(w, r, "method_not_allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	if !a.auth.OIDCOAuthReady() {
-		http.Error(w, "oidc oauth is not configured", http.StatusServiceUnavailable)
+		a.writeError(w, r, "oidc_not_configured", http.StatusServiceUnavailable)
 		return
 	}
 
 	var input startOIDCLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -61,7 +61,7 @@ func (a *API) handleStartOIDCLogin(w http.ResponseWriter, r *http.Request) {
 
 	nonce, err := randomURLSafeString(32)
 	if err != nil {
-		http.Error(w, "failed to build oauth state", http.StatusInternalServerError)
+		a.writeError(w, r, "failed_build_oauth_state", http.StatusInternalServerError)
 		return
 	}
 	pkceVerifier := oauth2.GenerateVerifier()
@@ -74,7 +74,7 @@ func (a *API) handleStartOIDCLogin(w http.ResponseWriter, r *http.Request) {
 		ExpiresAtUnix: time.Now().UTC().Add(oidcLoginOAuthStateTTL).Unix(),
 	})
 	if err != nil {
-		http.Error(w, "failed to build oauth state", http.StatusInternalServerError)
+		a.writeError(w, r, "failed_build_oauth_state", http.StatusInternalServerError)
 		return
 	}
 
@@ -141,7 +141,7 @@ func (a *API) handleOIDCLoginCallback(w http.ResponseWriter, r *http.Request) {
 				"hint", "encryption key rotated? state TTL expired? malformed callback URL?",
 			)
 		}
-		http.Error(w, "invalid oauth state", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_oauth_state", http.StatusBadRequest)
 		return
 	}
 
@@ -187,7 +187,7 @@ func (a *API) handleOIDCLoginCallback(w http.ResponseWriter, r *http.Request) {
 		if a.log != nil {
 			a.log.Error("oidc login success HTML render failed", "err", err)
 		}
-		http.Error(w, "failed to render callback page", http.StatusInternalServerError)
+		a.writeError(w, r, "failed_render_callback", http.StatusInternalServerError)
 		return
 	}
 }

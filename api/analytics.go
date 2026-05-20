@@ -52,7 +52,7 @@ func (a *API) handleTeamAnalyticsPosts(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleTeamAnalyticsChart(w http.ResponseWriter, r *http.Request) {
 	metric := strings.TrimSpace(r.URL.Query().Get("metric"))
 	if metric == "" {
-		http.Error(w, "metric query parameter is required", http.StatusBadRequest)
+		a.writeError(w, r, "metric_query_required", http.StatusBadRequest)
 		return
 	}
 	days := 30
@@ -114,7 +114,7 @@ func (a *API) handlePostAnalytics(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
 	postID := r.PathValue("postID")
 	if _, err := a.store.GetScheduledPost(r.Context(), teamID, postID); err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
 	items, err := a.store.ListPostMetricsForTeamPost(r.Context(), teamID, postID)
@@ -129,7 +129,7 @@ func (a *API) handleListPostVersions(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
 	postID := r.PathValue("postID")
 	if _, err := a.store.GetScheduledPost(r.Context(), teamID, postID); err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
 	items, err := a.store.ListPostVersionsForTeamPost(r.Context(), teamID, postID)
@@ -161,12 +161,12 @@ func (a *API) handlePatchPostVersions(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
 	postID := r.PathValue("postID")
 	if _, err := a.store.GetScheduledPost(r.Context(), teamID, postID); err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
 	var body patchPostVersionsRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	patches := make([]domain.PostVersion, 0, len(body.Versions))
@@ -183,7 +183,7 @@ func (a *API) handlePatchPostVersions(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.store.ApplyPostVersionsPatch(r.Context(), teamID, postID, patches); err != nil {
 		if err.Error() == "post not found" {
-			http.Error(w, "not found", http.StatusNotFound)
+			a.writeError(w, r, "not_found", http.StatusNotFound)
 			return
 		}
 		if err.Error() == "account not targeted by post" {

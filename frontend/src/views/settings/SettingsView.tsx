@@ -1,5 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { format, isValid, parseISO } from 'date-fns'
+import { useTranslation } from 'react-i18next'
+
+import { setAppLanguage, supportedLanguages, type SupportedLanguage } from '../../i18n'
 import { SettingsCard } from '../../components/settings/SettingsCard'
 import type { BackendAPIToken } from '../../api'
 import { apiTokenDisplayName, isApiTokenExpired } from './apiTokens'
@@ -42,16 +45,41 @@ export function SettingsView({
   apiTokens: BackendAPIToken[]
   apiTokensLoading: boolean
 }) {
+  const { t: tr } = useTranslation()
+
   return (
     <div className="settings-view two-column-detail">
       <div className="glass-panel">
-        <SettingsCard title="Browser session">
+        <SettingsCard title={tr('language.label')}>
           <label className="field">
-            <span>API base URL (optional)</span>
+            <span>{tr('language.label')}</span>
+            <select
+              value={settings.ui.language ?? 'en'}
+              onChange={(event) => {
+                const language = event.target.value as SupportedLanguage
+                setSettings((current) => ({ ...current, ui: { ...current.ui, language } }))
+                setAppLanguage(language)
+              }}
+            >
+              {supportedLanguages.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="hint">{tr('language.hint')}</p>
+        </SettingsCard>
+      </div>
+
+      <div className="glass-panel">
+        <SettingsCard title={tr('settings.browserSession')}>
+          <label className="field">
+            <span>{tr('settings.apiBaseUrl')}</span>
             <input value={settings.general.apiBaseUrl} onChange={(event) => updateAPIBaseURL(event.target.value)} />
           </label>
           <label className="field">
-            <span>Bearer token (OIDC ID token, bootstrap, or API token)</span>
+            <span>{tr('settings.bearerToken')}</span>
             <input
               type="password"
               value={settings.general.bearerToken}
@@ -60,53 +88,52 @@ export function SettingsView({
           </label>
           <div className="inline-cluster mt-1">
             <button type="button" className="button button--primary" onClick={connectBackend}>
-              Apply session
+              {tr('settings.applySession')}
             </button>
             <button type="button" className="button button--secondary" onClick={() => void loadDashboard()} disabled={!apiPresent || syncing}>
-              Refresh data
+              {tr('settings.refreshData')}
             </button>
           </div>
         </SettingsCard>
       </div>
 
       <div className="glass-panel">
-        <h2 className="section-card__title">API tokens</h2>
-        <p className="hint">
-          Tokens authenticate as <strong>you</strong>, not a team. Team access follows your memberships. Use{' '}
-          <code className="inline-code">Authorization: Bearer &lt;token&gt;</code> on every request. Create automation tokens here; each value is
-          shown only once.
-        </p>
+        <h2 className="section-card__title">{tr('settings.apiTokens')}</h2>
+        <p className="hint">{tr('settings.apiTokensHint')}</p>
         {newTokenPlaintext ? (
           <div className="token-reveal">
-            <p className="hint">Copy this secret now:</p>
+            <p className="hint">{tr('settings.copySecret')}</p>
             <code className="token-reveal__value">{newTokenPlaintext}</code>
             <button type="button" className="button button--secondary" onClick={() => setNewTokenPlaintext(null)}>
-              Dismiss
+              {tr('common.dismiss')}
             </button>
           </div>
         ) : null}
         <div className="flex-row--wrap mt-1">
           <label className="field min-w-12">
-            <span>Label</span>
-            <input value={newApiTokenName} onChange={(event) => setNewApiTokenName(event.target.value)} placeholder="e.g. CI, laptop" />
+            <span>{tr('settings.label')}</span>
+            <input
+              value={newApiTokenName}
+              onChange={(event) => setNewApiTokenName(event.target.value)}
+              placeholder={tr('settings.labelPlaceholder')}
+            />
           </label>
           <label className="field min-w-11">
-            <span>Expires (UTC end of day)</span>
+            <span>{tr('settings.expiresUtc')}</span>
             <input type="date" value={newApiTokenExpiresYmd} onChange={(event) => setNewApiTokenExpiresYmd(event.target.value)} />
           </label>
           <button type="button" className="button button--primary" onClick={() => void onCreateApiToken()} disabled={syncing || !newApiTokenName.trim()}>
-            Create token
+            {tr('settings.createToken')}
           </button>
         </div>
-        <p className="hint">Expiry uses end of the selected calendar day in UTC (default picker value is 90 days ahead).</p>
-        {apiTokensLoading ? <p className="hint">Loading tokens…</p> : null}
+        {apiTokensLoading ? <p className="hint">{tr('common.loadingTokens')}</p> : null}
         <table className="data-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Created</th>
-              <th>Expires</th>
-              <th>Last used</th>
+              <th>{tr('settings.label')}</th>
+              <th>{tr('settings.created')}</th>
+              <th>{tr('settings.expires')}</th>
+              <th>{tr('settings.lastUsed')}</th>
               <th />
             </tr>
           </thead>
@@ -125,14 +152,19 @@ export function SettingsView({
                       type="button"
                       className="button button--secondary"
                       onClick={() => {
-                        const action = expired ? 'delete' : 'revoke'
-                        if (window.confirm(`Are you sure you want to ${action} the token "${label}"?`)) {
+                        if (
+                          window.confirm(
+                            expired
+                              ? tr('settings.confirmDelete', { label })
+                              : tr('settings.confirmRevoke', { label }),
+                          )
+                        ) {
                           void onRemoveApiToken(t.id, expired)
                         }
                       }}
                       disabled={syncing}
                     >
-                      {expired ? 'Delete' : 'Revoke'}
+                      {expired ? tr('common.delete') : tr('settings.revoke')}
                     </button>
                   </td>
                 </tr>
@@ -140,7 +172,7 @@ export function SettingsView({
             })}
           </tbody>
         </table>
-        {apiTokens.length === 0 && !apiTokensLoading ? <p className="hint">No API tokens yet.</p> : null}
+        {apiTokens.length === 0 && !apiTokensLoading ? <p className="hint">{tr('settings.noTokens')}</p> : null}
       </div>
     </div>
   )

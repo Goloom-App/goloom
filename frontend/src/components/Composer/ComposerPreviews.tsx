@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { SocialPreview } from '../post/SocialPreview'
 import type { SocialPreviewAttachment } from '../post/SocialPreview.types'
 import type { BackendMediaItem } from '../../api'
@@ -27,6 +29,7 @@ function attachmentsForDestination(
 }
 
 export function ComposerPreviews({ draft, teamAccounts, teamId, api, authHeader, theme, libraryItems }: ComposerPreviewsProps) {
+  const { t } = useTranslation()
   const selectedAccounts = useMemo(
     () => teamAccounts.filter((account) => draft.targetAccountIds.includes(account.id)),
     [draft.targetAccountIds, teamAccounts],
@@ -50,7 +53,7 @@ export function ComposerPreviews({ draft, teamAccounts, teamId, api, authHeader,
 
   return (
     <>
-      <p className="eyebrow">Live previews</p>
+      <p className="eyebrow">{t('eyebrow.livePreviews')}</p>
       <div className="composer-preview-stack">
         {selectedAccounts.length > 0 ? (
           selectedAccounts.map((account) => (
@@ -65,7 +68,7 @@ export function ComposerPreviews({ draft, teamAccounts, teamId, api, authHeader,
             />
           ))
         ) : (
-          <p className="hint">Select a destination to see previews.</p>
+          <p className="hint">{t('composer.selectDestinationPreviews')}</p>
         )}
       </div>
     </>

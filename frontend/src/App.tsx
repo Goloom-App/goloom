@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { addDays, addHours, format, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
 
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
@@ -38,6 +39,9 @@ import { initialSettings } from './data'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { engagementForAccount } from './postMetrics'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
+import { setAppLanguage, type SupportedLanguage } from './i18n'
+import { isAppSection, sectionHeading } from './i18n/sections'
+import { translateApiError } from './i18n/translateApiError'
 import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, PostVersionRecord, ProviderInstanceRecord, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
@@ -46,25 +50,10 @@ const OIDC_PENDING_SESSION_KEY = 'goloom.oidc.pending_session_v1'
 const LAST_SECTION_STORAGE_KEY = 'goloom.last_section.v1'
 const LAST_TEAM_STORAGE_KEY = 'goloom.last_team.v1'
 
-const SECTION_HEADINGS: Record<AppSection, string> = {
-  dashboard: 'Dashboard',
-  calendar: 'Schedule',
-  contentCalendar: 'Content calendar',
-  archive: 'Archive',
-  analytics: 'Analytics',
-  mediaLibrary: 'Media library',
-  management: 'Management',
-  teams: 'Team settings',
-  recurringPosts: 'Recurring posts',
-  accounts: 'Accounts',
-  composer: 'Composer',
-  settings: 'Settings',
-  admin: 'Admin',
-}
-
 const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics']
 
 function App() {
+  const { t } = useTranslation()
   const [section, setSection] = useState<AppSection>(() => loadInitialSection())
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
@@ -82,6 +71,13 @@ function App() {
   const prevSectionRef = useRef<AppSection | null>(null)
   const prevSectionBeforeComposerRef = useRef<AppSection | null>(null)
   const [settings, setSettings] = useState<SettingsState>(() => loadStoredSettings())
+
+  useEffect(() => {
+    const lang = settings.ui.language
+    if (lang) {
+      setAppLanguage(lang as SupportedLanguage)
+    }
+  }, [settings.ui.language])
   const [activeConnection, setActiveConnection] = useState(() => ({
     apiBaseUrl: loadStoredSettings().general.apiBaseUrl,
     bearerToken: loadStoredSettings().general.bearerToken,
@@ -263,9 +259,9 @@ function App() {
     }
 
     const provider = params.get('oauth_provider') || 'provider'
-    const message = params.get('oauth_message') || (oauthStatus === 'success'
-      ? `Connected ${provider} account`
-      : `${provider} oauth failed`)
+    const message =
+      params.get('oauth_message') ||
+      (oauthStatus === 'success' ? t('status.oauthConnected', { provider }) : t('status.oauthFailed', { provider }))
 
     if (oauthStatus === 'success') {
       setStatusMessage(message)
@@ -288,7 +284,7 @@ function App() {
     const nextQuery = params.toString()
     const nextURL = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`
     window.history.replaceState({}, document.title, nextURL)
-  }, [])
+  }, [t])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -312,13 +308,13 @@ function App() {
     try {
       payload = JSON.parse(raw) as { token: string; baseUrl: string }
     } catch {
-      setAuthError('Invalid OpenID Connect hand-off data.')
+      setAuthError(t('auth.invalidOidcHandoff'))
       return
     }
     const token = typeof payload.token === 'string' ? payload.token.trim() : ''
     const baseUrl = typeof payload.baseUrl === 'string' ? payload.baseUrl.trim() : ''
     if (!token) {
-      setAuthError('OpenID Connect returned an empty token.')
+      setAuthError(t('auth.emptyOidcToken'))
       return
     }
     const apiBase = baseUrl || (typeof window !== 'undefined' ? window.location.origin : '')
@@ -335,12 +331,14 @@ function App() {
         }))
         setAuthTokenDraft(token)
         setPrincipalUser(toUserRecord(meResponse.user))
-        setStatusMessage('Signed in with OpenID Connect')
+        setStatusMessage(t('auth.signedInOidc'))
       } catch (cause) {
         if (cause instanceof ApiError && cause.status === 401) {
-          setAuthError('OpenID Connect sign-in was rejected (check server time, IdP audience, and PUBLIC_BASE_URL / ALLOWED_ORIGINS).')
+          setAuthError(t('auth.oidcRejected'))
         } else {
-          setAuthError(cause instanceof Error ? cause.message : 'Sign-in failed')
+          setAuthError(
+            cause instanceof Error ? translateApiError(cause.message, t) : t('auth.signInFailed'),
+          )
         }
       } finally {
         setAuthSubmitting(false)
@@ -358,12 +356,12 @@ function App() {
     try {
       token = decodeURIComponent(encoded)
     } catch {
-      setAuthError('Invalid sign-in response.')
+      setAuthError(t('auth.invalidSignInResponse'))
       window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
       return
     }
     if (!token.trim()) {
-      setAuthError('Invalid sign-in response.')
+      setAuthError(t('auth.invalidSignInResponse'))
       window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
       return
     }
@@ -371,7 +369,7 @@ function App() {
     try {
       sessionStorage.setItem(OIDC_PENDING_SESSION_KEY, JSON.stringify({ token, baseUrl }))
     } catch {
-      setAuthError('Could not store sign-in data (private browsing?).')
+      setAuthError(t('auth.storeSignInFailed'))
       return
     }
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
@@ -402,7 +400,7 @@ function App() {
   async function authenticateWithToken(mode: 'bootstrap' | 'login') {
     const token = authTokenDraft.trim()
     if (!token) {
-      setAuthError(mode === 'bootstrap' ? 'Enter the bootstrap token.' : 'Enter a bearer token.')
+      setAuthError(mode === 'bootstrap' ? t('auth.enterBootstrapToken') : t('auth.enterBearerToken'))
       return
     }
 
@@ -419,12 +417,12 @@ function App() {
         general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
       }))
       setPrincipalUser(toUserRecord(meResponse.user))
-      setStatusMessage(mode === 'bootstrap' ? 'Bootstrap administrator signed in' : 'Signed in')
+      setStatusMessage(mode === 'bootstrap' ? t('status.bootstrapAdminSignedIn') : t('status.signedIn'))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
-        setAuthError(mode === 'bootstrap' ? 'The bootstrap token was rejected.' : 'The bearer token was rejected.')
+        setAuthError(mode === 'bootstrap' ? t('auth.bootstrapTokenRejected') : t('auth.bearerTokenRejected'))
       } else {
-        setAuthError(cause instanceof Error ? cause.message : 'Sign-in failed')
+        setAuthError(cause instanceof Error ? translateApiError(cause.message, t) : t('auth.signInFailed'))
       }
     } finally {
       setAuthSubmitting(false)
@@ -442,7 +440,7 @@ function App() {
       window.location.href = authorizationUrl
     } catch (cause) {
       setAuthSubmitting(false)
-      setAuthError(cause instanceof Error ? cause.message : 'Failed to start OpenID Connect login')
+      setAuthError(cause instanceof Error ? translateApiError(cause.message, t) : t('auth.oidcStartFailed'))
     }
   }
 
@@ -513,12 +511,12 @@ function App() {
       setExpandedPostId((current) => (current && teamPayloads.flatMap((payload) => payload.posts).some((post) => post.id === current) ? current : null))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
-        clearAuthenticatedState('Session expired')
-        setAuthError('Session expired. Sign in again to continue.')
+        clearAuthenticatedState(t('status.sessionExpired'))
+        setAuthError(t('status.sessionExpiredSignIn'))
         return
       }
       if (!silent) {
-        setError(cause instanceof Error ? cause.message : 'Failed to load dashboard data')
+        setError(translateApiError(cause instanceof Error ? cause.message : t('status.failedLoadDashboard'), t))
       }
     } finally {
       if (!silent) {
@@ -573,7 +571,7 @@ function App() {
       try {
         await api.acceptTeamInvitation({ token: inviteToken })
         if (!cancelled) {
-          setStatusMessage('Invitation accepted — you have been added to the team.')
+          setStatusMessage(t('status.invitationAccepted'))
           setError(null)
           params.delete('invite')
           const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`
@@ -582,7 +580,7 @@ function App() {
         }
       } catch (cause) {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Failed to accept invitation')
+          setError(translateApiError(cause instanceof Error ? cause.message : t('status.failedAcceptInvitation'), t))
         }
       }
     })()
@@ -797,7 +795,8 @@ function App() {
       await work()
       setStatusMessage(successMessage)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Action failed')
+      const raw = cause instanceof Error ? cause.message : t('auth.signInFailed')
+      setError(translateApiError(raw, t))
     } finally {
       setSyncing(false)
     }
@@ -894,7 +893,7 @@ function App() {
       bearerToken: settings.general.bearerToken.trim(),
     })
     setAuthTokenDraft(settings.general.bearerToken.trim())
-    setStatusMessage('Session settings applied')
+    setStatusMessage(t('status.sessionSettingsApplied'))
   }
 
   function directoryUserLabel(userId: string) {
@@ -908,7 +907,7 @@ function App() {
     }
     const name = teamSettingsName.trim()
     if (!name) {
-      setError('Team name is required.')
+      setError(t('status.teamNameRequired'))
       return
     }
     await runAction(async () => {
@@ -917,7 +916,7 @@ function App() {
         description: teamSettingsDescription.trim(),
       })
       await loadDashboard({ silent: true })
-    }, 'Team settings updated')
+    }, t('status.teamSettingsUpdated'))
   }
 
   async function handleAddTeamMember() {
@@ -928,7 +927,7 @@ function App() {
       await api.addTeamMember(selectedTeam.id, { user_id: addMemberUserId.trim(), role: 'editor' })
       setAddMemberUserId('')
       await loadDashboard({ silent: true })
-    }, 'Member added')
+    }, t('status.memberAdded'))
   }
 
   async function handleRemoveTeamMember(userId: string) {
@@ -938,7 +937,7 @@ function App() {
     await runAction(async () => {
       await api.removeTeamMember(selectedTeam.id, userId)
       await loadDashboard({ silent: true })
-    }, 'Member removed')
+    }, t('status.memberRemoved'))
   }
 
   async function handleChangeTeamMemberRole(userId: string) {
@@ -952,7 +951,7 @@ function App() {
     await runAction(async () => {
       await api.addTeamMember(selectedTeam.id, { user_id: userId, role })
       await loadDashboard({ silent: true })
-    }, 'Member access updated')
+    }, t('status.memberAccessUpdated'))
   }
 
   async function handleSaveAdminProvider() {
@@ -972,7 +971,7 @@ function App() {
       token_endpoint: d.tokenEndpoint.trim() || undefined,
     }
     if (!payload.name || !payload.instance_url) {
-      setError('Provider name and instance URL are required.')
+      setError(t('status.providerNameUrlRequired'))
       return
     }
     await runAction(async () => {
@@ -994,7 +993,7 @@ function App() {
       setAdminProviderDraft(defaultAdminProviderDraft())
       setShowAdminProviderAdvanced(false)
       await loadDashboard({ silent: true })
-    }, editingProviderId ? 'Provider updated' : 'Provider registered')
+    }, editingProviderId ? t('status.providerUpdated') : t('status.providerRegistered'))
   }
 
   async function handleDeleteProviderInstance(instanceId: string) {
@@ -1003,10 +1002,10 @@ function App() {
     }
     const linked = accounts.filter((a) => a.providerInstanceId === instanceId).length
     if (linked > 0) {
-      setError('Disconnect all social accounts that use this instance before removing it.')
+      setError(t('status.disconnectAccountsBeforeRemove'))
       return
     }
-    if (!window.confirm('Remove this provider instance? It will no longer appear when teams connect accounts.')) {
+    if (!window.confirm(t('status.confirmRemoveProviderInstance'))) {
       return
     }
     await runAction(async () => {
@@ -1017,7 +1016,7 @@ function App() {
         setShowAdminProviderAdvanced(false)
       }
       await loadDashboard({ silent: true })
-    }, 'Provider instance removed')
+    }, t('status.providerInstanceRemoved'))
   }
 
   async function handleAdminSyncMetrics() {
@@ -1030,7 +1029,7 @@ function App() {
       setAdminSyncStatus(sync)
       await loadDashboard({ silent: true })
       setStatusMessage(result.message)
-    }, 'Metrics sync started')
+    }, t('status.metricsSyncStarted'))
   }
 
   async function handleDeleteTeamAccount(accountId: string) {
@@ -1040,7 +1039,7 @@ function App() {
     await runAction(async () => {
       await api.deleteAccount(selectedTeam.id, accountId)
       await loadDashboard({ silent: true })
-    }, 'Account disconnected')
+    }, t('status.accountDisconnected'))
   }
 
   async function handleConnectSocialAccount() {
@@ -1058,11 +1057,11 @@ function App() {
 
     if (d.provider === 'mastodon') {
       if (!d.accessToken.trim()) {
-        setError('Mastodon access token is required for manual connection.')
+        setError(t('status.mastodonTokenRequired'))
         return
       }
       if (!hasInst && !instanceUrl) {
-        setError('Select a registered instance or enter the instance URL.')
+        setError(t('status.selectInstanceOrUrl'))
         return
       }
       await runAction(async () => {
@@ -1073,17 +1072,17 @@ function App() {
         })
         setAccountDraft(defaultAccountConnectDraft())
         await loadDashboard({ silent: true })
-      }, 'Mastodon account connected')
+      }, t('status.mastodonConnected'))
       return
     }
 
     if (d.provider === 'friendica') {
       if (!d.accessToken.trim() || !d.identifier.trim()) {
-        setError('Friendica username and access token are required.')
+        setError(t('status.friendicaCredentialsRequired'))
         return
       }
       if (!hasInst && !instanceUrl) {
-        setError('Select a registered instance or enter the Friendica base URL.')
+        setError(t('status.selectInstanceOrFriendicaUrl'))
         return
       }
       await runAction(async () => {
@@ -1094,14 +1093,14 @@ function App() {
         })
         setAccountDraft(defaultAccountConnectDraft())
         await loadDashboard({ silent: true })
-      }, 'Friendica account connected')
+      }, t('status.friendicaConnected'))
       return
     }
 
     if (d.provider === 'bluesky') {
       if (d.blueskyAuthMode === 'app_password') {
         if (!d.identifier.trim() || !d.appPassword.trim()) {
-          setError('Bluesky handle and app password are required.')
+          setError(t('status.blueskyCredentialsRequired'))
           return
         }
         await runAction(async () => {
@@ -1112,11 +1111,11 @@ function App() {
           })
           setAccountDraft(defaultAccountConnectDraft())
           await loadDashboard({ silent: true })
-        }, 'Bluesky account connected')
+        }, t('status.blueskyConnected'))
         return
       }
       if (!d.accessToken.trim()) {
-        setError('Bluesky access token (JWT) is required.')
+        setError(t('status.blueskyJwtRequired'))
         return
       }
       await runAction(async () => {
@@ -1127,13 +1126,13 @@ function App() {
         })
         setAccountDraft(defaultAccountConnectDraft())
         await loadDashboard({ silent: true })
-      }, 'Bluesky account connected')
+      }, t('status.blueskyConnected'))
     }
   }
 
   async function handleMastodonOAuthConnect() {
     if (!api || !selectedTeam || !canEditTeamAccounts || !accountDraft.providerInstanceId.trim()) {
-      setError('Select a registered Mastodon instance for browser login.')
+      setError(t('status.selectMastodonForOAuth'))
       return
     }
     setSyncing(true)
@@ -1150,7 +1149,7 @@ function App() {
       window.location.assign(res.authorization_url)
     } catch (cause) {
       setSyncing(false)
-      setError(cause instanceof Error ? cause.message : 'Mastodon OAuth failed to start')
+      setError(translateApiError(cause instanceof Error ? cause.message : t('status.mastodonOAuthStartFailed'), t))
     }
   }
 
@@ -1160,7 +1159,7 @@ function App() {
     }
     const expEnd = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`)
     if (!newApiTokenExpiresYmd.trim() || Number.isNaN(expEnd.getTime()) || expEnd.getTime() <= Date.now()) {
-      setError('Choose an expiry date in the future (UTC end of day).')
+      setError(t('settings.expiryHint'))
       return
     }
     await runAction(async () => {
@@ -1171,7 +1170,7 @@ function App() {
       setNewApiTokenExpiresYmd(format(addDays(new Date(), 90), 'yyyy-MM-dd'))
       const list = await api.listMyApiTokens()
       setApiTokens(list.items ?? [])
-    }, 'API token created. Copy the secret below; it is not stored in plain text.')
+    }, t('status.apiTokenCreated'))
   }
 
   async function handleRemoveApiToken(tokenID: string, expired: boolean) {
@@ -1182,7 +1181,7 @@ function App() {
       await api.revokeMyApiToken(tokenID)
       const list = await api.listMyApiTokens()
       setApiTokens(list.items ?? [])
-    }, expired ? 'Token deleted' : 'API token revoked')
+    }, expired ? t('status.tokenDeleted') : t('status.apiTokenRevoked'))
   }
 
   async function handleSavePost() {
@@ -1225,7 +1224,7 @@ function App() {
 
       closeComposer()
       await loadDashboard({ silent: true })
-    }, composerMode === 'edit' ? 'Post updated' : 'Post scheduled')
+    }, composerMode === 'edit' ? t('status.postUpdated') : t('status.postScheduled'))
   }
 
   async function handleSaveDraft() {
@@ -1254,7 +1253,7 @@ function App() {
 
       closeComposer()
       await loadDashboard({ silent: true })
-    }, 'Draft saved')
+    }, t('status.draftSaved'))
   }
 
   async function deletePost(postId: string) {
@@ -1267,7 +1266,7 @@ function App() {
       setEditingPostId((current) => (current === postId ? null : current))
       closeComposer()
       await loadDashboard({ silent: true })
-    }, 'Post deleted')
+    }, t('status.postDeleted'))
   }
 
   async function handleCalendarPostDrop(postId: string, targetDay: Date) {
@@ -1316,7 +1315,7 @@ function App() {
         })
       }
       await loadDashboard({ silent: true })
-    }, changed.length > 1 ? 'Posts rescheduled to avoid overlap' : 'Post moved on calendar')
+    }, changed.length > 1 ? t('status.postsRescheduledOverlap') : t('status.postMovedCalendar'))
   }
 
   if (authStatusLoading && !activeConnection.bearerToken.trim()) {
@@ -1363,7 +1362,7 @@ function App() {
       selectedTeamId={effectiveSelectedTeamId}
       onSelectTeam={setSelectedTeamId}
       user={principalUser}
-      onSignOut={() => clearAuthenticatedState('Signed out')}
+      onSignOut={() => clearAuthenticatedState(t('status.signedOut'))}
       openComposer={openCreateComposer}
       resolvedTheme={resolvedTheme}
       showPreviewColumn={showPreviewColumn}
@@ -1386,9 +1385,9 @@ function App() {
             <div className="preview-header">
               <div className="preview-header__top">
                 <div>
-                  <p className="eyebrow">Live Preview</p>
+                  <p className="eyebrow">{t('preview.livePreview')}</p>
                   <h3 data-testid="live-preview-title">
-                    {selectedPost ? selectedPost.title || 'Untitled Post' : 'No post selected'}
+                    {selectedPost ? selectedPost.title || t('common.untitledPost') : t('preview.noPostSelected')}
                   </h3>
                 </div>
                 {selectedPost &&
@@ -1401,7 +1400,7 @@ function App() {
                     onClick={() => void openEditor(selectedPost.id)}
                   >
                     <Edit size={16} />
-                    <span>Edit</span>
+                    <span>{t('common.edit')}</span>
                   </button>
                 ) : null}
               </div>
@@ -1430,7 +1429,7 @@ function App() {
                 ))
               ) : (
                 <div className="empty-state">
-                  <p className="hint">Select a post from the timeline to see how it will look on different platforms.</p>
+                  <p className="hint">{t('common.selectPostPreview')}</p>
                 </div>
               )}
             </div>
@@ -1441,8 +1440,8 @@ function App() {
       {section !== 'composer' ? (
         <header className="page-header">
           <div>
-            <p className="eyebrow">{section === 'dashboard' ? 'Workspace' : 'Social publishing'}</p>
-            <h1>{SECTION_HEADINGS[section]}</h1>
+            <p className="eyebrow">{section === 'dashboard' ? t('eyebrow.workspace') : t('eyebrow.socialPublishing')}</p>
+            <h1>{sectionHeading(t, section)}</h1>
           </div>
 
           <button
@@ -1463,7 +1462,7 @@ function App() {
       {(error || statusMessage || loading) && dismissedNoticeKey !== noticeKey ? (
         <section className="glass-panel status-banner-panel">
           <div>
-            {loading ? <span className="hint">Loading data…</span> : null}
+            {loading ? <span className="hint">{t('common.loadingData')}</span> : null}
             {statusMessage ? <span className="status-banner__success">{statusMessage}</span> : null}
             {error ? <span className="status-banner__error">{error}</span> : null}
           </div>
@@ -1547,7 +1546,7 @@ function App() {
                   >
                     <X size={20} />
                   </button>
-                  <h3 style={{ margin: 0 }}>Preview</h3>
+                  <h3 style={{ margin: 0 }}>{t('common.preview')}</h3>
                 </div>
                 <div className="flex-row--center gap-2">
                   {(() => {
@@ -1560,7 +1559,7 @@ function App() {
                           className="button button--secondary button--sm"
                           style={{ color: 'var(--danger)' }}
                           onClick={() => {
-                            if (window.confirm('Are you sure you want to delete this post?')) {
+                            if (window.confirm(t('common.confirmDeletePost'))) {
                               const id = mobilePreviewPostId
                               setMobilePreviewPostId(null)
                               setPreviewTranslateY(0)
@@ -1569,7 +1568,7 @@ function App() {
                           }}
                         >
                           <Icon name="trash" className="inline-icon" />
-                          <span className="desktop-only">Delete</span>
+                          <span className="desktop-only">{t('common.delete')}</span>
                         </button>
                         {p.status !== 'posted' && (
                           <button
@@ -1584,7 +1583,7 @@ function App() {
                             }}
                           >
                             <Icon name="edit" className="inline-icon" />
-                            <span>Edit</span>
+                            <span>{t('common.edit')}</span>
                           </button>
                         )}
                         {p.status === 'posted' && (
@@ -1642,7 +1641,7 @@ function App() {
             onOpenAccounts={() => setSection('accounts')}
           />
         ) : section === 'dashboard' ? (
-          <p className="hint">Select a team to load the dashboard.</p>
+          <p className="hint">{t('common.selectTeamDashboard')}</p>
         ) : null}
 
         {section === 'calendar' && (
@@ -1714,27 +1713,27 @@ function App() {
         {section === 'teams' && selectedTeam && (
           <div className="glass-panel stack stack--lg">
             <div>
-              <h2 className="mb-2">Team settings</h2>
-              <p className="hint">Manage members, update access, and transfer ownership for <strong>{selectedTeam.name}</strong>.</p>
+              <h2 className="mb-2">{t('teams.settingsTitle')}</h2>
+              <p className="hint">{t('teams.settingsHint', { teamName: selectedTeam.name })}</p>
             </div>
 
             {selectedTeam.isPersonal ? (
-              <p className="hint">Personal workspace has no shared members.</p>
+              <p className="hint">{t('teams.personalNoMembers')}</p>
             ) : myRoleInSelectedTeam === 'owner' ? (
               <>
                 <section className="stack">
-                  <h3 className="subsection-title">General</h3>
+                  <h3 className="subsection-title">{t('common.general')}</h3>
                   <label className="field">
-                    <span>Team name</span>
+                    <span>{t('teams.teamName')}</span>
                     <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
                   </label>
                   <label className="field">
-                    <span>Description</span>
+                    <span>{t('common.description')}</span>
                     <textarea
                       rows={3}
                       value={teamSettingsDescription}
                       onChange={(event) => setTeamSettingsDescription(event.target.value)}
-                      placeholder="Describe your team's purpose and focus"
+                      placeholder={t('teams.descriptionPlaceholder')}
                     />
                   </label>
                   <div>
@@ -1744,13 +1743,13 @@ function App() {
                       onClick={() => void handleUpdateTeam()}
                       disabled={syncing || !teamSettingsName.trim()}
                     >
-                      Save Changes
+                      {t('teams.saveChanges')}
                     </button>
                   </div>
                 </section>
 
                 <section className="stack">
-                  <h3 className="subsection-title">Members</h3>
+                  <h3 className="subsection-title">{t('common.members')}</h3>
                   <div className="stack stack--sm">
                     {selectedTeam.members.map((m) => (
                       <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between">
@@ -1766,23 +1765,23 @@ function App() {
                               setMemberRoleEdits((current) => ({ ...current, [m.userId]: event.target.value as TeamRole }))
                             }
                           >
-                            <option value="owner">Owner</option>
-                            <option value="editor">Editor</option>
-                            <option value="viewer">Viewer</option>
+                            <option value="owner">{t('roles.owner')}</option>
+                            <option value="editor">{t('roles.editor')}</option>
+                            <option value="viewer">{t('roles.viewer')}</option>
                           </select>
                           <button 
                             className="btn btn--ghost btn--xs"
                             onClick={() => void handleChangeTeamMemberRole(m.userId)}
                             disabled={syncing || (memberRoleEdits[m.userId] ?? m.role) === m.role}
                           >
-                            Apply
+                            {t('common.apply')}
                           </button>
                           {m.userId !== principalUser?.id && (
                             <button 
                               className="btn btn--xs btn--danger-ghost"
                               onClick={() => void handleRemoveTeamMember(m.userId)}
                             >
-                              Remove
+                              {t('common.remove')}
                             </button>
                           )}
                         </div>
@@ -1792,10 +1791,10 @@ function App() {
                 </section>
 
                 <section className="stack">
-                  <h3 className="subsection-title">Add Member</h3>
+                  <h3 className="subsection-title">{t('teams.addMember')}</h3>
                   <div className="inline-cluster flex-wrap">
                     <select className="grow" value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
-                      <option value="">Select user…</option>
+                      <option value="">{t('teams.selectUser')}</option>
                       {directoryUsers
                         .filter((u) => !selectedTeam.members.some((m) => m.userId === u.id))
                         .map((u) => (
@@ -1807,7 +1806,7 @@ function App() {
                       onClick={() => void handleAddTeamMember()} 
                       disabled={syncing || !addMemberUserId}
                     >
-                      Add to Team
+                      {t('teams.addToTeam')}
                     </button>
                   </div>
                 </section>
@@ -1919,10 +1918,6 @@ function writeStoredSettings(settings: SettingsState) {
     return
   }
   window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-}
-
-function isAppSection(value: string): value is AppSection {
-  return value in SECTION_HEADINGS
 }
 
 function loadInitialSection(): AppSection {

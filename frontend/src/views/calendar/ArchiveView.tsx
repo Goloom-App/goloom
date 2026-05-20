@@ -1,5 +1,7 @@
-import type { AccountRecord, PostRecord } from '../../types'
+import { useTranslation } from 'react-i18next'
+
 import { PostCard } from '../../components/post/PostCard'
+import type { AccountRecord, PostRecord } from '../../types'
 
 export function ArchiveView({
   archivedPosts,
@@ -12,6 +14,8 @@ export function ArchiveView({
   onPreview?: (postId: string) => void
   accounts: AccountRecord[]
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="archive-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-8)' }}>
       {archivedPosts.map((post) => (
@@ -27,8 +31,8 @@ export function ArchiveView({
       ))}
       {archivedPosts.length === 0 ? (
         <div className="empty-state">
-          <h3>No published posts yet</h3>
-          <p className="hint">Posted items appear here once the scheduler publishes them.</p>
+          <h3>{t('calendar.archive.noPublishedTitle')}</h3>
+          <p className="hint">{t('calendar.archive.hint')}</p>
         </div>
       ) : null}
     </div>

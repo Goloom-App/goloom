@@ -46,7 +46,7 @@ func (a *API) handleCreatePostTemplate(w http.ResponseWriter, r *http.Request) {
 	teamID := strings.TrimSpace(r.PathValue("teamID"))
 	var input domain.CreatePostTemplateInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	input.Title = strings.TrimSpace(input.Title)
@@ -56,12 +56,12 @@ func (a *API) handleCreatePostTemplate(w http.ResponseWriter, r *http.Request) {
 	input.MediaExcludeByAccount = domain.NormalizeMediaExcludeByAccount(input.MediaExcludeByAccount, input.MediaIDs)
 	input.TargetAccountIDs = domain.NormalizeMediaIDs(input.TargetAccountIDs)
 	if input.Content == "" || strings.TrimSpace(input.RecurrenceJSON) == "" || len(input.TargetAccountIDs) == 0 {
-		http.Error(w, "content, recurrence_json, and target_account_ids are required", http.StatusBadRequest)
+		a.writeError(w, r, "content_recurrence_targets_required", http.StatusBadRequest)
 		return
 	}
 	accs, err := a.store.GetAccountsByIDs(r.Context(), teamID, input.TargetAccountIDs)
 	if err != nil || len(accs) != len(input.TargetAccountIDs) {
-		http.Error(w, "invalid target_account_ids", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_target_account_ids", http.StatusBadRequest)
 		return
 	}
 	tmpl, err := a.store.CreatePostTemplate(r.Context(), teamID, principal, input)
@@ -77,7 +77,7 @@ func (a *API) handleUpdatePostTemplate(w http.ResponseWriter, r *http.Request) {
 	templateID := strings.TrimSpace(r.PathValue("templateID"))
 	var input domain.UpdatePostTemplateInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	if input.Title != nil {
@@ -109,7 +109,7 @@ func (a *API) handleUpdatePostTemplate(w http.ResponseWriter, r *http.Request) {
 		input.TargetAccountIDs = &tg
 		accs, err := a.store.GetAccountsByIDs(r.Context(), teamID, tg)
 		if err != nil || len(accs) != len(tg) {
-			http.Error(w, "invalid target_account_ids", http.StatusBadRequest)
+			a.writeError(w, r, "invalid_target_account_ids", http.StatusBadRequest)
 			return
 		}
 	}
@@ -140,11 +140,11 @@ func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Re
 	templateID := strings.TrimSpace(r.PathValue("templateID"))
 	var body skipTemplateBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	if body.OccurrenceAt.IsZero() {
-		http.Error(w, "occurrence_at is required", http.StatusBadRequest)
+		a.writeError(w, r, "occurrence_at_required", http.StatusBadRequest)
 		return
 	}
 	if err := a.store.AddPostTemplateSkip(r.Context(), teamID, templateID, body.OccurrenceAt.UTC()); err != nil {

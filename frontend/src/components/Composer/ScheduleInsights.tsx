@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { createApiClient } from '../../api'
 import type { TeamSchedulingPreferences } from '../../types'
 
@@ -40,6 +42,7 @@ export function ScheduleInsights({
   setScheduledAt: (v: string) => void
   schedulingPreferences?: TeamSchedulingPreferences | null
 }) {
+  const { t } = useTranslation()
   const [hours, setHours] = useState<Array<{ hour: number; score: number }>>([])
   const [use24h, setUse24h] = useState(true)
 
@@ -81,13 +84,13 @@ export function ScheduleInsights({
   return (
     <div className="schedule-insights">
       <div className="schedule-insights__toolbar">
-        <span className="eyebrow">Engagement by hour (UTC)</span>
+        <span className="eyebrow">{t('composer.engagementByHour')}</span>
         <label className="schedule-insights__toggle">
           <input type="checkbox" checked={use24h} onChange={(e) => setUse24h(e.target.checked)} />
-          <span>24h labels</span>
+          <span>{t('composer.labels24h')}</span>
         </label>
       </div>
-      <div className="schedule-insights__heatmap" role="img" aria-label="Engagement heatmap by hour">
+      <div className="schedule-insights__heatmap" role="img" aria-label={t('composer.heatmapAria')}>
         {Array.from({ length: 24 }, (_, h) => {
           const score = byHour.get(h) ?? 0
           const intensity = score / maxScore
@@ -97,7 +100,7 @@ export function ScheduleInsights({
               type="button"
               className="schedule-insights__cell"
               style={{ opacity: 0.25 + intensity * 0.75 }}
-              title={`${h}:00 UTC — score ${score}`}
+              title={t('composer.heatmapCellTitle', { hour: h, score })}
               onClick={() => {
                 const cur = scheduledAt && scheduledAt.includes('T') ? scheduledAt : `${new Date().toISOString().slice(0, 10)}T12:00`
                 const datePart = cur.slice(0, 10)
@@ -111,7 +114,7 @@ export function ScheduleInsights({
       </div>
       {slots.length > 0 ? (
         <div className="schedule-insights__slots">
-          <span className="hint">Default timeslots</span>
+          <span className="hint">{t('composer.defaultTimeslots')}</span>
           <div className="inline-cluster" style={{ gap: '0.35rem' }}>
             {slots.map((slot) => (
               <button
