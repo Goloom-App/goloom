@@ -5,6 +5,7 @@ WORKDIR /src
 
 COPY frontend/package.json frontend/pnpm-lock.yaml ./frontend/
 COPY frontend ./frontend
+COPY locales ./locales
 RUN mkdir -p /src/internal/webui && corepack enable && CI=true pnpm --dir frontend install --frozen-lockfile && pnpm --dir frontend build
 
 FROM ghcr.io/psarossy/golang:1.26.2-alpine3.22 AS builder
