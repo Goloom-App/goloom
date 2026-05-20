@@ -137,6 +137,8 @@ export interface ProviderSetting {
 export interface SettingsState {
   ui: {
     colorScheme: 'system' | 'dark' | 'light'
+    /** BCP 47 language code (en, de, …). */
+    language?: string
   }
   general: {
     apiBaseUrl: string

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format, parseISO } from 'date-fns'
+import { useTranslation } from 'react-i18next'
 import type { BackendMetricHistoryPoint, BackendAccountGrowthPoint } from '../../api'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import { Icon } from '../../icons'
@@ -40,15 +41,21 @@ function formatSparkValue(value: number, mode: 'total' | 'delta'): string {
 
 function MetricSparkline({
   title,
+  subtitle,
   color,
   points,
   loading,
+  loadingLabel,
+  emptyLabel,
   valueMode = 'delta',
 }: {
   title: string
+  subtitle: string
   color: string
   points: SparkPoint[]
   loading: boolean
+  loadingLabel: string
+  emptyLabel: string
   valueMode?: 'total' | 'delta'
 }) {
   const data = useMemo(() => points, [points])
@@ -62,7 +69,7 @@ function MetricSparkline({
       <div className="dashboard-spark__head">
         <div className="dashboard-spark__info">
           <span className="dashboard-spark__title">{title}</span>
-          <span className="dashboard-spark__subtitle">Last 7 days</span>
+          <span className="dashboard-spark__subtitle">{subtitle}</span>
         </div>
         {lastValue !== null && !loading && (
           <div
@@ -79,9 +86,9 @@ function MetricSparkline({
       </div>
       <div className="dashboard-spark__chart">
         {loading ? (
-          <p className="hint dashboard-spark__placeholder">Loading…</p>
+          <p className="hint dashboard-spark__placeholder">{loadingLabel}</p>
         ) : data.length === 0 ? (
-          <p className="hint dashboard-spark__placeholder">No data yet</p>
+          <p className="hint dashboard-spark__placeholder">{emptyLabel}</p>
         ) : (
           <ResponsiveContainer width="100%" height={88}>
             <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
@@ -129,6 +136,7 @@ export function DashboardView({
   onOpenSchedule: () => void
   onOpenAccounts: () => void
 }) {
+  const { t } = useTranslation()
   const [seriesByMetric, setSeriesByMetric] = useState<Record<string, SparkPoint[]>>({})
   const [networkSeries, setNetworkSeries] = useState<SparkPoint[]>([])
   const [loadingCharts, setLoadingCharts] = useState(false)
@@ -178,30 +186,37 @@ export function DashboardView({
   }
 
   const chartTitles: Record<string, string> = {
-    likes: 'Likes',
-    reposts: 'Shares',
-    replies: 'Replies',
+    likes: t('dashboard.metricLikes'),
+    reposts: t('dashboard.metricShares'),
+    replies: t('dashboard.metricReplies'),
+  }
+
+  const sparkProps = {
+    subtitle: t('dashboard.last7days'),
+    loading: loadingCharts,
+    loadingLabel: t('common.loading'),
+    emptyLabel: t('dashboard.noDataYet'),
   }
 
   const performancePanel = (
     <section className="glass-panel dashboard-panel">
       <div className="dashboard-panel__header">
         <div>
-          <p className="eyebrow">Performance</p>
-          <h2 className="dashboard-panel__title">Recent engagement</h2>
-          <p className="hint">Daily change from synced analytics</p>
+          <p className="eyebrow">{t('eyebrow.performance')}</p>
+          <h2 className="dashboard-panel__title">{t('dashboard.recentEngagement')}</h2>
+          <p className="hint">{t('dashboard.dailyChangeHint')}</p>
         </div>
         <button type="button" className="button button--secondary" onClick={() => void loadCharts()} disabled={loadingCharts}>
           {loadingCharts ? <Icon name="loader" className="reload-spin" /> : <Icon name="refresh" />}
-          <span>Refresh</span>
+          <span>{t('common.refresh')}</span>
         </button>
       </div>
       <div className="dashboard-spark-grid">
         <MetricSparkline
-          title="Network Trend"
+          title={t('dashboard.networkTrend')}
           color="#38bdf8"
           points={networkSeries}
-          loading={loadingCharts}
+          {...sparkProps}
         />
         {ENGAGEMENT_METRICS.map((m) => (
           <MetricSparkline
@@ -209,7 +224,7 @@ export function DashboardView({
             title={chartTitles[m]}
             color={chartColors[m] ?? 'var(--accent)'}
             points={seriesByMetric[m] ?? []}
-            loading={loadingCharts}
+            {...sparkProps}
           />
         ))}
       </div>
@@ -220,17 +235,17 @@ export function DashboardView({
     <section className="glass-panel dashboard-panel">
       <div className="dashboard-panel__header">
         <div>
-          <p className="eyebrow">Account health</p>
-          <h2 className="dashboard-panel__title">Connection status</h2>
-          <p className="hint">OAuth expiry determines reconnect prompts</p>
+          <p className="eyebrow">{t('eyebrow.accountHealth')}</p>
+          <h2 className="dashboard-panel__title">{t('dashboard.connectionStatus')}</h2>
+          <p className="hint">{t('dashboard.oauthHint')}</p>
         </div>
         <button type="button" className="button button--secondary" onClick={onOpenAccounts}>
           <Icon name="share" className="dashboard-manage-accounts__icon" />
-          <span>Manage accounts</span>
+          <span>{t('dashboard.manageAccounts')}</span>
         </button>
       </div>
       {accounts.length === 0 ? (
-        <p className="hint dashboard-panel__empty">No accounts linked to this workspace yet.</p>
+        <p className="hint dashboard-panel__empty">{t('dashboard.noAccountsLinked')}</p>
       ) : (
         <div className="dashboard-accounts">
           {accounts.map((account) => {
@@ -243,7 +258,7 @@ export function DashboardView({
                   <span className="dashboard-account-card__handle">{account.username}</span>
                 </div>
                 <span className={`dashboard-account-card__pill dashboard-account-card__pill--${status}`}>
-                  {status === 'active' ? 'Active' : 'Needs re-auth'}
+                  {status === 'active' ? t('dashboard.active') : t('dashboard.needsReauth')}
                 </span>
               </div>
             )
@@ -257,22 +272,22 @@ export function DashboardView({
     <section className="glass-panel dashboard-panel">
       <div className="dashboard-panel__header">
         <div>
-          <p className="eyebrow">Schedule</p>
-          <h2 className="dashboard-panel__title">Upcoming posts</h2>
+          <p className="eyebrow">{t('eyebrow.schedule')}</p>
+          <h2 className="dashboard-panel__title">{t('dashboard.upcomingPosts')}</h2>
           <p className="hint">{teamName}</p>
         </div>
         <button type="button" className="button button--secondary" onClick={onOpenSchedule}>
           <Icon name="calendar" className="inline-icon" />
-          <span>Open schedule</span>
+          <span>{t('dashboard.openSchedule')}</span>
         </button>
       </div>
       {upcomingPosts.length === 0 ? (
-        <p className="hint dashboard-panel__empty">No upcoming scheduled or draft posts. Create a post to fill your calendar.</p>
+        <p className="hint dashboard-panel__empty">{t('dashboard.noUpcoming')}</p>
       ) : (
-        <ul className="dashboard-scheduled-cards" role="list" aria-label="Upcoming scheduled posts">
+        <ul className="dashboard-scheduled-cards" role="list" aria-label={t('dashboard.upcomingPostsAria')}>
           {upcomingPosts.map((post) => {
             const when = parseISO(post.scheduledAt)
-            const snippet = post.title?.trim() || post.content.slice(0, 80) || 'Untitled'
+            const snippet = post.title?.trim() || post.content.slice(0, 80) || t('common.untitled')
             return (
               <li key={post.id} className="dashboard-scheduled-cards__item">
                 <button type="button" className="dashboard-scheduled-card" onClick={() => onOpenPreview(post.id)}>
@@ -281,7 +296,7 @@ export function DashboardView({
                       <span className="dashboard-scheduled-card__date">{format(when, 'MMM d')}</span>
                       <span className="dashboard-scheduled-card__clock">{format(when, 'HH:mm')}</span>
                     </time>
-                    {post.status === 'draft' ? <span className="dashboard-scheduled-card__draft">Draft</span> : null}
+                    {post.status === 'draft' ? <span className="dashboard-scheduled-card__draft">{t('common.draft')}</span> : null}
                   </div>
                   <p className="dashboard-scheduled-card__title">{snippet}</p>
                   <div className="dashboard-scheduled-card__accounts" aria-hidden="true">

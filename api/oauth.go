@@ -47,28 +47,28 @@ func (a *API) handleStartMastodonOAuth(w http.ResponseWriter, r *http.Request) {
 
 	var input startMastodonOAuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
 	instance, err := a.store.GetProviderInstanceByID(r.Context(), strings.TrimSpace(input.ProviderInstanceID))
 	if err != nil {
-		http.Error(w, "provider_instance_id is invalid", http.StatusBadRequest)
+		a.writeError(w, r, "provider_instance_id_invalid", http.StatusBadRequest)
 		return
 	}
 	if instance.Provider != "mastodon" {
-		http.Error(w, "provider instance must be mastodon", http.StatusBadRequest)
+		a.writeError(w, r, "provider_instance_must_be_mastodon", http.StatusBadRequest)
 		return
 	}
 
 	providerImpl, ok := a.providers.Get(instance.Provider)
 	if !ok {
-		http.Error(w, "unsupported provider", http.StatusBadRequest)
+		a.writeError(w, r, "unsupported_provider", http.StatusBadRequest)
 		return
 	}
 	connector, ok := providerImpl.(provider.OAuthAccountConnector)
 	if !ok {
-		http.Error(w, "provider does not support oauth", http.StatusBadRequest)
+		a.writeError(w, r, "provider_no_oauth", http.StatusBadRequest)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (a *API) handleStartMastodonOAuth(w http.ResponseWriter, r *http.Request) {
 		ExpiresAtUnix:      time.Now().UTC().Add(mastodonOAuthStateTTL).Unix(),
 	})
 	if err != nil {
-		http.Error(w, "failed to build oauth state", http.StatusInternalServerError)
+		a.writeError(w, r, "failed_build_oauth_state", http.StatusInternalServerError)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (a *API) handleMastodonOAuthCallback(w http.ResponseWriter, r *http.Request
 
 	state, err := a.parseMastodonOAuthState(strings.TrimSpace(r.URL.Query().Get("state")))
 	if err != nil {
-		http.Error(w, "invalid oauth state", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_oauth_state", http.StatusBadRequest)
 		return
 	}
 

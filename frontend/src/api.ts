@@ -1,3 +1,4 @@
+import i18n from './i18n'
 import type { ProviderName } from './types'
 
 export interface ApiClientOptions {
@@ -254,11 +255,27 @@ export interface BackendOAuthAuthorization {
   authorization_url: string
 }
 
+function currentAcceptLanguage(): string {
+  try {
+    const raw = localStorage.getItem('goloom-ui-settings')
+    if (raw) {
+      const parsed = JSON.parse(raw) as { ui?: { language?: string } }
+      if (parsed.ui?.language?.trim()) {
+        return parsed.ui.language.trim()
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return typeof navigator !== 'undefined' ? navigator.language || 'en' : 'en'
+}
+
 function buildHeaders(token: string, withJSON = true) {
   const headers = new Headers()
   if (token.trim()) {
     headers.set('Authorization', `Bearer ${token}`)
   }
+  headers.set('Accept-Language', currentAcceptLanguage())
   if (withJSON) {
     headers.set('Content-Type', 'application/json')
   }
@@ -273,10 +290,13 @@ async function request<T>(options: ApiClientOptions, path: string, init?: Reques
     if (response.status === 429) {
       const trimmed = message.trim().toLowerCase()
       if (!trimmed || trimmed.includes('rate limit')) {
-        message = 'Too many requests. Please wait a moment and try again.'
+        message = i18n.t('common.rateLimit')
       }
     }
-    throw new ApiError(response.status, message || `Request failed with ${response.status}`)
+    throw new ApiError(
+      response.status,
+      message || i18n.t('common.requestFailed', { status: response.status }),
+    )
   }
   if (response.status === 204) {
     return undefined as T

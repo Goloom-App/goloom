@@ -28,13 +28,13 @@ func (a *API) handleTeamMediaUploadToLibrary(w http.ResponseWriter, r *http.Requ
 	teamID := r.PathValue("teamID")
 
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "invalid multipart form", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_multipart_form", http.StatusBadRequest)
 		return
 	}
 
 	file, hdr, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "file is required", http.StatusBadRequest)
+		a.writeError(w, r, "file_required", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -93,7 +93,7 @@ func (a *API) handleTeamMediaDelete(w http.ResponseWriter, r *http.Request) {
 
 	item, err := a.store.GetMediaItemByID(r.Context(), teamID, mediaID)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (a *API) handleTeamMediaPreview(w http.ResponseWriter, r *http.Request) {
 
 	item, err := a.store.GetMediaItemByID(r.Context(), teamID, mediaID)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
 

@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { useTranslation } from 'react-i18next'
 import { format, isValid, parseISO } from 'date-fns'
 import { Icon } from '../../icons'
 import type { BackendAdminMetrics, BackendAdminSyncStatus } from '../../api'
@@ -45,47 +46,48 @@ export function AdminView({
   onSaveAdminProvider: () => void | Promise<void>
   onDeleteProviderInstance: (instanceId: string) => void | Promise<void>
 }) {
+  const { t } = useTranslation()
   return (
     <div className="admin-view two-column-detail">
       <div className="glass-panel">
-        <h2 className="section-card__title">Overview</h2>
-        {adminMetricsLoading ? <p className="hint">Loading metrics…</p> : null}
+        <h2 className="section-card__title">{t('admin.overview')}</h2>
+        {adminMetricsLoading ? <p className="hint">{t('common.loadingMetrics')}</p> : null}
         {adminMetrics ? (
           <div className="stat-grid">
             <div className="stat-tile">
-              <span className="stat-tile__label">Users</span>
+              <span className="stat-tile__label">{t('admin.users')}</span>
               <span className="stat-tile__value">{adminMetrics.users_count}</span>
             </div>
             <div className="stat-tile">
-              <span className="stat-tile__label">Teams</span>
+              <span className="stat-tile__label">{t('admin.teams')}</span>
               <span className="stat-tile__value">{adminMetrics.teams_count}</span>
             </div>
             <div className="stat-tile">
-              <span className="stat-tile__label">Provider instances</span>
+              <span className="stat-tile__label">{t('admin.providerInstances')}</span>
               <span className="stat-tile__value">{adminMetrics.provider_instances_count}</span>
             </div>
             <div className="stat-tile">
-              <span className="stat-tile__label">Queued / pending</span>
+              <span className="stat-tile__label">{t('admin.queuedPending')}</span>
               <span className="stat-tile__value">{adminMetrics.posts_pending}</span>
             </div>
             <div className="stat-tile">
-              <span className="stat-tile__label">Drafts</span>
+              <span className="stat-tile__label">{t('admin.drafts')}</span>
               <span className="stat-tile__value">{adminMetrics.posts_draft ?? 0}</span>
             </div>
             <div className="stat-tile">
-              <span className="stat-tile__label">Publishing</span>
+              <span className="stat-tile__label">{t('admin.publishing')}</span>
               <span className="stat-tile__value">{adminMetrics.posts_processing}</span>
             </div>
             <div className="stat-tile">
-              <span className="stat-tile__label">Posted</span>
+              <span className="stat-tile__label">{t('admin.posted')}</span>
               <span className="stat-tile__value">{adminMetrics.posts_posted}</span>
             </div>
             <div className="stat-tile stat-tile--warn">
-              <span className="stat-tile__label">Failed</span>
+              <span className="stat-tile__label">{t('admin.failed')}</span>
               <span className="stat-tile__value">{adminMetrics.posts_failed}</span>
             </div>
             <div className="stat-tile">
-              <span className="stat-tile__label">Cancelled</span>
+              <span className="stat-tile__label">{t('admin.cancelled')}</span>
               <span className="stat-tile__value">{adminMetrics.posts_cancelled}</span>
             </div>
           </div>
@@ -93,15 +95,15 @@ export function AdminView({
       </div>
 
       <div className="glass-panel">
-        <h2 className="section-card__title">Registered users</h2>
-        <p className="hint">Everyone who can sign in to this deployment.</p>
+        <h2 className="section-card__title">{t('admin.registeredUsers')}</h2>
+        <p className="hint">{t('admin.registeredUsersHint')}</p>
         <table className="data-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Access</th>
-              <th>Registered</th>
+              <th>{t('common.name')}</th>
+              <th>{t('common.email')}</th>
+              <th>{t('common.access')}</th>
+              <th>{t('common.registered')}</th>
             </tr>
           </thead>
           <tbody>
@@ -111,60 +113,57 @@ export function AdminView({
                 <tr key={user.id}>
                   <td>{user.name}</td>
                   <td>{user.email}</td>
-                  <td>{user.globalRole === 'admin' ? 'Administrator' : 'Member'}</td>
-                  <td>{user.createdAt && isValid(parseISO(user.createdAt)) ? format(parseISO(user.createdAt), 'PP') : '—'}</td>
+                  <td>{user.globalRole === 'admin' ? t('roles.administrator') : t('roles.member')}</td>
+                  <td>{user.createdAt && isValid(parseISO(user.createdAt)) ? format(parseISO(user.createdAt), 'PP') : t('common.emDash')}</td>
                 </tr>
               ))}
           </tbody>
         </table>
-        {directoryUsers.length === 0 ? <p className="hint">No users returned from the directory.</p> : null}
+        {directoryUsers.length === 0 ? <p className="hint">{t('admin.noUsers')}</p> : null}
       </div>
 
       {adminRuntime ? (
         <div className="glass-panel">
-          <h2 className="section-card__title">Scheduler &amp; server</h2>
+          <h2 className="section-card__title">{t('admin.schedulerServer')}</h2>
           <dl className="kv-list">
-            <dt>Worker processes</dt>
+            <dt>{t('admin.workerProcesses')}</dt>
             <dd>{adminRuntime.scheduler.workers}</dd>
-            <dt>Poll interval</dt>
+            <dt>{t('admin.pollInterval')}</dt>
             <dd>{adminRuntime.scheduler.pollInterval}</dd>
-            <dt>Post metrics sync</dt>
-            <dd>{adminRuntime.scheduler.metricsSyncInterval ?? '—'}</dd>
-            <dt>Account health check</dt>
-            <dd>{adminRuntime.scheduler.accountHealthInterval ?? '—'}</dd>
-            <dt>HTTP listen</dt>
+            <dt>{t('admin.postMetricsSync')}</dt>
+            <dd>{adminRuntime.scheduler.metricsSyncInterval ?? t('common.emDash')}</dd>
+            <dt>{t('admin.accountHealthCheck')}</dt>
+            <dd>{adminRuntime.scheduler.accountHealthInterval ?? t('common.emDash')}</dd>
+            <dt>{t('admin.httpListen')}</dt>
             <dd>
               <code className="inline-code">{adminRuntime.general.httpAddr}</code>
             </dd>
-            <dt>Rate limit / min (anonymous)</dt>
+            <dt>{t('admin.rateLimitAnonymous')}</dt>
             <dd>{adminRuntime.security.rateLimitPerMinute}</dd>
-            <dt>Rate limit / min (Bearer)</dt>
+            <dt>{t('admin.rateLimitBearer')}</dt>
             <dd>{adminRuntime.security.rateLimitAuthenticatedPerMinute}</dd>
           </dl>
         </div>
       ) : null}
 
       <div className="glass-panel">
-        <h2 className="section-card__title">Metrics sync</h2>
-        <p className="hint">
-          Post engagement (likes, reposts) and account follower counts are pulled from connected providers on a schedule.
-          Intervals are configured via server environment variables (<code className="inline-code">SCHEDULER_METRICS_SYNC_INTERVAL</code>, etc.).
-        </p>
-        {adminSyncLoading ? <p className="hint">Loading sync state…</p> : null}
+        <h2 className="section-card__title">{t('admin.metricsSync')}</h2>
+        <p className="hint">{t('admin.metricsSyncHint')}</p>
+        {adminSyncLoading ? <p className="hint">{t('common.loadingSync')}</p> : null}
         {adminSyncStatus ? (
           <>
             <dl className="kv-list">
-              <dt>Post engagement interval</dt>
+              <dt>{t('admin.postEngagementInterval')}</dt>
               <dd>{adminSyncStatus.post_metrics_sync_interval}</dd>
-              <dt>Account followers interval</dt>
+              <dt>{t('admin.accountFollowersInterval')}</dt>
               <dd>{adminSyncStatus.account_metrics_sync_interval}</dd>
-              <dt>Targets waiting for sync</dt>
+              <dt>{t('admin.targetsWaitingSync')}</dt>
               <dd>{adminSyncStatus.posted_targets_pending_sync}</dd>
-              <dt>Never synced (posted)</dt>
+              <dt>{t('admin.neverSyncedPosted')}</dt>
               <dd>{adminSyncStatus.posted_targets_never_synced}</dd>
-              <dt>Targets with stored metrics</dt>
+              <dt>{t('admin.targetsWithMetrics')}</dt>
               <dd>{adminSyncStatus.posted_targets_with_metrics}</dd>
-              <dt>Accounts with follower snapshots</dt>
+              <dt>{t('admin.accountsWithFollowers')}</dt>
               <dd>{adminSyncStatus.accounts_with_follower_metrics}</dd>
             </dl>
             <button
@@ -173,21 +172,16 @@ export function AdminView({
               onClick={() => void onTriggerMetricsSync()}
               disabled={syncing}
             >
-              Sync metrics now
+              {t('admin.syncMetricsNow')}
             </button>
-            <p className="hint mt-1">
-              Runs post engagement and account follower sync in the background. Refresh after about a minute to see updated counts.
-            </p>
+            <p className="hint mt-1">{t('admin.syncMetricsHint')}</p>
           </>
         ) : null}
       </div>
 
       <div className="glass-panel">
-        <h2 className="section-card__title">Provider onboarding</h2>
-        <p className="hint">
-          Register Mastodon, Friendica, or Bluesky instances so teams can connect accounts. Mastodon can auto-discover OAuth endpoints from the
-          instance URL when credentials are omitted.
-        </p>
+        <h2 className="section-card__title">{t('admin.providerOnboarding')}</h2>
+        <p className="hint">{t('admin.providerOnboardingHint')}</p>
 
         <div className="inline-cluster mb-1">
           <select
@@ -201,9 +195,9 @@ export function AdminView({
               }))
             }}
           >
-            <option value="mastodon">Mastodon</option>
-            <option value="friendica">Friendica</option>
-            <option value="bluesky">Bluesky</option>
+            <option value="mastodon">{t('accounts.providerMastodon')}</option>
+            <option value="friendica">{t('accounts.providerFriendica')}</option>
+            <option value="bluesky">{t('accounts.providerBluesky')}</option>
           </select>
           {editingProviderId ? (
             <button
@@ -215,70 +209,67 @@ export function AdminView({
                 setShowAdminProviderAdvanced(false)
               }}
             >
-              Cancel edit
+              {t('admin.cancelEdit')}
             </button>
           ) : null}
         </div>
 
         <label className="field">
-          <span>Display name</span>
-          <input value={adminProviderDraft.name} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, name: event.target.value }))} placeholder="My instance" />
+          <span>{t('admin.displayName')}</span>
+          <input value={adminProviderDraft.name} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, name: event.target.value }))} placeholder={t('admin.placeholderDisplayName')} />
         </label>
         <label className="field">
-          <span>Instance URL</span>
+          <span>{t('admin.instanceUrl')}</span>
           <input
             value={adminProviderDraft.instanceUrl}
             onChange={(event) => setAdminProviderDraft((c) => ({ ...c, instanceUrl: event.target.value }))}
-            placeholder="https://mastodon.social"
+            placeholder={t('admin.placeholderMastodon')}
           />
         </label>
 
         <details className="advanced-config" open={showAdminProviderAdvanced} onToggle={(event) => setShowAdminProviderAdvanced(event.currentTarget.open)}>
-          <summary className="advanced-config__summary">Advanced configuration</summary>
-          <p className="hint mt-1">
-            OAuth client credentials, scopes, and token endpoints. Mastodon can auto-register an app when these are left empty; set them manually for custom apps or
-            strict instances.
-          </p>
+          <summary className="advanced-config__summary">{t('admin.advancedConfig')}</summary>
+          <p className="hint mt-1">{t('admin.advancedConfigHint')}</p>
           <label className="field">
-            <span>Client ID</span>
+            <span>{t('admin.clientId')}</span>
             <input
               value={adminProviderDraft.clientId}
               onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientId: event.target.value }))}
-              placeholder="Optional for Mastodon auto-register"
+              placeholder={t('admin.placeholderClientId')}
             />
           </label>
           <label className="field">
-            <span>Client secret</span>
+            <span>{t('admin.clientSecret')}</span>
             <input
               type="password"
               value={adminProviderDraft.clientSecret}
               onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientSecret: event.target.value }))}
-              placeholder="Leave blank to keep existing on update"
+              placeholder={t('admin.placeholderKeepSecret')}
             />
           </label>
           <label className="field">
-            <span>Scopes (comma-separated)</span>
+            <span>{t('admin.scopes')}</span>
             <input value={adminProviderDraft.scopes} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, scopes: event.target.value }))} />
           </label>
           <label className="field">
-            <span>Authorization endpoint</span>
+            <span>{t('admin.authorizationEndpoint')}</span>
             <input
               value={adminProviderDraft.authorizationEndpoint}
               onChange={(event) => setAdminProviderDraft((c) => ({ ...c, authorizationEndpoint: event.target.value }))}
             />
           </label>
           <label className="field">
-            <span>Token endpoint</span>
+            <span>{t('admin.tokenEndpoint')}</span>
             <input value={adminProviderDraft.tokenEndpoint} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, tokenEndpoint: event.target.value }))} />
           </label>
         </details>
 
         <button type="button" className="button button--primary mt-1" onClick={() => void onSaveAdminProvider()} disabled={syncing}>
-          {editingProviderId ? 'Update provider' : 'Register provider'}
+          {editingProviderId ? t('admin.updateProvider') : t('admin.registerProvider')}
         </button>
 
         <h3 className="subsection-title mt-2">
-          Registered instances
+          {t('admin.registeredInstances')}
         </h3>
         <ul className="provider-admin-list">
           {providerInstances.map((p) => {
@@ -292,7 +283,9 @@ export function AdminView({
                     {p.provider} · {p.instanceUrl}
                   </span>
                   <span className="provider-admin-list__count">
-                    {onboarded} account{onboarded === 1 ? '' : 's'} onboarded
+                    {onboarded === 1
+                      ? t('admin.accountsOnboarded', { count: onboarded })
+                      : t('admin.accountsOnboarded_plural', { count: onboarded })}
                   </span>
                 </div>
                 <div className="inline-cluster flex-shrink-0">
@@ -314,28 +307,28 @@ export function AdminView({
                       })
                     }}
                   >
-                    Edit
+                    {t('common.edit')}
                   </button>
                   <button
                     type="button"
                     className="button button--secondary"
                     onClick={() => {
-                      if (window.confirm(`Are you sure you want to remove the provider instance "${p.name}"?`)) {
+                      if (window.confirm(t('admin.confirmRemoveInstance', { name: p.name }))) {
                         void onDeleteProviderInstance(p.id)
                       }
                     }}
                     disabled={syncing || onboarded > 0}
-                    title={onboarded > 0 ? 'Disconnect every account using this instance first' : 'Remove provider instance'}
+                    title={onboarded > 0 ? t('admin.disconnectBeforeRemove') : t('admin.removeProviderInstance')}
                   >
                     <Icon name="trash" className="inline-icon" />
-                    <span>Remove</span>
+                    <span>{t('common.remove')}</span>
                   </button>
                 </div>
               </li>
             )
           })}
         </ul>
-        {providerInstances.length === 0 ? <p className="hint">No provider instances yet.</p> : null}
+        {providerInstances.length === 0 ? <p className="hint">{t('admin.noProviderInstances')}</p> : null}
       </div>
     </div>
   )

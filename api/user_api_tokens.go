@@ -39,22 +39,22 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 	}
 	var input createAPITokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	if strings.TrimSpace(input.Name) == domain.WebSessionAPITokenName {
-		http.Error(w, "token name is reserved", http.StatusBadRequest)
+		a.writeError(w, r, "token_name_reserved", http.StatusBadRequest)
 		return
 	}
 	var expires *time.Time
 	if input.ExpiresAt != nil && *input.ExpiresAt != "" {
 		t, err := time.Parse(time.RFC3339, *input.ExpiresAt)
 		if err != nil {
-			http.Error(w, "expires_at must be RFC3339 timestamp", http.StatusBadRequest)
+			a.writeError(w, r, "expires_at_rfc3339", http.StatusBadRequest)
 			return
 		}
 		if !t.After(time.Now().UTC()) {
-			http.Error(w, "expires_at must be in the future", http.StatusBadRequest)
+			a.writeError(w, r, "expires_at_future", http.StatusBadRequest)
 			return
 		}
 		expires = &t
@@ -79,7 +79,7 @@ func (a *API) handleRevokeMyAPIToken(w http.ResponseWriter, r *http.Request) {
 	err = a.store.RevokeUserAPIToken(r.Context(), principal.User.ID, r.PathValue("tokenID"))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, "token not found", http.StatusNotFound)
+			a.writeError(w, r, "token_not_found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)

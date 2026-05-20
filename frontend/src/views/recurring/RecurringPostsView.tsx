@@ -1,7 +1,10 @@
 import { format, parseISO } from 'date-fns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
+import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord } from '../../types'
 
 type Api = ReturnType<typeof createApiClient>
@@ -19,6 +22,7 @@ export function RecurringPostsView({
   canEdit: boolean
   onStatus: (msg: string | null) => void
 }) {
+  const { t } = useTranslation()
   const [items, setItems] = useState<BackendPostTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -57,7 +61,7 @@ export function RecurringPostsView({
 
   async function handleCreate() {
     if (!title.trim() || !content.trim() || targetIds.length === 0) {
-      onStatus('Title, content, and at least one account are required.')
+      onStatus(t('recurring.requiredFields'))
       return
     }
     onStatus(null)
@@ -73,9 +77,10 @@ export function RecurringPostsView({
       setTitle('')
       setContent('')
       await refresh()
-      onStatus('Template created')
+      onStatus(t('status.templateCreated'))
     } catch (e) {
-      onStatus(e instanceof Error ? e.message : 'Failed to create template')
+      const raw = e instanceof Error ? e.message : t('status.templateCreateFailed')
+      onStatus(translateApiError(raw, t))
     }
   }
 
@@ -84,33 +89,36 @@ export function RecurringPostsView({
       await api.updatePostTemplate(teamId, id, { enabled: !currentEnabled })
       await refresh()
     } catch (e) {
-      onStatus(e instanceof Error ? e.message : 'Update failed')
+      const raw = e instanceof Error ? e.message : t('status.templateUpdateFailed')
+      onStatus(translateApiError(raw, t))
     }
   }
 
   async function removeTemplate(id: string) {
-    if (!window.confirm('Delete this recurring template?')) {
+    if (!window.confirm(t('recurring.confirmDelete'))) {
       return
     }
     try {
       await api.deletePostTemplate(teamId, id)
       await refresh()
     } catch (e) {
-      onStatus(e instanceof Error ? e.message : 'Delete failed')
+      const raw = e instanceof Error ? e.message : t('status.templateDeleteFailed')
+      onStatus(translateApiError(raw, t))
     }
   }
 
   async function skipNext(id: string, nextIso?: string) {
     if (!nextIso) {
-      onStatus('No scheduled occurrence to skip.')
+      onStatus(t('status.noOccurrenceToSkip'))
       return
     }
     try {
       await api.skipPostTemplateOccurrence(teamId, id, nextIso)
       await refresh()
-      onStatus('Occurrence skipped')
+      onStatus(t('status.occurrenceSkipped'))
     } catch (e) {
-      onStatus(e instanceof Error ? e.message : 'Skip failed')
+      const raw = e instanceof Error ? e.message : t('status.skipFailed')
+      onStatus(translateApiError(raw, t))
     }
   }
 
@@ -119,48 +127,44 @@ export function RecurringPostsView({
       <div className="glass-panel">
         <div className="flex-row--wrap" style={{ justifyContent: 'space-between' }}>
           <div>
-            <h2 className="section-card__title">Recurring posts</h2>
-            <p className="hint">
-              Templates expand into scheduled posts using <code className="inline-code">{'{year}'}</code>,{' '}
-              <code className="inline-code">{'{month}'}</code>, <code className="inline-code">{'{day}'}</code>,{' '}
-              <code className="inline-code">{'{counter}'}</code>. Use weekly or monthly recurrence JSON (
-              <code className="inline-code">monthly_anchor_offset</code> supports “days before” anchors).
-            </p>
+            <h2 className="section-card__title">{t('recurring.title')}</h2>
+            <p className="hint">{t('recurring.hint')}</p>
           </div>
           {canEdit ? (
             <button type="button" className="button button--primary" onClick={() => setEditorOpen(true)}>
-              New template
+              {t('recurring.newTemplate')}
             </button>
           ) : null}
         </div>
-        {loading ? <p className="hint">Loading…</p> : null}
-        {!loading && items.length === 0 ? <p className="hint">No templates yet.</p> : null}
+        {loading ? <p className="hint">{t('common.loading')}</p> : null}
+        {!loading && items.length === 0 ? <p className="hint">{t('recurring.noTemplates')}</p> : null}
         <ul className="recurring-template-list">
-          {items.map((t) => (
-            <li key={t.id} className="glass-panel recurring-template-card">
+          {items.map((item) => (
+            <li key={item.id} className="glass-panel recurring-template-card">
               <div className="recurring-template-card__header">
-                <strong>{t.title || '(untitled)'}</strong>
-                <span className="hint">{t.enabled ? 'enabled' : 'paused'}</span>
+                <strong>{item.title || t('recurring.untitled')}</strong>
+                <span className="hint">{item.enabled ? t('analytics.enabled') : t('analytics.paused')}</span>
               </div>
-              <p className="hint monospace-small">{t.recurrence_json}</p>
+              <p className="hint monospace-small">{item.recurrence_json}</p>
               <p className="hint">
-                Next:{' '}
-                {t.next_materialize_at ? format(parseISO(t.next_materialize_at), 'PPpp') : '—'} · Counter: {t.counter_next}
+                {t('recurring.next')}{' '}
+                {item.next_materialize_at ? format(parseISO(item.next_materialize_at), 'PPpp') : t('common.emDash')} · {t('common.counter')}:{' '}
+                {item.counter_next}
               </p>
               <p className="hint">
-                Targets:{' '}
-                {t.target_account_ids.map((id) => accountById[id]?.username ?? id.slice(0, 8)).join(', ')}
+                {t('recurring.targets')}{' '}
+                {item.target_account_ids.map((id) => accountById[id]?.username ?? id.slice(0, 8)).join(', ')}
               </p>
               {canEdit ? (
                 <div className="inline-cluster mt-1" style={{ flexWrap: 'wrap' }}>
-                  <button type="button" className="button button--secondary" onClick={() => void toggleEnabled(t.id, t.enabled)}>
-                    {t.enabled ? 'Pause' : 'Resume'}
+                  <button type="button" className="button button--secondary" onClick={() => void toggleEnabled(item.id, item.enabled)}>
+                    {item.enabled ? t('recurring.pause') : t('recurring.resume')}
                   </button>
-                  <button type="button" className="button button--secondary" onClick={() => void skipNext(t.id, t.next_materialize_at)}>
-                    Skip next
+                  <button type="button" className="button button--secondary" onClick={() => void skipNext(item.id, item.next_materialize_at)}>
+                    {t('recurring.skipNext')}
                   </button>
-                  <button type="button" className="button button--secondary" onClick={() => void removeTemplate(t.id)}>
-                    Delete
+                  <button type="button" className="button button--secondary" onClick={() => void removeTemplate(item.id)}>
+                    {t('common.delete')}
                   </button>
                 </div>
               ) : null}
@@ -172,20 +176,20 @@ export function RecurringPostsView({
       {editorOpen ? (
         <div className="modal-backdrop" onClick={() => setEditorOpen(false)}>
           <div className="glass-panel recurring-editor-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="section-card__title">New recurring template</h3>
+            <h3 className="section-card__title">{t('recurring.editorTitle')}</h3>
             <label className="field">
-              <span>Title</span>
+              <span>{t('common.title')}</span>
               <input value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
             <label className="field">
-              <span>Content</span>
-              <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Happy {year}-{month}-{day}! (#{counter})" />
+              <span>{t('common.content')}</span>
+              <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} />
             </label>
             <label className="field">
-              <span>Recurrence (JSON)</span>
+              <span>{t('recurring.recurrenceJson')}</span>
               <textarea rows={10} className="monospace-small" value={recurrenceJson} onChange={(e) => setRecurrenceJson(e.target.value)} />
             </label>
-            <p className="hint">Targets</p>
+            <p className="hint">{t('common.targets')}</p>
             <div className="composer-destination-row">
               {accounts.map((a) => {
                 const on = targetIds.includes(a.id)
@@ -205,10 +209,10 @@ export function RecurringPostsView({
             </div>
             <div className="inline-cluster mt-1">
               <button type="button" className="button button--primary" onClick={() => void handleCreate()}>
-                Create
+                {t('common.create')}
               </button>
               <button type="button" className="button button--secondary" onClick={() => setEditorOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>

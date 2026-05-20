@@ -28,11 +28,11 @@ func (a *API) handleAdminSyncStatus(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleAdminSyncMetrics(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		a.writeError(w, r, "method_not_allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	if a.metricsSync == nil {
-		http.Error(w, "metrics sync not available", http.StatusServiceUnavailable)
+		a.writeError(w, r, "metrics_sync_not_available", http.StatusServiceUnavailable)
 		return
 	}
 	go func() {

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import type { BackendMediaItem, createApiClient } from '../../api'
+import { translateApiError } from '../../i18n/translateApiError'
 import { Icon } from '../../icons'
 import { AuthMediaThumb } from './AuthMediaThumb'
 
@@ -21,10 +24,10 @@ export function MediaLibraryPickerModal({
   authHeader: string
   alreadyAttached: string[]
   onClose: () => void
-  /** Append unique library IDs to the post */
   onAddIds: (ids: string[]) => void
   onUploadNew: (file: File) => Promise<string>
 }) {
+  const { t } = useTranslation()
   const [items, setItems] = useState<BackendMediaItem[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -39,12 +42,13 @@ export function MediaLibraryPickerModal({
       const { items: rows } = await api.listTeamMedia(teamId)
       setItems(rows)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load library')
+      const raw = e instanceof Error ? e.message : t('status.couldNotLoadLibrary')
+      setError(translateApiError(raw, t))
       setItems([])
     } finally {
       setLoading(false)
     }
-  }, [api, teamId])
+  }, [api, teamId, t])
 
   useEffect(() => {
     if (!open) {
@@ -81,7 +85,8 @@ export function MediaLibraryPickerModal({
       await onUploadNew(file)
       await reload()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed')
+      const raw = e instanceof Error ? e.message : t('common.uploadFailed')
+      setError(translateApiError(raw, t))
     } finally {
       setUploading(false)
     }
@@ -98,12 +103,12 @@ export function MediaLibraryPickerModal({
       <div className="glass-panel composer-media-picker" onClick={(e) => e.stopPropagation()} role="dialog" aria-labelledby="composer-media-picker-title">
         <header className="composer-media-picker__head">
           <div>
-            <p className="eyebrow">Media library</p>
-            <h2 id="composer-media-picker-title">Choose or upload</h2>
-            <p className="hint">Select files from your workspace library or upload a new one.</p>
+            <p className="eyebrow">{t('media.libraryTitle')}</p>
+            <h2 id="composer-media-picker-title">{t('media.pickerTitle')}</h2>
+            <p className="hint">{t('media.pickerHint')}</p>
           </div>
           <button type="button" className="button button--secondary" onClick={onClose}>
-            Close
+            {t('common.close')}
           </button>
         </header>
 
@@ -123,19 +128,19 @@ export function MediaLibraryPickerModal({
           />
           <button type="button" className="button button--secondary" disabled={uploading || loading} onClick={() => fileRef.current?.click()}>
             <Icon name="plus" className="inline-icon" />
-            <span>{uploading ? 'Uploading…' : 'Upload new file'}</span>
+            <span>{uploading ? t('common.uploading') : t('media.uploadNewFile')}</span>
           </button>
           <button type="button" className="button button--primary" disabled={loading || uploading || selected.size === 0} onClick={attachSelected}>
-            Add selected to post ({selected.size})
+            {t('media.addSelectedToPost', { count: selected.size })}
           </button>
         </div>
 
         {error ? <p className="status-banner__error">{error}</p> : null}
-        {loading ? <p className="hint">Loading library…</p> : null}
+        {loading ? <p className="hint">{t('common.loadingLibrary')}</p> : null}
 
-        {!loading && items.length === 0 ? <p className="hint">No files in the library yet. Upload one above.</p> : null}
+        {!loading && items.length === 0 ? <p className="hint">{t('media.noFilesInLibrary')}</p> : null}
 
-        <div className="composer-media-picker__grid" aria-label="Library items">
+        <div className="composer-media-picker__grid" aria-label={t('media.libraryItemsPickerAria')}>
           {items.map((entry) => {
             const sel = selected.has(entry.id)
             const onPost = attachedSet.has(entry.id)
@@ -145,7 +150,6 @@ export function MediaLibraryPickerModal({
                 type="button"
                 className={`composer-media-picker__tile ${sel ? 'composer-media-picker__tile--selected' : ''}`}
                 onClick={() => toggle(entry.id)}
-                aria-pressed={sel}
               >
                 <span className="composer-media-picker__thumb">
                   {entry.mime_type.startsWith('image/') ? (
@@ -160,7 +164,7 @@ export function MediaLibraryPickerModal({
                       <Icon name="film" />
                     </span>
                   )}
-                  {onPost ? <span className="composer-media-picker__badge">On post</span> : null}
+                  {onPost ? <span className="composer-media-picker__badge">{t('common.onPost')}</span> : null}
                 </span>
                 <span className="composer-media-picker__name" title={entry.filename}>
                   {entry.filename}

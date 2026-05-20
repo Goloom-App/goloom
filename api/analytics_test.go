@@ -14,6 +14,7 @@ import (
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/i18n"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
 	sqlitestore "git.f4mily.net/goloom/internal/store/sqlite"
@@ -88,7 +89,11 @@ func analyticsTestHandler(t *testing.T, s *sqlitestore.Store) http.Handler {
 		provider.NewMastodonProvider(provider.MastodonRegistrationConfig{}),
 	)
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
-	h := api.New(logger, s, authSvc, reg, config.Config{}, nil)
+	catalog, err := i18n.Load()
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	h := api.New(logger, s, authSvc, reg, config.Config{}, nil, catalog)
 	return h.Handler(security.NewLimiter(10_000, 10_000), nil)
 }
 

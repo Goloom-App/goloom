@@ -13,6 +13,7 @@ import (
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/i18n"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store"
@@ -25,6 +26,7 @@ type API struct {
 	providers   *provider.Registry
 	config      config.Config
 	metricsSync metricsSyncRunner
+	i18n        *i18n.Catalog
 }
 
 type validationResponse struct {
@@ -42,7 +44,7 @@ type destinationInfo struct {
 	Valid     bool   `json:"valid"`
 }
 
-func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner) *API {
+func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner, catalog *i18n.Catalog) *API {
 	return &API{
 		log:         logger,
 		store:       store,
@@ -50,6 +52,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		providers:   providers,
 		config:      cfg,
 		metricsSync: metricsSync,
+		i18n:        catalog,
 	}
 }
 
@@ -233,14 +236,14 @@ func (a *API) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 
 	var input domain.CreateTeamInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	if input.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		a.writeError(w, r, "name_required", http.StatusBadRequest)
 		return
 	}
 
@@ -255,23 +258,23 @@ func (a *API) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		http.Error(w, "team not found", http.StatusNotFound)
+		a.writeError(w, r, "team_not_found", http.StatusNotFound)
 		return
 	}
 	if team.IsPersonal {
-		http.Error(w, "personal workspace cannot be updated", http.StatusBadRequest)
+		a.writeError(w, r, "personal_workspace_cannot_update", http.StatusBadRequest)
 		return
 	}
 
 	var input domain.UpdateTeamInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	if input.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		a.writeError(w, r, "name_required", http.StatusBadRequest)
 		return
 	}
 
@@ -295,7 +298,7 @@ func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	var input domain.UpdateUserInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -340,7 +343,7 @@ func (a *API) handleListProviderInstances(w http.ResponseWriter, r *http.Request
 	providerName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider")))
 	if providerName != "" {
 		if _, ok := a.providers.Get(providerName); !ok {
-			http.Error(w, "unsupported provider", http.StatusBadRequest)
+			a.writeError(w, r, "unsupported_provider", http.StatusBadRequest)
 			return
 		}
 	}
@@ -356,7 +359,7 @@ func (a *API) handleListProviderInstances(w http.ResponseWriter, r *http.Request
 func (a *API) handleGetProviderInstance(w http.ResponseWriter, r *http.Request) {
 	instance, err := a.store.GetProviderInstanceByID(r.Context(), r.PathValue("instanceID"))
 	if err != nil {
-		http.Error(w, "provider instance not found", http.StatusNotFound)
+		a.writeError(w, r, "provider_instance_not_found", http.StatusNotFound)
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, instance)
@@ -371,7 +374,7 @@ func (a *API) handleCreateProviderInstance(w http.ResponseWriter, r *http.Reques
 
 	var input domain.CreateProviderInstanceInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -392,13 +395,13 @@ func (a *API) handleCreateProviderInstance(w http.ResponseWriter, r *http.Reques
 func (a *API) handleUpdateProviderInstance(w http.ResponseWriter, r *http.Request) {
 	existing, err := a.store.GetProviderInstanceByID(r.Context(), r.PathValue("instanceID"))
 	if err != nil {
-		http.Error(w, "provider instance not found", http.StatusNotFound)
+		a.writeError(w, r, "provider_instance_not_found", http.StatusNotFound)
 		return
 	}
 
 	var input domain.CreateProviderInstanceInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -486,15 +489,15 @@ func (a *API) handleListTeamMembers(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 	var input domain.AddTeamMemberInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	if input.UserID == "" {
-		http.Error(w, "user_id is required", http.StatusBadRequest)
+		a.writeError(w, r, "user_id_required", http.StatusBadRequest)
 		return
 	}
 	if !slices.Contains([]domain.TeamRole{domain.RoleOwner, domain.RoleEditor, domain.RoleViewer}, input.Role) {
-		http.Error(w, "role must be one of owner, editor, viewer", http.StatusBadRequest)
+		a.writeError(w, r, "role_invalid", http.StatusBadRequest)
 		return
 	}
 
@@ -504,7 +507,7 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if team.IsPersonal {
-		http.Error(w, "cannot add members to a personal workspace", http.StatusBadRequest)
+		a.writeError(w, r, "cannot_add_members_personal", http.StatusBadRequest)
 		return
 	}
 
@@ -523,7 +526,7 @@ func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if team.IsPersonal {
-		http.Error(w, "cannot remove members from a personal workspace", http.StatusBadRequest)
+		a.writeError(w, r, "cannot_remove_members_personal", http.StatusBadRequest)
 		return
 	}
 	if err := a.store.RemoveTeamMember(r.Context(), r.PathValue("teamID"), r.PathValue("userID")); err != nil {
@@ -536,7 +539,7 @@ func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	var input domain.CreateAccountInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -550,17 +553,17 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		input.Provider = providerInstance.Provider
 	}
 	if input.Provider == "" {
-		http.Error(w, "provider is required", http.StatusBadRequest)
+		a.writeError(w, r, "provider_required", http.StatusBadRequest)
 		return
 	}
 	if providerInstance != nil && providerInstance.Provider != input.Provider {
-		http.Error(w, "provider_instance_id does not match provider", http.StatusBadRequest)
+		a.writeError(w, r, "provider_instance_id_mismatch", http.StatusBadRequest)
 		return
 	}
 
 	providerImpl, ok := a.providers.Get(input.Provider)
 	if !ok {
-		http.Error(w, "unsupported provider", http.StatusBadRequest)
+		a.writeError(w, r, "unsupported_provider", http.StatusBadRequest)
 		return
 	}
 
@@ -587,12 +590,12 @@ func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	acc, err := a.store.GetAccountByID(r.Context(), r.PathValue("accountID"))
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, acc.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
 	if err := a.store.DeleteSocialAccount(r.Context(), acc.ID); err != nil {
@@ -623,12 +626,12 @@ func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	}
 	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
 	posts := []domain.ScheduledPost{post}
@@ -648,7 +651,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 
 	var input domain.CreatePostInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -673,13 +676,13 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pathTeamID != "" && effectiveTeam != pathTeamID {
-		http.Error(w, "team mismatch between URL and destinations", http.StatusBadRequest)
+		a.writeError(w, r, "team_mismatch_url_destinations", http.StatusBadRequest)
 		return
 	}
 
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, effectiveTeam, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -704,13 +707,13 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
 
 	var input domain.CreatePostInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -731,11 +734,11 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pathTeamID != "" && effectiveTeam != pathTeamID {
-		http.Error(w, "team mismatch between URL and destinations", http.StatusBadRequest)
+		a.writeError(w, r, "team_mismatch_url_destinations", http.StatusBadRequest)
 		return
 	}
 	if effectiveTeam != existing.TeamID {
-		http.Error(w, "target accounts must stay within the same team as the post", http.StatusBadRequest)
+		a.writeError(w, r, "target_accounts_same_team", http.StatusBadRequest)
 		return
 	}
 
@@ -760,7 +763,7 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
 	if err := a.store.DeleteScheduledPost(r.Context(), post.TeamID, r.PathValue("postID")); err != nil {
@@ -783,7 +786,7 @@ func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
 	if err := a.store.CancelScheduledPost(r.Context(), post.TeamID, r.PathValue("postID")); err != nil {
@@ -801,7 +804,7 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	var input domain.CreatePostInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
@@ -816,12 +819,12 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if pathTeamID != "" && effectiveTeam != pathTeamID {
-		http.Error(w, "team mismatch between URL and destinations", http.StatusBadRequest)
+		a.writeError(w, r, "team_mismatch_url_destinations", http.StatusBadRequest)
 		return
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, effectiveTeam, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, validation)
@@ -929,11 +932,11 @@ func (a *API) handleMigrateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	var input domain.MigrateAccountInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	if strings.TrimSpace(input.TargetTeamID) == "" {
-		http.Error(w, "target_team_id is required", http.StatusBadRequest)
+		a.writeError(w, r, "target_team_id_required", http.StatusBadRequest)
 		return
 	}
 	accountID := r.PathValue("accountID")
@@ -962,7 +965,7 @@ func (a *API) handleCreateTeamInvitation(w http.ResponseWriter, r *http.Request)
 	}
 	var input domain.CreateTeamInvitationInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	inv, token, err := a.store.CreateTeamInvitation(r.Context(), r.PathValue("teamID"), principal.User.ID, input)
@@ -984,11 +987,11 @@ func (a *API) handleAcceptTeamInvitation(w http.ResponseWriter, r *http.Request)
 	}
 	var input domain.AcceptTeamInvitationInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "invalid json body", http.StatusBadRequest)
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 	if strings.TrimSpace(input.Token) == "" {
-		http.Error(w, "token is required", http.StatusBadRequest)
+		a.writeError(w, r, "token_required", http.StatusBadRequest)
 		return
 	}
 	email := strings.TrimSpace(strings.ToLower(principal.User.Email))

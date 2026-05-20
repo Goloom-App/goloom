@@ -1,5 +1,7 @@
 import { addMonths, format, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { useEffect, useMemo, useState, type TouchEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Icon } from '../../icons'
 import type { AccountRecord, PostRecord } from '../../types'
 import { PostCard } from '../../components/post/PostCard'
@@ -32,6 +34,11 @@ export function ContentCalendarView({
   accounts: AccountRecord[]
   handleCalendarPostDrop: (postId: string, targetDay: Date) => void | Promise<void>
 }) {
+  const { t } = useTranslation()
+  const weekdayLabels = useMemo(
+    () => ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => t(`weekdays.${d}` as 'weekdays.mon')),
+    [t],
+  )
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(isMobile ? 'list' : 'grid')
   const [calendarTouchStart, setCalendarTouchStart] = useState<{ x: number; y: number } | null>(null)
 
@@ -106,7 +113,7 @@ export function ContentCalendarView({
             type="button"
             className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
             onClick={() => setContentCalendarMonth((m) => startOfMonth(subMonths(m, 1)))}
-            aria-label="Previous month"
+            aria-label={t('calendar.content.prevMonth')}
           >
             &lt;
           </button>
@@ -115,7 +122,7 @@ export function ContentCalendarView({
             type="button"
             className="button button--secondary content-calendar__nav-btn content-calendar__nav-btn--text"
             onClick={() => setContentCalendarMonth((m) => startOfMonth(addMonths(m, 1)))}
-            aria-label="Next month"
+            aria-label={t('calendar.content.nextMonth')}
           >
             &gt;
           </button>
@@ -123,18 +130,18 @@ export function ContentCalendarView({
         <div className="content-calendar__toolbar-right">
           <div className="content-calendar__view-toggle">
             <button type="button" className={`button button--secondary ${viewMode === 'grid' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('grid')}>
-              Grid
+              {t('calendar.content.grid')}
             </button>
             <button type="button" className={`button button--secondary ${viewMode === 'list' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('list')}>
-              List
+              {t('calendar.content.list')}
             </button>
           </div>
         </div>
       </div>
       {viewMode === 'grid' ? (
-      <div className="content-calendar__grid glass-panel" role="grid" aria-label="Scheduled posts by day">
+      <div className="content-calendar__grid glass-panel" role="grid" aria-label={t('calendar.content.scheduledByDay')}>
         <div className="content-calendar__weekdays" role="row">
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+          {weekdayLabels.map((d) => (
             <div key={d} className="content-calendar__weekday" role="columnheader">
               {d}
             </div>
@@ -197,13 +204,13 @@ export function ContentCalendarView({
                         }}
                       >
                         <span className="content-calendar__post-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
-                        <span className="content-calendar__post-title">{post.title || 'Untitled'}</span>
+                        <span className="content-calendar__post-title">{post.title || t('common.untitled')}</span>
                       </div>
                       {canEditScheduledPosts ? (
                         <button
                           type="button"
                           className="content-calendar__chip-edit"
-                          aria-label="Preview post"
+                          aria-label={t('calendar.content.previewPost')}
                           onClick={(event) => {
                             event.stopPropagation()
                             onPreview?.(post.id)
@@ -221,9 +228,9 @@ export function ContentCalendarView({
         </div>
       </div>
       ) : (
-        <div className="content-calendar__list" role="list" aria-label="Scheduled posts list">
+        <div className="content-calendar__list" role="list" aria-label={t('calendar.content.scheduledList')}>
           {groupedByDay.length === 0 ? (
-            <p className="hint">No scheduled posts for this month.</p>
+            <p className="hint">{t('calendar.content.noScheduledMonth')}</p>
           ) : (
             groupedByDay.map((group) => (
               <section key={format(group.day, 'yyyy-MM-dd')} className="content-calendar__list-day">
@@ -245,9 +252,7 @@ export function ContentCalendarView({
         </div>
       )}
       {plannedPostsForContentCalendar.length === 0 ? (
-        <p className="hint mt-1">
-          No scheduled posts for this workspace. Create a post from the schedule view or the composer.
-        </p>
+        <p className="hint mt-1">{t('calendar.content.noScheduledWorkspace')}</p>
       ) : null}
     </div>
   )

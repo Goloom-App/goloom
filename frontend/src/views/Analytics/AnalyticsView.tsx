@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { format, parseISO } from 'date-fns'
+import { translateApiError } from '../../i18n/translateApiError'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import { Icon } from '../../icons'
@@ -14,10 +16,11 @@ import type { AccountRecord } from '../../types'
 import { accountConnectionStatus } from '../../mappers'
 import { aggregatePostMetrics, engagementForAccount } from '../../postMetrics'
 
-const METRIC_LABELS: Record<string, string> = {
-  likes: 'Likes',
-  reposts: 'Shares',
-  replies: 'Replies',
+function metricLabel(metric: string, t: (key: string) => string): string {
+  if (metric === 'likes') return t('analytics.metricLikes')
+  if (metric === 'reposts') return t('analytics.metricShares')
+  if (metric === 'replies') return t('analytics.metricReplies')
+  return metric
 }
 
 function PostMetricsDetailPanel({
@@ -31,19 +34,20 @@ function PostMetricsDetailPanel({
   totals: Record<string, number>
   accounts: AccountRecord[]
 }) {
+  const { t } = useTranslation()
   return (
     <section className="glass-panel glass-panel--compact analytics-post-detail">
-      <h4 className="subsection-title">Post metrics</h4>
+      <h4 className="subsection-title">{t('analytics.postMetrics')}</h4>
       {loading ? (
-        <p className="hint">Loading post metrics…</p>
+        <p className="hint">{t('common.loadingPostMetrics')}</p>
       ) : metrics.length === 0 ? (
-        <p className="hint">No engagement metrics synced for this post yet.</p>
+        <p className="hint">{t('analytics.noPostMetrics')}</p>
       ) : (
         <>
           <ul className="analytics-delta-grid">
             {Object.entries(totals).map(([metric, total]) => (
               <li key={metric} className="analytics-delta-card">
-                <span className="analytics-delta-card__metric">{METRIC_LABELS[metric] ?? metric}</span>
+                <span className="analytics-delta-card__metric">{metricLabel(metric, t)}</span>
                 <span className="analytics-delta-card__total">{total.toLocaleString()}</span>
               </li>
             ))}
@@ -58,7 +62,11 @@ function PostMetricsDetailPanel({
                 <div key={acc.id} className="analytics-post-detail__account">
                   <DestinationAvatar account={acc} />
                   <span className="hint">
-                    {engagement.likes} likes · {engagement.reposts} shares · {engagement.replies} replies
+                    {t('analytics.engagementBreakdown', {
+                      likes: engagement.likes,
+                      reposts: engagement.reposts,
+                      replies: engagement.replies,
+                    })}
                   </span>
                 </div>
               )
@@ -96,6 +104,7 @@ export function AnalyticsView({
   fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
   fetchPostMetrics?: (postId: string) => Promise<{ items: BackendPostMetric[] }>
 }) {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'posts'>('overview')
   const [summary, setSummary] = useState<BackendTeamAnalyticsReport | null>(null)
   const [posts, setPosts] = useState<BackendPostAnalyticsListRow[]>([])
@@ -137,11 +146,12 @@ export function AnalyticsView({
       setSummary(null)
       setPosts([])
       setSeries([])
-      setError(e instanceof Error ? e.message : 'Failed to load analytics')
+      const raw = e instanceof Error ? e.message : t('common.failedLoadAnalytics')
+      setError(translateApiError(raw, t))
     } finally {
       setLoading(false)
     }
-  }, [fetchPosts, fetchSummary, teamId])
+  }, [fetchPosts, fetchSummary, teamId, t])
 
   useEffect(() => {
     void load()
@@ -295,15 +305,15 @@ export function AnalyticsView({
   const selectedPostTotals = useMemo(() => aggregatePostMetrics(selectedPostMetrics), [selectedPostMetrics])
 
   if (!teamId) {
-    return <p className="hint">Select a team to view analytics.</p>
+    return <p className="hint">{t('common.selectTeamAnalytics')}</p>
   }
 
   return (
     <div className="analytics-view" style={viewGapStyle}>
       <div className="page-header" style={{ marginBottom: 0 }}>
         <div>
-          <p className="eyebrow">Analytics</p>
-          <h1>Team Performance</h1>
+          <p className="eyebrow">{t('eyebrow.analytics')}</p>
+          <h1>{t('analytics.teamPerformance')}</h1>
         </div>
         <div className="page-header__actions">
           <div className="view-toggle view-toggle--scrollable">
@@ -312,54 +322,54 @@ export function AnalyticsView({
               className={`view-toggle__btn ${activeTab === 'overview' ? 'view-toggle__btn--active' : ''}`}
               onClick={() => setActiveTab('overview')}
             >
-              Overview
+              {t('analytics.tabOverview')}
             </button>
             <button
               type="button"
               className={`view-toggle__btn ${activeTab === 'accounts' ? 'view-toggle__btn--active' : ''}`}
               onClick={() => setActiveTab('accounts')}
             >
-              Accounts
+              {t('analytics.tabAccounts')}
             </button>
             <button
               type="button"
               className={`view-toggle__btn ${activeTab === 'posts' ? 'view-toggle__btn--active' : ''}`}
               onClick={() => setActiveTab('posts')}
             >
-              Posts
+              {t('analytics.tabPosts')}
             </button>
           </div>
           <button type="button" className="button button--secondary" onClick={() => void load()} disabled={loading}>
             <Icon name="refresh" className="inline-icon" />
-            <span className="hidden-mobile">Refresh</span>
+            <span className="hidden-mobile">{t('common.refresh')}</span>
           </button>
         </div>
       </div>
 
       {error ? <p className="status-banner__error">{error}</p> : null}
-      {loading && !summary ? <p className="hint">Loading analytics…</p> : null}
+      {loading && !summary ? <p className="hint">{t('common.loadingAnalytics')}</p> : null}
 
       {summary && activeTab === 'overview' && (
         <div style={viewGapStyle}>
           <div className="analytics-cards">
             <section className="glass-panel analytics-card">
-              <p className="eyebrow">Total engagement</p>
+              <p className="eyebrow">{t('analytics.totalEngagement')}</p>
               <p className="analytics-card__value">{totalEngagement.toLocaleString()}</p>
-              <p className="hint">Sum of all likes, shares, and replies across all platforms.</p>
+              <p className="hint">{t('analytics.totalEngagementHint')}</p>
             </section>
             <section className="glass-panel analytics-card">
-              <p className="eyebrow">Follower Trend (7d)</p>
+              <p className="eyebrow">{t('analytics.followerTrend7d')}</p>
               <p className="analytics-card__value" style={{ color: newFollowers7d < 0 ? '#ef4444' : (newFollowers7d > 0 ? '#22c55e' : 'inherit') }}>
                 {(newFollowers7d >= 0 ? '+' : '') + newFollowers7d.toLocaleString()}
               </p>
-              <p className="hint">Net change in followers over the last 7 days.</p>
+              <p className="hint">{t('analytics.followerTrend7dHint')}</p>
             </section>
           </div>
 
           <div className="analytics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 'var(--space-8)' }}>
             {metrics.length > 0 && (
               <section className="glass-panel">
-                <h3 className="subsection-title">Platform Engagement</h3>
+                <h3 className="subsection-title">{t('analytics.platformEngagement')}</h3>
                 <div className="analytics-chart-wrap">
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
@@ -396,7 +406,7 @@ export function AnalyticsView({
 
             <section className="glass-panel analytics-card-chart">
               <div className="analytics-chart-panel__head">
-                <h3 className="subsection-title">Metric Trend (30d)</h3>
+                <h3 className="subsection-title">{t('analytics.metricTrend30d')}</h3>
                 <select className="select-sm" value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}>
                   {metrics.map((m) => (
                     <option key={m.metric} value={m.metric}>{m.metric}</option>
@@ -423,9 +433,9 @@ export function AnalyticsView({
         <div className="analytics-accounts-view" style={viewGapStyle}>
           <section className="glass-panel analytics-card-chart">
             <div className="analytics-chart-panel__head">
-              <h3 className="subsection-title">Account Growth</h3>
+              <h3 className="subsection-title">{t('analytics.accountGrowth')}</h3>
               <select className="select-sm" value={growthAccountId} onChange={(e) => setGrowthAccountId(e.target.value)}>
-                <option value="all">All accounts</option>
+                <option value="all">{t('common.allAccounts')}</option>
                 {accounts.map((a) => (
                   <option key={a.id} value={a.id}>{a.name} ({a.username})</option>
                 ))}
@@ -438,9 +448,9 @@ export function AnalyticsView({
                   <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} minTickGap={20} />
                   <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} width={35} />
                   <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
-                  <Line name="Followers" type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
-                  <Line name="Following" type="monotone" dataKey="following" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" dot={false} />
-                  <Line name="Network Size" type="monotone" dataKey="networkSize" stroke="var(--accent)" strokeWidth={1} dot={false} />
+                  <Line name={t('analytics.followers')} type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  <Line name={t('analytics.following')} type="monotone" dataKey="following" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+                  <Line name={t('analytics.networkSize')} type="monotone" dataKey="networkSize" stroke="var(--accent)" strokeWidth={1} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -460,7 +470,7 @@ export function AnalyticsView({
                       <span className="hint">@{acc.username}</span>
                     </div>
                     <span className={`status-pill status-pill--${status}`}>
-                      {status === 'active' ? 'Active' : 'Re-auth'}
+                      {status === 'active' ? t('common.active') : t('common.reauth')}
                     </span>
                   </div>
                   
@@ -469,19 +479,19 @@ export function AnalyticsView({
                       <span className="account-stat-card__metric-value">
                         {latestGrowth?.followers?.toLocaleString() ?? '—'}
                       </span>
-                      <span className="account-stat-card__metric-label">Followers</span>
+                      <span className="account-stat-card__metric-label">{t('analytics.followers')}</span>
                     </div>
                     <div className="account-stat-card__metric">
                       <span className="account-stat-card__metric-value">
                         {latestGrowth?.posts?.toLocaleString() ?? '—'}
                       </span>
-                      <span className="account-stat-card__metric-label">Posts</span>
+                      <span className="account-stat-card__metric-label">{t('analytics.posts')}</span>
                     </div>
                     <div className="account-stat-card__metric">
                       <span className="account-stat-card__metric-value">
                         {latestGrowth?.following?.toLocaleString() ?? '—'}
                       </span>
-                      <span className="account-stat-card__metric-label">Following</span>
+                      <span className="account-stat-card__metric-label">{t('analytics.following')}</span>
                     </div>
                   </div>
 
@@ -497,17 +507,17 @@ export function AnalyticsView({
 
       {summary && activeTab === 'posts' && (
         <section className="glass-panel" style={viewGapStyle}>
-          <h3 className="subsection-title">Post Performance</h3>
+          <h3 className="subsection-title">{t('analytics.postPerformance')}</h3>
           {posts.length === 0 ? (
-            <p className="hint">No published posts yet. Metrics appear after posts are published and synced from connected accounts.</p>
+            <p className="hint">{t('analytics.noPublishedPosts')}</p>
           ) : (
           <div className="analytics-posts-table-wrap">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Post</th>
-                  <th>Published</th>
-                  <th className="text-right">Score</th>
+                  <th>{t('common.post')}</th>
+                  <th>{t('common.publishedAt')}</th>
+                  <th className="text-right">{t('common.score')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -525,7 +535,7 @@ export function AnalyticsView({
                       }
                     >
                       <td>
-                        <div className="post-table-title">{row.title || 'Untitled'}</div>
+                        <div className="post-table-title">{row.title || t('common.untitled')}</div>
                         <div className="hint mono text-xs">{row.post_id}</div>
                       </td>
                       <td className="text-soft">

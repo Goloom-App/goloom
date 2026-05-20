@@ -5,6 +5,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { Toaster } from 'sonner'
 import './index.css'
+import './i18n'
 import App from './App.tsx'
 
 const queryClient = new QueryClient({

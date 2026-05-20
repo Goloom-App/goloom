@@ -1,6 +1,8 @@
 import { format, parseISO } from 'date-fns'
-import type { AccountRecord, PostRecord } from '../../types'
+import { useTranslation } from 'react-i18next'
+
 import { PostCard } from '../../components/post/PostCard'
+import type { AccountRecord, PostRecord } from '../../types'
 import { groupUpcomingIntoMonths } from './calendarUtils'
 
 export function ScheduleView({
@@ -14,12 +16,14 @@ export function ScheduleView({
   onPreview?: (postId: string) => void
   accounts: AccountRecord[]
 }) {
+  const { t } = useTranslation()
+
   if (upcomingPosts.length === 0) {
     return (
       <div className="timeline-view">
         <div className="empty-state">
-          <h3>No upcoming posts</h3>
-          <p className="hint">Create a post to start building your publishing timeline.</p>
+          <h3>{t('calendar.schedule.noUpcomingTitle')}</h3>
+          <p className="hint">{t('calendar.schedule.createPostHint')}</p>
         </div>
       </div>
     )
@@ -39,7 +43,7 @@ export function ScheduleView({
                 }}
               >
                 {format(parseISO(group.posts[0].scheduledAt), 'EEEE, d MMMM')}
-                {group.posts.length > 1 ? ` · ${group.posts.length} posts` : null}
+                {group.posts.length > 1 ? ` · ${t('calendar.schedule.postsOnDay', { count: group.posts.length })}` : null}
               </p>
               <div className="posts-grid">
                 {group.posts.map((post) => (

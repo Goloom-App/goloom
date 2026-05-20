@@ -13,6 +13,7 @@ import (
 	"git.f4mily.net/goloom/api"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
+	"git.f4mily.net/goloom/internal/i18n"
 	"git.f4mily.net/goloom/internal/logging"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/scheduler"
@@ -115,7 +116,12 @@ func Run(ctx context.Context) error {
 	)
 	go schedulerService.Start(ctx)
 
-	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService)
+	catalog, err := i18n.Load()
+	if err != nil {
+		return fmt.Errorf("load i18n catalog: %w", err)
+	}
+
+	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog)
 	apiChain := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute, cfg.RateLimitAuthenticatedPerMinute), cfg.AllowedOrigins)
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/healthz", apiChain)

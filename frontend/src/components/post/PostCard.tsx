@@ -1,5 +1,7 @@
 import { format, parseISO } from 'date-fns'
 import { useState, useRef, type TouchEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+
 import { Icon } from '../../icons'
 import type { AccountRecord, PostRecord } from '../../types'
 import { sharedAccountLabels } from '../../schedule'
@@ -20,6 +22,7 @@ export function PostCard({
   isArchived?: boolean
   publishedLinks?: Record<string, string>
 }) {
+  const { t } = useTranslation()
   const [swipeX, setSwipeX] = useState(0)
   const touchStart = useRef<number | null>(null)
   const isSwiping = useRef(false)
@@ -32,7 +35,6 @@ export function PostCard({
   const onTouchMove = (e: TouchEvent) => {
     if (touchStart.current === null) return
     const delta = e.touches[0].clientX - touchStart.current
-    // Only allow swiping to the left
     if (delta < 0) {
       setSwipeX(delta)
     }
@@ -40,7 +42,7 @@ export function PostCard({
 
   const onTouchEnd = () => {
     if (swipeX < -100) {
-      if (window.confirm('Delete this post?')) {
+      if (window.confirm(t('common.confirmDeletePostShort'))) {
         onDelete()
       }
     }
@@ -67,7 +69,7 @@ export function PostCard({
       >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
           <Icon name="trash" style={{ width: '24px', height: '24px' }} />
-          <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>DELETE</span>
+          <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>{t('common.deleteSwipe')}</span>
         </div>
       </div>
       <article
@@ -96,8 +98,8 @@ export function PostCard({
           </div>
         </div>
         <h3 className="post-card__title">
-          {post.status === 'draft' ? <span className="post-card__badge">Draft</span> : null}
-          {post.title || 'Untitled Post'}
+          {post.status === 'draft' ? <span className="post-card__badge">{t('common.draft')}</span> : null}
+          {post.title || t('common.untitledPost')}
         </h3>
         <p className="post-card__content">{post.content}</p>
       </article>
