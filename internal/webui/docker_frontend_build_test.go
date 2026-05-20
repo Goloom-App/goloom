@@ -1,6 +1,7 @@
 package webui_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,23 @@ func TestFrontendLocaleCatalogPathsExist(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("locale catalog %s: %v", rel, err)
 		}
+	}
+}
+
+func TestFrontendPackageManagerPinned(t *testing.T) {
+	root := repoRoot(t)
+	data, err := os.ReadFile(filepath.Join(root, "frontend", "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pkg struct {
+		PackageManager string `json:"packageManager"`
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(pkg.PackageManager, "pnpm@") {
+		t.Fatalf("frontend packageManager must pin pnpm (got %q)", pkg.PackageManager)
 	}
 }
 
