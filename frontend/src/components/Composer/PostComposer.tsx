@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { BackendMediaItem, createApiClient } from '../../api'
 import { Icon } from '../../icons'
 import type { AccountRecord, TeamSchedulingPreferences } from '../../types'
@@ -210,7 +211,49 @@ export function PostComposer({
     }
   }
 
-  const destinationsPanel = (
+  const toggleDestination = (accountId: string) => {
+    setDraft((current) => {
+      const has = current.targetAccountIds.includes(accountId)
+      return {
+        ...current,
+        targetAccountIds: has
+          ? current.targetAccountIds.filter((id) => id !== accountId)
+          : [...current.targetAccountIds, accountId],
+      }
+    })
+  }
+
+  const destinationsPanel = isMobile ? (
+    <section className="composer-destinations-mobile" aria-label="Post destinations">
+      <p className="eyebrow">Destinations</p>
+      <p className="hint composer-destinations-mobile__hint">Tap accounts to include. Per-account text tabs appear below.</p>
+      {teamAccounts.length === 0 ? (
+        <p className="hint">No accounts for this workspace.</p>
+      ) : (
+        <div className="composer-destination-row composer-destination-row--mobile" role="group">
+          {teamAccounts.map((account) => {
+            const selected = draft.targetAccountIds.includes(account.id)
+            return (
+              <button
+                key={account.id}
+                type="button"
+                data-testid="composer-destination-toggle"
+                className={`composer-destination-mobile ${selected ? 'composer-destination-mobile--selected' : ''}`}
+                aria-pressed={selected}
+                title={`${account.name} · ${account.provider}`}
+                onClick={() => toggleDestination(account.id)}
+              >
+                <DestinationAvatar account={account} />
+                <span className="composer-destination-mobile__label">
+                  {account.username.replace(/^@/, '').slice(0, 14)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  ) : (
     <aside className="composer-sidebar composer-sidebar--destinations">
       <p className="eyebrow">Destinations</p>
       <div className="composer-destination-row" role="group" aria-label="Post destinations">
@@ -223,15 +266,7 @@ export function PostComposer({
               className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''}`}
               aria-pressed={selected}
               title={`${account.name} · ${account.provider}`}
-              onClick={() =>
-                setDraft((current) => {
-                  const has = current.targetAccountIds.includes(account.id)
-                  return {
-                    ...current,
-                    targetAccountIds: has ? current.targetAccountIds.filter((id) => id !== account.id) : [...current.targetAccountIds, account.id],
-                  }
-                })
-              }
+              onClick={() => toggleDestination(account.id)}
             >
               <DestinationAvatar account={account} />
             </button>
@@ -243,7 +278,9 @@ export function PostComposer({
   )
 
   const previewsPanel = !previewColumnExternal || isMobile ? (
-    <aside className={`composer-sidebar composer-sidebar--previews ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}>
+    <aside
+      className={`composer-sidebar composer-sidebar--previews ${isMobile ? 'composer-previews-mobile' : ''} ${isMobile && mobilePanel !== 'preview' ? 'composer-mobile-panel--hidden' : ''}`}
+    >
       <ComposerPreviews
         draft={draft}
         teamAccounts={teamAccounts}
@@ -274,7 +311,11 @@ export function PostComposer({
             />
           </label>
 
-          <div className="composer-tabs" role="tablist" aria-label="Content scope">
+          {isMobile && selectedAccounts.length === 0 ? (
+            <p className="hint composer-tabs__hint">Select at least one destination to add per-account text overrides.</p>
+          ) : null}
+
+          <div className={`composer-tabs ${isMobile ? 'composer-tabs--mobile' : ''}`} role="tablist" aria-label="Content scope">
             <button
               type="button"
               role="tab"
@@ -446,10 +487,10 @@ export function PostComposer({
   )
 
   if (isMobile) {
-    return (
+    const mobileComposer = (
       <div className="composer-overlay" data-testid="composer-overlay" onClick={(event) => event.stopPropagation()}>
         <div className="composer-container composer-container--enhanced composer-container--mobile">
-        <div className="composer-main composer-main--mobile">
+          <div className="composer-main composer-main--mobile">
           <header className="composer-mobile-header">
             <button type="button" className="btn btn--ghost btn--xs" onClick={onClose} aria-label="Close composer">
               <Icon name="close" className="inline-icon" />
@@ -464,10 +505,10 @@ export function PostComposer({
             <button type="button" role="tab" aria-selected={mobilePanel === 'preview'} className={`composer-mobile-tab ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('preview')}>Preview</button>
           </div>
           {mobilePanel === 'edit' ? (
-            <>
+            <div className="composer-mobile-edit-scroll">
               {destinationsPanel}
               {editingContent}
-            </>
+            </div>
           ) : (
             previewsPanel
           )}
@@ -475,6 +516,7 @@ export function PostComposer({
         </div>
       </div>
     )
+    return createPortal(mobileComposer, document.body)
   }
 
   if (standalone) {
