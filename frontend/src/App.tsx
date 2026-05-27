@@ -1862,6 +1862,7 @@ function App() {
 
         {section === 'admin' && principalUser?.globalRole === 'admin' && (
           <AdminView
+            api={api}
             adminMetrics={adminMetrics}
             adminMetricsLoading={adminMetricsLoading}
             adminRuntime={adminRuntime}

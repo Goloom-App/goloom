@@ -3,14 +3,16 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { BackendAdminMetrics, BackendAdminSyncStatus } from '../../api'
+import type { createApiClient } from '../../api'
 import type { AccountRecord, ProviderInstanceRecord, RuntimeConfigRecord, UserRecord } from '../../types'
 import type { AdminProviderDraft } from './adminTypes'
 import { AdminConfigurationsTab } from './AdminConfigurationsTab'
+import { AdminLogsTab } from './AdminLogsTab'
 import { AdminProvidersTab } from './AdminProvidersTab'
 import { AdminStatusTab } from './AdminStatusTab'
 import { AdminUsersTab } from './AdminUsersTab'
 
-export type AdminTab = 'status' | 'configurations' | 'providers' | 'users'
+export type AdminTab = 'status' | 'configurations' | 'providers' | 'users' | 'logs'
 
 export function AdminView({
   adminMetrics,
@@ -31,7 +33,9 @@ export function AdminView({
   syncing,
   onSaveAdminProvider,
   onDeleteProviderInstance,
+  api,
 }: {
+  api: ReturnType<typeof createApiClient> | null
   adminMetrics: BackendAdminMetrics | null
   adminMetricsLoading: boolean
   adminRuntime: RuntimeConfigRecord | null
@@ -59,6 +63,7 @@ export function AdminView({
     { id: 'configurations', label: t('admin.tabConfigurations') },
     { id: 'providers', label: t('admin.tabProviders') },
     { id: 'users', label: t('admin.tabUsers') },
+    { id: 'logs', label: t('admin.tabLogs') },
   ]
 
   return (
@@ -119,6 +124,8 @@ export function AdminView({
         ) : null}
 
         {activeTab === 'users' ? <AdminUsersTab directoryUsers={directoryUsers} /> : null}
+
+        {activeTab === 'logs' ? <AdminLogsTab api={api} /> : null}
       </div>
     </div>
   )

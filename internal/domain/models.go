@@ -602,3 +602,26 @@ func ResolvePostStatusOnUpdate(was PostStatus, in CreatePostInput) PostStatus {
 	}
 	return was
 }
+
+// LogEntry is a persisted log record captured from the structured logger.
+type LogEntry struct {
+	ID          string            `json:"id"`
+	Level       string            `json:"level"`
+	Message     string            `json:"message"`
+	Attributes  map[string]string `json:"attributes"`
+	SourceFile  string            `json:"source_file,omitempty"`
+	SourceLine  int               `json:"source_line,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+	ArchivedAt  *time.Time        `json:"archived_at,omitempty"`
+}
+
+// LogFilter specifies pagination and filtering for listing log entries.
+type LogFilter struct {
+	Level        string
+	Search       string
+	Archived     *bool // nil = all, true = archived, false = unarchived
+	Before       *time.Time
+	After        *time.Time
+	Limit        int
+	Offset       int
+}

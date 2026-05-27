@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -57,6 +58,12 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	defer dataStore.Close()
+
+	// Wrap logger with DB-backed persistence so scheduler and API logs
+	// are captured in the log_entries table (visible in the admin UI).
+	dbLogHandler := logging.NewDBHandler(logger.Handler(), dataStore)
+	logger = slog.New(dbLogHandler)
+	defer dbLogHandler.Close()
 
 	users, err := dataStore.ListUsers(ctx)
 	if err != nil {

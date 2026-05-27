@@ -117,7 +117,7 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 
 func (s *Store) TryAcquireLock(ctx context.Context, lockID string, duration time.Duration) (bool, error) {
 	now := nowString()
-	expiresAt := time.Now().UTC().Add(duration).Format(time.RFC3339)
+	expiresAt := formatTime(time.Now().UTC().Add(duration))
 
 	const query = `
 		insert into job_locks (lock_id, locked_at, expires_at)

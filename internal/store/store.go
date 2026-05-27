@@ -110,6 +110,24 @@ type Store interface {
 	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error
+
+	InsertLogEntry(ctx context.Context, e domain.LogEntry) error
+	ListLogEntries(ctx context.Context, filter domain.LogFilter) ([]domain.LogEntry, error)
+	CountLogEntries(ctx context.Context, filter domain.LogFilter) (int, error)
+	ArchiveLogEntry(ctx context.Context, id string) error
+	UnarchiveLogEntry(ctx context.Context, id string) error
+	DeleteLogEntry(ctx context.Context, id string) error
+	DeleteLogEntriesBefore(ctx context.Context, before time.Time) (int64, error)
+}
+
+// LogStore is the subset of Store needed for persisting and querying log entries.
+// It allows the slog DBHandler to accept a minimal interface instead of the full Store.
+type LogStore interface {
+	InsertLogEntry(ctx context.Context, e domain.LogEntry) error
+	ArchiveLogEntry(ctx context.Context, id string) error
+	UnarchiveLogEntry(ctx context.Context, id string) error
+	DeleteLogEntry(ctx context.Context, id string) error
+	DeleteLogEntriesBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 func Open(ctx context.Context, databaseURL string, encrypter *security.Encrypter) (Store, error) {

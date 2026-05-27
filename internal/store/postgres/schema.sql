@@ -175,6 +175,7 @@ create index if not exists idx_social_accounts_team on social_accounts(team_id);
 create index if not exists idx_provider_instances_provider on provider_instances(provider, instance_url);
 create index if not exists idx_scheduled_posts_due on scheduled_posts(status, scheduled_at);
 create index if not exists idx_post_targets_post on scheduled_post_targets(post_id);
+create index if not exists idx_post_targets_metrics_sync on scheduled_post_targets(metrics_last_sync_at);
 
 create table if not exists post_metrics (
     post_id uuid not null references scheduled_posts(id) on delete cascade,
@@ -296,3 +297,14 @@ create table if not exists post_template_skips (
 
 alter table scheduled_posts add column if not exists post_template_id uuid references post_templates(id) on delete set null;
 alter table scheduled_posts add column if not exists template_counter integer;
+
+create table if not exists log_entries (
+    id uuid primary key default gen_random_uuid(),
+    level text not null,
+    message text not null,
+    attributes_json jsonb not null default '{}',
+    source_file text not null default '',
+    source_line integer not null default 0,
+    created_at timestamptz not null default now(),
+    archived_at timestamptz
+);

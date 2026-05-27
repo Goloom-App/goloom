@@ -219,6 +219,17 @@ export interface BackendRuntimeConfig {
   }
 }
 
+export interface BackendLogEntry {
+  id: string
+  level: string
+  message: string
+  attributes: Record<string, string>
+  source_file?: string
+  source_line?: number
+  created_at: string
+  archived_at?: string
+}
+
 export interface BackendAdminMetrics {
   users_count: number
   teams_count: number
@@ -762,6 +773,45 @@ export function createApiClient(options: ApiClientOptions) {
         method: 'POST',
         headers: buildHeaders(options.token),
         body: JSON.stringify({ occurrence_at: occurrenceAtIso }),
+      })
+    },
+    listLogEntries(params?: { level?: string; search?: string; archived?: boolean; before?: string; after?: string; limit?: number; offset?: number }) {
+      const search = new URLSearchParams()
+      if (params?.level) search.set('level', params.level)
+      if (params?.search) search.set('search', params.search)
+      if (params?.archived != null) search.set('archived', String(params.archived))
+      if (params?.before) search.set('before', params.before)
+      if (params?.after) search.set('after', params.after)
+      if (params?.limit != null) search.set('limit', String(params.limit))
+      if (params?.offset != null) search.set('offset', String(params.offset))
+      const q = search.toString()
+      return request<{ entries: BackendLogEntry[]; total: number }>(options, `/v1/admin/logs${q ? `?${q}` : ''}`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    archiveLogEntry(id: string) {
+      return request<void>(options, `/v1/admin/logs/${id}/archive`, {
+        method: 'POST',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    unarchiveLogEntry(id: string) {
+      return request<void>(options, `/v1/admin/logs/${id}/unarchive`, {
+        method: 'POST',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    deleteLogEntry(id: string) {
+      return request<void>(options, `/v1/admin/logs/${id}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    pruneLogEntries(before?: string) {
+      const q = before ? `?before=${encodeURIComponent(before)}` : ''
+      return request<{ deleted_count: number }>(options, `/v1/admin/logs/prune${q}`, {
+        method: 'POST',
+        headers: buildHeaders(options.token, false),
       })
     },
     validatePost(
