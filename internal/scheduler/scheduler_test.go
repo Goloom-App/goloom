@@ -450,6 +450,18 @@ func (m *mockStore) TryAcquireLock(ctx context.Context, lockID string, duration 
 	return true, nil
 }
 
+func (m *mockStore) InsertLogEntry(ctx context.Context, e domain.LogEntry) error { return nil }
+func (m *mockStore) ListLogEntries(ctx context.Context, filter domain.LogFilter) ([]domain.LogEntry, error) {
+	return nil, nil
+}
+func (m *mockStore) CountLogEntries(ctx context.Context, filter domain.LogFilter) (int, error) { return 0, nil }
+func (m *mockStore) ArchiveLogEntry(ctx context.Context, id string) error      { return nil }
+func (m *mockStore) UnarchiveLogEntry(ctx context.Context, id string) error    { return nil }
+func (m *mockStore) DeleteLogEntry(ctx context.Context, id string) error       { return nil }
+func (m *mockStore) DeleteLogEntriesBefore(ctx context.Context, before time.Time) (int64, error) {
+	return 0, nil
+}
+
 var _ store.Store = (*mockStore)(nil)
 
 type fakeProvider struct {
