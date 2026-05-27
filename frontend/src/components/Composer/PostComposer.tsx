@@ -10,7 +10,12 @@ import { DestinationAvatar } from '../post/DestinationAvatar'
 import { charCounterClass, pruneMediaExcludeAfterRemove } from './editorDraft'
 import { ComposerMedia } from './ComposerMedia'
 import { ComposerPreviews } from './ComposerPreviews'
-import { effectiveBody } from './composerUtils'
+import {
+  bodyForAccountLimit,
+  effectiveBody,
+  accountContentOverrideForSave,
+  isAnyTargetAccountOverCharLimit,
+} from './composerUtils'
 import type { EditorDraftState } from './types'
 
 type Api = ReturnType<typeof createApiClient>
@@ -149,31 +154,17 @@ export function PostComposer({
     })
   }
 
-  // Block saving when any destination's effective content exceeds its limit.
-  // Each destination must be addressed individually — overrides per account.
-  const overAnyLimit = useMemo(() => {
-    if (draft.targetAccountIds.length === 0) {
-      return true
-    }
-    for (const id of draft.targetAccountIds) {
-      const acc = teamAccounts.find((a) => a.id === id)
-      if (!acc) {
-        continue
-      }
-      const body = effectiveBody(draft, id)
-      if (acc.maxChars > 0 && body.length > acc.maxChars) {
-        return true
-      }
-    }
-    return false
-  }, [draft, teamAccounts])
+  const overAnyLimit = useMemo(
+    () => isAnyTargetAccountOverCharLimit(draft, teamAccounts),
+    [draft, teamAccounts],
+  )
 
   const accountLimitStatus = useMemo(() => {
     const status: Record<string, { len: number; max: number; over: boolean }> = {}
     for (const id of draft.targetAccountIds) {
       const acc = teamAccounts.find((a) => a.id === id)
       if (!acc) continue
-      const body = effectiveBody(draft, id)
+      const body = bodyForAccountLimit(draft, id)
       status[id] = {
         len: body.length,
         max: acc.maxChars,
@@ -199,7 +190,7 @@ export function PostComposer({
         target_accounts: draft.targetAccountIds,
         media_ids: draft.mediaIds,
         media_exclude_by_account: draft.mediaExcludeByAccount,
-        account_content_override: draft.accountContentOverride,
+        account_content_override: accountContentOverrideForSave(draft),
         draft: false,
       }
       const val = await api!.validatePost(teamId!, payload)
@@ -242,12 +233,20 @@ export function PostComposer({
                 key={account.id}
                 type="button"
                 data-testid="composer-destination-toggle"
-                className={`composer-destination-mobile ${selected ? 'composer-destination-mobile--selected' : ''}`}
+                className={`composer-destination-mobile ${selected ? 'composer-destination-mobile--selected' : ''} ${accountLimitStatus[account.id]?.over ? 'composer-destination-mobile--over-limit' : ''}`}
                 aria-pressed={selected}
-                title={`${account.name} · ${account.provider}`}
+                title={
+                  accountLimitStatus[account.id]?.over
+                    ? t('composer.exceedsLimit', {
+                        name: account.name,
+                        len: accountLimitStatus[account.id]!.len,
+                        max: accountLimitStatus[account.id]!.max,
+                      })
+                    : `${account.name} · ${account.provider}`
+                }
                 onClick={() => toggleDestination(account.id)}
               >
-                <DestinationAvatar account={account} />
+                <DestinationAvatar account={account} error={accountLimitStatus[account.id]?.over} />
                 <span className="composer-destination-mobile__label">
                   {account.username.replace(/^@/, '').slice(0, 14)}
                 </span>
@@ -267,12 +266,20 @@ export function PostComposer({
             <button
               key={account.id}
               type="button"
-              className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''}`}
+              className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''} ${accountLimitStatus[account.id]?.over ? 'composer-destination-toggle--over-limit' : ''}`}
               aria-pressed={selected}
-              title={`${account.name} · ${account.provider}`}
+              title={
+                accountLimitStatus[account.id]?.over
+                  ? t('composer.exceedsLimit', {
+                      name: account.name,
+                      len: accountLimitStatus[account.id]!.len,
+                      max: accountLimitStatus[account.id]!.max,
+                    })
+                  : `${account.name} · ${account.provider}`
+              }
               onClick={() => toggleDestination(account.id)}
             >
-              <DestinationAvatar account={account} />
+              <DestinationAvatar account={account} error={accountLimitStatus[account.id]?.over} />
             </button>
           )
         })}
@@ -341,7 +348,7 @@ export function PostComposer({
                   onClick={() => setActiveTab(account.id)}
                   title={status?.over ? t('composer.exceedsLimit', { name: account.name, len: status.len, max: status.max }) : account.name}
                 >
-                  <DestinationAvatar account={account} compact />
+                  <DestinationAvatar account={account} compact error={status?.over} />
                   <span className="composer-tab__label">{account.username.replace(/^@/, '').slice(0, 12)}</span>
                 </button>
               )

@@ -6,6 +6,7 @@ import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
 import { ComposerPreviews } from './components/Composer/ComposerPreviews'
 import { buildMediaExcludePayload, defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
+import { accountContentOverrideForSave, isAccountOverCharLimit } from './components/Composer/composerUtils'
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
 import { AppShell } from './components/Shell/AppShell'
@@ -822,7 +823,9 @@ function App() {
       try {
         const res = await api.listPostVersions(targetPost.teamId, postId)
         for (const row of res.items ?? []) {
-          accountContentOverride[row.account_id] = row.content
+          if (row.content.trim() !== targetPost.content.trim()) {
+            accountContentOverride[row.account_id] = row.content
+          }
         }
       } catch {
         accountContentOverride = {}
@@ -864,7 +867,9 @@ function App() {
       try {
         const res = await api.listPostVersions(targetPost.teamId, postId)
         for (const row of res.items ?? []) {
-          accountContentOverride[row.account_id] = row.content
+          if (row.content.trim() !== targetPost.content.trim()) {
+            accountContentOverride[row.account_id] = row.content
+          }
         }
       } catch {
         accountContentOverride = {}
@@ -1211,8 +1216,7 @@ function App() {
       if (!acc) {
         continue
       }
-      const body = (editorDraft.accountContentOverride[id] ?? editorDraft.content).trim()
-      if (acc.maxChars > 0 && body.length > acc.maxChars) {
+      if (isAccountOverCharLimit(editorDraft, acc)) {
         return
       }
     }
@@ -1226,7 +1230,7 @@ function App() {
         target_accounts: editorDraft.targetAccountIds,
         media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
         media_exclude_by_account: mediaExclude,
-        account_content_override: editorDraft.accountContentOverride,
+        account_content_override: accountContentOverrideForSave(editorDraft),
         draft: false,
       }
 
@@ -1255,7 +1259,7 @@ function App() {
         target_accounts: editorDraft.targetAccountIds,
         media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
         media_exclude_by_account: mediaExclude,
-        account_content_override: editorDraft.accountContentOverride,
+        account_content_override: accountContentOverrideForSave(editorDraft),
         draft: true,
       }
 

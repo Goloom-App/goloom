@@ -5,11 +5,14 @@ export function DestinationAvatar({
   account,
   compact = false,
   publishedPostUrl,
+  error = false,
 }: {
   account: AccountRecord
   compact?: boolean
   /** When set, the platform badge links to the published post (e.g. archive). */
   publishedPostUrl?: string
+  /** Highlight when this destination exceeds its character limit. */
+  error?: boolean
 }) {
   const initials = account.username.replace('@', '').slice(0, 2).toUpperCase()
   const badge = (
@@ -18,7 +21,7 @@ export function DestinationAvatar({
     </span>
   )
   const avatar = (
-    <div className={`destination-avatar ${compact ? 'destination-avatar--compact' : ''}`}>
+    <div className={`destination-avatar ${compact ? 'destination-avatar--compact' : ''} ${error ? 'destination-avatar--error' : ''}`}>
       <div className="destination-avatar__disk">
         <div className="destination-avatar__inner">
           {account.avatarUrl ? (
