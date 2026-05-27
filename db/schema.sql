@@ -284,6 +284,9 @@ create table if not exists post_templates (
 
 create index if not exists idx_post_templates_due on post_templates (enabled, next_materialize_at);
 
+alter table post_templates add column if not exists announces_template_id uuid references post_templates(id) on delete set null;
+alter table post_templates add column if not exists announcement_days_before integer;
+
 create table if not exists post_template_skips (
     template_id uuid not null references post_templates(id) on delete cascade,
     occurrence_at timestamptz not null,

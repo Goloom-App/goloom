@@ -30,6 +30,8 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table scheduled_post_targets add column publish_metadata text not null default '{}'`,
 		`alter table scheduled_post_targets add column metrics_last_sync_date text`,
 		`alter table scheduled_post_targets add column metrics_last_sync_at text`,
+		`alter table post_templates add column announces_template_id text references post_templates(id) on delete set null`,
+		`alter table post_templates add column announcement_days_before integer`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)
