@@ -207,6 +207,8 @@ create table if not exists post_templates (
     enabled integer not null default 1,
     next_materialize_at text,
     counter_next integer not null default 1,
+    announces_template_id text references post_templates(id) on delete set null,
+    announcement_days_before integer,
     created_at text not null,
     updated_at text not null
 );
@@ -216,6 +218,7 @@ create index if not exists idx_post_templates_due on post_templates (enabled, ne
 create table if not exists post_template_skips (
     template_id text not null references post_templates(id) on delete cascade,
     occurrence_at text not null,
+    shift_to text,
     primary key (template_id, occurrence_at)
 );
 

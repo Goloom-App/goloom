@@ -133,6 +133,7 @@ func (a *API) handleDeletePostTemplate(w http.ResponseWriter, r *http.Request) {
 
 type skipTemplateBody struct {
 	OccurrenceAt time.Time `json:"occurrence_at"`
+	ShiftTo      time.Time `json:"shift_to,omitempty"`
 }
 
 func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Request) {
@@ -147,9 +148,16 @@ func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Re
 		a.writeError(w, r, "occurrence_at_required", http.StatusBadRequest)
 		return
 	}
-	if err := a.store.AddPostTemplateSkip(r.Context(), teamID, templateID, body.OccurrenceAt.UTC()); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	if !body.ShiftTo.IsZero() {
+		if err := a.store.ShiftPostTemplateOccurrence(r.Context(), teamID, templateID, body.OccurrenceAt.UTC(), body.ShiftTo.UTC()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		if err := a.store.AddPostTemplateSkip(r.Context(), teamID, templateID, body.OccurrenceAt.UTC()); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

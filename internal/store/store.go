@@ -35,8 +35,11 @@ type Store interface {
 	CreatePostTemplate(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostTemplateInput) (domain.PostTemplate, error)
 	UpdatePostTemplate(ctx context.Context, teamID, templateID string, input domain.UpdatePostTemplateInput) (domain.PostTemplate, error)
 	DeletePostTemplate(ctx context.Context, teamID, templateID string) error
+	ListAnnouncingTemplates(ctx context.Context, parentTemplateID string) ([]domain.PostTemplate, error)
 	IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error)
 	AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error
+	ShiftPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt, shiftTo time.Time) error
+	GetPostTemplateShiftTo(ctx context.Context, templateID string, occurrenceAt time.Time) (*time.Time, error)
 	AdvancePostTemplateSchedule(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext int) error
 	ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error)
 	AddTeamMember(ctx context.Context, teamID string, input domain.AddTeamMemberInput) (domain.TeamMembership, error)

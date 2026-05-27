@@ -274,6 +274,7 @@
       "templateUpdateFailed": "Update failed",
       "templateDeleteFailed": "Delete failed",
       "occurrenceSkipped": "Occurrence skipped",
+      "occurrenceShifted": "Occurrence shifted",
       "skipFailed": "Skip failed",
       "noOccurrenceToSkip": "No scheduled occurrence to skip.",
       "failedLoadMediaLibrary": "Failed to load media library",
@@ -423,7 +424,14 @@
       "weekday": "Weekday",
       "preview": "Upcoming occurrences",
       "expandedPreview": "Expanded preview",
-      "noOccurrences": "No occurrences found for this schedule."
+      "noOccurrences": "No occurrences found for this schedule.",
+      "shiftTo": "Shift to",
+      "shiftNext": "Skip & shift",
+      "announcement": "Announcement",
+      "announcementFor": "Announcement for",
+      "announcementDaysBefore": "Days before",
+      "announcementHint": "This template announces another recurring post. It uses {main_day}, {main_month}, {main_weekday_name} for the main event date.",
+      "announcementBadge": "Announces"
     },
     "calendar": {
       "createPostHint": "Create a post to start building your publishing timeline.",

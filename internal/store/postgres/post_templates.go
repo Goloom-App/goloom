@@ -18,7 +18,8 @@ func (s *Store) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.P
 	}
 	rows, err := s.pool.Query(ctx, `
 		select id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-		       media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next, created_at, updated_at
+		       media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next,
+		       announces_template_id, announcement_days_before, created_at, updated_at
 		from post_templates
 		where enabled = true
 		  and next_materialize_at is not null
@@ -45,7 +46,8 @@ func (s *Store) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.P
 func (s *Store) ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error) {
 	rows, err := s.pool.Query(ctx, `
 		select id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-		       media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next, created_at, updated_at
+		       media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next,
+		       announces_template_id, announcement_days_before, created_at, updated_at
 		from post_templates
 		where team_id = $1
 		order by created_at desc`,
@@ -69,7 +71,8 @@ func (s *Store) ListPostTemplates(ctx context.Context, teamID string) ([]domain.
 func (s *Store) GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error) {
 	row := s.pool.QueryRow(ctx, `
 		select id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-		       media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next, created_at, updated_at
+		       media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next,
+		       announces_template_id, announcement_days_before, created_at, updated_at
 		from post_templates
 		where team_id = $1 and id = $2`,
 		teamID, templateID,
@@ -82,14 +85,6 @@ func (s *Store) GetPostTemplate(ctx context.Context, teamID, templateID string) 
 }
 
 func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostTemplateInput) (domain.PostTemplate, error) {
-	rule, err := scheduling.ParseRecurrenceJSON(strings.TrimSpace(input.RecurrenceJSON))
-	if err != nil {
-		return domain.PostTemplate{}, err
-	}
-	next, err := scheduling.NextOccurrence(rule, time.Now().UTC())
-	if err != nil {
-		return domain.PostTemplate{}, err
-	}
 	visibility := domain.NormalizePostVisibility(input.Visibility)
 	mediaJSON, err := encodeMediaIDsJSON(input.MediaIDs)
 	if err != nil {
@@ -107,17 +102,39 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	if input.Enabled != nil {
 		enabled = *input.Enabled
 	}
+	isAnnouncement := input.AnnouncesTemplateID != nil && *input.AnnouncesTemplateID != ""
+	var next any
+	if !isAnnouncement {
+		rule, err := scheduling.ParseRecurrenceJSON(strings.TrimSpace(input.RecurrenceJSON))
+		if err != nil {
+			return domain.PostTemplate{}, err
+		}
+		next, err = scheduling.NextOccurrence(rule, time.Now().UTC())
+		if err != nil {
+			return domain.PostTemplate{}, err
+		}
+	}
 	id := uuid.NewString()
+	var announcesID, annDays any
+	if isAnnouncement {
+		announcesID = *input.AnnouncesTemplateID
+	}
+	if input.AnnouncementDaysBefore != nil {
+		annDays = *input.AnnouncementDaysBefore
+	}
 	row := s.pool.QueryRow(ctx, `
 		insert into post_templates (
 			id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-			media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next
+			media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next,
+			announces_template_id, announcement_days_before
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 1)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 1, $13, $14)
 		returning id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-		          media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next, created_at, updated_at`,
+		          media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next,
+		          announces_template_id, announcement_days_before, created_at, updated_at`,
 		id, teamID, principal.User.ID, strings.TrimSpace(input.Title), strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.RecurrenceJSON), visibility, mediaJSON, excludeJSON, targetJSON, enabled, next,
+		announcesID, annDays,
 	)
 	return scanPostTemplate(row)
 }
@@ -160,21 +177,35 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 		targets = *input.TargetAccountIDs
 	}
 
-	rule, err := scheduling.ParseRecurrenceJSON(recJSON)
-	if err != nil {
-		return domain.PostTemplate{}, err
+	announcesID := existing.AnnouncesTemplateID
+	if input.AnnouncesTemplateID != nil {
+		if *input.AnnouncesTemplateID == "" {
+			announcesID = nil
+		} else {
+			announcesID = input.AnnouncesTemplateID
+		}
 	}
+	isAnnouncement := announcesID != nil && *announcesID != ""
+
 	var next *time.Time
-	if !enabled {
+	if isAnnouncement {
 		next = nil
-	} else if input.RecurrenceJSON != nil || (input.Enabled != nil && *input.Enabled && !existing.Enabled) {
-		nx, err := scheduling.NextOccurrence(rule, time.Now().UTC())
+	} else if !enabled {
+		next = nil
+	} else {
+		rule, err := scheduling.ParseRecurrenceJSON(recJSON)
 		if err != nil {
 			return domain.PostTemplate{}, err
 		}
-		next = &nx
-	} else {
-		next = existing.NextMaterializeAt
+		if input.RecurrenceJSON != nil || (input.Enabled != nil && *input.Enabled && !existing.Enabled) {
+			nx, err := scheduling.NextOccurrence(rule, time.Now().UTC())
+			if err != nil {
+				return domain.PostTemplate{}, err
+			}
+			next = &nx
+		} else {
+			next = existing.NextMaterializeAt
+		}
 	}
 
 	mediaJSON, err := encodeMediaIDsJSON(mediaIDs)
@@ -195,14 +226,22 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 		nextAny = *next
 	}
 
+	annDays := existing.AnnouncementDaysBefore
+	if input.AnnouncementDaysBefore != nil {
+		annDays = input.AnnouncementDaysBefore
+	}
+
 	row := s.pool.QueryRow(ctx, `
 		update post_templates
 		set title = $3, content = $4, recurrence_json = $5, visibility = $6, media_ids = $7,
-		    media_exclude_by_account = $8, target_account_ids = $9, enabled = $10, next_materialize_at = $11, updated_at = now()
+		    media_exclude_by_account = $8, target_account_ids = $9, enabled = $10, next_materialize_at = $11,
+		    announces_template_id = $12, announcement_days_before = $13, updated_at = now()
 		where team_id = $1 and id = $2
 		returning id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-		          media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next, created_at, updated_at`,
+		          media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next,
+		          announces_template_id, announcement_days_before, created_at, updated_at`,
 		teamID, templateID, title, content, recJSON, visibility, mediaJSON, excludeJSON, targetJSON, enabled, nextAny,
+		announcesID, annDays,
 	)
 	return scanPostTemplate(row)
 }
@@ -242,6 +281,64 @@ func (s *Store) AddPostTemplateSkip(ctx context.Context, teamID, templateID stri
 	return nil
 }
 
+func (s *Store) ShiftPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt, shiftTo time.Time) error {
+	tag, err := s.pool.Exec(ctx, `
+		insert into post_template_skips (template_id, occurrence_at, shift_to)
+		select id, $3, $4 from post_templates where team_id = $1 and id = $2`,
+		teamID, templateID, occurrenceAt, shiftTo,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("template not found")
+	}
+	return nil
+}
+
+func (s *Store) GetPostTemplateShiftTo(ctx context.Context, templateID string, occurrenceAt time.Time) (*time.Time, error) {
+	var shift sql.NullTime
+	err := s.pool.QueryRow(ctx, `
+		select shift_to from post_template_skips where template_id = $1 and occurrence_at = $2`,
+		templateID, occurrenceAt,
+	).Scan(&shift)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !shift.Valid {
+		return nil, nil
+	}
+	u := shift.Time.UTC()
+	return &u, nil
+}
+
+func (s *Store) ListAnnouncingTemplates(ctx context.Context, parentTemplateID string) ([]domain.PostTemplate, error) {
+	rows, err := s.pool.Query(ctx, `
+		select id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
+		       media_exclude_by_account, target_account_ids, enabled, next_materialize_at, counter_next,
+		       announces_template_id, announcement_days_before, created_at, updated_at
+		from post_templates
+		where announces_template_id = $1 and enabled = true`,
+		parentTemplateID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []domain.PostTemplate
+	for rows.Next() {
+		t, err := scanPostTemplate(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, t)
+	}
+	return list, rows.Err()
+}
+
 func (s *Store) AdvancePostTemplateSchedule(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext int) error {
 	var next any
 	if nextMaterialize != nil {
@@ -262,6 +359,8 @@ func scanPostTemplate(row interface {
 	var t domain.PostTemplate
 	var mediaRaw, excludeRaw, targetRaw string
 	var next sql.NullTime
+	var announcesID sql.NullString
+	var annDays sql.NullInt64
 	err := row.Scan(
 		&t.ID,
 		&t.TeamID,
@@ -276,11 +375,20 @@ func scanPostTemplate(row interface {
 		&t.Enabled,
 		&next,
 		&t.CounterNext,
+		&announcesID,
+		&annDays,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
 	if err != nil {
 		return domain.PostTemplate{}, err
+	}
+	if announcesID.Valid && announcesID.String != "" {
+		t.AnnouncesTemplateID = &announcesID.String
+	}
+	if annDays.Valid {
+		v := int(annDays.Int64)
+		t.AnnouncementDaysBefore = &v
 	}
 	if next.Valid {
 		u := next.Time.UTC()

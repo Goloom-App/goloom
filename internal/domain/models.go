@@ -254,43 +254,49 @@ type ScheduledPost struct {
 
 // PostTemplate drives recurring scheduled posts (stored in post_templates).
 type PostTemplate struct {
-	ID                    string              `json:"id"`
-	TeamID                string              `json:"team_id"`
-	AuthorUserID          string              `json:"author_user_id"`
-	Title                 string              `json:"title"`
-	Content               string              `json:"content"`
-	RecurrenceJSON        string              `json:"recurrence_json"`
-	Visibility            string              `json:"visibility"`
-	MediaIDs              []string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs      []string            `json:"target_account_ids"`
-	Enabled               bool                `json:"enabled"`
-	NextMaterializeAt     *time.Time          `json:"next_materialize_at,omitempty"`
-	CounterNext           int                 `json:"counter_next"`
-	CreatedAt             time.Time           `json:"created_at"`
-	UpdatedAt             time.Time           `json:"updated_at"`
+	ID                     string              `json:"id"`
+	TeamID                 string              `json:"team_id"`
+	AuthorUserID           string              `json:"author_user_id"`
+	Title                  string              `json:"title"`
+	Content                string              `json:"content"`
+	RecurrenceJSON         string              `json:"recurrence_json"`
+	Visibility             string              `json:"visibility"`
+	MediaIDs               []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs       []string            `json:"target_account_ids"`
+	Enabled                bool                `json:"enabled"`
+	NextMaterializeAt      *time.Time          `json:"next_materialize_at,omitempty"`
+	CounterNext            int                 `json:"counter_next"`
+	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
+	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
+	CreatedAt              time.Time           `json:"created_at"`
+	UpdatedAt              time.Time           `json:"updated_at"`
 }
 
 type CreatePostTemplateInput struct {
-	Title                 string              `json:"title"`
-	Content               string              `json:"content"`
-	RecurrenceJSON        string              `json:"recurrence_json"`
-	Visibility            string              `json:"visibility,omitempty"`
-	MediaIDs              []string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs      []string            `json:"target_account_ids"`
-	Enabled               *bool               `json:"enabled,omitempty"`
+	Title                  string              `json:"title"`
+	Content                string              `json:"content"`
+	RecurrenceJSON         string              `json:"recurrence_json"`
+	Visibility             string              `json:"visibility,omitempty"`
+	MediaIDs               []string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs       []string            `json:"target_account_ids"`
+	Enabled                *bool               `json:"enabled,omitempty"`
+	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
+	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
 }
 
 type UpdatePostTemplateInput struct {
-	Title                 *string              `json:"title,omitempty"`
-	Content               *string              `json:"content,omitempty"`
-	RecurrenceJSON        *string              `json:"recurrence_json,omitempty"`
-	Visibility            *string              `json:"visibility,omitempty"`
-	MediaIDs              *[]string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount map[string][]string  `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs      *[]string            `json:"target_account_ids,omitempty"`
-	Enabled               *bool                `json:"enabled,omitempty"`
+	Title                  *string              `json:"title,omitempty"`
+	Content                *string              `json:"content,omitempty"`
+	RecurrenceJSON         *string              `json:"recurrence_json,omitempty"`
+	Visibility             *string              `json:"visibility,omitempty"`
+	MediaIDs               *[]string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount  map[string][]string  `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs       *[]string            `json:"target_account_ids,omitempty"`
+	Enabled                *bool                `json:"enabled,omitempty"`
+	AnnouncesTemplateID    *string              `json:"announces_template_id,omitempty"`
+	AnnouncementDaysBefore *int                 `json:"announcement_days_before,omitempty"`
 }
 
 // EngagementHourBucket aggregates engagement score by UTC hour-of-day for posted content.

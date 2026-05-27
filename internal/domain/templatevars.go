@@ -18,7 +18,9 @@ var weekdayNames = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 // ExpandDynamicVariables replaces {year}, {month}, {day}, {counter}, and new
 // variables ({day+N}, {month+N}, {weekday}, {weekday_name}) in content.
 // Month and day are zero-padded to width 2. If counter is nil, {counter} becomes "".
-func ExpandDynamicVariables(content string, publishedAt time.Time, counter *int) string {
+// If mainEventAt is non-nil, {main_day}, {main_month}, {main_weekday_name} are
+// expanded from that time; otherwise they become empty strings.
+func ExpandDynamicVariables(content string, publishedAt time.Time, counter *int, mainEventAt *time.Time) string {
 	if content == "" {
 		return ""
 	}
@@ -54,6 +56,27 @@ func ExpandDynamicVariables(content string, publishedAt time.Time, counter *int)
 		counterStr = strconv.Itoa(*counter)
 	}
 	out = strings.ReplaceAll(out, "{counter}", counterStr)
+
+	// Main-event variables (for announcement posts)
+	if mainEventAt != nil {
+		mt := mainEventAt.UTC()
+		mainRepl := []struct {
+			old string
+			new string
+		}{
+			{"{main_day}", zeroPad2(mt.Day())},
+			{"{main_month}", zeroPad2(int(mt.Month()))},
+			{"{main_weekday_name}", weekdayNames[mt.Weekday()]},
+		}
+		for _, r := range mainRepl {
+			out = strings.ReplaceAll(out, r.old, r.new)
+		}
+	} else {
+		for _, old := range []string{"{main_day}", "{main_month}", "{main_weekday_name}"} {
+			out = strings.ReplaceAll(out, old, "")
+		}
+	}
+
 	return out
 }
 

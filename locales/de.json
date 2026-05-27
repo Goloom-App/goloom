@@ -274,6 +274,7 @@
       "templateUpdateFailed": "Aktualisierung fehlgeschlagen",
       "templateDeleteFailed": "Löschen fehlgeschlagen",
       "occurrenceSkipped": "Termin übersprungen",
+      "occurrenceShifted": "Termin verschoben",
       "skipFailed": "Überspringen fehlgeschlagen",
       "noOccurrenceToSkip": "Kein geplanter Termin zum Überspringen.",
       "failedLoadMediaLibrary": "Medienbibliothek konnte nicht geladen werden",
@@ -423,7 +424,14 @@
       "weekday": "Wochentag",
       "preview": "Nächste Termine",
       "expandedPreview": "Erweiterte Vorschau",
-      "noOccurrences": "Keine Termine für diesen Zeitplan gefunden."
+      "noOccurrences": "Keine Termine für diesen Zeitplan gefunden.",
+      "shiftTo": "Verschieben auf",
+      "shiftNext": "Überspringen & verschieben",
+      "announcement": "Ankündigung",
+      "announcementFor": "Ankündigung für",
+      "announcementDaysBefore": "Tage vorher",
+      "announcementHint": "Diese Vorlage kündigt einen anderen wiederkehrenden Beitrag an. Verwenden Sie {main_day}, {main_month}, {main_weekday_name} für das Hauptereignis-Datum.",
+      "announcementBadge": "Kündigt an"
     },
     "calendar": {
       "createPostHint": "Erstellen Sie einen Beitrag, um Ihre Veröffentlichungs-Timeline aufzubauen.",

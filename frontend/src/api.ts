@@ -55,6 +55,8 @@ export interface BackendPostTemplate {
   enabled: boolean
   next_materialize_at?: string
   counter_next: number
+  announces_template_id?: string
+  announcement_days_before?: number
   created_at: string
   updated_at: string
 }
@@ -743,6 +745,8 @@ export function createApiClient(options: ApiClientOptions) {
         media_exclude_by_account?: Record<string, string[]>
         target_account_ids: string[]
         enabled?: boolean
+        announces_template_id?: string
+        announcement_days_before?: number
       },
     ) {
       return request<BackendPostTemplate>(options, `/v1/teams/${teamID}/post-templates`, {
@@ -768,11 +772,13 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
-    skipPostTemplateOccurrence(teamID: string, templateID: string, occurrenceAtIso: string) {
+    skipPostTemplateOccurrence(teamID: string, templateID: string, occurrenceAtIso: string, shiftToIso?: string) {
+      const body: Record<string, string> = { occurrence_at: occurrenceAtIso }
+      if (shiftToIso) body.shift_to = shiftToIso
       return request<void>(options, `/v1/teams/${teamID}/post-templates/${templateID}/skip`, {
         method: 'POST',
         headers: buildHeaders(options.token),
-        body: JSON.stringify({ occurrence_at: occurrenceAtIso }),
+        body: JSON.stringify(body),
       })
     },
     listLogEntries(params?: { level?: string; search?: string; archived?: boolean; before?: string; after?: string; limit?: number; offset?: number }) {

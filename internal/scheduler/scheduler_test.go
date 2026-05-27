@@ -40,6 +40,25 @@ type mockStore struct {
 
 	markPostCalls []markPostCall
 	markPostErr   error
+
+	listDuePostTemplates    []domain.PostTemplate
+	listDuePostTemplatesErr error
+
+	listAnnouncingTemplates    []domain.PostTemplate
+	listAnnouncingTemplatesErr error
+
+	createScheduledPostCalls []domain.CreatePostInput
+	createScheduledPostErr  error
+
+	isPostTemplateOccurrenceSkippedFn func(templateID string, occurrenceAt time.Time) (bool, error)
+	getPostTemplateShiftToFn          func(templateID string, occurrenceAt time.Time) *time.Time
+	advancePostTemplateCalls          []advanceTemplateCall
+}
+
+type advanceTemplateCall struct {
+	templateID    string
+	nextMaterialize *time.Time
+	counterNext   int
 }
 
 type markTargetCall struct {
@@ -134,7 +153,10 @@ func (m *mockStore) GetAccountsByIDs(ctx context.Context, teamID string, ids []s
 }
 
 func (m *mockStore) CreateScheduledPost(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostInput) (domain.ScheduledPost, error) {
-	return domain.ScheduledPost{}, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.createScheduledPostCalls = append(m.createScheduledPostCalls, input)
+	return domain.ScheduledPost{}, m.createScheduledPostErr
 }
 
 func (m *mockStore) ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error) {
@@ -410,8 +432,16 @@ func (m *mockStore) GetTeamEngagementHourHistogram(ctx context.Context, teamID s
 	return nil, nil
 }
 
+func (m *mockStore) ListAnnouncingTemplates(ctx context.Context, parentTemplateID string) ([]domain.PostTemplate, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listAnnouncingTemplates, m.listAnnouncingTemplatesErr
+}
+
 func (m *mockStore) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
-	return nil, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listDuePostTemplates, m.listDuePostTemplatesErr
 }
 
 func (m *mockStore) ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error) {
@@ -435,6 +465,11 @@ func (m *mockStore) DeletePostTemplate(ctx context.Context, teamID, templateID s
 }
 
 func (m *mockStore) IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.isPostTemplateOccurrenceSkippedFn != nil {
+		return m.isPostTemplateOccurrenceSkippedFn(templateID, occurrenceAt)
+	}
 	return false, nil
 }
 
@@ -442,7 +477,27 @@ func (m *mockStore) AddPostTemplateSkip(ctx context.Context, teamID, templateID 
 	return nil
 }
 
+func (m *mockStore) ShiftPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt, shiftTo time.Time) error {
+	return nil
+}
+
+func (m *mockStore) GetPostTemplateShiftTo(ctx context.Context, templateID string, occurrenceAt time.Time) (*time.Time, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.getPostTemplateShiftToFn != nil {
+		return m.getPostTemplateShiftToFn(templateID, occurrenceAt), nil
+	}
+	return nil, nil
+}
+
 func (m *mockStore) AdvancePostTemplateSchedule(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.advancePostTemplateCalls = append(m.advancePostTemplateCalls, advanceTemplateCall{
+		templateID:    templateID,
+		nextMaterialize: nextMaterialize,
+		counterNext:   counterNext,
+	})
 	return nil
 }
 
@@ -853,5 +908,171 @@ func TestService_Start_stopsOnContextCancel(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("Start did not return after cancel")
+	}
+}
+
+func TestService_materializePostTemplates_shift(t *testing.T) {
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	shiftTo := time.Date(2026, 5, 28, 14, 0, 0, 0, time.UTC)
+	tmpl := domain.PostTemplate{
+		ID:                "tmpl1",
+		TeamID:            "team1",
+		AuthorUserID:      "user1",
+		Title:             "shift-test",
+		Content:           "shifted post {counter}",
+		RecurrenceJSON:    `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
+		TargetAccountIDs:  []string{"acc1"},
+		Enabled:           true,
+		NextMaterializeAt: &now,
+		CounterNext:       3,
+	}
+
+	st := &mockStore{
+		listDuePostTemplates: []domain.PostTemplate{tmpl},
+		isPostTemplateOccurrenceSkippedFn: func(templateID string, occurrenceAt time.Time) (bool, error) {
+			return true, nil
+		},
+		getPostTemplateShiftToFn: func(templateID string, occurrenceAt time.Time) *time.Time {
+			return &shiftTo
+		},
+	}
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
+	err := svc.materializePostTemplates(context.Background())
+	if err != nil {
+		t.Fatalf("materializePostTemplates: %v", err)
+	}
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	if len(st.createScheduledPostCalls) != 1 {
+		t.Fatalf("expected 1 createScheduledPost call, got %d", len(st.createScheduledPostCalls))
+	}
+	if !st.createScheduledPostCalls[0].ScheduledAt.Equal(shiftTo) {
+		t.Fatalf("expected ScheduledAt=%v, got %v", shiftTo, st.createScheduledPostCalls[0].ScheduledAt)
+	}
+	if len(st.advancePostTemplateCalls) != 1 {
+		t.Fatalf("expected 1 advancePostTemplate call, got %d", len(st.advancePostTemplateCalls))
+	}
+	if st.advancePostTemplateCalls[0].counterNext != 4 {
+		t.Fatalf("expected counterNext=4 (shifted+1), got %d", st.advancePostTemplateCalls[0].counterNext)
+	}
+}
+
+func TestService_materializePostTemplates_announcement(t *testing.T) {
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	parent := domain.PostTemplate{
+		ID:                "parent1",
+		TeamID:            "team1",
+		AuthorUserID:      "user1",
+		Title:             "main event",
+		Content:           "main post {counter}",
+		RecurrenceJSON:    `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
+		TargetAccountIDs:  []string{"acc1"},
+		Enabled:           true,
+		NextMaterializeAt: &now,
+		CounterNext:       7,
+	}
+	annDays := 2
+	ann := domain.PostTemplate{
+		ID:                     "ann1",
+		TeamID:                 "team1",
+		AuthorUserID:           "user1",
+		Title:                  "announcement",
+		Content:                "coming on {main_month}/{main_day} ({main_weekday_name})",
+		RecurrenceJSON:         `{}`,
+		TargetAccountIDs:       []string{"acc1"},
+		Enabled:                true,
+		CounterNext:            1,
+		AnnouncesTemplateID:    strPtr("parent1"),
+		AnnouncementDaysBefore: &annDays,
+	}
+
+	st := &mockStore{
+		listDuePostTemplates: []domain.PostTemplate{parent},
+		listAnnouncingTemplates: []domain.PostTemplate{ann},
+	}
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
+	err := svc.materializePostTemplates(context.Background())
+	if err != nil {
+		t.Fatalf("materializePostTemplates: %v", err)
+	}
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	if len(st.createScheduledPostCalls) != 2 {
+		t.Fatalf("expected 2 createScheduledPost calls (parent + announcement), got %d", len(st.createScheduledPostCalls))
+	}
+	// First call: parent post at `now`
+	parentCall := st.createScheduledPostCalls[0]
+	if !parentCall.ScheduledAt.Equal(now) {
+		t.Fatalf("parent ScheduledAt: want %v, got %v", now, parentCall.ScheduledAt)
+	}
+	if parentCall.Content != "main post {counter}" {
+		t.Fatalf("parent content: want %q, got %q", "main post {counter}", parentCall.Content)
+	}
+	// Counter is passed to TemplateCounter for late expansion
+	if parentCall.TemplateCounter == nil || *parentCall.TemplateCounter != 7 {
+		t.Fatalf("parent TemplateCounter: want 7, got %v", parentCall.TemplateCounter)
+	}
+	// Second call: announcement at now - 2 days
+	wantAnn := now.Add(-2 * 24 * time.Hour)
+	annCall := st.createScheduledPostCalls[1]
+	if !annCall.ScheduledAt.Equal(wantAnn) {
+		t.Fatalf("announcement ScheduledAt: want %v, got %v", wantAnn, annCall.ScheduledAt)
+	}
+	// Announcement content is pre-expanded (including {main_*} from parent)
+	// {main_month}=05 {main_day}=27 {main_weekday_name}=Wed
+	wantContent := "coming on 05/27 (Wed)"
+	if annCall.Content != wantContent {
+		t.Fatalf("announcement content: want %q, got %q", wantContent, annCall.Content)
+	}
+	// Both templates should have their counter advanced
+	if len(st.advancePostTemplateCalls) != 2 {
+		t.Fatalf("expected 2 advancePostTemplate calls, got %d", len(st.advancePostTemplateCalls))
+	}
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestService_materializePostTemplates_skipWithoutShift(t *testing.T) {
+	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
+	tmpl := domain.PostTemplate{
+		ID:                "tmpl2",
+		TeamID:            "team1",
+		AuthorUserID:      "user1",
+		Title:             "skip-test",
+		Content:           "skipped post",
+		RecurrenceJSON:    `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
+		TargetAccountIDs:  []string{"acc1"},
+		Enabled:           true,
+		NextMaterializeAt: &now,
+		CounterNext:       5,
+	}
+
+	st := &mockStore{
+		listDuePostTemplates: []domain.PostTemplate{tmpl},
+		isPostTemplateOccurrenceSkippedFn: func(templateID string, occurrenceAt time.Time) (bool, error) {
+			return true, nil
+		},
+	}
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)
+	err := svc.materializePostTemplates(context.Background())
+	if err != nil {
+		t.Fatalf("materializePostTemplates: %v", err)
+	}
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	if len(st.createScheduledPostCalls) != 0 {
+		t.Fatalf("expected 0 createScheduledPost calls (plain skip), got %d", len(st.createScheduledPostCalls))
+	}
+	if len(st.advancePostTemplateCalls) != 1 {
+		t.Fatalf("expected 1 advancePostTemplate call, got %d", len(st.advancePostTemplateCalls))
+	}
+	if st.advancePostTemplateCalls[0].counterNext != 5 {
+		t.Fatalf("expected counterNext=5 (unchanged), got %d", st.advancePostTemplateCalls[0].counterNext)
 	}
 }
