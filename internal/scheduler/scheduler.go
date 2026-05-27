@@ -24,6 +24,9 @@ type Service struct {
 	metricSyncInterval    time.Duration
 	accountHealthInterval time.Duration
 	workers               int
+
+	accountMetricsMu sync.Mutex
+	postMetricsMu    sync.Mutex
 }
 
 func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration) *Service {
@@ -107,16 +110,18 @@ func (s *Service) Start(ctx context.Context) {
 }
 
 func (s *Service) runAccountMetricsLoop(ctx context.Context) {
+	s.accountMetricsJob(ctx)
+
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for {
-		if s.tryLock(ctx, "account_metrics", 23*time.Hour) {
-			s.accountMetricsJob(ctx)
-		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			s.accountMetricsMu.Lock()
+			s.accountMetricsJob(ctx)
+			s.accountMetricsMu.Unlock()
 		}
 	}
 }
@@ -269,9 +274,9 @@ func (s *Service) runMetricSyncLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.metricSyncInterval)
 	defer ticker.Stop()
 	for {
-		if s.tryLock(ctx, "metric_sync", s.metricSyncInterval-1*time.Minute) {
-			s.fetchMetricsJob(ctx)
-		}
+		s.postMetricsMu.Lock()
+		s.fetchMetricsJob(ctx)
+		s.postMetricsMu.Unlock()
 		select {
 		case <-ctx.Done():
 			return
@@ -331,10 +336,16 @@ func (s *Service) accountHealthJob(ctx context.Context) {
 func (s *Service) accountMetricsJob(ctx context.Context) {
 	accounts, err := s.store.ListAccountsForMetricsSync(ctx, 2000)
 	if err != nil {
-		s.logger.Error("account metrics list failed", "error", err)
+		s.logger.ErrorContext(ctx, "account metrics list failed", "error", err)
 		return
 	}
+	if len(accounts) == 0 {
+		s.logger.DebugContext(ctx, "account metrics sync: no accounts to sync")
+		return
+	}
+	s.logger.InfoContext(ctx, "account metrics sync started", "account_count", len(accounts))
 	now := time.Now().UTC()
+	synced := 0
 	for _, account := range accounts {
 		providerImpl, ok := s.providers.Get(account.Provider)
 		if !ok {
@@ -371,18 +382,25 @@ func (s *Service) accountMetricsJob(ctx context.Context) {
 			snapshot[name] = metric.Value
 		}
 		if err := s.store.UpsertAccountMetrics(ctx, account.ID, snapshot, now); err != nil {
-			s.logger.Warn("account metrics upsert failed", "account_id", account.ID, "error", err)
+			s.logger.WarnContext(ctx, "account metrics upsert failed", "account_id", account.ID, "error", err)
+			continue
 		}
+		synced++
 	}
+	s.logger.InfoContext(ctx, "account metrics sync completed", "synced", synced, "total", len(accounts))
 }
 
 // SyncPostMetricsNow pulls engagement metrics for eligible posted targets (admin trigger; bypasses job lock).
 func (s *Service) SyncPostMetricsNow(ctx context.Context) {
+	s.postMetricsMu.Lock()
+	defer s.postMetricsMu.Unlock()
 	s.fetchMetricsJob(ctx)
 }
 
 // SyncAccountMetricsNow refreshes follower counts for all connected accounts (admin trigger).
 func (s *Service) SyncAccountMetricsNow(ctx context.Context) {
+	s.accountMetricsMu.Lock()
+	defer s.accountMetricsMu.Unlock()
 	s.accountMetricsJob(ctx)
 }
 
@@ -392,12 +410,18 @@ func (s *Service) fetchMetricsJob(ctx context.Context) {
 	utcDay := time.Now().UTC().Format("2006-01-02")
 	rows, err := s.store.ListPostedTargetsForMetricSync(ctx, since, utcDay, 500)
 	if err != nil {
-		s.logger.Error("metric sync list failed", "error", err)
+		s.logger.ErrorContext(ctx, "metric sync list failed", "error", err)
 		return
 	}
+	if len(rows) == 0 {
+		s.logger.DebugContext(ctx, "post metrics sync: no targets due for refresh")
+		return
+	}
+	s.logger.InfoContext(ctx, "post metrics sync started", "target_count", len(rows))
 	for _, row := range rows {
 		s.syncOnePostTargetMetrics(ctx, row, utcDay)
 	}
+	s.logger.InfoContext(ctx, "post metrics sync completed", "target_count", len(rows))
 }
 
 func (s *Service) syncOnePostTargetMetrics(ctx context.Context, row domain.PostedTargetForMetricSync, utcDay string) {
