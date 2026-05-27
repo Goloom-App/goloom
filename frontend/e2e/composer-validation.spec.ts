@@ -16,8 +16,11 @@ test.describe('composer validation', () => {
     await page.getByRole('button', { name: 'New Post' }).click()
     await expect(page.getByTestId('composer-view')).toBeVisible({ timeout: 10_000 })
 
-    // Type content
-    await page.getByLabel(/content|inhalt/i).fill('Test content for validation')
+    // Type content (label is "Message (all destinations)", not "Content" — tablist uses contentScopeAria)
+    await page
+      .getByTestId('composer-view')
+      .getByLabel(/message.*all destinations|nachricht.*alle ziele/i)
+      .fill('Test content for validation')
 
     // Save button should be disabled because no destinations are selected
     const saveBtn = page.getByRole('button', { name: /schedule post|speichern/i })
