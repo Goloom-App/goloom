@@ -103,6 +103,7 @@ create table if not exists provider_instances (
 create table if not exists social_accounts (
     id uuid primary key default gen_random_uuid(),
     team_id uuid not null references teams(id) on delete cascade,
+    name text not null default '',
     provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
     auth_type text not null default 'oauth_token' check (auth_type in ('oauth_token', 'app_password')),
     provider_instance_id uuid references provider_instances(id) on delete set null,
@@ -128,6 +129,9 @@ alter table if exists social_accounts
 
 alter table if exists social_accounts
     alter column auth_type set not null;
+
+alter table if exists social_accounts
+    add column if not exists name text not null default '';
 
 alter table if exists social_accounts
     add column if not exists provider_instance_id uuid references provider_instances(id) on delete set null;

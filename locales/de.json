@@ -238,6 +238,7 @@
       "providerInstanceRemoved": "Provider-Instanz entfernt",
       "metricsSyncStarted": "Metrik-Sync gestartet",
       "accountDisconnected": "Konto getrennt",
+"accountUpdated": "Konto aktualisiert",
       "mastodonConnected": "Mastodon-Konto verbunden",
       "friendicaConnected": "Friendica-Konto verbunden",
       "blueskyConnected": "Bluesky-Konto verbunden",
@@ -366,7 +367,14 @@
       "providerFriendica": "Friendica",
       "providerBluesky": "Bluesky",
       "optionAppPassword": "App-Passwort",
-      "optionAccessToken": "Zugriffstoken (JWT)"
+      "optionAccessToken": "Zugriffstoken (JWT)",
+      "editAccount": "Konto bearbeiten",
+      "editAccountHint": "Anzeigenamen, Zeichenlimit oder Anmeldedaten für dieses Konto aktualisieren.",
+      "updateAccount": "Konto aktualisieren",
+      "displayName": "Anzeigename",
+      "maxCharsOverride": "Max. Zeichen",
+      "accountName": "Kontoname",
+      "editing": "Bearbeitung"
     },
     "teams": {
       "yourTeams": "Ihre Teams",

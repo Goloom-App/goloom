@@ -14,7 +14,7 @@ func (s *Store) ListAccountsForMetricsSync(ctx context.Context, limit int) ([]do
 		limit = 1000
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts

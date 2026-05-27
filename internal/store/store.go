@@ -52,6 +52,7 @@ type Store interface {
 	UserHasAnyTeamRole(ctx context.Context, userID, teamID string, roles ...domain.TeamRole) (bool, error)
 	ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error)
 	CreateAccount(ctx context.Context, teamID string, input domain.ConnectedAccount) (domain.SocialAccount, error)
+	UpdateAccount(ctx context.Context, teamID, accountID string, input domain.UpdateAccountInput) (domain.SocialAccount, error)
 	DeleteAccount(ctx context.Context, teamID, accountID string) error
 	DeleteSocialAccount(ctx context.Context, accountID string) error
 	GetAccountByID(ctx context.Context, accountID string) (domain.SocialAccount, error)

@@ -14,7 +14,7 @@ func (s *Store) ListAccountsForMetricsSync(ctx context.Context, limit int) ([]do
 		limit = 1000
 	}
 	rows, err := s.pool.Query(ctx, `
-		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
@@ -31,6 +31,7 @@ func (s *Store) ListAccountsForMetricsSync(ctx context.Context, limit int) ([]do
 		if err := rows.Scan(
 			&account.ID,
 			&account.TeamID,
+			&account.Name,
 			&account.Provider,
 			&account.AuthType,
 			&account.ProviderInstanceID,

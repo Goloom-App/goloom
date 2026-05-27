@@ -105,6 +105,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("DELETE /v1/teams/{teamID}/media/{mediaID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaDelete))))
 	mux.Handle("GET /v1/teams/{teamID}/media/{mediaID}/preview", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaPreview))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/{accountID}/migrate", a.auth.RequireAuth(http.HandlerFunc(a.handleMigrateAccount)))
+	mux.Handle("PATCH /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(http.HandlerFunc(a.handleUpdateAccount)))
 	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeleteAccount)))
 	mux.Handle("GET /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPosts))))
 	mux.Handle("POST /v1/teams/{teamID}/posts", a.auth.RequireAuth(http.HandlerFunc(a.handleCreatePost)))
@@ -585,6 +586,44 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	a.syncAccountMetricsNow(r.Context(), account, connectedAccount)
 	auth.WriteJSON(w, http.StatusCreated, account)
+}
+
+func (a *API) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	teamID := r.PathValue("teamID")
+	accountID := r.PathValue("accountID")
+
+	acc, err := a.store.GetAccountByID(r.Context(), accountID)
+	if err != nil {
+		a.writeError(w, r, "not_found", http.StatusNotFound)
+		return
+	}
+	if acc.TeamID != teamID {
+		a.writeError(w, r, "not_found", http.StatusNotFound)
+		return
+	}
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, acc.TeamID, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var input domain.UpdateAccountInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+		return
+	}
+
+	updated, err := a.store.UpdateAccount(r.Context(), teamID, accountID, input)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
 func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {

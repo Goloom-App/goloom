@@ -521,6 +521,22 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    updateAccount(
+      teamID: string,
+      accountID: string,
+      payload: {
+        name?: string
+        max_chars_override?: number
+        access_token?: string
+        refresh_token?: string
+      },
+    ) {
+      return request<BackendAccount>(options, `/v1/teams/${teamID}/accounts/${accountID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
     migrateAccount(teamID: string, accountID: string, payload: { target_team_id: string }) {
       return request<BackendAccount>(options, `/v1/teams/${teamID}/accounts/${accountID}/migrate`, {
         method: 'POST',

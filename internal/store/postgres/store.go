@@ -581,7 +581,7 @@ func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, r
 
 func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error) {
 	const query = `
-		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
@@ -602,6 +602,7 @@ func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.S
 		if err := rows.Scan(
 			&account.ID,
 			&account.TeamID,
+			&account.Name,
 			&account.Provider,
 			&account.AuthType,
 			&account.ProviderInstanceID,
@@ -642,12 +643,12 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 
 	const query = `
 		insert into social_accounts (
-			team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+			team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 			avatar_url,
 			access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at
 		)
-		values ($1, $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9, $10, $11)
-		returning id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		values ($1, '', $2, $3, nullif($4, '')::uuid, $5, $6, $7, $8, $9, $10, $11)
+		returning id, team_id, name, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		          avatar_url,
 		          access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 	`
@@ -671,6 +672,7 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 	).Scan(
 		&account.ID,
 		&account.TeamID,
+		&account.Name,
 		&account.Provider,
 		&account.AuthType,
 		&account.ProviderInstanceID,
@@ -694,6 +696,59 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 	return account, nil
 }
 
+func (s *Store) UpdateAccount(ctx context.Context, teamID, accountID string, input domain.UpdateAccountInput) (domain.SocialAccount, error) {
+	acc, err := s.GetAccountByID(ctx, accountID)
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	if acc.TeamID != teamID {
+		return domain.SocialAccount{}, sql.ErrNoRows
+	}
+
+	name := acc.Name
+	if input.Name != nil {
+		name = *input.Name
+	}
+	maxChars := acc.MaxCharsOverride
+	if input.MaxCharsOverride != nil {
+		maxChars = input.MaxCharsOverride
+	}
+
+	accessCipher := acc.AccessTokenCiphertext
+	if input.AccessToken != nil {
+		accessCipher, err = s.encrypter.Encrypt(*input.AccessToken)
+		if err != nil {
+			return domain.SocialAccount{}, fmt.Errorf("encrypt access token: %w", err)
+		}
+	}
+	refreshCipher := acc.RefreshTokenCiphertext
+	if input.RefreshToken != nil {
+		if *input.RefreshToken != "" {
+			refreshCipher, err = s.encrypter.Encrypt(*input.RefreshToken)
+			if err != nil {
+				return domain.SocialAccount{}, fmt.Errorf("encrypt refresh token: %w", err)
+			}
+		} else {
+			refreshCipher = ""
+		}
+	}
+
+	const q = `
+		update social_accounts set
+			name = $1,
+			max_chars_override = $2,
+			access_token_ciphertext = $3,
+			refresh_token_ciphertext = $4
+		where id = $5
+	`
+	_, err = s.pool.Exec(ctx, q, name, maxChars, accessCipher, refreshCipher, accountID)
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+
+	return s.GetAccountByID(ctx, accountID)
+}
+
 func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) error {
 	acc, err := s.GetAccountByID(ctx, accountID)
 	if err != nil {
@@ -707,7 +762,7 @@ func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) err
 
 func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error) {
 	const query = `
-		select id, team_id, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, coalesce(provider_instance_id::text, ''), instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
@@ -727,6 +782,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 		if err := rows.Scan(
 			&account.ID,
 			&account.TeamID,
+			&account.Name,
 			&account.Provider,
 			&account.AuthType,
 			&account.ProviderInstanceID,

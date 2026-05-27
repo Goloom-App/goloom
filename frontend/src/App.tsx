@@ -97,6 +97,7 @@ function App() {
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null)
   const [previewPostMetrics, setPreviewPostMetrics] = useState<BackendPostMetric[]>([])
   const [editingPostId, setEditingPostId] = useState<string | null>(null)
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
   const [editorDraft, setEditorDraft] = useState<EditorDraftState>(() => defaultEditorDraft(currentDate, []))
   const [loading, setLoading] = useState(false)
@@ -1042,6 +1043,19 @@ function App() {
     }, t('status.accountDisconnected'))
   }
 
+  async function handleUpdateTeamAccount(
+    accountId: string,
+    payload: { name?: string; max_chars_override?: number; access_token?: string; refresh_token?: string },
+  ) {
+    if (!api || !selectedTeam) {
+      return
+    }
+    await runAction(async () => {
+      await api.updateAccount(selectedTeam.id, accountId, payload)
+      await loadDashboard({ silent: true })
+    }, t('status.accountUpdated'))
+  }
+
   async function handleConnectSocialAccount() {
     if (!api || !selectedTeam || !canEditTeamAccounts) {
       return
@@ -1836,6 +1850,9 @@ function App() {
             onDeleteTeamAccount={handleDeleteTeamAccount}
             onConnectSocialAccount={handleConnectSocialAccount}
             onMastodonOAuthConnect={handleMastodonOAuthConnect}
+            onUpdateTeamAccount={handleUpdateTeamAccount}
+            editingAccountId={editingAccountId}
+            setEditingAccountId={setEditingAccountId}
           />
         )}
 

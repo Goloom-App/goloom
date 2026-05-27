@@ -501,7 +501,7 @@ func (s *Store) UserHasAnyTeamRole(ctx context.Context, userID, teamID string, r
 
 func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
@@ -538,11 +538,11 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 	}
 	_, err = s.db.ExecContext(ctx, `
 		insert into social_accounts (
-			id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+			id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 			avatar_url,
 			access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at, created_at
 		)
-		values (?, ?, ?, ?, nullif(?, ''), ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, '', ?, ?, nullif(?, ''), ?, ?, ?, ?, ?, ?, ?, ?)`,
 		accountID, teamID, input.Provider, input.AuthType, input.ProviderInstanceID, input.InstanceURL, input.Username,
 		input.RemoteAccountID, strings.TrimSpace(input.AvatarURL), accessCipher, refreshCipher, accessExpires, now,
 	)
@@ -550,13 +550,66 @@ func (s *Store) CreateAccount(ctx context.Context, teamID string, input domain.C
 		return domain.SocialAccount{}, err
 	}
 	return queryAccount(ctx, s.db, `
-		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
 		where id = ?`,
 		accountID,
 	)
+}
+
+func (s *Store) UpdateAccount(ctx context.Context, teamID, accountID string, input domain.UpdateAccountInput) (domain.SocialAccount, error) {
+	acc, err := s.GetAccountByID(ctx, accountID)
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+	if acc.TeamID != teamID {
+		return domain.SocialAccount{}, sql.ErrNoRows
+	}
+
+	name := acc.Name
+	if input.Name != nil {
+		name = *input.Name
+	}
+	maxChars := acc.MaxCharsOverride
+	if input.MaxCharsOverride != nil {
+		maxChars = input.MaxCharsOverride
+	}
+
+	accessCipher := acc.AccessTokenCiphertext
+	if input.AccessToken != nil {
+		accessCipher, err = s.encrypter.Encrypt(*input.AccessToken)
+		if err != nil {
+			return domain.SocialAccount{}, fmt.Errorf("encrypt access token: %w", err)
+		}
+	}
+	refreshCipher := acc.RefreshTokenCiphertext
+	if input.RefreshToken != nil {
+		if *input.RefreshToken != "" {
+			refreshCipher, err = s.encrypter.Encrypt(*input.RefreshToken)
+			if err != nil {
+				return domain.SocialAccount{}, fmt.Errorf("encrypt refresh token: %w", err)
+			}
+		} else {
+			refreshCipher = ""
+		}
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		update social_accounts set
+			name = ?,
+			max_chars_override = ?,
+			access_token_ciphertext = ?,
+			refresh_token_ciphertext = ?
+		where id = ?`,
+		name, maxChars, accessCipher, refreshCipher, accountID,
+	)
+	if err != nil {
+		return domain.SocialAccount{}, err
+	}
+
+	return s.GetAccountByID(ctx, accountID)
 }
 
 func (s *Store) DeleteAccount(ctx context.Context, teamID, accountID string) error {
@@ -577,7 +630,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 	placeholders, args := inClause(ids)
 	args = append([]any{teamID}, args...)
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
-		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
@@ -1101,6 +1154,7 @@ func scanAccount(scanner accountScanner) (domain.SocialAccount, error) {
 	if err := scanner.Scan(
 		&account.ID,
 		&account.TeamID,
+		&account.Name,
 		&account.Provider,
 		&account.AuthType,
 		&providerInstanceID,

@@ -238,6 +238,7 @@
       "providerInstanceRemoved": "Provider instance removed",
       "metricsSyncStarted": "Metrics sync started",
       "accountDisconnected": "Account disconnected",
+"accountUpdated": "Account updated",
       "mastodonConnected": "Mastodon account connected",
       "friendicaConnected": "Friendica account connected",
       "blueskyConnected": "Bluesky account connected",
@@ -366,7 +367,14 @@
       "providerFriendica": "Friendica",
       "providerBluesky": "Bluesky",
       "optionAppPassword": "App password",
-      "optionAccessToken": "Access token (JWT)"
+      "optionAccessToken": "Access token (JWT)",
+      "editAccount": "Edit account",
+      "editAccountHint": "Update display name, character limit, or rotate credentials for this account.",
+      "updateAccount": "Update account",
+      "displayName": "Display name",
+      "maxCharsOverride": "Max characters",
+      "accountName": "Account name",
+      "editing": "Editing"
     },
     "teams": {
       "yourTeams": "Your teams",

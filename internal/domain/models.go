@@ -215,6 +215,7 @@ type TeamMembership struct {
 type SocialAccount struct {
 	ID                     string          `json:"id"`
 	TeamID                 string          `json:"team_id"`
+	Name                   string          `json:"name"`
 	Provider               string          `json:"provider"`
 	AuthType               AccountAuthType `json:"auth_type"`
 	ProviderInstanceID     string          `json:"provider_instance_id,omitempty"`
@@ -452,6 +453,13 @@ type CreateAccountInput struct {
 	AccessToken        string `json:"access_token"`
 	RefreshToken       string `json:"refresh_token"`
 	AppPassword        string `json:"app_password"`
+}
+
+type UpdateAccountInput struct {
+	Name             *string `json:"name,omitempty"`
+	MaxCharsOverride *int    `json:"max_chars_override,omitempty"`
+	AccessToken      *string `json:"access_token,omitempty"`
+	RefreshToken     *string `json:"refresh_token,omitempty"`
 }
 
 type ConnectedAccount struct {

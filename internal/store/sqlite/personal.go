@@ -201,7 +201,7 @@ func (s *Store) GetTeamByID(ctx context.Context, teamID string) (domain.Team, er
 
 func (s *Store) GetAccountByID(ctx context.Context, accountID string) (domain.SocialAccount, error) {
 	return queryAccount(ctx, s.db, `
-		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
@@ -214,7 +214,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 	}
 	placeholders, args := inClause(ids)
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
-		select id, team_id, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
+		select id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username, remote_account_id,
 		       avatar_url,
 		       access_token_ciphertext, refresh_token_ciphertext, max_chars_override, access_token_expires_at, created_at
 		from social_accounts
