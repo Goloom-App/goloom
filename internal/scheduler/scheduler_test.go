@@ -148,6 +148,10 @@ func (m *mockStore) CreateAccount(ctx context.Context, teamID string, input doma
 
 func (m *mockStore) DeleteAccount(ctx context.Context, teamID, accountID string) error { return nil }
 
+func (m *mockStore) UpdateAccount(ctx context.Context, teamID, accountID string, input domain.UpdateAccountInput) (domain.SocialAccount, error) {
+	return domain.SocialAccount{}, nil
+}
+
 func (m *mockStore) GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error) {
 	return nil, nil
 }

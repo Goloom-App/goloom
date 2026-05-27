@@ -941,7 +941,7 @@ func (s *Store) UpdateSocialAccountTokens(ctx context.Context, accountID string,
 
 func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.SocialAccount, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select a.id, a.team_id, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
+		select a.id, a.team_id, a.name, a.provider, a.auth_type, a.provider_instance_id, a.instance_url, a.username, a.remote_account_id,
 		       a.avatar_url,
 		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.access_token_expires_at, a.created_at
 		from scheduled_post_targets t
