@@ -40,6 +40,9 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `create unique index if not exists idx_teams_personal_user on teams(personal_for_user_id) where personal_for_user_id is not null`); err != nil {
 		return fmt.Errorf("sqlite migrate index: %w", err)
 	}
+	if _, err := db.ExecContext(ctx, `create index if not exists idx_post_targets_metrics_sync on scheduled_post_targets(metrics_last_sync_at)`); err != nil {
+		return fmt.Errorf("sqlite migrate metrics sync index: %w", err)
+	}
 	for _, stmt := range []string{
 		`create table if not exists account_metrics (
 			account_id text not null references social_accounts(id) on delete cascade,
