@@ -308,3 +308,9 @@ create table if not exists log_entries (
     created_at timestamptz not null default now(),
     archived_at timestamptz
 );
+
+create table if not exists job_locks (
+    lock_id text primary key,
+    locked_at timestamptz not null default now(),
+    expires_at timestamptz not null
+);

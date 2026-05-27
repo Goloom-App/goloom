@@ -27,6 +27,7 @@ type Service struct {
 
 	accountMetricsMu sync.Mutex
 	postMetricsMu    sync.Mutex
+	accountHealthMu  sync.Mutex
 }
 
 func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration) *Service {
@@ -291,9 +292,9 @@ func (s *Service) runAccountHealthLoop(ctx context.Context) {
 	ticker := time.NewTicker(s.accountHealthInterval)
 	defer ticker.Stop()
 	for {
-		if s.tryLock(ctx, "account_health", s.accountHealthInterval-1*time.Minute) {
-			s.accountHealthJob(ctx)
-		}
+		s.accountHealthMu.Lock()
+		s.accountHealthJob(ctx)
+		s.accountHealthMu.Unlock()
 		select {
 		case <-ctx.Done():
 			return
