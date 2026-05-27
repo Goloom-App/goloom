@@ -5,7 +5,7 @@ test.describe('recurring posts form', () => {
   test.beforeEach(async ({ page }) => {
     await signIn(page)
     await page.getByRole('button', { name: /recurring|wiederkehrend/i }).click()
-    await expect(page.getByRole('heading', { name: /recurring posts|wiederkehrend/i })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: /recurring posts|wiederkehrend/i })).toBeVisible()
   })
 
   test('renders kind selector with weekly/monthly options', async ({ page }) => {
