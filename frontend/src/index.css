@@ -4231,3 +4231,159 @@ select {
   }
 }
 
+/* Recurrence form */
+.recurrence-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: var(--space-4) 0;
+}
+
+.recurrence-form__kind-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.recurrence-form__legend {
+  width: 100%;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: var(--space-1);
+}
+
+.recurrence-form__kind-pill {
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.recurrence-form__kind-pill:hover {
+  border-color: var(--accent);
+}
+
+.recurrence-form__kind-pill--active {
+  background: var(--accent);
+  color: var(--text-on-accent, #fff);
+  border-color: var(--accent);
+}
+
+.recurrence-form__weekdays {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.recurrence-form__weekday-row {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.recurrence-form__weekday-btn {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.recurrence-form__weekday-btn:hover {
+  border-color: var(--accent);
+}
+
+.recurrence-form__weekday-btn--active {
+  background: var(--accent);
+  color: var(--text-on-accent, #fff);
+  border-color: var(--accent);
+}
+
+.recurrence-form__row {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.recurrence-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 6rem;
+}
+
+.recurrence-form__field--grow {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.recurrence-form__label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.recurrence-form__input {
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-input, var(--surface));
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.recurrence-form__input--narrow {
+  max-width: 5rem;
+}
+
+/* Occurrence preview */
+.occurrence-preview {
+  margin: var(--space-3) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-soft);
+}
+
+.occurrence-preview__heading {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin: 0 0 var(--space-2);
+}
+
+.occurrence-preview__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.occurrence-preview__item {
+  font-size: 0.85rem;
+  color: var(--text);
+  padding: 0.25rem 0;
+}
+
+.occurrence-preview__empty {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+

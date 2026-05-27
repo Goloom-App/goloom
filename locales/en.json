@@ -400,7 +400,20 @@
       "editorTitle": "New recurring template",
       "contentPlaceholder": "Happy {year}-{month}-{day}! (#{counter})",
       "recurrenceJson": "Recurrence (JSON)",
-      "requiredFields": "Title, content, and at least one account are required."
+      "requiredFields": "Title, content, and at least one account are required.",
+      "repeat": "Repeat",
+      "kindWeekly": "Weekly",
+      "kindMonthlyDom": "Monthly (day of month)",
+      "kindMonthlyAnchor": "Monthly (anchor + offset)",
+      "onDays": "On days",
+      "dayOfMonth": "Day of month",
+      "anchorDay": "Anchor day",
+      "offsetDays": "Offset (days)",
+      "hour": "Hour",
+      "minute": "Minute",
+      "timezone": "Timezone",
+      "preview": "Upcoming occurrences",
+      "noOccurrences": "No occurrences found for this schedule."
     },
     "calendar": {
       "createPostHint": "Create a post to start building your publishing timeline.",

@@ -6,6 +6,8 @@ import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
 import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord } from '../../types'
+import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
+import { OccurrencePreview } from './OccurrencePreview'
 
 type Api = ReturnType<typeof createApiClient>
 
@@ -28,19 +30,9 @@ export function RecurringPostsView({
   const [editorOpen, setEditorOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
-  const [recurrenceJson, setRecurrenceJson] = useState(
-    JSON.stringify(
-      {
-        kind: 'weekly',
-        weekdays: [1],
-        hour: 9,
-        minute: 0,
-        timezone: 'UTC',
-      },
-      null,
-      2,
-    ),
-  )
+  const [recState, setRecState] = useState<RecurrenceState>(() => parseRecurrenceJSON(
+    JSON.stringify({ kind: 'weekly', weekdays: [1], hour: 9, minute: 0, timezone: 'UTC' }),
+  ))
   const [targetIds, setTargetIds] = useState<string[]>([])
 
   const accountById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
@@ -59,6 +51,16 @@ export function RecurringPostsView({
     void refresh()
   }, [refresh])
 
+  function openEditor() {
+    setTitle('')
+    setContent('')
+    setRecState(parseRecurrenceJSON(
+      JSON.stringify({ kind: 'weekly', weekdays: [1], hour: 9, minute: 0, timezone: 'UTC' }),
+    ))
+    setTargetIds([])
+    setEditorOpen(true)
+  }
+
   async function handleCreate() {
     if (!title.trim() || !content.trim() || targetIds.length === 0) {
       onStatus(t('recurring.requiredFields'))
@@ -69,7 +71,7 @@ export function RecurringPostsView({
       await api.createPostTemplate(teamId, {
         title: title.trim(),
         content: content.trim(),
-        recurrence_json: recurrenceJson,
+        recurrence_json: recurrenceStateToJSON(recState),
         target_account_ids: targetIds,
         enabled: true,
       })
@@ -131,7 +133,7 @@ export function RecurringPostsView({
             <p className="hint">{t('recurring.hint')}</p>
           </div>
           {canEdit ? (
-            <button type="button" className="button button--primary" onClick={() => setEditorOpen(true)}>
+            <button type="button" className="button button--primary" onClick={openEditor}>
               {t('recurring.newTemplate')}
             </button>
           ) : null}
@@ -177,18 +179,20 @@ export function RecurringPostsView({
         <div className="modal-backdrop" onClick={() => setEditorOpen(false)}>
           <div className="glass-panel recurring-editor-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="section-card__title">{t('recurring.editorTitle')}</h3>
+
             <label className="field">
               <span>{t('common.title')}</span>
               <input value={title} onChange={(e) => setTitle(e.target.value)} />
             </label>
+
             <label className="field">
               <span>{t('common.content')}</span>
               <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} />
             </label>
-            <label className="field">
-              <span>{t('recurring.recurrenceJson')}</span>
-              <textarea rows={10} className="monospace-small" value={recurrenceJson} onChange={(e) => setRecurrenceJson(e.target.value)} />
-            </label>
+
+            <RecurrenceForm state={recState} onChange={setRecState} />
+            <OccurrencePreview state={recState} />
+
             <p className="hint">{t('common.targets')}</p>
             <div className="composer-destination-row">
               {accounts.map((a) => {
@@ -207,6 +211,7 @@ export function RecurringPostsView({
                 )
               })}
             </div>
+
             <div className="inline-cluster mt-1">
               <button type="button" className="button button--primary" onClick={() => void handleCreate()}>
                 {t('common.create')}
