@@ -2,7 +2,6 @@ import { addMonths, format, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { useEffect, useMemo, useState, type TouchEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Icon } from '../../icons'
 import type { AccountRecord, PostRecord } from '../../types'
 import { PostCard } from '../../components/post/PostCard'
 import { calendarCellsForMonth } from './calendarUtils'
@@ -206,19 +205,6 @@ export function ContentCalendarView({
                         <span className="content-calendar__post-time">{format(parseISO(post.scheduledAt), 'HH:mm')}</span>
                         <span className="content-calendar__post-title">{post.title || t('common.untitled')}</span>
                       </div>
-                      {canEditScheduledPosts ? (
-                        <button
-                          type="button"
-                          className="content-calendar__chip-edit"
-                          aria-label={t('calendar.content.previewPost')}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onPreview?.(post.id)
-                          }}
-                        >
-                          <Icon name="eye" className="inline-icon" />
-                        </button>
-                      ) : null}
                     </div>
                   ))}
                 </div>

@@ -2030,25 +2030,27 @@ select {
   color: var(--warning);
 }
 
-.dashboard-scheduled-cards {
-  list-style: none;
+.dashboard-scheduled-horizontal {
   display: flex;
-  flex-direction: column;
   gap: var(--space-3);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-bottom: var(--space-2);
+  -webkit-overflow-scrolling: touch;
 }
 
 .dashboard-scheduled-card {
-  width: 100%;
+  flex: 0 0 240px;
+  scroll-snap-align: start;
   background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   transition: all var(--transition-fast);
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  gap: 0;
+  overflow: hidden;
 }
 
 .dashboard-scheduled-card:hover {
@@ -2056,18 +2058,26 @@ select {
   background: var(--surface-hover);
 }
 
-.dashboard-scheduled-card__top {
+.dashboard-scheduled-card__body {
+  flex: 1;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  min-width: 0;
 }
 
 .dashboard-scheduled-card__time {
-  display: flex;
-  gap: var(--space-2);
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--accent);
+  white-space: nowrap;
 }
 
 .dashboard-scheduled-card__title {
@@ -3331,6 +3341,32 @@ select {
   flex-wrap: wrap;
   gap: var(--space-1);
   margin-top: var(--space-1);
+}
+
+.dashboard-scheduled-card__edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-height: 100%;
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.dashboard-scheduled-card__edit:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+@media (max-width: 768px) {
+  .dashboard-scheduled-card__edit {
+    display: none;
+  }
 }
 
 /* ==========================================================================

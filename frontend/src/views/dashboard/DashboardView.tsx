@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format, formatDistanceToNow, isToday, isTomorrow, parseISO } from 'date-fns'
+import { de } from 'date-fns/locale/de'
+import { enUS } from 'date-fns/locale/en-US'
 import { useTranslation } from 'react-i18next'
 import type { BackendMetricHistoryPoint, BackendAccountGrowthPoint } from '../../api'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
@@ -117,6 +119,31 @@ function MetricSparkline({
   )
 }
 
+function formatRelativeTime(iso: string, locale: 'de' | 'en'): string {
+  const date = parseISO(iso)
+  const localeObj = locale === 'de' ? de : enUS
+  const now = Date.now()
+  const diffMs = date.getTime() - now
+  const diffHours = diffMs / (1000 * 60 * 60)
+
+  if (diffHours > 0 && diffHours <= 2) {
+    return formatDistanceToNow(date, { addSuffix: true, locale: localeObj })
+  }
+  if (isToday(date)) {
+    return `${locale === 'de' ? 'heute' : 'today'} ${format(date, 'HH:mm')}`
+  }
+  if (isTomorrow(date)) {
+    return `${locale === 'de' ? 'morgen' : 'tomorrow'} ${format(date, 'HH:mm')}`
+  }
+
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays >= 1 && diffDays <= 6) {
+    return format(date, 'EEE HH:mm', { locale: localeObj })
+  }
+
+  return format(date, 'MMM d, HH:mm', { locale: localeObj })
+}
+
 export function DashboardView({
   teamName,
   upcomingPosts,
@@ -124,6 +151,7 @@ export function DashboardView({
   fetchSeries,
   fetchGrowth,
   onOpenPreview,
+  onEditPost,
   onOpenSchedule,
   onOpenAccounts,
 }: {
@@ -133,10 +161,12 @@ export function DashboardView({
   fetchSeries: (metric: string) => Promise<{ series: BackendMetricHistoryPoint[] }>
   fetchGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: import('../../api').BackendAccountGrowthPoint[] }>
   onOpenPreview: (postId: string) => void
+  onEditPost?: (postId: string) => void
   onOpenSchedule: () => void
   onOpenAccounts: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language === 'de' ? 'de' : 'en'
   const [seriesByMetric, setSeriesByMetric] = useState<Record<string, SparkPoint[]>>({})
   const [networkSeries, setNetworkSeries] = useState<SparkPoint[]>([])
   const [loadingCharts, setLoadingCharts] = useState(false)
@@ -284,20 +314,15 @@ export function DashboardView({
       {upcomingPosts.length === 0 ? (
         <p className="hint dashboard-panel__empty">{t('dashboard.noUpcoming')}</p>
       ) : (
-        <ul className="dashboard-scheduled-cards" role="list" aria-label={t('dashboard.upcomingPostsAria')}>
-          {upcomingPosts.map((post) => {
-            const when = parseISO(post.scheduledAt)
+        <div className="dashboard-scheduled-horizontal" role="list" aria-label={t('dashboard.upcomingPostsAria')}>
+          {upcomingPosts.slice(0, 8).map((post) => {
             const snippet = post.title?.trim() || post.content.slice(0, 80) || t('common.untitled')
             return (
-              <li key={post.id} className="dashboard-scheduled-cards__item">
-                <button type="button" className="dashboard-scheduled-card" onClick={() => onOpenPreview(post.id)}>
-                  <div className="dashboard-scheduled-card__top">
-                    <time className="dashboard-scheduled-card__time" dateTime={post.scheduledAt}>
-                      <span className="dashboard-scheduled-card__date">{format(when, 'MMM d')}</span>
-                      <span className="dashboard-scheduled-card__clock">{format(when, 'HH:mm')}</span>
-                    </time>
-                    {post.status === 'draft' ? <span className="dashboard-scheduled-card__draft">{t('common.draft')}</span> : null}
-                  </div>
+              <div key={post.id} className="dashboard-scheduled-card" role="listitem">
+                <button type="button" className="dashboard-scheduled-card__body" onClick={() => onOpenPreview(post.id)}>
+                  <time className="dashboard-scheduled-card__time" dateTime={post.scheduledAt}>
+                    {formatRelativeTime(post.scheduledAt, locale)}
+                  </time>
                   <p className="dashboard-scheduled-card__title">{snippet}</p>
                   <div className="dashboard-scheduled-card__accounts" aria-hidden="true">
                     {sharedAccountLabels(post, accounts).map((a) => (
@@ -305,10 +330,20 @@ export function DashboardView({
                     ))}
                   </div>
                 </button>
-              </li>
+                {onEditPost ? (
+                  <button
+                    type="button"
+                    className="dashboard-scheduled-card__edit"
+                    aria-label={t('common.edit')}
+                    onClick={() => onEditPost(post.id)}
+                  >
+                    <Icon name="edit" />
+                  </button>
+                ) : null}
+              </div>
             )
           })}
-        </ul>
+        </div>
       )}
     </section>
   )
