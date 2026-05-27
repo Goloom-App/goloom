@@ -171,7 +171,7 @@ func (m *mockStore) GetScheduledPost(ctx context.Context, teamID, postID string)
 	return domain.ScheduledPost{}, nil
 }
 
-func (m *mockStore) UpdateScheduledPost(ctx context.Context, teamID, postID string, input domain.CreatePostInput) (domain.ScheduledPost, error) {
+func (m *mockStore) PatchScheduledPost(ctx context.Context, teamID, postID string, patch domain.UpdatePostPatch) (domain.ScheduledPost, error) {
 	return domain.ScheduledPost{}, nil
 }
 

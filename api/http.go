@@ -755,20 +755,20 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var input domain.CreatePostInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var patch domain.UpdatePostPatch
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
 
-	input.Content = strings.TrimSpace(input.Content)
-	input.Title = strings.TrimSpace(input.Title)
-	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
-	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
-	input.MediaExcludeByAccount = domain.NormalizeMediaExcludeByAccount(input.MediaExcludeByAccount, input.MediaIDs)
-	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
+	versions, err := a.store.ListPostVersionsForTeamPost(r.Context(), existing.TeamID, existing.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	merged, _ := domain.ApplyPostPatch(existing, versions, patch)
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
-	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
+	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, merged)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -786,7 +786,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := a.store.UpdateScheduledPost(r.Context(), existing.TeamID, r.PathValue("postID"), input)
+	post, err := a.store.PatchScheduledPost(r.Context(), existing.TeamID, r.PathValue("postID"), patch)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

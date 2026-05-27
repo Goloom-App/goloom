@@ -960,61 +960,86 @@ func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (do
 	return posts[0], nil
 }
 
-func (s *Store) UpdateScheduledPost(ctx context.Context, teamID, postID string, input domain.CreatePostInput) (domain.ScheduledPost, error) {
+func (s *Store) PatchScheduledPost(ctx context.Context, teamID, postID string, patch domain.UpdatePostPatch) (domain.ScheduledPost, error) {
 	existing, err := s.GetScheduledPost(ctx, teamID, postID)
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
+	versions, err := s.ListPostVersionsForTeamPost(ctx, teamID, postID)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	merged, flags := domain.ApplyPostPatch(existing, versions, patch)
+	if !flags.Any() {
+		return existing, nil
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
 	defer tx.Rollback(ctx)
 
-	visibility := domain.NormalizePostVisibility(input.Visibility)
-	mediaJSON, err := encodeMediaIDsJSON(input.MediaIDs)
-	if err != nil {
-		return domain.ScheduledPost{}, err
-	}
-	excludeJSON, err := encodeMediaExcludeJSON(input.MediaExcludeByAccount)
-	if err != nil {
-		return domain.ScheduledPost{}, err
-	}
-	// Resolve status based on draft flag and previous status
-	newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, input)
-	_, err = tx.Exec(
-		ctx,
-		`update scheduled_posts set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, media_exclude_by_account = $6, status = $7, updated_at = now() where id = $8 and team_id = $9`,
-		input.Title, input.Content, input.ScheduledAt, visibility, mediaJSON, excludeJSON, string(newStatus), postID, teamID,
-	)
-	if err != nil {
-		return domain.ScheduledPost{}, err
-	}
-
-	if _, err := tx.Exec(ctx, `delete from post_versions where post_id = $1`, postID); err != nil {
-		return domain.ScheduledPost{}, err
-	}
-	for accountID, content := range input.AccountContentOverride {
-		if _, err := tx.Exec(ctx, `
-			insert into post_versions (post_id, account_id, content)
-			values ($1, $2, $3)`,
-			postID, accountID, content,
-		); err != nil {
+	postFieldChange := flags.Title || flags.Content || flags.ScheduledAt || flags.Visibility ||
+		flags.MediaIDs || flags.MediaExcludeByAccount || flags.Draft
+	if postFieldChange {
+		visibility := domain.NormalizePostVisibility(merged.Visibility)
+		mediaJSON, err := encodeMediaIDsJSON(merged.MediaIDs)
+		if err != nil {
+			return domain.ScheduledPost{}, err
+		}
+		excludeJSON, err := encodeMediaExcludeJSON(merged.MediaExcludeByAccount)
+		if err != nil {
+			return domain.ScheduledPost{}, err
+		}
+		newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, merged)
+		if flags.ScheduledAt && !flags.Title && !flags.Content && !flags.Visibility && !flags.MediaIDs && !flags.MediaExcludeByAccount && !flags.Draft {
+			_, err = tx.Exec(ctx, `
+				update scheduled_posts
+				set scheduled_at = $1, status = $2, updated_at = now()
+				where id = $3 and team_id = $4`,
+				merged.ScheduledAt, string(newStatus), postID, teamID,
+			)
+		} else {
+			_, err = tx.Exec(ctx, `
+				update scheduled_posts
+				set title = $1, content = $2, scheduled_at = $3, visibility = $4, media_ids = $5, media_exclude_by_account = $6, status = $7, updated_at = now()
+				where id = $8 and team_id = $9`,
+				merged.Title, merged.Content, merged.ScheduledAt, visibility, mediaJSON, excludeJSON, string(newStatus), postID, teamID,
+			)
+		}
+		if err != nil {
 			return domain.ScheduledPost{}, err
 		}
 	}
 
-	if _, err := tx.Exec(ctx, `delete from scheduled_post_targets where post_id = $1`, postID); err != nil {
-		return domain.ScheduledPost{}, err
+	if flags.Versions {
+		if _, err := tx.Exec(ctx, `delete from post_versions where post_id = $1`, postID); err != nil {
+			return domain.ScheduledPost{}, err
+		}
+		for accountID, content := range merged.AccountContentOverride {
+			if _, err := tx.Exec(ctx, `
+				insert into post_versions (post_id, account_id, content)
+				values ($1, $2, $3)`,
+				postID, accountID, content,
+			); err != nil {
+				return domain.ScheduledPost{}, err
+			}
+		}
 	}
 
-	for _, accountID := range input.TargetAccounts {
-		if _, err := tx.Exec(
-			ctx,
-			`insert into scheduled_post_targets (post_id, account_id, status) values ($1, $2, $3)`,
-			postID, accountID, domain.PostStatusPending,
-		); err != nil {
+	if flags.TargetAccounts {
+		if _, err := tx.Exec(ctx, `delete from scheduled_post_targets where post_id = $1`, postID); err != nil {
 			return domain.ScheduledPost{}, err
+		}
+		for _, accountID := range merged.TargetAccounts {
+			if _, err := tx.Exec(
+				ctx,
+				`insert into scheduled_post_targets (post_id, account_id, status) values ($1, $2, $3)`,
+				postID, accountID, domain.PostStatusPending,
+			); err != nil {
+				return domain.ScheduledPost{}, err
+			}
 		}
 	}
 

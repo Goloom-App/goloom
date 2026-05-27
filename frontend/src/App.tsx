@@ -1326,10 +1326,7 @@ function App() {
           continue
         }
         await api.updatePost(selectedTeam.id, p.id, {
-          title: original.title.trim(),
-          content: original.content.trim(),
           scheduled_at: p.scheduledAt,
-          target_accounts: original.targetAccountIds,
         })
       }
       await loadDashboard({ silent: true })

@@ -590,10 +590,10 @@ export function createApiClient(options: ApiClientOptions) {
       teamID: string,
       postID: string,
       payload: {
-        title: string
-        content: string
-        scheduled_at: string
-        target_accounts: string[]
+        title?: string
+        content?: string
+        scheduled_at?: string
+        target_accounts?: string[]
         media_ids?: string[]
         media_exclude_by_account?: Record<string, string[]>
         account_content_override?: Record<string, string>

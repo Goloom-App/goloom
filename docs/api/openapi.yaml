@@ -228,7 +228,10 @@ paths:
           description: Post not found
     patch:
       tags: [Posts]
-      summary: Update scheduled post
+      summary: Partially update scheduled post
+      description: >-
+        Only fields present in the body are changed. Omitted fields (including post_versions)
+        remain unchanged. Reschedule with scheduled_at only.
       parameters:
         - $ref: "#/components/parameters/teamID"
         - $ref: "#/components/parameters/postID"
@@ -237,7 +240,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreatePostInput"
+              $ref: "#/components/schemas/UpdatePostPatch"
       responses:
         "200":
           description: Post updated
@@ -530,6 +533,41 @@ components:
           description: >-
             When true, validate character limits per account using overrides (or default content)
             instead of failing on default content length alone.
+    UpdatePostPatch:
+      type: object
+      description: Partial update; omit fields to leave them unchanged.
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        target_accounts:
+          type: array
+          items:
+            type: string
+            format: uuid
+        visibility:
+          type: string
+        draft:
+          type: boolean
+        media_ids:
+          type: array
+          items:
+            type: string
+        media_exclude_by_account:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        account_content_override:
+          type: object
+          description: When sent, replaces all per-account overrides. When omitted, existing overrides are kept.
+          additionalProperties:
+            type: string
     PostVersion:
       type: object
       properties:

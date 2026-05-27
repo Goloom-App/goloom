@@ -65,7 +65,7 @@ type Store interface {
 	ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error)
 	GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error)
 	GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error)
-	UpdateScheduledPost(ctx context.Context, teamID, postID string, input domain.CreatePostInput) (domain.ScheduledPost, error)
+	PatchScheduledPost(ctx context.Context, teamID, postID string, patch domain.UpdatePostPatch) (domain.ScheduledPost, error)
 	CancelScheduledPost(ctx context.Context, teamID, postID string) error
 	DeleteScheduledPost(ctx context.Context, teamID, postID string) error
 	ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error)

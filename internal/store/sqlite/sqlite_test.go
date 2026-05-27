@@ -309,8 +309,11 @@ func TestSQLite_ScheduledPostsLifecycle(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatalf("ListTeamPosts: %v", err)
 	}
-	updated, err := s.UpdateScheduledPost(ctx, team.ID, post.ID, domain.CreatePostInput{
-		Title: "T2", Content: "new", ScheduledAt: when.Add(time.Hour), TargetAccounts: []string{acc.ID},
+	updated, err := s.PatchScheduledPost(ctx, team.ID, post.ID, domain.UpdatePostPatch{
+		Title:       domain.PatchField[string]{Set: true, Value: "T2"},
+		Content:     domain.PatchField[string]{Set: true, Value: "new"},
+		ScheduledAt: domain.PatchField[time.Time]{Set: true, Value: when.Add(time.Hour)},
+		TargetAccounts: domain.PatchField[[]string]{Set: true, Value: []string{acc.ID}},
 	})
 	if err != nil || updated.Content != "new" {
 		t.Fatal(err)

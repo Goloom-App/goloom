@@ -68,7 +68,7 @@ type discoveryDocument struct {
 func buildDiscoveryDocument() discoveryDocument {
 	schemas := map[string]discoverySchema{
 		"CreatePostInput": {
-			Description: "Body for POST/PATCH posts and POST .../posts/validate. Default content applies to all target_accounts unless overridden per account.",
+			Description: "Body for POST /posts and POST .../posts/validate. Default content applies to all target_accounts unless overridden per account.",
 			Required:    []string{"content"},
 			Properties: map[string]discoveryProperty{
 				"title":                    {Type: "string", Description: "Internal title (optional)"},
@@ -87,6 +87,24 @@ func buildDiscoveryDocument() discoveryDocument {
 				"use_versions": {
 					Type:        "boolean",
 					Description: "When true, character-limit validation uses each account's override (or content) separately instead of failing on the default content length.",
+				},
+			},
+		},
+		"UpdatePostPatch": {
+			Description: "Partial update for PATCH /posts/{postID}. Only include fields to change. Omitted fields stay as stored (including post_versions).",
+			Properties: map[string]discoveryProperty{
+				"title":                    {Type: "string"},
+				"content":                  {Type: "string"},
+				"scheduled_at":             {Type: "string", Description: "RFC3339 UTC datetime"},
+				"target_accounts":          {Type: "array", Items: "uuid"},
+				"visibility":               {Type: "string"},
+				"draft":                    {Type: "boolean"},
+				"media_ids":                {Type: "array", Items: "string"},
+				"media_exclude_by_account": {Type: "object", Additional: "array of media_id strings"},
+				"account_content_override": {
+					Type:        "object",
+					Additional:  "string",
+					Description: "When present, replaces all per-account overrides. When omitted, existing overrides are kept.",
 				},
 			},
 		},
@@ -246,7 +264,7 @@ func buildDiscoveryDocument() discoveryDocument {
 			},
 			{
 				Path: "/v1/teams/{teamID}/posts/{postID}", Method: "PATCH",
-				Description: "Update post fields including account_content_override (same schema as create)",
+				Description: "Partial update: only sent fields change. Reschedule with {\"scheduled_at\": \"...\"} without touching text or overrides.",
 				Auth:        "bearer_token",
 				Parameters: []discoveryParameter{
 					{Name: "teamID", In: "path", Type: "uuid", Required: true, Description: "Team id"},
@@ -254,7 +272,7 @@ func buildDiscoveryDocument() discoveryDocument {
 				},
 				RequestBody: &discoveryRequestBody{
 					ContentType: "application/json",
-					Schema:      "CreatePostInput",
+					Schema:      "UpdatePostPatch",
 				},
 				Response: "200 ScheduledPost",
 			},
