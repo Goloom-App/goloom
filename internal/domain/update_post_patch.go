@@ -7,15 +7,15 @@ import (
 
 // UpdatePostPatch is the PATCH body for scheduled posts. Omitted keys are left unchanged.
 type UpdatePostPatch struct {
-	Title                  PatchField[string]
-	Content                PatchField[string]
-	ScheduledAt            PatchField[time.Time]
-	TargetAccounts         PatchField[[]string]
-	Visibility             PatchField[string]
-	MediaIDs               PatchField[[]string]
-	MediaExcludeByAccount  PatchField[map[string][]string]
-	AccountContentOverride PatchField[map[string]string]
-	Draft                  PatchField[bool]
+	Title                  PatchField[string]              `json:"title"`
+	Content                PatchField[string]              `json:"content"`
+	ScheduledAt            PatchField[time.Time]           `json:"scheduled_at"`
+	TargetAccounts         PatchField[[]string]            `json:"target_accounts"`
+	Visibility             PatchField[string]              `json:"visibility"`
+	MediaIDs               PatchField[[]string]            `json:"media_ids"`
+	MediaExcludeByAccount  PatchField[map[string][]string] `json:"media_exclude_by_account"`
+	AccountContentOverride PatchField[map[string]string]   `json:"account_content_override"`
+	Draft                  PatchField[bool]                `json:"draft"`
 }
 
 // PostPatchFieldsSet records which logical groups should be written to storage.

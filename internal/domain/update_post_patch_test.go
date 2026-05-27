@@ -1,9 +1,24 @@
 package domain
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
+
+func TestUpdatePostPatch_UnmarshalJSON_ScheduledAt(t *testing.T) {
+	var patch UpdatePostPatch
+	if err := json.Unmarshal([]byte(`{"scheduled_at":"2026-05-21T10:00:00Z"}`), &patch); err != nil {
+		t.Fatal(err)
+	}
+	if !patch.ScheduledAt.Set {
+		t.Fatal("scheduled_at should be marked set (json tag must match API snake_case)")
+	}
+	want := time.Date(2026, 5, 21, 10, 0, 0, 0, time.UTC)
+	if !patch.ScheduledAt.Value.Equal(want) {
+		t.Fatalf("time=%v want %v", patch.ScheduledAt.Value, want)
+	}
+}
 
 func TestApplyPostPatch_ScheduledAtOnlyKeepsVersionOverrides(t *testing.T) {
 	existing := ScheduledPost{

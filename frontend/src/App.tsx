@@ -1319,12 +1319,16 @@ function App() {
       return
     }
 
+    const resolvedById = new Map(resolved.map((p) => [p.id, p]))
+    setPosts((current) =>
+      current.map((p) => {
+        const next = resolvedById.get(p.id)
+        return next ? { ...p, scheduledAt: next.scheduledAt } : p
+      }),
+    )
+
     await runAction(async () => {
       for (const p of changed) {
-        const original = posts.find((x) => x.id === p.id)
-        if (!original) {
-          continue
-        }
         await api.updatePost(selectedTeam.id, p.id, {
           scheduled_at: p.scheduledAt,
         })
