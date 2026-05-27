@@ -184,8 +184,9 @@ export function RecurrenceForm({
 
       {state.kind === 'monthly_dom' && (
         <div className="recurrence-form__field">
-          <label className="recurrence-form__label">{t('recurring.dayOfMonth')}</label>
+          <label className="recurrence-form__label" htmlFor="recurrence-dayofmonth">{t('recurring.dayOfMonth')}</label>
           <input
+            id="recurrence-dayofmonth"
             type="number"
             className="recurrence-form__input"
             min={1}
@@ -252,8 +253,9 @@ export function RecurrenceForm({
 
       <div className="recurrence-form__row">
         <div className="recurrence-form__field">
-          <label className="recurrence-form__label">{t('recurring.hour')}</label>
+          <label className="recurrence-form__label" htmlFor="recurrence-hour">{t('recurring.hour')}</label>
           <input
+            id="recurrence-hour"
             type="number"
             className="recurrence-form__input recurrence-form__input--narrow"
             min={0}
@@ -263,8 +265,9 @@ export function RecurrenceForm({
           />
         </div>
         <div className="recurrence-form__field">
-          <label className="recurrence-form__label">{t('recurring.minute')}</label>
+          <label className="recurrence-form__label" htmlFor="recurrence-minute">{t('recurring.minute')}</label>
           <input
+            id="recurrence-minute"
             type="number"
             className="recurrence-form__input recurrence-form__input--narrow"
             min={0}
@@ -274,8 +277,9 @@ export function RecurrenceForm({
           />
         </div>
         <div className="recurrence-form__field recurrence-form__field--grow">
-          <label className="recurrence-form__label">{t('recurring.timezone')}</label>
+          <label className="recurrence-form__label" htmlFor="recurrence-timezone">{t('recurring.timezone')}</label>
           <input
+            id="recurrence-timezone"
             type="text"
             className="recurrence-form__input"
             list="tz-list"
