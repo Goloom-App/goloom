@@ -149,6 +149,8 @@ export function PostComposer({
     })
   }
 
+  // Block saving when any destination's effective content exceeds its limit.
+  // Each destination must be addressed individually — overrides per account.
   const overAnyLimit = useMemo(() => {
     if (draft.targetAccountIds.length === 0) {
       return true

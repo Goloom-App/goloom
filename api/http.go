@@ -937,7 +937,7 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 		effectiveContent := input.EffectiveContent(account.ID)
 		contentLen := len([]rune(effectiveContent))
 		isValid := capabilities.MaxChars == 0 || contentLen <= capabilities.MaxChars
-		if !isValid && !input.UseVersions {
+		if !isValid {
 			allValid = false
 		}
 
