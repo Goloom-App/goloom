@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	RecurrenceWeekly              = "weekly"
-	RecurrenceMonthlyDOM          = "monthly_dom"
-	RecurrenceMonthlyAnchorOffset = "monthly_anchor_offset"
+	RecurrenceWeekly                    = "weekly"
+	RecurrenceMonthlyDOM                = "monthly_dom"
+	RecurrenceMonthlyAnchorOffset       = "monthly_anchor_offset"
+	RecurrenceMonthlyOrdinalWeekday     = "monthly_ordinal_weekday"
 )
 
 // RecurrenceRule is stored JSON in post_templates.recurrence_json.
@@ -27,6 +28,9 @@ type RecurrenceRule struct {
 
 	AnchorDay  int `json:"anchor_day,omitempty"`
 	OffsetDays int `json:"offset_days,omitempty"`
+
+	Ordinal        int `json:"ordinal,omitempty"`
+	OrdinalWeekday int `json:"ordinal_weekday,omitempty"`
 }
 
 // ParseRecurrenceJSON validates and parses recurrence_json from the database.
@@ -51,7 +55,7 @@ func ValidateRecurrenceRule(r *RecurrenceRule) error {
 		return errors.New("rule is nil")
 	}
 	switch strings.TrimSpace(r.Kind) {
-	case RecurrenceWeekly, RecurrenceMonthlyDOM, RecurrenceMonthlyAnchorOffset:
+	case RecurrenceWeekly, RecurrenceMonthlyDOM, RecurrenceMonthlyAnchorOffset, RecurrenceMonthlyOrdinalWeekday:
 	default:
 		return fmt.Errorf("unsupported recurrence kind %q", strings.TrimSpace(r.Kind))
 	}
@@ -83,6 +87,13 @@ func ValidateRecurrenceRule(r *RecurrenceRule) error {
 		if r.AnchorDay < 1 || r.AnchorDay > 31 {
 			return errors.New("anchor_day must be 1–31")
 		}
+	case RecurrenceMonthlyOrdinalWeekday:
+		if r.Ordinal < -1 || r.Ordinal == 0 || r.Ordinal > 5 {
+			return errors.New("ordinal must be -1 (last), or 1–5")
+		}
+		if r.OrdinalWeekday < 0 || r.OrdinalWeekday > 6 {
+			return errors.New("ordinal_weekday must be 0–6 (Sunday–Saturday)")
+		}
 	}
 	return nil
 }
@@ -112,6 +123,8 @@ func NextOccurrence(rule *RecurrenceRule, after time.Time) (time.Time, error) {
 		return nextMonthlyDOM(rule, t, loc), nil
 	case RecurrenceMonthlyAnchorOffset:
 		return nextMonthlyAnchorOffset(rule, t, loc), nil
+	case RecurrenceMonthlyOrdinalWeekday:
+		return nextMonthlyOrdinalWeekday(rule, t, loc), nil
 	default:
 		return time.Time{}, fmt.Errorf("unsupported kind %q", rule.Kind)
 	}
@@ -168,6 +181,45 @@ func nextMonthlyAnchorOffset(rule *RecurrenceRule, after time.Time, loc *time.Lo
 		if day > maxd {
 			day = maxd
 		}
+		instant := time.Date(yy, mm, day, rule.Hour, rule.Minute, 0, 0, loc)
+		if instant.After(ref) {
+			return instant.UTC()
+		}
+	}
+	return after.AddDate(10, 0, 0).UTC()
+}
+
+func nextMonthlyOrdinalWeekday(rule *RecurrenceRule, after time.Time, loc *time.Location) time.Time {
+	ref := after.In(loc)
+	y, mo := ref.Year(), ref.Month()
+	for i := 0; i < 120; i++ {
+		candMonth := time.Date(y, mo, 1, 0, 0, 0, 0, loc).AddDate(0, i, 0)
+		yy, mm := candMonth.Year(), candMonth.Month()
+		maxd := daysInMonth(yy, int(mm))
+
+		var day int
+		if rule.Ordinal == -1 {
+			day = maxd
+			for day > 0 {
+				t := time.Date(yy, mm, day, 0, 0, 0, 0, loc)
+				if int(t.Weekday()) == rule.OrdinalWeekday {
+					break
+				}
+				day--
+			}
+			if day < 1 {
+				continue
+			}
+		} else {
+			firstDay := 1
+			t := time.Date(yy, mm, firstDay, 0, 0, 0, 0, loc)
+			offset := (rule.OrdinalWeekday - int(t.Weekday()) + 7) % 7
+			day = 1 + offset + (rule.Ordinal-1)*7
+			if day > maxd {
+				continue
+			}
+		}
+
 		instant := time.Date(yy, mm, day, rule.Hour, rule.Minute, 0, 0, loc)
 		if instant.After(ref) {
 			return instant.UTC()

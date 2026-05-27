@@ -7,9 +7,39 @@ import type { BackendPostTemplate } from '../../api'
 import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord } from '../../types'
 import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
-import { OccurrencePreview } from './OccurrencePreview'
+import { OccurrencePreview, computeOccurrences } from './OccurrencePreview'
 
 type Api = ReturnType<typeof createApiClient>
+
+const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function expandContent(tpl: string, d: Date, counter: number): string {
+  let s = tpl
+  s = s.replace(/\{day([+-]\d+)\}/g, (_m, off: string) => zeroPad(clampDay(d.getDate() + parseInt(off, 10))))
+  s = s.replace(/\{month([+-]\d+)\}/g, (_m, off: string) => zeroPad(clampMonth(d.getMonth() + 1 + parseInt(off, 10))))
+  s = s.replace(/\{year\}/g, String(d.getFullYear()))
+  s = s.replace(/\{month\}/g, zeroPad(d.getMonth() + 1))
+  s = s.replace(/\{day\}/g, zeroPad(d.getDate()))
+  s = s.replace(/\{weekday\}/g, String(d.getDay()))
+  s = s.replace(/\{weekday_name\}/g, WEEKDAY_NAMES[d.getDay()])
+  s = s.replace(/\{counter\}/g, String(counter))
+  return s
+}
+
+function zeroPad(n: number): string { return n < 10 ? '0' + n : String(n) }
+function clampDay(d: number): number { return Math.max(1, Math.min(31, d)) }
+function clampMonth(m: number): number { return Math.max(1, Math.min(12, m)) }
+
+function ContentPreview({ content, firstOccurrence }: { content: string; firstOccurrence: Date | null }) {
+  const { t } = useTranslation()
+  if (!content.trim() || !firstOccurrence) return null
+  return (
+    <div className="recurrence-form__preview">
+      <span className="recurrence-form__label">{t('recurring.expandedPreview')}</span>
+      <div className="recurrence-form__expanded">{expandContent(content, firstOccurrence, 1)}</div>
+    </div>
+  )
+}
 
 export function RecurringPostsView({
   teamId,
@@ -34,6 +64,11 @@ export function RecurringPostsView({
     JSON.stringify({ kind: 'weekly', weekdays: [1], hour: 9, minute: 0, timezone: 'UTC' }),
   ))
   const [targetIds, setTargetIds] = useState<string[]>([])
+
+  const firstOccurrence = useMemo(() => {
+    const occ = computeOccurrences(recState, 1)
+    return occ.length > 0 ? occ[0] : null
+  }, [recState])
 
   const accountById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
 
@@ -189,6 +224,8 @@ export function RecurringPostsView({
               <span>{t('common.content')}</span>
               <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} />
             </label>
+
+            <ContentPreview content={content} firstOccurrence={firstOccurrence} />
 
             <RecurrenceForm state={recState} onChange={setRecState} />
             <OccurrencePreview state={recState} />

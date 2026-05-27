@@ -46,6 +46,69 @@ func TestNextOccurrence_monthlyDOM(t *testing.T) {
 	}
 }
 
+func TestNextOccurrence_ordinalWeekday(t *testing.T) {
+	t.Parallel()
+	rule := &RecurrenceRule{
+		Kind:           RecurrenceMonthlyOrdinalWeekday,
+		Ordinal:        2,
+		OrdinalWeekday: 1,
+		Hour:           9,
+		Minute:         0,
+		Timezone:       "UTC",
+	}
+	start := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
+	next, err := NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 5, 12, 9, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("got %v want %v", next, want)
+	}
+}
+
+func TestNextOccurrence_ordinalLastMonday(t *testing.T) {
+	t.Parallel()
+	rule := &RecurrenceRule{
+		Kind:           RecurrenceMonthlyOrdinalWeekday,
+		Ordinal:        -1,
+		OrdinalWeekday: 1,
+		Hour:           9,
+		Minute:         0,
+		Timezone:       "UTC",
+	}
+	start := time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC)
+	next, err := NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 5, 26, 9, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("got %v want %v", next, want)
+	}
+}
+
+func TestNextOccurrence_ordinalFifthFriday(t *testing.T) {
+	t.Parallel()
+	rule := &RecurrenceRule{
+		Kind:           RecurrenceMonthlyOrdinalWeekday,
+		Ordinal:        5,
+		OrdinalWeekday: 5,
+		Hour:           10,
+		Minute:         0,
+		Timezone:       "UTC",
+	}
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	next, err := NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 1, 31, 10, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("got %v want %v", next, want)
+	}
+}
+
 func TestNextOccurrence_anchorOffsetThreeDaysBefore(t *testing.T) {
 	t.Parallel()
 	rule := &RecurrenceRule{

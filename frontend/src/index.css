@@ -4350,6 +4350,24 @@ select {
   max-width: 5rem;
 }
 
+.recurrence-form__preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
+}
+
+.recurrence-form__expanded {
+  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-soft);
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Occurrence preview */
 .occurrence-preview {
   margin: var(--space-3) 0;

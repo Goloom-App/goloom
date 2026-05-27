@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
-export type RecurrenceKind = 'weekly' | 'monthly_dom' | 'monthly_anchor_offset'
+export type RecurrenceKind = 'weekly' | 'monthly_dom' | 'monthly_anchor_offset' | 'monthly_ordinal_weekday'
 
 export interface RecurrenceState {
   kind: RecurrenceKind
@@ -12,6 +12,8 @@ export interface RecurrenceState {
   dayOfMonth: number
   anchorDay: number
   offsetDays: number
+  ordinal: number
+  ordinalWeekday: number
 }
 
 export const DEFAULT_RECURRENCE: RecurrenceState = {
@@ -23,6 +25,8 @@ export const DEFAULT_RECURRENCE: RecurrenceState = {
   dayOfMonth: 15,
   anchorDay: 15,
   offsetDays: -3,
+  ordinal: 1,
+  ordinalWeekday: 1,
 }
 
 export function recurrenceStateToJSON(state: RecurrenceState): string {
@@ -39,6 +43,9 @@ export function recurrenceStateToJSON(state: RecurrenceState): string {
   } else if (state.kind === 'monthly_anchor_offset') {
     obj.anchor_day = state.anchorDay
     obj.offset_days = state.offsetDays
+  } else if (state.kind === 'monthly_ordinal_weekday') {
+    obj.ordinal = state.ordinal
+    obj.ordinal_weekday = state.ordinalWeekday
   }
   return JSON.stringify(obj, null, 2)
 }
@@ -55,6 +62,8 @@ export function parseRecurrenceJSON(raw: string): RecurrenceState {
       dayOfMonth: obj.day_of_month || 15,
       anchorDay: obj.anchor_day || 15,
       offsetDays: obj.offset_days ?? -3,
+      ordinal: obj.ordinal ?? 1,
+      ordinalWeekday: obj.ordinal_weekday ?? 1,
     }
   } catch {
     return { ...DEFAULT_RECURRENCE }
@@ -136,6 +145,7 @@ export function RecurrenceForm({
             { kind: 'weekly' as const, key: 'recurring.kindWeekly' },
             { kind: 'monthly_dom' as const, key: 'recurring.kindMonthlyDom' },
             { kind: 'monthly_anchor_offset' as const, key: 'recurring.kindMonthlyAnchor' },
+            { kind: 'monthly_ordinal_weekday' as const, key: 'recurring.kindMonthlyOrdinal' },
           ]).map(({ kind, key }) => (
             <button
               key={kind}
@@ -209,6 +219,33 @@ export function RecurrenceForm({
               value={state.offsetDays}
               onChange={(e) => set({ offsetDays: Math.min(30, Math.max(-30, Number(e.target.value) || 0)) })}
             />
+          </div>
+        </div>
+      )}
+
+      {state.kind === 'monthly_ordinal_weekday' && (
+        <div className="recurrence-form__row">
+          <div className="recurrence-form__field">
+            <label className="recurrence-form__label">{t('recurring.ordinal')}</label>
+            <select className="recurrence-form__input" value={state.ordinal} onChange={(e) => set({ ordinal: Number(e.target.value) })}>
+              <option value={1}>{t('recurring.ordinal1')}</option>
+              <option value={2}>{t('recurring.ordinal2')}</option>
+              <option value={3}>{t('recurring.ordinal3')}</option>
+              <option value={4}>{t('recurring.ordinal4')}</option>
+              <option value={5}>{t('recurring.ordinal5')}</option>
+              <option value={-1}>{t('recurring.ordinalLast')}</option>
+            </select>
+          </div>
+          <div className="recurrence-form__field">
+            <label className="recurrence-form__label">{t('recurring.weekday')}</label>
+            <select className="recurrence-form__input" value={state.ordinalWeekday} onChange={(e) => set({ ordinalWeekday: Number(e.target.value) })}>
+              {WEEKDAY_KEYS.map((key, i) => {
+                const goWd = UI_TO_GO_WEEKDAY[i]
+                return (
+                  <option key={key} value={goWd}>{t(`weekdays.${key}` as 'weekdays.mon')}</option>
+                )
+              })}
+            </select>
           </div>
         </div>
       )}
