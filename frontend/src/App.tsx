@@ -698,6 +698,7 @@ function App() {
   const showPreviewColumn = (section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer') && !isMobile
 
   const isComposer = section === 'composer'
+  const pullToRefreshDisabled = !isMobile || !CONTENT_REFRESH_SECTIONS.includes(section)
 
   useEffect(() => {
     if (section !== 'composer') {
@@ -1386,6 +1387,8 @@ function App() {
       resolvedTheme={resolvedTheme}
       showPreviewColumn={showPreviewColumn}
       isComposer={isComposer}
+      onRefresh={loadDashboard}
+      pullToRefreshDisabled={pullToRefreshDisabled}
       previewColumn={
         section === 'composer' && !isMobile ? (
           <div className="preview-content">

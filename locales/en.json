@@ -149,6 +149,8 @@
       "duplicate": "Duplicate",
       "dismiss": "Dismiss",
       "refresh": "Refresh",
+      "pullToRefresh": "Pull to refresh",
+      "releaseToRefresh": "Release to refresh",
       "apply": "Apply",
       "create": "Create",
       "close": "Close",

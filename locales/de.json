@@ -149,6 +149,8 @@
       "duplicate": "Duplizieren",
       "dismiss": "Schließen",
       "refresh": "Aktualisieren",
+      "pullToRefresh": "Zum Aktualisieren nach unten ziehen",
+      "releaseToRefresh": "Loslassen zum Aktualisieren",
       "apply": "Anwenden",
       "create": "Erstellen",
       "close": "Schließen",

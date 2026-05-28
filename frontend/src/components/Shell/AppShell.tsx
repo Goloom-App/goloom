@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { BottomNav, MobileDrawer } from './MobileNav'
+import { PullToRefresh } from '../ui/PullToRefresh'
 import type { AppSection, TeamRecord, UserRecord } from '../../types'
 
 interface AppShellProps {
@@ -17,6 +18,8 @@ interface AppShellProps {
   showPreviewColumn?: boolean
   previewColumn?: React.ReactNode
   isComposer?: boolean
+  onRefresh?: () => void | Promise<void>
+  pullToRefreshDisabled?: boolean
 }
 
 export function AppShell({
@@ -32,7 +35,9 @@ export function AppShell({
   resolvedTheme,
   showPreviewColumn,
   previewColumn,
-  isComposer
+  isComposer,
+  onRefresh,
+  pullToRefreshDisabled = true
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -53,9 +58,13 @@ export function AppShell({
         openComposer={openComposer}
       />
 
-      <main className="app-main">
+      <PullToRefresh
+        onRefresh={onRefresh ?? (() => {})}
+        disabled={pullToRefreshDisabled || !onRefresh}
+        className="app-main"
+      >
         {children}
-      </main>
+      </PullToRefresh>
 
       {showPreviewColumn && (
         <aside className={`preview-column ${section === 'composer' ? 'preview-column--composer' : ''}`}>
