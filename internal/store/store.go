@@ -74,7 +74,6 @@ type Store interface {
 
 	// Admin: list AI-enabled teams
 	ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error)
-
 	ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error)
 	ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error)
 	GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error)
