@@ -131,6 +131,8 @@ function App() {
   const [teamAiEnabled, setTeamAiEnabled] = useState(false)
   const [teamTokenPlaintext, setTeamTokenPlaintext] = useState<string | null>(null)
   const [teamTokenName, setTeamTokenName] = useState('')
+  const [teamAiServiceUrl, setTeamAiServiceUrl] = useState('')
+  const [teamAiServiceDesc, setTeamAiServiceDesc] = useState('')
   const [adminAIEnabledTeams, setAdminAIEnabledTeams] = useState<BackendTeam[]>([])
   const [adminAIEnabledTeamsLoading, setAdminAIEnabledTeamsLoading] = useState(false)
   const [adminProviderDraft, setAdminProviderDraft] = useState<AdminProviderDraft>(() => defaultAdminProviderDraft())
@@ -963,6 +965,27 @@ function App() {
       setApiTokens(list.items ?? [])
     }, t('status.apiTokenCreated'))
   }
+
+  async function handleSaveAiServiceConfig() {
+    if (!api || !selectedTeam) return
+    await runAction(async () => {
+      await api.upsertAIServiceConfig(selectedTeam.id, {
+        service_url: teamAiServiceUrl.trim(),
+        description: teamAiServiceDesc.trim() || 'ai service',
+      })
+      setStatusMessage(t('status.saved'))
+    }, t('status.saved'))
+  }
+
+  useEffect(() => {
+    if (!api || !selectedTeamId) return
+    api.getAIServiceConfig(selectedTeamId)
+      .then((cfg) => {
+        setTeamAiServiceUrl(cfg.service_url ?? '')
+        setTeamAiServiceDesc(cfg.description ?? '')
+      })
+      .catch(() => {})
+  }, [api, selectedTeamId])
 
   async function handleLoadAdminAIEnabledTeams() {
     if (!api) {
@@ -1844,6 +1867,37 @@ function App() {
 
                   {teamAiEnabled && (
                     <div className="stack stack--sm mt-1">
+                      <h4 className="subsection-title">AI Service URL</h4>
+                      <p className="hint">URL of the AI processing service (e.g., http://ai-service:8000).</p>
+                      <label className="field">
+                        <span>Service URL</span>
+                        <input
+                          value={teamAiServiceUrl}
+                          onChange={(event) => setTeamAiServiceUrl(event.target.value)}
+                          placeholder="http://ai-service:8000"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Description</span>
+                        <input
+                          value={teamAiServiceDesc}
+                          onChange={(event) => setTeamAiServiceDesc(event.target.value)}
+                          placeholder="ai service"
+                        />
+                      </label>
+                      <div>
+                        <button
+                          type="button"
+                          className="btn btn--primary"
+                          onClick={() => void handleSaveAiServiceConfig()}
+                          disabled={syncing || !teamAiServiceUrl.trim()}
+                        >
+                          Save AI Service
+                        </button>
+                      </div>
+
+                      <hr className="divider" />
+
                       <h4 className="subsection-title">Team API Token</h4>
                       <p className="hint">
                         This token is used by the AI service to authenticate against the goloom API for this team.
