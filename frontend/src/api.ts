@@ -252,6 +252,8 @@ export interface BackendAPIToken {
   last_used_at?: string
   expires_at?: string
   created_at: string
+  scopes?: string[]
+  team_id?: string
 }
 
 export interface BackendAuthStatus {
@@ -447,6 +449,7 @@ export function createApiClient(options: ApiClientOptions) {
         name: string
         description: string
         scheduling_preferences?: BackendTeamSchedulingPreferences
+        is_ai_enabled?: boolean
       },
     ) {
       return request<BackendTeam>(options, `/v1/teams/${teamID}`, {
@@ -488,12 +491,17 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    listAIEnabledTeams() {
+      return request<{ items: BackendTeam[] }>(options, '/v1/admin/ai-enabled-teams', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
     listMyApiTokens() {
       return request<{ items: BackendAPIToken[] }>(options, '/v1/me/api-tokens', {
         headers: buildHeaders(options.token, false),
       })
     },
-    createMyApiToken(payload: { name: string; expires_at?: string }) {
+    createMyApiToken(payload: { name: string; expires_at?: string; scopes?: string[]; team_id?: string }) {
       return request<{ token: string; api_token: BackendAPIToken }>(options, '/v1/me/api-tokens', {
         method: 'POST',
         headers: buildHeaders(options.token),

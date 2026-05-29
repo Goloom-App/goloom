@@ -8,6 +8,17 @@ import type { BackendAPIToken } from '../../api'
 import { apiTokenDisplayName, isApiTokenExpired } from './apiTokens'
 import type { SettingsState } from '../../types'
 
+const AI_SCOPES = ['ai:read:context', 'ai:write:drafts', 'ai:trigger:jobs'] as const
+
+function scopeLabel(scope: string): string {
+  const map: Record<string, string> = {
+    'ai:read:context': 'Read AI context',
+    'ai:write:drafts': 'Create post drafts',
+    'ai:trigger:jobs': 'Trigger AI jobs',
+  }
+  return map[scope] ?? scope
+}
+
 export function SettingsView({
   settings,
   setSettings,
@@ -22,6 +33,8 @@ export function SettingsView({
   setNewApiTokenName,
   newApiTokenExpiresYmd,
   setNewApiTokenExpiresYmd,
+  newApiTokenScopes,
+  setNewApiTokenScopes,
   onCreateApiToken,
   onRemoveApiToken,
   apiTokens,
@@ -40,6 +53,8 @@ export function SettingsView({
   setNewApiTokenName: (v: string) => void
   newApiTokenExpiresYmd: string
   setNewApiTokenExpiresYmd: (v: string) => void
+  newApiTokenScopes: string[]
+  setNewApiTokenScopes: (v: string[]) => void
   onCreateApiToken: () => void | Promise<void>
   onRemoveApiToken: (tokenID: string, expired: boolean) => void | Promise<void>
   apiTokens: BackendAPIToken[]
@@ -126,11 +141,35 @@ export function SettingsView({
             {tr('settings.createToken')}
           </button>
         </div>
+        <div className="flex-row--wrap mt-1">
+          <span className="field-label">Scopes (optional):</span>
+          {AI_SCOPES.map((scope) => {
+            const checked = newApiTokenScopes.includes(scope)
+            return (
+              <label key={scope} className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => {
+                    setNewApiTokenScopes(
+                      checked
+                        ? newApiTokenScopes.filter((s) => s !== scope)
+                        : [...newApiTokenScopes, scope],
+                    )
+                  }}
+                />
+                <span>{scopeLabel(scope)}</span>
+              </label>
+            )
+          })}
+        </div>
         {apiTokensLoading ? <p className="hint">{tr('common.loadingTokens')}</p> : null}
         <table className="data-table">
           <thead>
             <tr>
               <th>{tr('settings.label')}</th>
+              <th>Scopes</th>
+              <th>Team</th>
               <th>{tr('settings.created')}</th>
               <th>{tr('settings.expires')}</th>
               <th>{tr('settings.lastUsed')}</th>
@@ -144,6 +183,8 @@ export function SettingsView({
               return (
                 <tr key={t.id}>
                   <td>{label}</td>
+                  <td>{t.scopes && t.scopes.length > 0 ? t.scopes.map(scopeLabel).join(', ') : '—'}</td>
+                  <td>{t.team_id ?? '—'}</td>
                   <td>{format(parseISO(t.created_at), 'PPp')}</td>
                   <td>{t.expires_at && isValid(parseISO(t.expires_at)) ? format(parseISO(t.expires_at), 'PPp') : '—'}</td>
                   <td>{t.last_used_at ? format(parseISO(t.last_used_at), 'PPp') : '—'}</td>

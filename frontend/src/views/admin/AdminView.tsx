@@ -2,17 +2,18 @@ import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { BackendAdminMetrics, BackendAdminSyncStatus } from '../../api'
+import type { BackendAdminMetrics, BackendAdminSyncStatus, BackendTeam } from '../../api'
 import type { createApiClient } from '../../api'
 import type { AccountRecord, ProviderInstanceRecord, RuntimeConfigRecord, UserRecord } from '../../types'
 import type { AdminProviderDraft } from './adminTypes'
+import { AdminAITab } from './AdminAITab'
 import { AdminConfigurationsTab } from './AdminConfigurationsTab'
 import { AdminLogsTab } from './AdminLogsTab'
 import { AdminProvidersTab } from './AdminProvidersTab'
 import { AdminStatusTab } from './AdminStatusTab'
 import { AdminUsersTab } from './AdminUsersTab'
 
-export type AdminTab = 'status' | 'configurations' | 'providers' | 'users' | 'logs'
+export type AdminTab = 'status' | 'configurations' | 'providers' | 'users' | 'logs' | 'ai'
 
 export function AdminView({
   adminMetrics,
@@ -34,6 +35,9 @@ export function AdminView({
   onSaveAdminProvider,
   onDeleteProviderInstance,
   api,
+  adminAIEnabledTeams,
+  adminAIEnabledTeamsLoading,
+  onLoadAdminAIEnabledTeams,
 }: {
   api: ReturnType<typeof createApiClient> | null
   adminMetrics: BackendAdminMetrics | null
@@ -54,6 +58,9 @@ export function AdminView({
   syncing: boolean
   onSaveAdminProvider: () => void | Promise<void>
   onDeleteProviderInstance: (instanceId: string) => void | Promise<void>
+  adminAIEnabledTeams: BackendTeam[]
+  adminAIEnabledTeamsLoading: boolean
+  onLoadAdminAIEnabledTeams: () => void | Promise<void>
 }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<AdminTab>('status')
@@ -64,6 +71,7 @@ export function AdminView({
     { id: 'providers', label: t('admin.tabProviders') },
     { id: 'users', label: t('admin.tabUsers') },
     { id: 'logs', label: t('admin.tabLogs') },
+    { id: 'ai', label: 'AI Agents' },
   ]
 
   return (
@@ -126,6 +134,14 @@ export function AdminView({
         {activeTab === 'users' ? <AdminUsersTab directoryUsers={directoryUsers} /> : null}
 
         {activeTab === 'logs' ? <AdminLogsTab api={api} /> : null}
+
+        {activeTab === 'ai' ? (
+          <AdminAITab
+            teams={adminAIEnabledTeams}
+            loading={adminAIEnabledTeamsLoading}
+            onLoad={onLoadAdminAIEnabledTeams}
+          />
+        ) : null}
       </div>
     </div>
   )
