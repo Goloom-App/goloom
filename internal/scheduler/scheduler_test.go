@@ -212,7 +212,6 @@ func (m *mockStore) GetTeamAIContext(ctx context.Context, teamID string) (domain
 }
 
 func (m *mockStore) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) { return nil, nil }
-
 func (m *mockStore) ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error) {
 	return nil, nil
 }
