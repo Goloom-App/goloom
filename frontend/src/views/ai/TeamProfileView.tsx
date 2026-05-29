@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, Sparkles } from 'lucide-react'
 
 import {
   useTeamProfile,
@@ -8,11 +8,22 @@ import {
   useStyleExamples,
   useCreateStyleExample,
   useDeleteStyleExample,
+  useTriggerAIJob,
+  useAIJobs,
 } from '../../hooks/useAI'
+import { createApiClient } from '../../api'
 import type { TeamRecord } from '../../types'
 
 interface TeamProfileViewProps {
   team: TeamRecord
+}
+
+function getApiClient() {
+  const stored = typeof window !== 'undefined' ? window.localStorage.getItem('goloom-ui-settings') : null
+  const settings = stored ? JSON.parse(stored) : {}
+  const baseUrl = settings.general?.apiBaseUrl?.trim() || (typeof window !== 'undefined' ? window.location.origin : '')
+  const token = settings.general?.bearerToken?.trim() || ''
+  return createApiClient({ baseUrl, token })
 }
 
 export function TeamProfileView({ team }: TeamProfileViewProps) {
@@ -21,6 +32,11 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
   const upsertProfile = useUpsertTeamProfile()
   const createExample = useCreateStyleExample()
   const deleteExample = useDeleteStyleExample()
+  const triggerJob = useTriggerAIJob()
+  const { data: aiJobs } = useAIJobs(team.id)
+
+  const [isAiEnabled, setIsAiEnabled] = useState(team.isAiEnabled ?? false)
+  const [isTogglingAI, setIsTogglingAI] = useState(false)
 
   const [tonality, setTonality] = useState('')
   const [formattingRules, setFormattingRules] = useState<string[]>([])
@@ -36,8 +52,17 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
   const [exampleContent, setExampleContent] = useState('')
   const [exampleNotes, setExampleNotes] = useState('')
 
+  const [teamTokenName, setTeamTokenName] = useState('')
+  const [teamTokenPlaintext, setTeamTokenPlaintext] = useState<string | null>(null)
+  const [postCount, setPostCount] = useState(20)
+
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const hasActiveAnalysis = useMemo(
+    () => aiJobs?.some((j) => j.type === 'profile_analysis' && (j.status === 'pending' || j.status === 'processing')),
+    [aiJobs],
+  )
 
   useEffect(() => {
     if (profile) {
@@ -50,12 +75,59 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
     }
   }, [profile])
 
-  if (!team.isAiEnabled) {
-    return (
-      <div className="empty-state">
-        <p className="hint">AI features are not enabled for this team.</p>
-      </div>
-    )
+  useEffect(() => {
+    setIsAiEnabled(team.isAiEnabled ?? false)
+  }, [team.isAiEnabled])
+
+  const handleToggleAI = async () => {
+    setIsTogglingAI(true)
+    setError(null)
+    try {
+      const api = getApiClient()
+      await api.updateTeam(team.id, { name: team.name, description: team.description ?? '', is_ai_enabled: !isAiEnabled })
+      setIsAiEnabled(!isAiEnabled)
+      setStatusMessage(isAiEnabled ? 'AI features disabled' : 'AI features enabled')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle AI features')
+    } finally {
+      setIsTogglingAI(false)
+    }
+  }
+
+  const handleCreateToken = async () => {
+    if (!teamTokenName.trim()) return
+    setError(null)
+    setStatusMessage(null)
+    try {
+      const api = getApiClient()
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]!
+      const res = await api.createMyApiToken({
+        name: teamTokenName.trim(),
+        expires_at: new Date(`${tomorrow}T23:59:59.999Z`).toISOString(),
+        scopes: ['ai:read:context', 'ai:write:drafts', 'ai:trigger:jobs'],
+        team_id: team.id,
+      })
+      setTeamTokenPlaintext(res.token)
+      setTeamTokenName('')
+      setStatusMessage('API token created — copy it now, it won\'t be shown again')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create token')
+    }
+  }
+
+  const handleAnalyzePosts = async () => {
+    setError(null)
+    setStatusMessage(null)
+    try {
+      await triggerJob.mutateAsync({
+        teamId: team.id,
+        type: 'profile_analysis',
+        params: { post_count: postCount },
+      })
+      setStatusMessage(`Analysis started for last ${postCount} posts`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start analysis')
+    }
   }
 
   const handleSaveProfile = async () => {
@@ -122,7 +194,19 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
   return (
     <div className="two-column-detail" data-testid="team-profile-view">
       <div className="glass-panel stack">
-        <h2 className="section-card__title">AI Team Profile</h2>
+        <div className="flex-row--between">
+          <h2 className="section-card__title">AI Team Profile</h2>
+          <label className="field toggle-row" style={{ margin: 0 }}>
+            <span>AI features</span>
+            <input
+              type="checkbox"
+              className="toggle"
+              checked={isAiEnabled}
+              onChange={handleToggleAI}
+              disabled={isTogglingAI}
+            />
+          </label>
+        </div>
         <p className="hint">Configure how the AI should write posts for this team.</p>
 
         {(error || statusMessage) && (
@@ -131,6 +215,15 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
             {error && <span className="status-banner__error" data-testid="profile-status-error">{error}</span>}
           </div>
         )}
+
+        {!isAiEnabled && (
+          <div className="empty-state" style={{ padding: '2rem 0' }}>
+            <p className="hint">Enable AI features above to configure the team profile.</p>
+          </div>
+        )}
+
+        {isAiEnabled && (
+        <>
 
         <label className="field">
           <span>Tonality</span>
@@ -273,6 +366,72 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
             {upsertProfile.isPending ? 'Saving...' : 'Save Profile'}
           </button>
         </div>
+
+        <hr className="divider" />
+
+        <h3 className="subsection-title">Analyze Posts</h3>
+        <p className="hint">Analyze recent posts to auto-detect tonality, formatting rules, and style.</p>
+        <div className="flex-row--center gap-2">
+          <label className="field" style={{ flex: '0 0 auto', flexDirection: 'row', alignItems: 'center', gap: '0.5rem' }}>
+            <span>Last</span>
+            <input
+              type="number"
+              min={5}
+              max={100}
+              value={postCount}
+              onChange={(e) => setPostCount(parseInt(e.target.value, 10) || 20)}
+              style={{ width: '5rem' }}
+            />
+            <span>posts</span>
+          </label>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={handleAnalyzePosts}
+            disabled={triggerJob.isPending || hasActiveAnalysis}
+          >
+            <Sparkles size={16} />
+            <span>{hasActiveAnalysis ? 'Analyzing...' : triggerJob.isPending ? 'Starting...' : 'Analyze'}</span>
+          </button>
+        </div>
+
+        <hr className="divider" />
+
+        <h3 className="subsection-title">Team API Token</h3>
+        <p className="hint">This token is used by the AI service to authenticate against the goloom API for this team.</p>
+
+        {teamTokenPlaintext ? (
+          <div className="token-reveal">
+            <p className="hint">Copy this token now — it won't be shown again.</p>
+            <code className="token-reveal__value">{teamTokenPlaintext}</code>
+            <button type="button" className="button button--secondary" onClick={() => setTeamTokenPlaintext(null)}>
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
+        <div className="flex-row--wrap">
+          <label className="field min-w-12">
+            <span>Token name</span>
+            <input
+              value={teamTokenName}
+              onChange={(e) => setTeamTokenName(e.target.value)}
+              placeholder="e.g. ai-service-prod"
+            />
+          </label>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={handleCreateToken}
+            disabled={!teamTokenName.trim()}
+          >
+            Create AI Token
+          </button>
+        </div>
+
+        </>
+        )}
+
       </div>
 
       <div className="glass-panel stack" data-testid="profile-examples-section">
