@@ -68,6 +68,36 @@ def render_few_shot_prompt(examples: list[str]) -> str:
 """.strip()
 
 
+def render_analysis_prompt(
+    *,
+    team_name: str,
+    recent_posts: list[str],
+    existing_tonality: str = "",
+    existing_rules: list[str] | None = None,
+) -> str:
+    rules_text = "\n".join(f"- {r}" for r in (existing_rules or []))
+    posts_text = "\n\n".join(f"--- Post {i+1} ---\n{p}" for i, p in enumerate(recent_posts))
+
+    return f"""Analyze the following recent social media posts from team "{team_name}" and extract their writing style.
+
+Existing tonality: {existing_tonality or "Not set"}
+Existing formatting rules:
+{rules_text or "- None"}
+
+Recent posts to analyze:
+{posts_text}
+
+Extract:
+1. Tonality — what is the consistent voice?
+2. Formatting rules — specific patterns (line breaks, emoji, caps, sentence length)
+3. Banned words or topics — anything notably avoided
+4. Preferred language
+5. Typical hashtag count
+
+Respond with ONLY valid JSON (no markdown):
+{{"tonality": "...", "formatting_rules": [...], "banned_words": [...], "preferred_language": "...", "max_hashtags": N}}"""
+
+
 def format_list(items: list[str]) -> str:
     if not items:
         return "- None provided."

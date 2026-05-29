@@ -68,6 +68,12 @@ class GoloomClient:
     async def update_rss_feed(self, team_id: str, feed_id: str, data: dict) -> dict:
         return await self._request("PATCH", f"/v1/teams/{team_id}/rss-feeds/{feed_id}", json=data)
 
+    async def update_team_profile(self, team_id: str, profile: dict) -> dict:
+        return await self._request("PUT", f"/v1/teams/{team_id}/profile", json=profile)
+
+    async def create_style_example(self, team_id: str, example: dict) -> dict:
+        return await self._request("POST", f"/v1/teams/{team_id}/style-examples", json=example)
+
     async def _request(self, method: str, path: str, json: dict[str, Any] | None = None) -> Any:
         async with httpx.AsyncClient(
             base_url=self.base_url,

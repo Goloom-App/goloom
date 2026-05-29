@@ -8,6 +8,7 @@ from app.config import Settings
 from app.prompts import PromptBuilder
 from app.services import GoloomClient
 from app.workers.voice_engine import VoiceEngineWorker
+from app.workers.profile_analysis import ProfileAnalysisWorker
 
 
 class JobRouter:
@@ -25,6 +26,7 @@ class JobRouter:
         self.workers = {
             "campaign_autopilot": campaign_worker_cls(self.adapter, self.goloom_client, self.prompt_builder),
             "voice_engine": VoiceEngineWorker(self.adapter, self.goloom_client, self.prompt_builder),
+            "profile_analysis": ProfileAnalysisWorker(self.adapter, self.goloom_client, self.prompt_builder),
         }
 
     async def route(self, job: dict) -> dict:
