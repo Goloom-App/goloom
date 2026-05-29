@@ -62,28 +62,28 @@ services:
       - traefik.http.routers.goloom.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
       - traefik.http.routers.goloom.tls=${TRAEFIK_TLS:-true}
 
-  #ai-service:
-  #  build:
-  #    context: ./ai-service
-  #    dockerfile: Dockerfile
-  #  container_name: goloom-ai
-  #  restart: unless-stopped
-  #  environment:
-  #    GOLOOM_API_URL: ${GOLOOM_API_URL:-http://app:8080}
-  #    GOLOOM_API_TOKEN: ${GOLOOM_API_TOKEN:?GOLOOM_API_TOKEN is required for the AI service}
-  #    LLM_ROUTER_PROVIDER: ${LLM_ROUTER_PROVIDER:-openai}
-  #    LLM_ROUTER_MODEL: ${LLM_ROUTER_MODEL:-gpt-4o-mini}
-  #    LLM_GENERATOR_PROVIDER: ${LLM_GENERATOR_PROVIDER:-openai}
-  #    LLM_GENERATOR_MODEL: ${LLM_GENERATOR_MODEL:-gpt-4o}
-  #    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-  #    OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
-  #    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-  #    REDIS_URL: ${AI_REDIS_URL:-}
-  #    LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
-  #    PROACTIVE_ENABLED: ${AI_PROACTIVE_ENABLED:-true}
-  #    PROACTIVE_INTERVAL_SECONDS: ${AI_PROACTIVE_INTERVAL_SECONDS:-3600}
-  #  networks:
-  #    - backend
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: goloom-ai
+    restart: unless-stopped
+    environment:
+      GOLOOM_API_URL: ${GOLOOM_API_URL:-http://app:8080}
+      GOLOOM_API_TOKEN: ${GOLOOM_API_TOKEN:?GOLOOM_API_TOKEN is required for the AI service}
+      LLM_ROUTER_PROVIDER: ${LLM_ROUTER_PROVIDER:-openai}
+      LLM_ROUTER_MODEL: ${LLM_ROUTER_MODEL:-gpt-4o-mini}
+      LLM_GENERATOR_PROVIDER: ${LLM_GENERATOR_PROVIDER:-openai}
+      LLM_GENERATOR_MODEL: ${LLM_GENERATOR_MODEL:-gpt-4o}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      REDIS_URL: ${AI_REDIS_URL:-}
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      PROACTIVE_ENABLED: ${AI_PROACTIVE_ENABLED:-false}
+      PROACTIVE_INTERVAL_SECONDS: ${AI_PROACTIVE_INTERVAL_SECONDS:-3600}
+    networks:
+      - backend
     # Uncomment to expose the AI service through Traefik (e.g. for webhook callbacks):
     # labels:
     #   - traefik.enable=true
