@@ -7,10 +7,25 @@ from fastapi import BackgroundTasks, FastAPI, status
 from app.config import settings
 from app.services import GoloomClient
 from app.workers import JobRouter
+from app.workers.proactive import ProactiveScheduler
 
 app = FastAPI(title="AI Service", version="0.1.0")
 job_router = JobRouter(settings)
 goloom_client = GoloomClient(settings.goloom_api_url, settings.goloom_api_token)
+proactive_scheduler = ProactiveScheduler(
+    goloom_client, interval_seconds=settings.proactive_interval_seconds
+)
+
+
+@app.on_event("startup")
+async def startup():
+    if settings.proactive_enabled:
+        await proactive_scheduler.start()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await proactive_scheduler.stop()
 
 
 @app.get("/health")

@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = None
     log_level: str = "INFO"
 
+    proactive_enabled: bool = True
+    proactive_interval_seconds: int = 3600
+
     class Config:
         env_file = ".env"
 
