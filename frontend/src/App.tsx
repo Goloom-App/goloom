@@ -129,6 +129,8 @@ function App() {
   const [newApiTokenName, setNewApiTokenName] = useState('')
   const [newApiTokenScopes, setNewApiTokenScopes] = useState<string[]>([])
   const [teamAiEnabled, setTeamAiEnabled] = useState(false)
+  const [teamTokenPlaintext, setTeamTokenPlaintext] = useState<string | null>(null)
+  const [teamTokenName, setTeamTokenName] = useState('')
   const [adminAIEnabledTeams, setAdminAIEnabledTeams] = useState<BackendTeam[]>([])
   const [adminAIEnabledTeamsLoading, setAdminAIEnabledTeamsLoading] = useState(false)
   const [adminProviderDraft, setAdminProviderDraft] = useState<AdminProviderDraft>(() => defaultAdminProviderDraft())
@@ -936,6 +938,30 @@ function App() {
       })
       await loadDashboard({ silent: true })
     }, t('status.teamSettingsUpdated'))
+  }
+
+  async function handleCreateTeamApiToken() {
+    if (!api || !selectedTeam || !teamTokenName.trim()) {
+      return
+    }
+    const expEnd = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`)
+    if (!newApiTokenExpiresYmd.trim() || Number.isNaN(expEnd.getTime()) || expEnd.getTime() <= Date.now()) {
+      setError(t('settings.expiryHint'))
+      return
+    }
+    await runAction(async () => {
+      const expiresAt = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`).toISOString()
+      const res = await api.createMyApiToken({
+        name: teamTokenName.trim(),
+        expires_at: expiresAt,
+        scopes: ['ai:read:context', 'ai:write:drafts', 'ai:trigger:jobs'],
+        team_id: selectedTeam.id,
+      })
+      setTeamTokenPlaintext(res.token)
+      setTeamTokenName('')
+      const list = await api.listMyApiTokens()
+      setApiTokens(list.items ?? [])
+    }, t('status.apiTokenCreated'))
   }
 
   async function handleLoadAdminAIEnabledTeams() {
@@ -1801,6 +1827,62 @@ function App() {
                       {t('teams.saveChanges')}
                     </button>
                   </div>
+                </section>
+
+                <section className="stack">
+                  <h3 className="subsection-title">AI Agent</h3>
+                  <p className="hint">Enable AI-powered content generation for this team.</p>
+                  <label className="field toggle-row">
+                    <span>AI features enabled</span>
+                    <input
+                      type="checkbox"
+                      className="toggle"
+                      checked={teamAiEnabled}
+                      onChange={(event) => setTeamAiEnabled(event.target.checked)}
+                    />
+                  </label>
+
+                  {teamAiEnabled && (
+                    <div className="stack stack--sm mt-1">
+                      <h4 className="subsection-title">Team API Token</h4>
+                      <p className="hint">
+                        This token is used by the AI service to authenticate against the goloom API for this team.
+                      </p>
+
+                      {teamTokenPlaintext ? (
+                        <div className="token-reveal">
+                          <p className="hint">Copy this token now — it won't be shown again.</p>
+                          <code className="token-reveal__value">{teamTokenPlaintext}</code>
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            onClick={() => setTeamTokenPlaintext(null)}
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      ) : null}
+
+                      <div className="flex-row--wrap">
+                        <label className="field min-w-12">
+                          <span>Token name</span>
+                          <input
+                            value={teamTokenName}
+                            onChange={(event) => setTeamTokenName(event.target.value)}
+                            placeholder="e.g. ai-service-prod"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn--primary"
+                          onClick={() => void handleCreateTeamApiToken()}
+                          disabled={syncing || !teamTokenName.trim()}
+                        >
+                          Create AI Token
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </section>
 
                 <section className="stack">
