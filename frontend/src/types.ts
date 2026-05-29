@@ -29,7 +29,7 @@ export type PostStatus = 'scheduled' | 'posted' | 'failed' | 'draft'
 
 export type AccountAuthType = 'oauth_token' | 'app_password'
 
-export type AIJobType = 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger'
+export type AIJobType = 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis'
 
 export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed'
 

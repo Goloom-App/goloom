@@ -48,6 +48,7 @@ const (
 	AIJobTypeVoiceEngine       AIJobType = "voice_engine"
 	AIJobTypeCampaignAutopilot AIJobType = "campaign_autopilot"
 	AIJobTypeProactiveTrigger  AIJobType = "proactive_trigger"
+	AIJobTypeProfileAnalysis   AIJobType = "profile_analysis"
 )
 
 type AIJobStatus string

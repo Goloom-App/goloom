@@ -313,7 +313,7 @@ export interface BackendAIJob {
   id: string
   team_id: string
   author_user_id: string
-  type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger'
+  type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis'
   status: 'pending' | 'processing' | 'completed' | 'failed'
   payload: Record<string, unknown>
   result: Record<string, unknown> | null
@@ -1054,7 +1054,7 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
-    triggerAIJob(teamID: string, type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger', params: Record<string, unknown>) {
+    triggerAIJob(teamID: string, type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis', params: Record<string, unknown>) {
       return request<BackendAITriggerResponse>(options, `/v1/teams/${teamID}/ai-trigger`, {
         method: 'POST',
         headers: buildHeaders(options.token),
