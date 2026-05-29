@@ -160,7 +160,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 
 func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error) {
 	const query = `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at, t.scopes, t.team_id
+		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at, t.scopes, t.team_id, t.name
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = $1
@@ -172,6 +172,7 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	principal.Kind = "api_token"
 	var rawScopes string
 	var teamID sql.NullString
+	var tokenName sql.NullString
 	err := s.pool.QueryRow(ctx, query, hash).Scan(
 		&principal.User.ID,
 		&principal.User.Email,
@@ -181,7 +182,11 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		&principal.User.CreatedAt,
 		&rawScopes,
 		&teamID,
+		&tokenName,
 	)
+	if tokenName.Valid && tokenName.String == domain.WebSessionAPITokenName {
+		principal.Kind = "oidc"
+	}
 	if err != nil {
 		return domain.AuthenticatedPrincipal{}, err
 	}
