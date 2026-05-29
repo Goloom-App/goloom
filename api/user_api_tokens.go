@@ -13,8 +13,10 @@ import (
 )
 
 type createAPITokenRequest struct {
-	Name      string  `json:"name"`
-	ExpiresAt *string `json:"expires_at,omitempty"`
+	Name      string   `json:"name"`
+	ExpiresAt *string  `json:"expires_at,omitempty"`
+	Scopes    []string `json:"scopes,omitempty"`
+	TeamID    *string  `json:"team_id,omitempty"`
 }
 
 func (a *API) handleListMyAPITokens(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +61,17 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		}
 		expires = &t
 	}
-	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires)
+	normalizedScopes := normalizeTokenScopes(input.Scopes)
+	var encodedScopes string
+	if len(normalizedScopes) > 0 {
+		raw, err := json.Marshal(normalizedScopes)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		encodedScopes = string(raw)
+	}
+	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires, encodedScopes, normalizeOptionalStringPtr(input.TeamID))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -68,6 +80,40 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		"token":     plaintext,
 		"api_token": meta,
 	})
+}
+
+func normalizeTokenScopes(scopes []string) []string {
+	if len(scopes) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(scopes))
+	normalized := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		scope = strings.TrimSpace(scope)
+		if scope == "" {
+			continue
+		}
+		if _, ok := seen[scope]; ok {
+			continue
+		}
+		seen[scope] = struct{}{}
+		normalized = append(normalized, scope)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func normalizeOptionalStringPtr(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }
 
 func (a *API) handleRevokeMyAPIToken(w http.ResponseWriter, r *http.Request) {

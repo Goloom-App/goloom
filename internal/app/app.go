@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/api"
+	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/i18n"
@@ -19,6 +20,7 @@ import (
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/scheduler"
 	"git.f4mily.net/goloom/internal/security"
+	"git.f4mily.net/goloom/internal/sse"
 	"git.f4mily.net/goloom/internal/store"
 	"git.f4mily.net/goloom/internal/webui"
 )
@@ -128,7 +130,10 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("load i18n catalog: %w", err)
 	}
 
-	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog)
+	jobManager := aijobs.NewManager(dataStore, nil, cfg.PublicBaseURL)
+	sseHub := sse.NewHub()
+	defer sseHub.Close()
+	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog, jobManager, sseHub)
 	apiChain := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute, cfg.RateLimitAuthenticatedPerMinute), cfg.AllowedOrigins)
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/healthz", apiChain)

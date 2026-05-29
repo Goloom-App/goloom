@@ -1,6 +1,6 @@
 APP_NAME := goloom
 
-.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build
+.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build ai-service-build ai-service-run ai-service-test
 
 fmt:
 	go fmt ./...
@@ -45,3 +45,12 @@ docs-api-lint:
 docs-api-build:
 	mkdir -p docs/api/dist
 	pnpm --package=@redocly/cli dlx redocly build-docs docs/api/openapi.yaml -o docs/api/dist/index.html
+
+ai-service-build:
+	cd ai-service && uv sync --dev
+
+ai-service-run:
+	cd ai-service && uv run uvicorn app.main:app --host 0.0.0.0 --port 8090
+
+ai-service-test:
+	cd ai-service && uv run python -m pytest tests/ -v

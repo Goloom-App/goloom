@@ -51,7 +51,7 @@ func newTestAPI(t *testing.T, s *sqlitestore.Store) *API {
 	if err != nil {
 		t.Fatalf("i18n.Load: %v", err)
 	}
-	return New(logger, s, authSvc, reg, config.Config{}, nil, catalog)
+	return New(logger, s, authSvc, reg, config.Config{}, nil, catalog, nil, nil)
 }
 
 // seedCrossPostAccounts creates a team with two accounts: Bluesky (300 chars) and Mastodon (500 chars).
@@ -228,7 +228,7 @@ func TestValidatePost_OverallValid_WithAllOverrides(t *testing.T) {
 		ScheduledAt:    time.Now().UTC(),
 		TargetAccounts: []string{bsID, mastoID},
 		AccountContentOverride: map[string]string{
-			bsID:   string(runeLen(200)), // within Bluesky 300
+			bsID:    string(runeLen(200)), // within Bluesky 300
 			mastoID: string(runeLen(400)), // within Mastodon 500
 		},
 	})

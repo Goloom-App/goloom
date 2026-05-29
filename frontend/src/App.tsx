@@ -25,6 +25,10 @@ import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admi
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { RecurringPostsView } from './views/recurring/RecurringPostsView'
 import { SettingsView } from './views/settings/SettingsView'
+import { TeamProfileView } from './views/ai/TeamProfileView'
+import { CampaignFormatView } from './views/ai/CampaignFormatView'
+import { AIGenerateView } from './views/ai/AIGenerateView'
+import { ProactiveTriggersView } from './views/ai/ProactiveTriggersView'
 import {
   ApiError,
   createApiClient,
@@ -1884,6 +1888,22 @@ function App() {
             apiTokens={apiTokens}
             apiTokensLoading={apiTokensLoading}
           />
+        )}
+
+        {section === 'aiProfile' && selectedTeam && (
+          <TeamProfileView team={selectedTeam} />
+        )}
+
+        {section === 'aiCampaigns' && selectedTeam && (
+          <CampaignFormatView team={selectedTeam} />
+        )}
+
+        {section === 'aiGenerate' && selectedTeam && (
+          <AIGenerateView team={selectedTeam} accounts={teamAccounts} />
+        )}
+
+        {section === 'aiProactive' && selectedTeam && (
+          <ProactiveTriggersView team={selectedTeam} />
         )}
 
         {section === 'admin' && principalUser?.globalRole === 'admin' && (

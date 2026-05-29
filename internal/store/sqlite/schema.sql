@@ -14,6 +14,7 @@ create table if not exists teams (
     description text not null default '',
     is_personal integer not null default 0,
     personal_for_user_id text references users(id) on delete cascade,
+    is_ai_enabled integer not null default 0,
     created_at text not null
 );
 
@@ -48,8 +49,91 @@ create table if not exists api_tokens (
     token_hash text not null unique,
     last_used_at text,
     expires_at text,
+    scopes text not null default '',
+    team_id text references teams(id) on delete cascade,
     created_at text not null
 );
+
+create table if not exists team_profiles (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    style_metadata text not null default '{}',
+    auto_publish_enabled integer not null default 0,
+    created_at text not null default (datetime('now')),
+    updated_at text not null default (datetime('now'))
+);
+
+create table if not exists campaign_formats (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    name text not null,
+    weekday integer,
+    structure text not null default '{}',
+    required_hashtags text not null default '[]',
+    is_active integer not null default 1,
+    created_at text not null default (datetime('now')),
+    updated_at text not null default (datetime('now'))
+);
+
+create table if not exists style_examples (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    platform text not null,
+    content text not null,
+    notes text not null default '',
+    created_at text not null default (datetime('now'))
+);
+
+create table if not exists ai_jobs (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    author_user_id text not null references users(id),
+    job_type text not null,
+    status text not null default 'pending',
+    payload text not null default '{}',
+    result text,
+    error_message text,
+    created_at text not null default (datetime('now')),
+    updated_at text not null default (datetime('now')),
+    completed_at text
+);
+
+create table if not exists ai_service_configs (
+    id text primary key,
+    team_id text references teams(id) on delete cascade,
+    service_url text not null,
+    description text not null default '',
+    created_at text not null default (datetime('now'))
+);
+
+create table if not exists rss_feed_configs (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    feed_url text not null,
+    name text not null,
+    is_active integer not null default 1,
+    last_fetched_at text,
+    created_at text not null default (datetime('now'))
+);
+
+create table if not exists proactive_trigger_settings (
+    id text primary key,
+    team_id text not null unique references teams(id) on delete cascade,
+    content_gap_threshold_days integer not null default 3,
+    auto_fill_enabled integer not null default 0,
+    max_triggers_per_day integer not null default 5,
+    cron_schedule text not null default '0 9 * * *',
+    created_at text not null default (datetime('now')),
+    updated_at text not null default (datetime('now'))
+);
+
+create index if not exists idx_team_profiles_team on team_profiles(team_id);
+create unique index if not exists idx_team_profiles_team_unique on team_profiles(team_id);
+create index if not exists idx_campaign_formats_team on campaign_formats(team_id);
+create index if not exists idx_style_examples_team on style_examples(team_id);
+create index if not exists idx_ai_jobs_team_status on ai_jobs(team_id, status);
+create index if not exists idx_ai_jobs_status on ai_jobs(status);
+create index if not exists idx_rss_feed_configs_team on rss_feed_configs(team_id);
 
 create table if not exists provider_instances (
     id text primary key,

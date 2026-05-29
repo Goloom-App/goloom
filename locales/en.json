@@ -730,6 +730,15 @@
     "instance_url_invalid_host": "instance_url must include a valid host",
     "oidc_token_no_id_token": "token response did not include id_token (need openid scope and IdP that returns id_token)",
     "id_token_nonce_mismatch": "id token nonce mismatch",
-    "provider_instance_in_use": "provider instance still has connected social accounts"
+    "provider_instance_in_use": "provider instance still has connected social accounts",
+    "ai_not_enabled": "AI is not enabled for this team",
+    "ai_scope_required": "AI scope is required",
+    "ai_job_not_found": "AI job not found",
+    "ai_invalid_job_type": "invalid AI job type",
+    "ai_service_unavailable": "AI service is unavailable",
+    "team_profile_not_found": "team profile not found",
+    "campaign_format_not_found": "campaign format not found",
+    "style_example_limit_reached": "style example limit reached",
+    "ai_service_not_configured": "AI service is not configured"
   }
 }

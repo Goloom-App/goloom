@@ -66,7 +66,7 @@ func seedTeamWithEditorPost(t *testing.T, s *sqlitestore.Store) (bearer, teamID,
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "patch", nil)
+	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "patch", nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

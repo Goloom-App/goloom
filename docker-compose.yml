@@ -28,6 +28,21 @@ services:
     volumes:
       - goloom_data:/app/data
 
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: goloom-ai-service
+    restart: unless-stopped
+    profiles: ["ai"]
+    depends_on:
+      - app
+    environment:
+      GOLOOM_API_URL: http://app:8080
+      GOLOOM_API_TOKEN: ${AI_SERVICE_TOKEN:-}
+    ports:
+      - "8090:8090"
+
   db:
     image: postgres:16
     container_name: goloom-db

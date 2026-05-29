@@ -186,19 +186,38 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	principal := domain.AuthenticatedPrincipal{Kind: "api_token"}
 	now := nowString()
 
+	var createdAt string
+	var rawScopes string
+	var teamID sql.NullString
 	row := s.db.QueryRowContext(ctx, `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at
+		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at, t.scopes, t.team_id
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = ?
 		  and (t.expires_at is null or t.expires_at = '' or t.expires_at > ?)`,
 		hash, now,
 	)
-	user, err := scanUser(row)
+	err := row.Scan(
+		&principal.User.ID,
+		&principal.User.Email,
+		&principal.User.Name,
+		&principal.User.Subject,
+		&principal.User.IsAdmin,
+		&createdAt,
+		&rawScopes,
+		&teamID,
+	)
 	if err != nil {
 		return domain.AuthenticatedPrincipal{}, err
 	}
-	principal.User = user
+	principal.User.CreatedAt = mustParseTime(createdAt)
+	principal.Scopes, err = parseTokenScopes(rawScopes)
+	if err != nil {
+		return domain.AuthenticatedPrincipal{}, err
+	}
+	if teamID.Valid && strings.TrimSpace(teamID.String) != "" {
+		principal.TokenTeamID = &teamID.String
+	}
 
 	rollingExpiry := formatTime(time.Now().UTC().Add(12 * time.Hour))
 	_, _ = s.db.ExecContext(ctx, `
@@ -209,6 +228,18 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		now, rollingExpiry, hash,
 	)
 	return principal, nil
+}
+
+func parseTokenScopes(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var scopes []string
+	if err := json.Unmarshal([]byte(raw), &scopes); err != nil {
+		return nil, fmt.Errorf("parse token scopes: %w", err)
+	}
+	return scopes, nil
 }
 
 func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
@@ -235,7 +266,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	_ = isAdmin
 	query := `
-		select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
 		from teams
 	`
 	args := []any{userID}
@@ -290,11 +321,30 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 		if err != nil {
 			return domain.Team{}, err
 		}
-		_, err = s.db.ExecContext(ctx, `
+		if input.IsAIEnabled != nil {
+			_, err = s.db.ExecContext(ctx, `
+				update teams
+				set name = ?, description = ?, scheduling_prefs = ?, is_ai_enabled = ?
+				where id = ?`,
+				input.Name, input.Description, prefsJSON, boolToInt(*input.IsAIEnabled), teamID,
+			)
+		} else {
+			_, err = s.db.ExecContext(ctx, `
+				update teams
+				set name = ?, description = ?, scheduling_prefs = ?
+				where id = ?`,
+				input.Name, input.Description, prefsJSON, teamID,
+			)
+		}
+		if err != nil {
+			return domain.Team{}, err
+		}
+	} else if input.IsAIEnabled != nil {
+		_, err := s.db.ExecContext(ctx, `
 			update teams
-			set name = ?, description = ?, scheduling_prefs = ?
+			set name = ?, description = ?, is_ai_enabled = ?
 			where id = ?`,
-			input.Name, input.Description, prefsJSON, teamID,
+			input.Name, input.Description, boolToInt(*input.IsAIEnabled), teamID,
 		)
 		if err != nil {
 			return domain.Team{}, err
@@ -311,7 +361,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 		}
 	}
 	return queryTeam(ctx, s.db, `
-		select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
 		from teams
 		where id = ?`,
 		teamID,
@@ -1131,14 +1181,16 @@ func scanTeam(scanner teamScanner) (domain.Team, error) {
 	var (
 		team              domain.Team
 		isPersonal        int
+		isAIEnabled       int
 		personalForUserID sql.NullString
 		schedulingPrefs   sql.NullString
 		createdAt         string
 	)
-	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt, &isPersonal, &personalForUserID, &schedulingPrefs); err != nil {
+	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt, &isPersonal, &isAIEnabled, &personalForUserID, &schedulingPrefs); err != nil {
 		return domain.Team{}, err
 	}
 	team.IsPersonal = isPersonal != 0
+	team.IsAIEnabled = isAIEnabled != 0
 	team.PersonalForUserID = personalForUserID.String
 	if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {
 		prefs, err := domain.ParseTeamSchedulingPrefsJSON(schedulingPrefs.String)

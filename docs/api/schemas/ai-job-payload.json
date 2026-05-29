@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AIJobPayload",
+  "description": "Payload sent from goloom to AI service when dispatching an AI job",
+  "type": "object",
+  "required": ["type", "team_id", "author_user_id", "callback_url", "params"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["voice_engine", "campaign_autopilot", "proactive_trigger"],
+      "description": "Type of AI job to execute"
+    },
+    "team_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Team ID for which the job is being executed"
+    },
+    "author_user_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "User ID who triggered the job (will be set as post author)"
+    },
+    "callback_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL where AI service should POST results when done"
+    },
+    "params": {
+      "type": "object",
+      "description": "Type-specific parameters",
+      "oneOf": [
+        {
+          "title": "VoiceEngineParams",
+          "properties": {
+            "platform": {"type": "string"},
+            "prompt_hint": {"type": "string"},
+            "target_account_ids": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        {
+          "title": "CampaignAutopilotParams",
+          "properties": {
+            "campaign_format_id": {"type": "string", "format": "uuid"},
+            "target_date": {"type": "string", "format": "date"}
+          }
+        },
+        {
+          "title": "ProactiveTriggerParams",
+          "properties": {
+            "trigger_type": {"type": "string"},
+            "source_url": {"type": "string"},
+            "content_hint": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "context": {
+      "type": "object",
+      "description": "Team context populated by Go backend (team profile, campaign rules, recent posts)"
+    }
+  }
+}

@@ -10,12 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/i18n"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
+	"git.f4mily.net/goloom/internal/sse"
 	"git.f4mily.net/goloom/internal/store"
 )
 
@@ -27,6 +29,8 @@ type API struct {
 	config      config.Config
 	metricsSync metricsSyncRunner
 	i18n        *i18n.Catalog
+	jobManager  *aijobs.Manager
+	hub         *sse.Hub
 }
 
 type validationResponse struct {
@@ -44,7 +48,14 @@ type destinationInfo struct {
 	Valid     bool   `json:"valid"`
 }
 
-func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner, catalog *i18n.Catalog) *API {
+func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner, catalog *i18n.Catalog, jobManager *aijobs.Manager, hub *sse.Hub) *API {
+	if jobManager == nil {
+		jobManager = aijobs.NewManager(store, nil, cfg.PublicBaseURL)
+	}
+	if hub == nil {
+		hub = sse.NewHub()
+	}
+
 	return &API{
 		log:         logger,
 		store:       store,
@@ -53,6 +64,8 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		config:      cfg,
 		metricsSync: metricsSync,
 		i18n:        catalog,
+		jobManager:  jobManager,
+		hub:         hub,
 	}
 }
 
@@ -129,6 +142,33 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("PATCH /v1/teams/{teamID}/post-templates/{templateID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdatePostTemplate))))
 	mux.Handle("DELETE /v1/teams/{teamID}/post-templates/{templateID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeletePostTemplate))))
 	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/skip", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleSkipPostTemplateOccurrence))))
+	mux.Handle("PUT /v1/teams/{teamID}/profile", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpsertTeamProfile)))))
+	mux.Handle("GET /v1/teams/{teamID}/profile", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetTeamProfile)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/profile", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteTeamProfile)))))
+	mux.Handle("POST /v1/teams/{teamID}/campaign-formats", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateCampaignFormat)))))
+	mux.Handle("GET /v1/teams/{teamID}/campaign-formats", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListCampaignFormats)))))
+	mux.Handle("GET /v1/teams/{teamID}/campaign-formats/{formatID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetCampaignFormat)))))
+	mux.Handle("PATCH /v1/teams/{teamID}/campaign-formats/{formatID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdateCampaignFormat)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/campaign-formats/{formatID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteCampaignFormat)))))
+	mux.Handle("POST /v1/teams/{teamID}/style-examples", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateStyleExample)))))
+	mux.Handle("GET /v1/teams/{teamID}/style-examples", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListStyleExamples)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/style-examples/{exampleID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteStyleExample)))))
+	mux.Handle("POST /v1/teams/{teamID}/rss-feeds", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateRSSFeed)))))
+	mux.Handle("GET /v1/teams/{teamID}/rss-feeds", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListRSSFeeds)))))
+	mux.Handle("PATCH /v1/teams/{teamID}/rss-feeds/{feedID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdateRSSFeed)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/rss-feeds/{feedID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteRSSFeed)))))
+	mux.Handle("GET /v1/teams/{teamID}/ai-service-config", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIServiceConfig)))))
+	mux.Handle("PUT /v1/teams/{teamID}/ai-service-config", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpsertAIServiceConfig)))))
+	mux.Handle("GET /v1/teams/{teamID}/proactive-settings", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetProactiveSettings)))))
+	mux.Handle("PUT /v1/teams/{teamID}/proactive-settings", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpsertProactiveSettings)))))
+	mux.Handle("GET /v1/teams/{teamID}/ai-context", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIReadContext)(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIContext))))))
+	mux.Handle("POST /v1/teams/{teamID}/posts/draft", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIWriteDrafts)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAIDraft))))))
+	mux.Handle("POST /v1/teams/{teamID}/ai-trigger", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAITriggerJobs)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAITrigger))))))
+	mux.Handle("GET /v1/teams/{teamID}/ai-jobs", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAIJobs)))))
+	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/{jobID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIJob)))))
+	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/stream", a.auth.AcceptQueryToken("token")(a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIJobStream))))))
+	mux.Handle("GET /v1/admin/ai-enabled-teams", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminListAIEnabledTeams))))
+	mux.Handle("POST /v1/webhooks/ai-callback", a.auth.RequireAuth(auth.RequireScope(auth.ScopeAIWriteDrafts)(http.HandlerFunc(a.handleAICallback))))
 
 	chain := security.CORSMiddleware(allowedOrigins)(limiter.Middleware(mux))
 	if a.log != nil {
@@ -279,6 +319,12 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
+	if input.Name == "" {
+		input.Name = team.Name
+	}
+	if input.Description == "" {
+		input.Description = team.Description
+	}
 	if input.Name == "" {
 		a.writeError(w, r, "name_required", http.StatusBadRequest)
 		return

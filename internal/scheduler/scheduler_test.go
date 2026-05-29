@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"errors"
 	"io"
 	"log/slog"
@@ -48,7 +49,7 @@ type mockStore struct {
 	listAnnouncingTemplatesErr error
 
 	createScheduledPostCalls []domain.CreatePostInput
-	createScheduledPostErr  error
+	createScheduledPostErr   error
 
 	isPostTemplateOccurrenceSkippedFn func(templateID string, occurrenceAt time.Time) (bool, error)
 	getPostTemplateShiftToFn          func(templateID string, occurrenceAt time.Time) *time.Time
@@ -56,9 +57,9 @@ type mockStore struct {
 }
 
 type advanceTemplateCall struct {
-	templateID    string
+	templateID      string
 	nextMaterialize *time.Time
-	counterNext   int
+	counterNext     int
 }
 
 type markTargetCall struct {
@@ -103,6 +104,114 @@ func (m *mockStore) CreateTeam(ctx context.Context, ownerUserID string, input do
 func (m *mockStore) UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error) {
 	return domain.Team{}, nil
 }
+
+func (m *mockStore) CreateTeamProfile(ctx context.Context, teamID string, input domain.TeamProfile) (domain.TeamProfile, error) {
+	return domain.TeamProfile{}, nil
+}
+
+func (m *mockStore) GetTeamProfile(ctx context.Context, teamID string) (domain.TeamProfile, error) {
+	return domain.TeamProfile{}, nil
+}
+
+func (m *mockStore) UpdateTeamProfile(ctx context.Context, teamID string, input domain.TeamProfile) (domain.TeamProfile, error) {
+	return domain.TeamProfile{}, nil
+}
+
+func (m *mockStore) DeleteTeamProfile(ctx context.Context, teamID string) error { return nil }
+
+func (m *mockStore) CreateCampaignFormat(ctx context.Context, teamID string, input domain.CampaignFormat) (domain.CampaignFormat, error) {
+	return domain.CampaignFormat{}, nil
+}
+
+func (m *mockStore) ListCampaignFormats(ctx context.Context, teamID string) ([]domain.CampaignFormat, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetCampaignFormatByID(ctx context.Context, teamID string, id string) (domain.CampaignFormat, error) {
+	return domain.CampaignFormat{}, nil
+}
+
+func (m *mockStore) UpdateCampaignFormat(ctx context.Context, teamID string, id string, input domain.CampaignFormat) (domain.CampaignFormat, error) {
+	return domain.CampaignFormat{}, nil
+}
+
+func (m *mockStore) DeleteCampaignFormat(ctx context.Context, teamID string, id string) error {
+	return nil
+}
+
+func (m *mockStore) CreateStyleExample(ctx context.Context, teamID string, input domain.StyleExample) (domain.StyleExample, error) {
+	return domain.StyleExample{}, nil
+}
+
+func (m *mockStore) ListStyleExamples(ctx context.Context, teamID string) ([]domain.StyleExample, error) {
+	return nil, nil
+}
+
+func (m *mockStore) DeleteStyleExample(ctx context.Context, teamID string, id string) error {
+	return nil
+}
+
+func (m *mockStore) CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJob, error) {
+	return domain.AIJob{}, nil
+}
+
+func (m *mockStore) GetAIJobByID(ctx context.Context, teamID string, id string) (domain.AIJob, error) {
+	return domain.AIJob{}, nil
+}
+
+func (m *mockStore) GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob, error) {
+	return domain.AIJob{}, fmt.Errorf("not implemented")
+}
+
+func (m *mockStore) ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error) {
+	return nil, nil
+}
+
+func (m *mockStore) UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) error {
+	return nil
+}
+
+func (m *mockStore) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetAIServiceConfig(ctx context.Context, teamID string) (domain.AIServiceConfig, error) {
+	return domain.AIServiceConfig{}, nil
+}
+
+func (m *mockStore) UpsertAIServiceConfig(ctx context.Context, teamID string, input domain.AIServiceConfig) (domain.AIServiceConfig, error) {
+	return domain.AIServiceConfig{}, nil
+}
+
+func (m *mockStore) CreateRSSFeedConfig(ctx context.Context, teamID string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error) {
+	return domain.RSSFeedConfig{}, nil
+}
+
+func (m *mockStore) ListRSSFeedConfigs(ctx context.Context, teamID string) ([]domain.RSSFeedConfig, error) {
+	return nil, nil
+}
+
+func (m *mockStore) UpdateRSSFeedConfig(ctx context.Context, teamID string, id string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error) {
+	return domain.RSSFeedConfig{}, nil
+}
+
+func (m *mockStore) DeleteRSSFeedConfig(ctx context.Context, teamID string, id string) error {
+	return nil
+}
+
+func (m *mockStore) GetProactiveTriggerSettings(ctx context.Context, teamID string) (domain.ProactiveTriggerSettings, error) {
+	return domain.ProactiveTriggerSettings{}, nil
+}
+
+func (m *mockStore) UpsertProactiveTriggerSettings(ctx context.Context, teamID string, input domain.ProactiveTriggerSettings) (domain.ProactiveTriggerSettings, error) {
+	return domain.ProactiveTriggerSettings{}, nil
+}
+
+func (m *mockStore) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIContext, error) {
+	return domain.AIContext{}, nil
+}
+
+func (m *mockStore) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) { return nil, nil }
 
 func (m *mockStore) ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error) {
 	return nil, nil
@@ -390,7 +499,7 @@ func (m *mockStore) RepairFuturePostedPosts(ctx context.Context) (int64, error) 
 	return 0, nil
 }
 
-func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (string, domain.APIToken, error) {
+func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
 
@@ -498,9 +607,9 @@ func (m *mockStore) AdvancePostTemplateSchedule(ctx context.Context, templateID 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.advancePostTemplateCalls = append(m.advancePostTemplateCalls, advanceTemplateCall{
-		templateID:    templateID,
+		templateID:      templateID,
 		nextMaterialize: nextMaterialize,
-		counterNext:   counterNext,
+		counterNext:     counterNext,
 	})
 	return nil
 }
@@ -513,10 +622,12 @@ func (m *mockStore) InsertLogEntry(ctx context.Context, e domain.LogEntry) error
 func (m *mockStore) ListLogEntries(ctx context.Context, filter domain.LogFilter) ([]domain.LogEntry, error) {
 	return nil, nil
 }
-func (m *mockStore) CountLogEntries(ctx context.Context, filter domain.LogFilter) (int, error) { return 0, nil }
-func (m *mockStore) ArchiveLogEntry(ctx context.Context, id string) error      { return nil }
-func (m *mockStore) UnarchiveLogEntry(ctx context.Context, id string) error    { return nil }
-func (m *mockStore) DeleteLogEntry(ctx context.Context, id string) error       { return nil }
+func (m *mockStore) CountLogEntries(ctx context.Context, filter domain.LogFilter) (int, error) {
+	return 0, nil
+}
+func (m *mockStore) ArchiveLogEntry(ctx context.Context, id string) error   { return nil }
+func (m *mockStore) UnarchiveLogEntry(ctx context.Context, id string) error { return nil }
+func (m *mockStore) DeleteLogEntry(ctx context.Context, id string) error    { return nil }
 func (m *mockStore) DeleteLogEntriesBefore(ctx context.Context, before time.Time) (int64, error) {
 	return 0, nil
 }
@@ -993,7 +1104,7 @@ func TestService_materializePostTemplates_announcement(t *testing.T) {
 	}
 
 	st := &mockStore{
-		listDuePostTemplates: []domain.PostTemplate{parent},
+		listDuePostTemplates:    []domain.PostTemplate{parent},
 		listAnnouncingTemplates: []domain.PostTemplate{ann},
 	}
 	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0)

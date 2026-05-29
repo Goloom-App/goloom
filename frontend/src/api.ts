@@ -37,6 +37,7 @@ export interface BackendTeam {
   description: string
   created_at: string
   is_personal: boolean
+  is_ai_enabled?: boolean
   personal_for_user_id?: string
   scheduling_preferences?: BackendTeamSchedulingPreferences
 }
@@ -266,6 +267,92 @@ export interface BackendAuthStatus {
 
 export interface BackendOAuthAuthorization {
   authorization_url: string
+}
+
+export interface BackendStyleMetadata {
+  tonality: string
+  formatting_rules: string[]
+  banned_words: string[]
+  max_hashtags: number
+  preferred_language: string
+}
+
+export interface BackendTeamProfile {
+  id: string
+  team_id: string
+  style_metadata: BackendStyleMetadata
+  auto_publish_enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface BackendCampaignFormat {
+  id: string
+  team_id: string
+  name: string
+  weekday: number | null
+  structure: Record<string, unknown>
+  required_hashtags: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface BackendStyleExample {
+  id: string
+  team_id: string
+  platform: string
+  content: string
+  notes: string
+  created_at: string
+}
+
+export interface BackendAIJob {
+  id: string
+  team_id: string
+  author_user_id: string
+  type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger'
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  payload: Record<string, unknown>
+  result: Record<string, unknown> | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  completed_at: string | null
+}
+
+export interface BackendAITriggerResponse {
+  jobId: string
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+}
+
+export interface BackendAIServiceConfig {
+  id: string
+  team_id: string | null
+  service_url: string
+  description: string
+  created_at: string
+}
+
+export interface BackendRSSFeedConfig {
+  id: string
+  team_id: string
+  feed_url: string
+  name: string
+  is_active: boolean
+  last_fetched_at: string | null
+  created_at: string
+}
+
+export interface BackendProactiveTriggerSettings {
+  id: string
+  team_id: string
+  content_gap_threshold_days: number
+  auto_fill_enabled: boolean
+  max_triggers_per_day: number
+  cron_schedule: string
+  created_at: string
+  updated_at: string
 }
 
 function currentAcceptLanguage(): string {
@@ -861,6 +948,212 @@ export function createApiClient(options: ApiClientOptions) {
           valid: boolean
         }>
       }>(options, `/v1/teams/${teamID}/posts/validate`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    getTeamProfile(teamID: string) {
+      return request<BackendTeamProfile>(options, `/v1/teams/${teamID}/profile`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    upsertTeamProfile(
+      teamID: string,
+      payload: {
+        style_metadata: BackendStyleMetadata
+        auto_publish_enabled: boolean
+      },
+    ) {
+      return request<BackendTeamProfile>(options, `/v1/teams/${teamID}/profile`, {
+        method: 'PUT',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    deleteTeamProfile(teamID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/profile`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listCampaignFormats(teamID: string) {
+      return request<{ items: BackendCampaignFormat[] }>(options, `/v1/teams/${teamID}/campaign-formats`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    createCampaignFormat(
+      teamID: string,
+      payload: {
+        name: string
+        weekday: number | null
+        structure: Record<string, unknown>
+        required_hashtags: string[]
+        is_active: boolean
+      },
+    ) {
+      return request<BackendCampaignFormat>(options, `/v1/teams/${teamID}/campaign-formats`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    updateCampaignFormat(
+      teamID: string,
+      formatID: string,
+      payload: {
+        name?: string
+        weekday?: number | null
+        structure?: Record<string, unknown>
+        required_hashtags?: string[]
+        is_active?: boolean
+      },
+    ) {
+      return request<BackendCampaignFormat>(options, `/v1/teams/${teamID}/campaign-formats/${formatID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    deleteCampaignFormat(teamID: string, formatID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/campaign-formats/${formatID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listStyleExamples(teamID: string) {
+      return request<{ items: BackendStyleExample[] }>(options, `/v1/teams/${teamID}/style-examples`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    createStyleExample(
+      teamID: string,
+      payload: {
+        platform: string
+        content: string
+        notes: string
+      },
+    ) {
+      return request<BackendStyleExample>(options, `/v1/teams/${teamID}/style-examples`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    deleteStyleExample(teamID: string, exampleID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/style-examples/${exampleID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    triggerAIJob(teamID: string, type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger', params: Record<string, unknown>) {
+      return request<BackendAITriggerResponse>(options, `/v1/teams/${teamID}/ai-trigger`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify({ type, params }),
+      })
+    },
+    getAIJob(teamID: string, jobID: string) {
+      return request<BackendAIJob>(options, `/v1/teams/${teamID}/ai-jobs/${jobID}`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listAIJobs(teamID: string) {
+      return request<{ items: BackendAIJob[] }>(options, `/v1/teams/${teamID}/ai-jobs`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    getAIContext(teamID: string) {
+      return request<{
+        team: BackendTeam
+        profile: BackendTeamProfile | null
+        campaign_formats: BackendCampaignFormat[]
+        style_examples: BackendStyleExample[]
+        recent_posts: BackendPost[]
+      }>(options, `/v1/teams/${teamID}/ai-context`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listRSSFeeds(teamID: string) {
+      return request<{ items: BackendRSSFeedConfig[] }>(options, `/v1/teams/${teamID}/rss-feeds`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    createRSSFeed(
+      teamID: string,
+      payload: {
+        feed_url: string
+        name: string
+        is_active: boolean
+      },
+    ) {
+      return request<BackendRSSFeedConfig>(options, `/v1/teams/${teamID}/rss-feeds`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    updateRSSFeed(
+      teamID: string,
+      feedID: string,
+      payload: {
+        feed_url?: string
+        name?: string
+        is_active?: boolean
+      },
+    ) {
+      return request<BackendRSSFeedConfig>(options, `/v1/teams/${teamID}/rss-feeds/${feedID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    deleteRSSFeed(teamID: string, feedID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/rss-feeds/${feedID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    getAIServiceConfig(teamID: string) {
+      return request<BackendAIServiceConfig>(options, `/v1/teams/${teamID}/ai-service-config`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    upsertAIServiceConfig(
+      teamID: string,
+      payload: {
+        service_url: string
+        description: string
+      },
+    ) {
+      return request<BackendAIServiceConfig>(options, `/v1/teams/${teamID}/ai-service-config`, {
+        method: 'PUT',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    getProactiveSettings(teamID: string) {
+      return request<BackendProactiveTriggerSettings>(options, `/v1/teams/${teamID}/proactive-settings`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    upsertProactiveSettings(
+      teamID: string,
+      payload: {
+        content_gap_threshold_days: number
+        auto_fill_enabled: boolean
+        max_triggers_per_day: number
+        cron_schedule: string
+      },
+    ) {
+      return request<BackendProactiveTriggerSettings>(options, `/v1/teams/${teamID}/proactive-settings`, {
+        method: 'PUT',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    createAIDraft(teamID: string, payload: Record<string, unknown>) {
+      return request<BackendPost>(options, `/v1/teams/${teamID}/posts/draft`, {
         method: 'POST',
         headers: buildHeaders(options.token),
         body: JSON.stringify(payload),

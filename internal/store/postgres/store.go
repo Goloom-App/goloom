@@ -160,7 +160,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 
 func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error) {
 	const query = `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at
+		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at, t.scopes, t.team_id
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = $1
@@ -170,6 +170,8 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	hash := security.HashToken(bearerToken)
 	var principal domain.AuthenticatedPrincipal
 	principal.Kind = "api_token"
+	var rawScopes string
+	var teamID sql.NullString
 	err := s.pool.QueryRow(ctx, query, hash).Scan(
 		&principal.User.ID,
 		&principal.User.Email,
@@ -177,9 +179,18 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		&principal.User.Subject,
 		&principal.User.IsAdmin,
 		&principal.User.CreatedAt,
+		&rawScopes,
+		&teamID,
 	)
 	if err != nil {
 		return domain.AuthenticatedPrincipal{}, err
+	}
+	principal.Scopes, err = parseTokenScopes(rawScopes)
+	if err != nil {
+		return domain.AuthenticatedPrincipal{}, err
+	}
+	if teamID.Valid && strings.TrimSpace(teamID.String) != "" {
+		principal.TokenTeamID = &teamID.String
 	}
 
 	_, _ = s.pool.Exec(ctx, `
@@ -188,6 +199,18 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		    expires_at = case when name = '__web_session' then now() + interval '12 hours' else expires_at end
 		where token_hash = $1`, hash)
 	return principal, nil
+}
+
+func parseTokenScopes(raw string) ([]string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var scopes []string
+	if err := json.Unmarshal([]byte(raw), &scopes); err != nil {
+		return nil, fmt.Errorf("parse token scopes: %w", err)
+	}
+	return scopes, nil
 }
 
 func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
@@ -245,7 +268,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	_ = isAdmin
 	query := `
-		select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
 		from teams
 	`
 	args := []any{userID}
@@ -279,7 +302,7 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 	const insertTeam = `
 		insert into teams (name, description)
 		values ($1, $2)
-		returning id, name, description, created_at
+		returning id, name, description, created_at, is_ai_enabled
 	`
 
 	var team domain.Team
@@ -288,6 +311,7 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 		&team.Name,
 		&team.Description,
 		&team.CreatedAt,
+		&team.IsAIEnabled,
 	); err != nil {
 		return domain.Team{}, err
 	}
@@ -314,19 +338,37 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 		if err != nil {
 			return domain.Team{}, err
 		}
+		if input.IsAIEnabled != nil {
+			const query = `
+				update teams
+				set name = $2, description = $3, scheduling_prefs = $4, is_ai_enabled = $5
+				where id = $1
+				returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+			`
+			return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, prefsJSON, *input.IsAIEnabled))
+		}
 		const query = `
 			update teams
 			set name = $2, description = $3, scheduling_prefs = $4
 			where id = $1
-			returning id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
+			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
 		`
 		return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, prefsJSON))
+	}
+	if input.IsAIEnabled != nil {
+		const query = `
+			update teams
+			set name = $2, description = $3, is_ai_enabled = $4
+			where id = $1
+			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+		`
+		return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, *input.IsAIEnabled))
 	}
 	const query = `
 		update teams
 		set name = $2, description = $3
 		where id = $1
-		returning id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
+		returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
 	`
 	return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description))
 }
@@ -343,6 +385,7 @@ func scanTeamRow(row interface {
 		&team.Description,
 		&team.CreatedAt,
 		&team.IsPersonal,
+		&team.IsAIEnabled,
 		&personal,
 		&schedulingPrefs,
 	)

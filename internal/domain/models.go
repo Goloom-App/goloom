@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -39,6 +40,23 @@ const (
 	PostStatusFailed     PostStatus = "failed"
 	PostStatusCancelled  PostStatus = "cancelled"
 	PostStatusDraft      PostStatus = "draft"
+)
+
+type AIJobType string
+
+const (
+	AIJobTypeVoiceEngine       AIJobType = "voice_engine"
+	AIJobTypeCampaignAutopilot AIJobType = "campaign_autopilot"
+	AIJobTypeProactiveTrigger  AIJobType = "proactive_trigger"
+)
+
+type AIJobStatus string
+
+const (
+	AIJobStatusPending    AIJobStatus = "pending"
+	AIJobStatusProcessing AIJobStatus = "processing"
+	AIJobStatusCompleted  AIJobStatus = "completed"
+	AIJobStatusFailed     AIJobStatus = "failed"
 )
 
 // Post visibility values aligned with Mastodon API.
@@ -173,13 +191,103 @@ type User struct {
 }
 
 type Team struct {
-	ID                  string                    `json:"id"`
-	Name                string                    `json:"name"`
-	Description         string                    `json:"description"`
-	IsPersonal          bool                      `json:"is_personal"`
-	PersonalForUserID   string                    `json:"personal_for_user_id,omitempty"`
-	SchedulingPrefs     TeamSchedulingPreferences `json:"scheduling_preferences"`
-	CreatedAt           time.Time                 `json:"created_at"`
+	ID                string                    `json:"id"`
+	Name              string                    `json:"name"`
+	Description       string                    `json:"description"`
+	IsPersonal        bool                      `json:"is_personal"`
+	IsAIEnabled       bool                      `json:"is_ai_enabled"`
+	PersonalForUserID string                    `json:"personal_for_user_id,omitempty"`
+	SchedulingPrefs   TeamSchedulingPreferences `json:"scheduling_preferences"`
+	CreatedAt         time.Time                 `json:"created_at"`
+}
+
+type StyleMetadata struct {
+	Tonality          string   `json:"tonality"`
+	FormattingRules   []string `json:"formatting_rules"`
+	BannedWords       []string `json:"banned_words"`
+	MaxHashtags       int      `json:"max_hashtags"`
+	PreferredLanguage string   `json:"preferred_language"`
+}
+
+type TeamProfile struct {
+	ID                 string        `json:"id"`
+	TeamID             string        `json:"team_id"`
+	StyleMetadata      StyleMetadata `json:"style_metadata"`
+	AutoPublishEnabled bool          `json:"auto_publish_enabled"`
+	CreatedAt          time.Time     `json:"created_at"`
+	UpdatedAt          time.Time     `json:"updated_at"`
+}
+
+type CampaignFormat struct {
+	ID               string          `json:"id"`
+	TeamID           string          `json:"team_id"`
+	Name             string          `json:"name"`
+	Weekday          *int            `json:"weekday,omitempty"`
+	Structure        json.RawMessage `json:"structure"`
+	RequiredHashtags []string        `json:"required_hashtags"`
+	IsActive         bool            `json:"is_active"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+}
+
+type StyleExample struct {
+	ID        string    `json:"id"`
+	TeamID    string    `json:"team_id"`
+	Platform  string    `json:"platform"`
+	Content   string    `json:"content"`
+	Notes     string    `json:"notes"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type AIJob struct {
+	ID           string          `json:"id"`
+	TeamID       string          `json:"team_id"`
+	AuthorUserID string          `json:"author_user_id"`
+	Type         AIJobType       `json:"type"`
+	Status       AIJobStatus     `json:"status"`
+	Payload      json.RawMessage `json:"payload"`
+	Result       json.RawMessage `json:"result"`
+	ErrorMessage string          `json:"error_message,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
+}
+
+type AIServiceConfig struct {
+	ID          string    `json:"id"`
+	TeamID      *string   `json:"team_id,omitempty"`
+	ServiceURL  string    `json:"service_url"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type RSSFeedConfig struct {
+	ID            string     `json:"id"`
+	TeamID        string     `json:"team_id"`
+	FeedURL       string     `json:"feed_url"`
+	Name          string     `json:"name"`
+	IsActive      bool       `json:"is_active"`
+	LastFetchedAt *time.Time `json:"last_fetched_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+type ProactiveTriggerSettings struct {
+	ID                      string    `json:"id"`
+	TeamID                  string    `json:"team_id"`
+	ContentGapThresholdDays int       `json:"content_gap_threshold_days"`
+	AutoFillEnabled         bool      `json:"auto_fill_enabled"`
+	MaxTriggersPerDay       int       `json:"max_triggers_per_day"`
+	CronSchedule            string    `json:"cron_schedule"`
+	CreatedAt               time.Time `json:"created_at"`
+	UpdatedAt               time.Time `json:"updated_at"`
+}
+
+type AIContext struct {
+	Team            Team             `json:"team"`
+	Profile         *TeamProfile     `json:"profile,omitempty"`
+	CampaignFormats []CampaignFormat `json:"campaign_formats"`
+	StyleExamples   []StyleExample   `json:"style_examples"`
+	RecentPosts     []ScheduledPost  `json:"recent_posts"`
 }
 
 type TeamInvitation struct {
@@ -288,16 +396,16 @@ type CreatePostTemplateInput struct {
 }
 
 type UpdatePostTemplateInput struct {
-	Title                  *string              `json:"title,omitempty"`
-	Content                *string              `json:"content,omitempty"`
-	RecurrenceJSON         *string              `json:"recurrence_json,omitempty"`
-	Visibility             *string              `json:"visibility,omitempty"`
-	MediaIDs               *[]string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount  map[string][]string  `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs       *[]string            `json:"target_account_ids,omitempty"`
-	Enabled                *bool                `json:"enabled,omitempty"`
-	AnnouncesTemplateID    *string              `json:"announces_template_id,omitempty"`
-	AnnouncementDaysBefore *int                 `json:"announcement_days_before,omitempty"`
+	Title                  *string             `json:"title,omitempty"`
+	Content                *string             `json:"content,omitempty"`
+	RecurrenceJSON         *string             `json:"recurrence_json,omitempty"`
+	Visibility             *string             `json:"visibility,omitempty"`
+	MediaIDs               *[]string           `json:"media_ids,omitempty"`
+	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs       *[]string           `json:"target_account_ids,omitempty"`
+	Enabled                *bool               `json:"enabled,omitempty"`
+	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
+	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
 }
 
 // EngagementHourBucket aggregates engagement score by UTC hour-of-day for posted content.
@@ -340,13 +448,13 @@ type PostedTargetForMetricSync struct {
 
 // AdminSyncStatus summarizes metrics sync scheduler state for the admin dashboard.
 type AdminSyncStatus struct {
-	PostMetricsSyncInterval      string `json:"post_metrics_sync_interval"`
-	AccountMetricsSyncInterval   string `json:"account_metrics_sync_interval"`
-	AccountHealthInterval        string `json:"account_health_interval"`
-	PostedTargetsPendingSync     int    `json:"posted_targets_pending_sync"`
-	PostedTargetsNeverSynced     int    `json:"posted_targets_never_synced"`
-	PostedTargetsWithMetrics     int    `json:"posted_targets_with_metrics"`
-	AccountsWithFollowerMetrics  int    `json:"accounts_with_follower_metrics"`
+	PostMetricsSyncInterval     string `json:"post_metrics_sync_interval"`
+	AccountMetricsSyncInterval  string `json:"account_metrics_sync_interval"`
+	AccountHealthInterval       string `json:"account_health_interval"`
+	PostedTargetsPendingSync    int    `json:"posted_targets_pending_sync"`
+	PostedTargetsNeverSynced    int    `json:"posted_targets_never_synced"`
+	PostedTargetsWithMetrics    int    `json:"posted_targets_with_metrics"`
+	AccountsWithFollowerMetrics int    `json:"accounts_with_follower_metrics"`
 }
 
 // PostEngagementSummary ranks a posted scheduled post by summed metrics.
@@ -439,8 +547,10 @@ type APIToken struct {
 }
 
 type AuthenticatedPrincipal struct {
-	User User   `json:"user"`
-	Kind string `json:"kind"`
+	User        User     `json:"user"`
+	Kind        string   `json:"kind"`
+	Scopes      []string `json:"scopes,omitempty"`
+	TokenTeamID *string  `json:"token_team_id,omitempty"`
 }
 
 type CreateAccountInput struct {
@@ -522,6 +632,7 @@ type UpdateTeamInput struct {
 	Name                  string                     `json:"name"`
 	Description           string                     `json:"description"`
 	SchedulingPreferences *TeamSchedulingPreferences `json:"scheduling_preferences,omitempty"`
+	IsAIEnabled           *bool                      `json:"is_ai_enabled,omitempty"`
 }
 
 // AdminMetrics aggregates global counts for the admin dashboard.
@@ -594,6 +705,42 @@ func (in CreatePostInput) Validate() error {
 	return nil
 }
 
+func (in TeamProfile) Validate() error {
+	if strings.TrimSpace(in.TeamID) == "" {
+		return errors.New("team_id is required")
+	}
+	if in.StyleMetadata.Tonality == "" && len(in.StyleMetadata.FormattingRules) == 0 && len(in.StyleMetadata.BannedWords) == 0 && in.StyleMetadata.MaxHashtags == 0 && in.StyleMetadata.PreferredLanguage == "" {
+		return errors.New("style_metadata is required")
+	}
+	return nil
+}
+
+func (in CampaignFormat) Validate() error {
+	if strings.TrimSpace(in.TeamID) == "" {
+		return errors.New("team_id is required")
+	}
+	if strings.TrimSpace(in.Name) == "" {
+		return errors.New("name is required")
+	}
+	if len(in.Structure) == 0 {
+		return errors.New("structure is required")
+	}
+	return nil
+}
+
+func (in StyleExample) Validate() error {
+	if strings.TrimSpace(in.TeamID) == "" {
+		return errors.New("team_id is required")
+	}
+	if strings.TrimSpace(in.Platform) == "" {
+		return errors.New("platform is required")
+	}
+	if strings.TrimSpace(in.Content) == "" {
+		return errors.New("content is required")
+	}
+	return nil
+}
+
 // ResolvePostStatusOnUpdate returns the post row status after an update from CreatePostInput.
 func ResolvePostStatusOnUpdate(was PostStatus, in CreatePostInput) PostStatus {
 	// If the post was already posted, processing or cancelled, do not change status back to pending/draft.
@@ -619,23 +766,23 @@ func ResolvePostStatusOnUpdate(was PostStatus, in CreatePostInput) PostStatus {
 
 // LogEntry is a persisted log record captured from the structured logger.
 type LogEntry struct {
-	ID          string            `json:"id"`
-	Level       string            `json:"level"`
-	Message     string            `json:"message"`
-	Attributes  map[string]string `json:"attributes"`
-	SourceFile  string            `json:"source_file,omitempty"`
-	SourceLine  int               `json:"source_line,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
-	ArchivedAt  *time.Time        `json:"archived_at,omitempty"`
+	ID         string            `json:"id"`
+	Level      string            `json:"level"`
+	Message    string            `json:"message"`
+	Attributes map[string]string `json:"attributes"`
+	SourceFile string            `json:"source_file,omitempty"`
+	SourceLine int               `json:"source_line,omitempty"`
+	CreatedAt  time.Time         `json:"created_at"`
+	ArchivedAt *time.Time        `json:"archived_at,omitempty"`
 }
 
 // LogFilter specifies pagination and filtering for listing log entries.
 type LogFilter struct {
-	Level        string
-	Search       string
-	Archived     *bool // nil = all, true = archived, false = unarchived
-	Before       *time.Time
-	After        *time.Time
-	Limit        int
-	Offset       int
+	Level    string
+	Search   string
+	Archived *bool // nil = all, true = archived, false = unarchived
+	Before   *time.Time
+	After    *time.Time
+	Limit    int
+	Offset   int
 }

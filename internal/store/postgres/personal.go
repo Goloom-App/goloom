@@ -78,7 +78,7 @@ func (s *Store) EnsurePersonalTeamsMigrated(ctx context.Context) error {
 
 func (s *Store) GetTeamByID(ctx context.Context, teamID string) (domain.Team, error) {
 	return scanTeamRow(s.pool.QueryRow(ctx, `
-		select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
 		from teams where id = $1`,
 		teamID))
 }

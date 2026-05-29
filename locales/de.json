@@ -730,6 +730,15 @@
     "instance_url_invalid_host": "instance_url muss einen gültigen Host enthalten",
     "oidc_token_no_id_token": "Token-Antwort enthielt kein id_token (openid-Scope und IdP mit id_token erforderlich)",
     "id_token_nonce_mismatch": "ID-Token-Nonce stimmt nicht überein",
-    "provider_instance_in_use": "Provider-Instanz hat noch verbundene Social-Konten"
+    "provider_instance_in_use": "Provider-Instanz hat noch verbundene Social-Konten",
+    "ai_not_enabled": "KI ist für dieses Team nicht aktiviert",
+    "ai_scope_required": "KI-Bereich ist erforderlich",
+    "ai_job_not_found": "KI-Job nicht gefunden",
+    "ai_invalid_job_type": "ungültiger KI-Job-Typ",
+    "ai_service_unavailable": "KI-Dienst ist nicht verfügbar",
+    "team_profile_not_found": "Teamprofil nicht gefunden",
+    "campaign_format_not_found": "Kampagnenformat nicht gefunden",
+    "style_example_limit_reached": "Limit für Stilbeispiele erreicht",
+    "ai_service_not_configured": "KI-Dienst ist nicht konfiguriert"
   }
 }

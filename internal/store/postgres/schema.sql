@@ -228,6 +228,87 @@ create table if not exists post_versions (
     primary key (post_id, account_id)
 );
 
+create table if not exists team_profiles (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    style_metadata jsonb not null default '{}',
+    auto_publish_enabled boolean not null default false,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create table if not exists campaign_formats (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    name text not null,
+    weekday smallint,
+    structure jsonb not null default '{}',
+    required_hashtags text[] not null default '{}',
+    is_active boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create table if not exists style_examples (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    platform text not null,
+    content text not null,
+    notes text not null default '',
+    created_at timestamptz not null default now()
+);
+
+create table if not exists ai_jobs (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    author_user_id uuid not null references users(id),
+    job_type text not null,
+    status text not null default 'pending',
+    payload jsonb not null default '{}',
+    result jsonb,
+    error_message text,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    completed_at timestamptz
+);
+
+create table if not exists ai_service_configs (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid references teams(id) on delete cascade,
+    service_url text not null,
+    description text not null default '',
+    created_at timestamptz not null default now()
+);
+
+create table if not exists rss_feed_configs (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade,
+    feed_url text not null,
+    name text not null,
+    is_active boolean not null default true,
+    last_fetched_at timestamptz,
+    created_at timestamptz not null default now()
+);
+
+create table if not exists proactive_trigger_settings (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade unique,
+    content_gap_threshold_days integer not null default 3,
+    auto_fill_enabled boolean not null default false,
+    max_triggers_per_day integer not null default 5,
+    cron_schedule text not null default '0 9 * * *',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_team_profiles_team on team_profiles(team_id);
+create unique index if not exists idx_team_profiles_team_unique on team_profiles(team_id);
+create index if not exists idx_campaign_formats_team on campaign_formats(team_id);
+create index if not exists idx_style_examples_team on style_examples(team_id);
+create index if not exists idx_ai_jobs_team_status on ai_jobs(team_id, status);
+create index if not exists idx_ai_jobs_status on ai_jobs(status);
+create index if not exists idx_rss_feed_configs_team on rss_feed_configs(team_id);
+
 alter table social_accounts add column if not exists access_token_expires_at timestamptz;
 
 alter table scheduled_posts add column if not exists visibility text not null default 'public';
@@ -324,3 +405,7 @@ create table if not exists job_locks (
     locked_at timestamptz not null default now(),
     expires_at timestamptz not null
 );
+
+alter table teams add column if not exists is_ai_enabled boolean not null default false;
+alter table api_tokens add column if not exists scopes text not null default '';
+alter table api_tokens add column if not exists team_id uuid references teams(id) on delete cascade;

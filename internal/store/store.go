@@ -29,6 +29,52 @@ type Store interface {
 	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
 	GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error)
 
+	// TeamProfile methods
+	CreateTeamProfile(ctx context.Context, teamID string, input domain.TeamProfile) (domain.TeamProfile, error)
+	GetTeamProfile(ctx context.Context, teamID string) (domain.TeamProfile, error)
+	UpdateTeamProfile(ctx context.Context, teamID string, input domain.TeamProfile) (domain.TeamProfile, error)
+	DeleteTeamProfile(ctx context.Context, teamID string) error
+
+	// CampaignFormat methods
+	CreateCampaignFormat(ctx context.Context, teamID string, input domain.CampaignFormat) (domain.CampaignFormat, error)
+	ListCampaignFormats(ctx context.Context, teamID string) ([]domain.CampaignFormat, error)
+	GetCampaignFormatByID(ctx context.Context, teamID string, id string) (domain.CampaignFormat, error)
+	UpdateCampaignFormat(ctx context.Context, teamID string, id string, input domain.CampaignFormat) (domain.CampaignFormat, error)
+	DeleteCampaignFormat(ctx context.Context, teamID string, id string) error
+
+	// StyleExample methods
+	CreateStyleExample(ctx context.Context, teamID string, input domain.StyleExample) (domain.StyleExample, error)
+	ListStyleExamples(ctx context.Context, teamID string) ([]domain.StyleExample, error)
+	DeleteStyleExample(ctx context.Context, teamID string, id string) error
+
+	// AIJob methods
+	CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJob, error)
+	GetAIJobByID(ctx context.Context, teamID string, id string) (domain.AIJob, error)
+	GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob, error)
+	ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error)
+	UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) error
+	ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error)
+
+	// AIServiceConfig methods
+	GetAIServiceConfig(ctx context.Context, teamID string) (domain.AIServiceConfig, error)
+	UpsertAIServiceConfig(ctx context.Context, teamID string, input domain.AIServiceConfig) (domain.AIServiceConfig, error)
+
+	// RSSFeedConfig methods
+	CreateRSSFeedConfig(ctx context.Context, teamID string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error)
+	ListRSSFeedConfigs(ctx context.Context, teamID string) ([]domain.RSSFeedConfig, error)
+	UpdateRSSFeedConfig(ctx context.Context, teamID string, id string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error)
+	DeleteRSSFeedConfig(ctx context.Context, teamID string, id string) error
+
+	// ProactiveTriggerSettings methods
+	GetProactiveTriggerSettings(ctx context.Context, teamID string) (domain.ProactiveTriggerSettings, error)
+	UpsertProactiveTriggerSettings(ctx context.Context, teamID string, input domain.ProactiveTriggerSettings) (domain.ProactiveTriggerSettings, error)
+
+	// AI Context aggregation
+	GetTeamAIContext(ctx context.Context, teamID string) (domain.AIContext, error)
+
+	// Admin: list AI-enabled teams
+	ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error)
+
 	ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error)
 	ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error)
 	GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error)
@@ -110,7 +156,7 @@ type Store interface {
 	AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error)
 	FillAccountSyncTimestamps(ctx context.Context, accounts []domain.SocialAccount) error
 	RepairFuturePostedPosts(ctx context.Context) (int64, error)
-	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (plaintext string, meta domain.APIToken, err error)
+	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (plaintext string, meta domain.APIToken, err error)
 	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error

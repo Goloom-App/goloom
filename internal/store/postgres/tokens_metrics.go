@@ -77,7 +77,7 @@ func (s *Store) RepairFuturePostedPosts(ctx context.Context) (int64, error) {
 	return res.RowsAffected(), nil
 }
 
-func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time) (string, domain.APIToken, error) {
+func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (string, domain.APIToken, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", domain.APIToken{}, errors.New("name is required")
@@ -96,10 +96,10 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 	var createdAt time.Time
 	var storedExpires time.Time
 	err = s.pool.QueryRow(ctx, `
-		insert into api_tokens (id, user_id, name, token_hash, expires_at, created_at)
-		values ($1, $2, $3, $4, $5, now())
+		insert into api_tokens (id, user_id, name, token_hash, expires_at, scopes, team_id, created_at)
+		values ($1, $2, $3, $4, $5, $6, $7, now())
 		returning created_at, expires_at`,
-		id, userID, name, hash, *exp,
+		id, userID, name, hash, *exp, scopes, teamID,
 	).Scan(&createdAt, &storedExpires)
 	if err != nil {
 		return "", domain.APIToken{}, err
@@ -138,7 +138,7 @@ func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl ti
 		ttl = 12 * time.Hour
 	}
 	expires := time.Now().UTC().Add(ttl)
-	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires)
+	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires, "", nil)
 }
 
 func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {

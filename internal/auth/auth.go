@@ -125,6 +125,22 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Service) AcceptQueryToken(param string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if bearerToken(r.Header.Get("Authorization")) == "" {
+				if token := strings.TrimSpace(r.URL.Query().Get(param)); token != "" {
+					clone := r.Clone(r.Context())
+					clone.Header = r.Header.Clone()
+					clone.Header.Set("Authorization", "Bearer "+token)
+					r = clone
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // PrincipalHasTeamAccess reports whether the caller may access the team:
 // global administrators may use any team (recovery / OIDC-linked data); otherwise
 // a team_memberships role is required.
@@ -138,14 +154,14 @@ func (s *Service) PrincipalHasTeamAccess(ctx context.Context, principal domain.A
 func (s *Service) RequireTeamRole(teamIDParam string, roles ...domain.TeamRole) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			principal, ok := security.PrincipalFromContext[domain.AuthenticatedPrincipal](r.Context())
-			if !ok {
+			principal := PrincipalFromContext(r.Context())
+			if principal == nil {
 				http.Error(w, "missing principal", http.StatusUnauthorized)
 				return
 			}
 
 			teamID := r.PathValue(teamIDParam)
-			allowed, err := s.PrincipalHasTeamAccess(r.Context(), principal, teamID, roles...)
+			allowed, err := s.PrincipalHasTeamAccess(r.Context(), *principal, teamID, roles...)
 			if err != nil {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
@@ -162,8 +178,8 @@ func (s *Service) RequireTeamRole(teamIDParam string, roles ...domain.TeamRole) 
 
 func (s *Service) RequireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		principal, ok := security.PrincipalFromContext[domain.AuthenticatedPrincipal](r.Context())
-		if !ok {
+		principal := PrincipalFromContext(r.Context())
+		if principal == nil {
 			http.Error(w, "missing principal", http.StatusUnauthorized)
 			return
 		}
@@ -191,15 +207,27 @@ func (s *Service) authenticate(ctx context.Context, token string) (domain.Authen
 		}
 	}
 
-	return s.store.LookupAPIToken(ctx, token)
+	principal, err := s.store.LookupAPIToken(ctx, token)
+	if err != nil {
+		return domain.AuthenticatedPrincipal{}, err
+	}
+	if principal.TokenTeamID != nil {
+		teamID := strings.TrimSpace(*principal.TokenTeamID)
+		if teamID == "" {
+			principal.TokenTeamID = nil
+		} else {
+			principal.TokenTeamID = &teamID
+		}
+	}
+	return principal, nil
 }
 
 func (s *Service) CurrentPrincipal(r *http.Request) (domain.AuthenticatedPrincipal, error) {
-	principal, ok := security.PrincipalFromContext[domain.AuthenticatedPrincipal](r.Context())
-	if !ok {
+	principal := PrincipalFromContext(r.Context())
+	if principal == nil {
 		return domain.AuthenticatedPrincipal{}, errors.New("missing principal")
 	}
-	return principal, nil
+	return *principal, nil
 }
 
 func WriteJSON(w http.ResponseWriter, status int, payload any) {

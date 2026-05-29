@@ -22,6 +22,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table scheduled_posts add column template_counter integer`,
 		`alter table teams add column is_personal integer not null default 0`,
 		`alter table teams add column personal_for_user_id text references users(id) on delete cascade`,
+		`alter table teams add column is_ai_enabled integer not null default 0`,
 		`alter table social_accounts add column avatar_url text not null default ''`,
 		`alter table social_accounts add column access_token_expires_at text`,
 		`alter table scheduled_posts add column visibility text not null default 'public'`,
@@ -32,6 +33,8 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table scheduled_post_targets add column metrics_last_sync_at text`,
 		`alter table post_templates add column announces_template_id text references post_templates(id) on delete set null`,
 		`alter table post_templates add column announcement_days_before integer`,
+		`alter table api_tokens add column scopes text not null default ''`,
+		`alter table api_tokens add column team_id text references teams(id) on delete cascade`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)
@@ -131,7 +134,7 @@ func (s *Store) EnsurePersonalTeam(ctx context.Context, userID string) (domain.T
 	var existingID string
 	err := s.db.QueryRowContext(ctx, `select id from teams where personal_for_user_id = ?`, userID).Scan(&existingID)
 	if err == nil {
-		return queryTeam(ctx, s.db, `select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs from teams where id = ?`, existingID)
+		return queryTeam(ctx, s.db, `select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs from teams where id = ?`, existingID)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return domain.Team{}, err
@@ -169,7 +172,7 @@ func (s *Store) EnsurePersonalTeam(ctx context.Context, userID string) (domain.T
 		return domain.Team{}, err
 	}
 	_ = u
-	return queryTeam(ctx, s.db, `select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs from teams where id = ?`, teamID)
+	return queryTeam(ctx, s.db, `select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs from teams where id = ?`, teamID)
 }
 
 func (s *Store) EnsurePersonalTeamsMigrated(ctx context.Context) error {
@@ -198,7 +201,7 @@ func (s *Store) EnsurePersonalTeamsMigrated(ctx context.Context) error {
 }
 
 func (s *Store) GetTeamByID(ctx context.Context, teamID string) (domain.Team, error) {
-	return queryTeam(ctx, s.db, `select id, name, description, created_at, is_personal, personal_for_user_id, scheduling_prefs from teams where id = ?`, teamID)
+	return queryTeam(ctx, s.db, `select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs from teams where id = ?`, teamID)
 }
 
 func (s *Store) GetAccountByID(ctx context.Context, accountID string) (domain.SocialAccount, error) {

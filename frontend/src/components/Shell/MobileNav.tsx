@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Plus, Menu, X } from 'lucide-react'
+import { Plus, Menu, X, Bot } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { CONFIG_NAV_DEF, localizeNav, MAIN_NAV_DEF, MORE_NAV_DEF, WORKSPACE_NAV_DEF } from '../../i18n/nav'
@@ -188,6 +188,30 @@ export function MobileDrawer({
                     <span className="drawer-item-label">{item.label}</span>
                   </button>
                 ))}
+                {teams.find(t => t.id === selectedTeamId)?.isAiEnabled && (
+                  <>
+                    <button
+                      className={`btn btn--ghost btn--justify-start ${currentSection === 'aiProfile' ? 'btn--active' : ''}`}
+                      onClick={() => {
+                        setSection('aiProfile')
+                        onOpenChange(false)
+                      }}
+                    >
+                      <Bot size={18} />
+                      <span className="drawer-item-label">AI Profile</span>
+                    </button>
+                    <button
+                      className={`btn btn--ghost btn--justify-start ${currentSection === 'aiCampaigns' ? 'btn--active' : ''}`}
+                      onClick={() => {
+                        setSection('aiCampaigns')
+                        onOpenChange(false)
+                      }}
+                    >
+                      <Bot size={18} />
+                      <span className="drawer-item-label">Campaign Formats</span>
+                    </button>
+                  </>
+                )}
               </div>
             </section>
 

@@ -12,6 +12,10 @@ export type AppSection =
   | 'composer'
   | 'settings'
   | 'admin'
+  | 'aiProfile'
+  | 'aiCampaigns'
+  | 'aiGenerate'
+  | 'aiProactive'
 
 export type CalendarViewMode = 'month' | 'week' | 'day'
 
@@ -24,6 +28,18 @@ export type ProviderName = 'bluesky' | 'friendica' | 'mastodon'
 export type PostStatus = 'scheduled' | 'posted' | 'failed' | 'draft'
 
 export type AccountAuthType = 'oauth_token' | 'app_password'
+
+export type AIJobType = 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger'
+
+export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed'
+
+export interface StyleMetadata {
+  tonality: string
+  formattingRules: string[]
+  bannedWords: string[]
+  maxHashtags: number
+  preferredLanguage: string
+}
 
 export interface UserRecord {
   id: string
@@ -74,8 +90,107 @@ export interface TeamRecord {
   members: TeamMemberRecord[]
   accountIds: string[]
   isPersonal: boolean
+  isAiEnabled: boolean
   personalForUserId?: string
   schedulingPreferences?: TeamSchedulingPreferences
+}
+
+export interface Team extends TeamRecord {}
+
+export interface TeamProfile {
+  id: string
+  teamId: string
+  styleMetadata: StyleMetadata
+  autoPublishEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CampaignFormat {
+  id: string
+  teamId: string
+  name: string
+  weekday: number | null
+  structure: Record<string, unknown>
+  requiredHashtags: string[]
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface StyleExample {
+  id: string
+  teamId: string
+  platform: string
+  content: string
+  notes: string
+  createdAt: string
+}
+
+export interface AIJob {
+  id: string
+  teamId: string
+  authorUserId: string
+  type: AIJobType
+  status: AIJobStatus
+  payload: Record<string, unknown>
+  result: Record<string, unknown> | null
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+  completedAt: string | null
+}
+
+export interface AIServiceConfig {
+  id: string
+  teamId: string | null
+  serviceUrl: string
+  description: string
+  createdAt: string
+}
+
+export interface RSSFeedConfig {
+  id: string
+  teamId: string
+  feedUrl: string
+  name: string
+  isActive: boolean
+  lastFetchedAt: string | null
+  createdAt: string
+}
+
+export interface ProactiveTriggerSettings {
+  id: string
+  teamId: string
+  contentGapThresholdDays: number
+  autoFillEnabled: boolean
+  maxTriggersPerDay: number
+  cronSchedule: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AIContext {
+  team: Team
+  profile: TeamProfile | null
+  campaignFormats: CampaignFormat[]
+  styleExamples: StyleExample[]
+  recentPosts: ScheduledPost[]
+}
+
+export interface AITriggerRequest {
+  type: AIJobType
+  params: Record<string, unknown>
+}
+
+export interface AITriggerResponse {
+  jobId: string
+  status: AIJobStatus
+}
+
+export interface AIInsight {
+  label: string
+  value: string
 }
 
 export interface PostRecord {
@@ -93,6 +208,8 @@ export interface PostRecord {
   /** Per destination: media library IDs excluded from that publish */
   mediaExcludeByAccount?: Record<string, string[]>
 }
+
+export type ScheduledPost = PostRecord
 
 /** Normalized engagement row for UI (maps from BackendPostMetric). */
 export interface PostMetricRecord {

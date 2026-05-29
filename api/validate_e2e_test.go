@@ -51,7 +51,7 @@ func seedValidateE2E(t *testing.T, s *sqlitestore.Store) (bearer, teamID, bsID, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "e2e-val-token", nil)
+	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "e2e-val-token", nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func validateE2EHandler(t *testing.T, s *sqlitestore.Store) http.Handler {
 	if err != nil {
 		t.Fatalf("i18n.Load: %v", err)
 	}
-	h := api.New(logger, s, authSvc, reg, config.Config{}, nil, catalog)
+	h := api.New(logger, s, authSvc, reg, config.Config{}, nil, catalog, nil, nil)
 	return h.Handler(security.NewLimiter(10_000, 10_000), nil)
 }
 
@@ -277,9 +277,9 @@ func TestValidateE2E_CrossPost_DifferentLimits(t *testing.T) {
 
 // validationResponseJSON mirrors the backend's validationResponse for JSON decoding.
 type validationResponseJSON struct {
-	MaxChars      int                  `json:"max_chars"`
-	ContentLength int                  `json:"content_length"`
-	Valid         bool                 `json:"valid"`
+	MaxChars      int                   `json:"max_chars"`
+	ContentLength int                   `json:"content_length"`
+	Valid         bool                  `json:"valid"`
 	Destinations  []destinationInfoJSON `json:"destinations"`
 }
 
@@ -304,8 +304,8 @@ func findDestJSON(dests []destinationInfoJSON, accountID string) *destinationInf
 func validateBody(t *testing.T, contentLen int, targetAccounts []string, accountContentOverride map[string]string) []byte {
 	t.Helper()
 	payload := map[string]any{
-		"content":      string(runeLenE2E(contentLen)),
-		"scheduled_at": time.Now().UTC().Format(time.RFC3339),
+		"content":         string(runeLenE2E(contentLen)),
+		"scheduled_at":    time.Now().UTC().Format(time.RFC3339),
 		"target_accounts": targetAccounts,
 	}
 	if len(accountContentOverride) > 0 {

@@ -1,21 +1,37 @@
 import type {
   BackendAccount,
+  BackendAIJob,
   BackendMembership,
   BackendPost,
   BackendProviderInstance,
+  BackendRSSFeedConfig,
   BackendRuntimeConfig,
   BackendAuthStatus,
+  BackendCampaignFormat,
+  BackendProactiveTriggerSettings,
+  BackendStyleExample,
+  BackendStyleMetadata,
+  BackendAIServiceConfig,
+  BackendTeamProfile,
   BackendTeam,
   BackendUser,
 } from './api'
 import type {
+  AIJob,
+  AIServiceConfig,
+  CampaignFormat,
   AccountRecord,
   AuthStatusRecord,
+  ProactiveTriggerSettings,
+  RSSFeedConfig,
   PostRecord,
   ProviderInstanceRecord,
   ProviderName,
+  StyleExample,
+  StyleMetadata,
   RuntimeConfigRecord,
   TeamMemberRecord,
+  TeamProfile,
   TeamRecord,
   TeamSchedulingPreferences,
   UserRecord,
@@ -70,6 +86,7 @@ export function toTeamRecord(team: BackendTeam, members: TeamMemberRecord[], acc
     members,
     accountIds,
     isPersonal: Boolean(team.is_personal),
+    isAiEnabled: Boolean(team.is_ai_enabled),
     personalForUserId: team.personal_for_user_id,
     schedulingPreferences: scheduling,
   }
@@ -188,6 +205,93 @@ export function toAuthStatusRecord(status: BackendAuthStatus): AuthStatusRecord 
   }
 }
 
+export function mapTeamProfile(raw: BackendTeamProfile): TeamProfile {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    styleMetadata: mapStyleMetadata(raw.style_metadata),
+    autoPublishEnabled: raw.auto_publish_enabled,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  }
+}
+
+export function mapCampaignFormat(raw: BackendCampaignFormat): CampaignFormat {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    name: raw.name,
+    weekday: raw.weekday ?? null,
+    structure: raw.structure,
+    requiredHashtags: raw.required_hashtags,
+    isActive: raw.is_active,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  }
+}
+
+export function mapStyleExample(raw: BackendStyleExample): StyleExample {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    platform: raw.platform,
+    content: raw.content,
+    notes: raw.notes,
+    createdAt: raw.created_at,
+  }
+}
+
+export function mapAIJob(raw: BackendAIJob): AIJob {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    authorUserId: raw.author_user_id,
+    type: raw.type,
+    status: raw.status,
+    payload: raw.payload,
+    result: raw.result,
+    errorMessage: raw.error_message,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    completedAt: raw.completed_at,
+  }
+}
+
+export function mapAIServiceConfig(raw: BackendAIServiceConfig): AIServiceConfig {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    serviceUrl: raw.service_url,
+    description: raw.description,
+    createdAt: raw.created_at,
+  }
+}
+
+export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    feedUrl: raw.feed_url,
+    name: raw.name,
+    isActive: raw.is_active,
+    lastFetchedAt: raw.last_fetched_at,
+    createdAt: raw.created_at,
+  }
+}
+
+export function mapProactiveTriggerSettings(raw: BackendProactiveTriggerSettings): ProactiveTriggerSettings {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    contentGapThresholdDays: raw.content_gap_threshold_days,
+    autoFillEnabled: raw.auto_fill_enabled,
+    maxTriggersPerDay: raw.max_triggers_per_day,
+    cronSchedule: raw.cron_schedule,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  }
+}
+
 function mapStatus(status: BackendPost['status']): PostRecord['status'] {
   switch (status) {
     case 'posted':
@@ -207,4 +311,14 @@ function fallbackTitle(content: string) {
     return trimmed || 'Untitled post'
   }
   return `${trimmed.slice(0, 33)}...`
+}
+
+function mapStyleMetadata(raw: BackendStyleMetadata): StyleMetadata {
+  return {
+    tonality: raw.tonality,
+    formattingRules: raw.formatting_rules ?? [],
+    bannedWords: raw.banned_words ?? [],
+    maxHashtags: raw.max_hashtags,
+    preferredLanguage: raw.preferred_language,
+  }
 }

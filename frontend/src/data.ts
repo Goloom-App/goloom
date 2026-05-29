@@ -18,6 +18,7 @@ export const initialTeams: TeamRecord[] = [
     ],
     accountIds: ['account-1', 'account-2'],
     isPersonal: false,
+    isAiEnabled: false,
   },
   {
     id: 'team-2',
@@ -29,6 +30,7 @@ export const initialTeams: TeamRecord[] = [
     ],
     accountIds: ['account-3', 'account-4'],
     isPersonal: false,
+    isAiEnabled: false,
   },
 ]
 
