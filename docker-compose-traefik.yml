@@ -93,7 +93,6 @@ services:
     #   - traefik.http.routers.goloom-ai.rule=Host(`ai-${HOST}`)
     #   - traefik.http.routers.goloom-ai.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
     #   - traefik.http.routers.goloom-ai.tls=${TRAEFIK_TLS:-true}
-
   db:
     image: postgres:16
     container_name: goloom-db
