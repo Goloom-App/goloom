@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Plus, Trash2, Sparkles } from 'lucide-react'
+import { X, Plus, Trash2, Sparkles, Loader2, Check, AlertCircle } from 'lucide-react'
 
 import {
   useTeamProfile,
@@ -11,6 +11,7 @@ import {
   useTriggerAIJob,
   useAIJobs,
 } from '../../hooks/useAI'
+import { useAIJobStream } from '../../hooks/useSSE'
 import type { TeamRecord } from '../../types'
 
 interface TeamProfileViewProps {
@@ -25,6 +26,15 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
   const deleteExample = useDeleteStyleExample()
   const triggerJob = useTriggerAIJob()
   const { data: aiJobs } = useAIJobs(team.id)
+  useAIJobStream(team.id)
+
+  const profileJobs = useMemo(() => {
+    if (!aiJobs) return { active: [], recent: [] }
+    return {
+      active: aiJobs.filter((j) => j.type === 'profile_analysis' && (j.status === 'pending' || j.status === 'processing')),
+      recent: aiJobs.filter((j) => j.type === 'profile_analysis' && (j.status === 'completed' || j.status === 'failed')).slice(0, 5),
+    }
+  }, [aiJobs])
 
   const [tonality, setTonality] = useState('')
   const [formattingRules, setFormattingRules] = useState<string[]>([])
@@ -317,6 +327,58 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
             <span>{hasActiveAnalysis ? 'Analyzing...' : triggerJob.isPending ? 'Starting...' : 'Analyze'}</span>
           </button>
         </div>
+
+        {profileJobs.active.length > 0 && (
+          <div className="glass-panel glass-panel--compact stack mt-4" data-testid="profile-active-jobs">
+            <h4 className="subsection-title" style={{ fontSize: '0.9rem' }}>Active Analysis</h4>
+            {profileJobs.active.map((job) => (
+              <div key={job.id} className="flex-row--between" style={{ alignItems: 'center' }}>
+                <span className="hint" style={{ fontSize: '0.8rem' }}>
+                  {new Date(job.createdAt).toLocaleString()}
+                </span>
+                <div className="flex-row--center gap-2">
+                  <Loader2 size={14} className="spin" style={{ color: 'var(--primary)' }} />
+                  <span className="badge badge--primary" style={{ textTransform: 'capitalize', fontSize: '0.75rem' }}>
+                    {job.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {profileJobs.recent.length > 0 && (
+          <div className="stack stack--sm mt-4" data-testid="profile-recent-jobs">
+            <h4 className="subsection-title" style={{ fontSize: '0.9rem' }}>Recent Analysis</h4>
+            {profileJobs.recent.map((job) => (
+              <div key={job.id} className="glass-panel glass-panel--compact flex-row--between" style={{ alignItems: 'center' }}>
+                <div>
+                  <span className="hint" style={{ fontSize: '0.8rem' }}>
+                    {new Date(job.createdAt).toLocaleString()}
+                  </span>
+                  {job.status === 'failed' && job.errorMessage && (
+                    <p className="status-banner__error" style={{ fontSize: '0.75rem', margin: '0.25rem 0 0' }}>
+                      {job.errorMessage}
+                    </p>
+                  )}
+                </div>
+                <div className="flex-row--center gap-2">
+                  {job.status === 'completed' ? (
+                    <Check size={14} style={{ color: 'var(--success)' }} />
+                  ) : (
+                    <AlertCircle size={14} style={{ color: 'var(--danger)' }} />
+                  )}
+                  <span
+                    className={`badge ${job.status === 'completed' ? 'badge--success' : 'badge--danger'}`}
+                    style={{ textTransform: 'capitalize', fontSize: '0.75rem' }}
+                  >
+                    {job.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
       </div>
 

@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
+
+const defaultDispatchPath = "/api/v1/jobs"
 
 var defaultHTTPTransportBackoffs = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second}
 
@@ -75,7 +78,11 @@ func (t *HTTPTransport) Dispatch(ctx context.Context, job domain.AIJob, serviceU
 }
 
 func (t *HTTPTransport) dispatchOnce(ctx context.Context, serviceURL string, body []byte) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, serviceURL, bytes.NewReader(body))
+	endpoint, err := url.JoinPath(serviceURL, defaultDispatchPath)
+	if err != nil {
+		return fmt.Errorf("HTTPTransport.Dispatch: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

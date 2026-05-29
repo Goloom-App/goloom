@@ -69,7 +69,18 @@ class GoloomClient:
         return await self._request("PATCH", f"/v1/teams/{team_id}/rss-feeds/{feed_id}", json=data)
 
     async def update_team_profile(self, team_id: str, profile: dict) -> dict:
-        return await self._request("PUT", f"/v1/teams/{team_id}/profile", json=profile)
+        # Read current to preserve auto_publish_enabled
+        current = {}
+        try:
+            current = await self._request("GET", f"/v1/teams/{team_id}/profile")
+        except httpx.HTTPStatusError:
+            pass  # first analysis, no existing profile
+
+        payload: dict[str, Any] = {
+            "style_metadata": profile,
+            "auto_publish_enabled": current.get("auto_publish_enabled", False),
+        }
+        return await self._request("PUT", f"/v1/teams/{team_id}/profile", json=payload)
 
     async def create_style_example(self, team_id: str, example: dict) -> dict:
         return await self._request("POST", f"/v1/teams/{team_id}/style-examples", json=example)
