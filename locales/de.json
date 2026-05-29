@@ -13,6 +13,10 @@
       "accounts": "Konten",
       "recurring": "Wiederkehrend",
       "archive": "Archiv",
+      "aiProfile": "KI-Profil",
+      "aiCampaigns": "Kampagnenformate",
+      "aiGenerate": "Beitrag generieren",
+      "aiProactive": "Proaktive Trigger",
       "settings": "Einstellungen",
       "admin": "Administration",
       "more": "Mehr"
@@ -58,6 +62,7 @@
       "mainNavigation": "Hauptnavigation",
       "sections": "Bereiche",
       "workspace": "Arbeitsbereich",
+      "aiService": "KI-Dienst",
       "createPost": "Beitrag erstellen",
       "noTeamLoaded": "Kein Team geladen",
       "createNewTeam": "+ Neues Team erstellen…",

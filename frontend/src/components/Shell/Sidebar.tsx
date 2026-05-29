@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next'
 
-import { CONFIG_NAV_DEF, localizeNav, MAIN_NAV_DEF, WORKSPACE_NAV_DEF } from '../../i18n/nav'
+import { AI_SERVICE_NAV_DEF, CONFIG_NAV_DEF, localizeNav, MAIN_NAV_DEF, WORKSPACE_NAV_DEF } from '../../i18n/nav'
 import type { AppSection, TeamRecord } from '../../types'
-import { LogOut, Plus, ChevronDown, Bot } from 'lucide-react'
+import { LogOut, Plus, ChevronDown } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 
 interface SidebarProps {
@@ -27,6 +27,7 @@ export function Sidebar({
   const { t } = useTranslation()
   const mainNav = localizeNav(MAIN_NAV_DEF, t)
   const workspaceNav = localizeNav(WORKSPACE_NAV_DEF, t)
+  const aiServiceNav = localizeNav(AI_SERVICE_NAV_DEF, t)
   const configNav = localizeNav(CONFIG_NAV_DEF, t)
   const selectedTeam = teams.find(t => t.id === selectedTeamId)
 
@@ -106,40 +107,26 @@ export function Sidebar({
                 <span>{item.label}</span>
               </button>
             ))}
-            {selectedTeam?.isAiEnabled && (
-              <>
-                <button
-                  className={`sidebar-nav-item ${currentSection === 'aiProfile' ? 'sidebar-nav-item--active' : ''}`}
-                  onClick={() => setSection('aiProfile')}
-                >
-                  <Bot size={18} />
-                  <span>AI Profile</span>
-                </button>
-                <button
-                  className={`sidebar-nav-item ${currentSection === 'aiCampaigns' ? 'sidebar-nav-item--active' : ''}`}
-                  onClick={() => setSection('aiCampaigns')}
-                >
-                  <Bot size={18} />
-                  <span>Campaign Formats</span>
-                </button>
-                <button
-                  className={`sidebar-nav-item ${currentSection === 'aiGenerate' ? 'sidebar-nav-item--active' : ''}`}
-                  onClick={() => setSection('aiGenerate')}
-                >
-                  <Bot size={18} />
-                  <span>Generate Post</span>
-                </button>
-                <button
-                  className={`sidebar-nav-item ${currentSection === 'aiProactive' ? 'sidebar-nav-item--active' : ''}`}
-                  onClick={() => setSection('aiProactive')}
-                >
-                  <Bot size={18} />
-                  <span>Proactive Triggers</span>
-                </button>
-              </>
-            )}
           </div>
         </div>
+
+        {selectedTeam?.isAiEnabled && (
+          <div className="sidebar-section">
+            <p className="sidebar-section__label">{t('sidebar.aiService')}</p>
+            <div className="sidebar-nav">
+              {aiServiceNav.map(item => (
+                <button
+                  key={item.id}
+                  className={`sidebar-nav-item ${currentSection === item.id ? 'sidebar-nav-item--active' : ''}`}
+                  onClick={() => setSection(item.id)}
+                >
+                  <item.icon size={18} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </nav>
 
       <div className="sidebar-footer">

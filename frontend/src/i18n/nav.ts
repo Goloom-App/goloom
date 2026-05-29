@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { Home, Calendar, Image, ChartBar, Settings, ShieldCheck, Users, RefreshCw, Share2, Archive } from 'lucide-react'
+import { Home, Calendar, Image, ChartBar, Settings, ShieldCheck, Users, RefreshCw, Share2, Archive, Bot } from 'lucide-react'
 import type { TFunction } from 'i18next'
 
 import type { AppSection } from '../types'
@@ -30,6 +30,13 @@ export const WORKSPACE_NAV_DEF: NavItemDef[] = [
   { id: 'accounts', labelKey: 'nav.accounts', icon: Share2 },
   { id: 'recurringPosts', labelKey: 'nav.recurring', icon: RefreshCw },
   { id: 'archive', labelKey: 'nav.archive', icon: Archive },
+]
+
+export const AI_SERVICE_NAV_DEF: NavItemDef[] = [
+  { id: 'aiProfile', labelKey: 'nav.aiProfile', icon: Bot },
+  { id: 'aiCampaigns', labelKey: 'nav.aiCampaigns', icon: Bot },
+  { id: 'aiGenerate', labelKey: 'nav.aiGenerate', icon: Bot },
+  { id: 'aiProactive', labelKey: 'nav.aiProactive', icon: Bot },
 ]
 
 export const CONFIG_NAV_DEF: NavItemDef[] = [
