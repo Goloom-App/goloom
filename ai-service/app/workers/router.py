@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import importlib
-import os
+import logging
 
 from app.adapters import create_adapter
 from app.config import Settings
@@ -9,6 +9,8 @@ from app.prompts import PromptBuilder
 from app.services import GoloomClient
 from app.workers.voice_engine import VoiceEngineWorker
 from app.workers.profile_analysis import ProfileAnalysisWorker
+
+logger = logging.getLogger(__name__)
 
 
 class JobRouter:
@@ -18,7 +20,7 @@ class JobRouter:
         self.goloom_client = GoloomClient(config.goloom_api_url, config.goloom_api_token)
         self.adapter = create_adapter(
             config.llm_generator_provider,
-            self._resolve_api_key(config.llm_generator_provider),
+            self._resolve_api_key(config),
             config.llm_generator_model,
             self._resolve_base_url(config.llm_generator_provider),
         )
@@ -31,26 +33,24 @@ class JobRouter:
 
     async def route(self, job: dict) -> dict:
         job_type = str(job.get("type") or "")
+        job_id = job.get("job_id", "unknown")
+        logger.info("Routing job %s type=%s", job_id, job_type)
         worker = self.workers.get(job_type)
         if worker is None:
+            logger.error("Unknown job type: %s", job_type)
             raise ValueError(f"Unknown job type: {job['type']}")
-        return await worker.process(job)
+        logger.info("Dispatching job %s to %s worker", job_id, job_type)
+        result = await worker.process(job)
+        logger.info("Job %s completed: %s", job_id, result)
+        return result
 
     @staticmethod
-    def _resolve_api_key(provider: str) -> str:
-        env_name = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-        }.get(provider.lower())
-        return os.getenv(env_name, "") if env_name else ""
+    def _resolve_api_key(config: Settings) -> str:
+        return {
+            "openai": config.openai_api_key,
+            "anthropic": config.anthropic_api_key,
+        }.get(config.llm_generator_provider.lower(), "")
 
     @staticmethod
     def _resolve_base_url(provider: str) -> str | None:
-        env_name = {
-            "openai": "OPENAI_BASE_URL",
-            "anthropic": "ANTHROPIC_BASE_URL",
-        }.get(provider.lower())
-        if not env_name:
-            return None
-        value = os.getenv(env_name)
-        return value or None
+        return None

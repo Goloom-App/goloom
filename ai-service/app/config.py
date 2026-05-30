@@ -13,11 +13,13 @@ class Settings(BaseSettings):
     redis_url: Optional[str] = None
     log_level: str = "INFO"
 
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+
     proactive_enabled: bool = True
     proactive_interval_seconds: int = 3600
 
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env", "extra": "allow"}
 
 
 settings = Settings()  # pyright: ignore[reportCallIssue]

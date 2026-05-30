@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from app.adapters import LLMAdapter
 from app.prompts import PromptBuilder
 from app.services import GoloomClient
+
+logger = logging.getLogger(__name__)
 
 
 class VoiceEngineWorker:
@@ -16,7 +19,7 @@ class VoiceEngineWorker:
         self.max_retries = 3
 
     async def process(self, job: dict) -> dict:
-        job_id = str(job.get("id") or "")
+        job_id = str(job.get("job_id") or "")
         callback_sent = False
 
         try:
@@ -66,7 +69,6 @@ class VoiceEngineWorker:
                 model=self.adapter.config.model,
                 temperature=0.7,
                 max_tokens=1000,
-                response_format="json",
                 author_user_id=author_user_id,
             )
             result = self._parse_result(response.content)
@@ -89,10 +91,24 @@ class VoiceEngineWorker:
 
     @staticmethod
     def _parse_result(raw_content: str) -> dict:
+        cleaned = raw_content.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[-1]
+            cleaned = cleaned.rsplit("```", 1)[0]
+        cleaned = cleaned.strip()
+
         try:
-            payload = json.loads(raw_content)
+            payload = json.loads(cleaned)
         except json.JSONDecodeError as exc:
-            raise ValueError("LLM response was not valid JSON") from exc
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1:
+                try:
+                    payload = json.loads(cleaned[start : end + 1])
+                except json.JSONDecodeError:
+                    raise ValueError("LLM response was not valid JSON") from exc
+            else:
+                raise ValueError("LLM response was not valid JSON") from exc
 
         if not isinstance(payload, dict):
             raise ValueError("LLM response must be a JSON object")

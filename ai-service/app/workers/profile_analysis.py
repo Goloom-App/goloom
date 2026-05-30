@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from app.adapters import LLMAdapter
 from app.prompts import PromptBuilder
 from app.services import GoloomClient
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileAnalysisWorker:
@@ -15,7 +18,7 @@ class ProfileAnalysisWorker:
         self.prompt_builder = prompt_builder
 
     async def process(self, job: dict) -> dict:
-        job_id = str(job.get("id") or "")
+        job_id = str(job.get("job_id") or "")
         callback_sent = False
 
         try:
@@ -38,7 +41,7 @@ class ProfileAnalysisWorker:
                 system_prompt="You are a brand voice analyst. Extract the team's writing style from their recent posts.",
             )
 
-            profile = self._parse_analysis(result)
+            profile = self._parse_analysis(result.content)
 
             await self.goloom_client.update_team_profile(team_id, profile)
 

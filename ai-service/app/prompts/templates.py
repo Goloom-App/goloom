@@ -59,6 +59,9 @@ Generation request:
 
 Supporting parameters:
 {format_list(parameter_notes)}
+
+Respond with a JSON object using this exact structure (no markdown, no code fences):
+{{"content": "the post text", "hashtags": ["hashtag1", "hashtag2"], "platform_metadata": {{"key": "value"}}}}
 """.strip()
 
 

@@ -23,7 +23,7 @@ class CampaignWorker:
         self.prompt_builder = prompt_builder
 
     async def process(self, job: dict) -> dict:
-        job_id = str(job.get("id") or "")
+        job_id = str(job.get("job_id") or "")
         callback_sent = False
 
         try:

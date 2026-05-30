@@ -170,6 +170,6 @@ class PromptBuilder:
                     found = False
                     break
                 current = current[key]
-            if found:
+            if found and current is not None:
                 return current
         return default

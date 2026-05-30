@@ -1,7 +1,11 @@
+import logging
+
 import httpx
 
 from .base import LLMAdapter
 from .models import LLMResponse
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIAdapter(LLMAdapter):
