@@ -24,6 +24,7 @@ class CampaignWorker:
 
     async def process(self, job: dict) -> dict:
         job_id = str(job.get("id") or "")
+        callback_sent = False
 
         try:
             team_id = str(job["team_id"])
@@ -33,7 +34,7 @@ class CampaignWorker:
             if not campaign_format_id:
                 raise ValueError("campaign_format_id is required")
 
-            context = await self.goloom_client.get_ai_context(team_id)
+            context = job.get("context") or {}
             campaign_format = self._find_campaign_format(context, campaign_format_id)
             platform = str(params.get("platform") or "mastodon")
             constraints = self.prompt_builder.apply_platform_constraints(platform)
@@ -74,11 +75,19 @@ class CampaignWorker:
                 char_limit=int(constraints["char_limit"]),
                 suggested_scheduled_at=suggested_scheduled_at,
             )
-            await self.goloom_client.send_callback(job_id, "completed", result)
+            await self._try_callback(job_id, "completed", result)
+            callback_sent = True
             return result
         except Exception as exc:
-            await self._send_failure(job_id, exc)
+            if not callback_sent:
+                await self._try_callback(job_id, "failed", {}, error_message=str(exc))
             raise
+
+    async def _try_callback(self, job_id: str, status: str, result: dict, error_message: str = "") -> None:
+        try:
+            await self.goloom_client.send_callback(job_id, status, result, error_message)
+        except Exception:
+            pass
 
     @staticmethod
     def _params(job: dict) -> dict[str, Any]:
@@ -360,5 +369,4 @@ class CampaignWorker:
     def _utcnow() -> datetime:
         return datetime.now(UTC)
 
-    async def _send_failure(self, job_id: str, exc: Exception) -> None:
-        await self.goloom_client.send_callback(job_id, "failed", {}, error_message=str(exc))
+

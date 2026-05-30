@@ -17,12 +17,13 @@ class VoiceEngineWorker:
 
     async def process(self, job: dict) -> dict:
         job_id = str(job.get("id") or "")
+        callback_sent = False
 
         try:
             team_id = str(job["team_id"])
             author_user_id = str(job["author_user_id"])
             params = self._params(job)
-            context = await self.goloom_client.get_ai_context(team_id)
+            context = job.get("context") or {}
             system_prompt = self.prompt_builder.build_system_prompt(context)
             platform = str(params.get("platform") or "mastodon")
             constraints = self.prompt_builder.apply_platform_constraints(platform)
@@ -35,11 +36,19 @@ class VoiceEngineWorker:
                 char_limit=int(constraints["char_limit"]),
                 author_user_id=author_user_id,
             )
-            await self.goloom_client.send_callback(job_id, "completed", result)
+            await self._try_callback(job_id, "completed", result)
+            callback_sent = True
             return result
         except Exception as exc:
-            await self._send_failure(job_id, exc)
+            if not callback_sent:
+                await self._try_callback(job_id, "failed", {}, error_message=str(exc))
             raise
+
+    async def _try_callback(self, job_id: str, status: str, result: dict, error_message: str = "") -> None:
+        try:
+            await self.goloom_client.send_callback(job_id, status, result, error_message)
+        except Exception:
+            pass
 
     async def _generate_with_retries(
         self,
@@ -113,5 +122,4 @@ class VoiceEngineWorker:
             f"The content field must be at most {char_limit} characters while preserving the core message."
         )
 
-    async def _send_failure(self, job_id: str, exc: Exception) -> None:
-        await self.goloom_client.send_callback(job_id, "failed", {}, error_message=str(exc))
+

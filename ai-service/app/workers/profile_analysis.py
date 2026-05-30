@@ -16,13 +16,14 @@ class ProfileAnalysisWorker:
 
     async def process(self, job: dict) -> dict:
         job_id = str(job.get("id") or "")
+        callback_sent = False
 
         try:
             team_id = str(job["team_id"])
             params = self._params(job)
             post_count = int(params.get("post_count", 20))
 
-            context = await self.goloom_client.get_ai_context(team_id)
+            context = job.get("context") or {}
             team_name = self._get_team_name(context)
             recent_posts = self._get_recent_posts(context, post_count)
 
@@ -46,12 +47,20 @@ class ProfileAnalysisWorker:
                 await self.goloom_client.create_style_example(team_id, example)
 
             payload = {"profile": profile, "examples_count": len(examples)}
-            await self.goloom_client.send_callback(job_id, "completed", payload)
+            await self._try_callback(job_id, "completed", payload)
+            callback_sent = True
             return payload
         except Exception as exc:
             error_message = str(exc)
-            await self.goloom_client.send_callback(job_id, "failed", {}, error_message)
+            if not callback_sent:
+                await self._try_callback(job_id, "failed", {}, error_message)
             return {"error": error_message}
+
+    async def _try_callback(self, job_id: str, status: str, result: dict, error_message: str = "") -> None:
+        try:
+            await self.goloom_client.send_callback(job_id, status, result, error_message)
+        except Exception:
+            pass  # callback failure must not swallow the original error
 
     def _params(self, job: dict) -> dict:
         raw = job.get("params") or {}
