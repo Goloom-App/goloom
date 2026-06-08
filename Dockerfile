@@ -6,9 +6,24 @@ WORKDIR /src
 COPY frontend/package.json frontend/pnpm-lock.yaml ./frontend/
 COPY frontend ./frontend
 COPY locales ./locales
-RUN mkdir -p /src/internal/webui && corepack enable && \
+ARG TARGETARCH=amd64
+SHELL ["/bin/bash", "-eu", "-o", "pipefail", "-c"]
+RUN mkdir -p /src/internal/webui && \
+    test -f locales/en.json && test -f locales/de.json || \
+      { echo "ERROR: locales/en.json and locales/de.json must exist in build context (COPY locales ./locales)" >&2; exit 1; } && \
+    corepack enable && \
     PNPM_VERSION="$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")" && \
-    corepack prepare "pnpm@${PNPM_VERSION}" --activate && \
+    if ! corepack prepare "pnpm@${PNPM_VERSION}" --activate; then \
+      echo "corepack prepare failed; installing pnpm ${PNPM_VERSION} from GitHub release" >&2; \
+      case "${TARGETARCH}" in \
+        arm64) PNPM_ARCH=arm64 ;; \
+        *) PNPM_ARCH=x64 ;; \
+      esac && \
+      curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-${PNPM_ARCH}" \
+        -o /usr/local/bin/pnpm && \
+      chmod +x /usr/local/bin/pnpm; \
+    fi && \
+    pnpm --version && \
     CI=true pnpm --dir frontend install --frozen-lockfile && \
     pnpm --dir frontend build
 

@@ -103,7 +103,56 @@ func TestDockerfileUsesPackageManagerPnpmVersion(t *testing.T) {
 	if err := json.Unmarshal(pkgJSON, &pkg); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(dockerfile), "packageManager.split('@')[1]") {
+	content := string(dockerfile)
+	if !strings.Contains(content, "packageManager.split('@')[1]") {
 		t.Fatal("Dockerfile must read pnpm version from frontend/package.json packageManager (avoid hardcoded drift)")
+	}
+}
+
+func TestDockerfileVerifiesLocalesBeforeFrontendBuild(t *testing.T) {
+	root := repoRoot(t)
+	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+	if !strings.Contains(s, "test -f locales/en.json") || !strings.Contains(s, "test -f locales/de.json") {
+		t.Fatal("Dockerfile must verify locale catalogs exist before frontend build (tsc imports ../../../locales/*.json)")
+	}
+}
+
+func TestDockerfilePnpmCorepackFallback(t *testing.T) {
+	root := repoRoot(t)
+	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+	if !strings.Contains(s, "corepack prepare failed") {
+		t.Fatal("Dockerfile must fall back when corepack prepare fails (restricted npm registry in CI/Dockhand)")
+	}
+	if !strings.Contains(s, "pnpm-linux-") {
+		t.Fatal("Dockerfile must download pnpm from GitHub releases on corepack fallback")
+	}
+}
+
+func TestDockerfileFrontendBuilderUsesBash(t *testing.T) {
+	root := repoRoot(t)
+	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(content)
+	frontendIdx := strings.Index(s, "AS frontend-builder")
+	if frontendIdx < 0 {
+		t.Fatal("Dockerfile: frontend-builder stage not found")
+	}
+	builderStage := s[frontendIdx:]
+	nextFrom := strings.Index(builderStage[1:], "\nFROM ")
+	if nextFrom >= 0 {
+		builderStage = builderStage[:nextFrom+1]
+	}
+	if !strings.Contains(builderStage, `SHELL ["/bin/bash"`) {
+		t.Fatal("Dockerfile frontend-builder must use bash (dash /bin/sh lacks pipefail and breaks RUN scripts)")
 	}
 }
