@@ -86,3 +86,24 @@ func TestDockerfileCopiesLocalesBeforeFrontendBuild(t *testing.T) {
 		t.Fatal("Dockerfile: frontend build RUN line not found")
 	}
 }
+
+func TestDockerfileUsesPackageManagerPnpmVersion(t *testing.T) {
+	root := repoRoot(t)
+	dockerfile, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkgJSON, err := os.ReadFile(filepath.Join(root, "frontend", "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pkg struct {
+		PackageManager string `json:"packageManager"`
+	}
+	if err := json.Unmarshal(pkgJSON, &pkg); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dockerfile), "packageManager.split('@')[1]") {
+		t.Fatal("Dockerfile must read pnpm version from frontend/package.json packageManager (avoid hardcoded drift)")
+	}
+}
