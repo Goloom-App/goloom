@@ -80,8 +80,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       REDIS_URL: ${AI_REDIS_URL:-}
       LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
-      PROACTIVE_ENABLED: ${AI_PROACTIVE_ENABLED:-false}
-      PROACTIVE_INTERVAL_SECONDS: ${AI_PROACTIVE_INTERVAL_SECONDS:-3600}
+      PROACTIVE_ENABLED: ${AI_PROACTIVE_ENABLED:-true}
+      PROACTIVE_POLL_SECONDS: ${AI_PROACTIVE_POLL_SECONDS:-60}
     networks:
       - backend
     # Uncomment to expose the AI service through Traefik (e.g. for webhook callbacks):

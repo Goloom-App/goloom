@@ -225,6 +225,7 @@ export function useRSSFeeds(teamId: string) {
     queryKey: [...teamKey(teamId), 'rss-feeds'],
     queryFn: async () => (await getApiClient().listRSSFeeds(teamId)).items.map(mapRSSFeedConfig),
     enabled: Boolean(teamId),
+    refetchInterval: 30_000,
   })
 }
 

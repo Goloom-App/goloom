@@ -12,7 +12,7 @@ import {
   useProactiveSettings,
   useUpsertProactiveSettings,
 } from '../../hooks/useAI'
-import type { AccountRecord, RSSFeedConfig, TeamRecord } from '../../types'
+import type { AccountRecord, RSSFeedConfig, RSSInitialSyncMode, TeamRecord } from '../../types'
 
 interface ProactiveTriggersViewProps {
   team: TeamRecord
@@ -26,6 +26,7 @@ type FeedFormState = {
   promptHint: string
   targetAccountIds: string[]
   tonality: string
+  initialSyncMode: RSSInitialSyncMode
 }
 
 const emptyFeedForm = (): FeedFormState => ({
@@ -35,6 +36,7 @@ const emptyFeedForm = (): FeedFormState => ({
   promptHint: '',
   targetAccountIds: [],
   tonality: '',
+  initialSyncMode: 'baseline',
 })
 
 function feedToForm(feed: RSSFeedConfig): FeedFormState {
@@ -45,6 +47,7 @@ function feedToForm(feed: RSSFeedConfig): FeedFormState {
     promptHint: feed.promptHint,
     targetAccountIds: feed.targetAccountIds,
     tonality: feed.tonality,
+    initialSyncMode: feed.initialSyncMode,
   }
 }
 
@@ -154,6 +157,7 @@ export function ProactiveTriggersView({ team, accounts }: ProactiveTriggersViewP
       prompt_hint: feedForm.promptHint.trim(),
       target_account_ids: feedForm.targetAccountIds,
       tonality: feedForm.tonality.trim(),
+      initial_sync_mode: feedForm.initialSyncMode,
     }
 
     try {
@@ -302,7 +306,7 @@ export function ProactiveTriggersView({ team, accounts }: ProactiveTriggersViewP
             />
           )}
           <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-            When should the system check for content gaps and new RSS items?
+            How often the AI service checks for content gaps and new RSS items. Save settings after changing.
           </p>
         </div>
 
@@ -398,6 +402,24 @@ export function ProactiveTriggersView({ team, accounts }: ProactiveTriggersViewP
                       placeholder="Overrides team profile tonality for this feed"
                     />
                   </label>
+                  <label className="field">
+                    <span>First check behavior</span>
+                    <select
+                      value={feedForm.initialSyncMode}
+                      onChange={(e) =>
+                        setFeedForm((prev) => ({
+                          ...prev,
+                          initialSyncMode: e.target.value as RSSInitialSyncMode,
+                        }))
+                      }
+                    >
+                      <option value="baseline">Only new articles after setup</option>
+                      <option value="publish_latest">Publish latest article once on setup</option>
+                    </select>
+                    <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      Applies when the feed has never been checked. Existing feeds keep their baseline.
+                    </p>
+                  </label>
                   <label className="field flex-row--center gap-2" style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <input
                       type="checkbox"
@@ -477,6 +499,7 @@ export function ProactiveTriggersView({ team, accounts }: ProactiveTriggersViewP
                 <p className="hint" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
                   {feed.targetAccountIds.length} target account{feed.targetAccountIds.length === 1 ? '' : 's'}
                   {feed.tonality ? ` · Tonality: ${feed.tonality}` : ''}
+                  {feed.initialSyncMode === 'publish_latest' ? ' · First check: publish latest' : ' · First check: new only'}
                 </p>
                 <div className="flex-row--center gap-1 mt-2 hint" style={{ fontSize: '0.75rem' }}>
                   <Clock size={12} />
@@ -484,7 +507,7 @@ export function ProactiveTriggersView({ team, accounts }: ProactiveTriggersViewP
                     Last fetched:{' '}
                     {feed.lastFetchedAt
                       ? formatDistanceToNow(new Date(feed.lastFetchedAt), { addSuffix: true })
-                      : 'Never (will baseline on first check)'}
+                      : 'Pending first proactive check'}
                   </span>
                 </div>
               </div>

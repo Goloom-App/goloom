@@ -65,6 +65,7 @@ def _make_feed_config(
     prompt_hint: str = "Write a short social post about this article.",
     target_account_ids: list[str] | None = None,
     tonality: str = "witty",
+    initial_sync_mode: str = "baseline",
 ) -> dict:
     return {
         "id": feed_id,
@@ -76,6 +77,7 @@ def _make_feed_config(
         "prompt_hint": prompt_hint,
         "target_account_ids": ["acct-1"] if target_account_ids is None else target_account_ids,
         "tonality": tonality,
+        "initial_sync_mode": initial_sync_mode,
     }
 
 
@@ -229,6 +231,26 @@ async def test_rss_hook_baselines_without_trigger_on_first_fetch(mock_fp: MagicM
 
     assert result is False
     client.trigger_job.assert_not_called()
+    client.update_rss_feed.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@patch("app.workers.proactive.rss.feedparser")
+async def test_rss_hook_publish_latest_on_first_fetch(mock_fp: MagicMock) -> None:
+    mock_fp.parse.return_value = _PARSED_MOCK_FEED
+
+    client = AsyncMock(spec=GoloomClient)
+    client.list_rss_feeds.return_value = [
+        _make_feed_config(last_fetched_at=None, initial_sync_mode="publish_latest")
+    ]
+
+    hook = RSSHook(client)
+    result = await hook.run("team-1", {})
+
+    assert result is True
+    assert client.trigger_job.await_count == 1
+    latest_call = client.trigger_job.await_args_list[0].args[2]
+    assert latest_call["source_url"] == "https://example.com/new-3"
     client.update_rss_feed.assert_awaited_once()
 
 

@@ -124,14 +124,14 @@ async def test_scheduler_skips_teams_with_auto_fill_disabled():
 
     async def proactive_settings(team_id: str) -> dict:
         if team_id == "team-skip":
-            return {"auto_fill_enabled": False, "max_triggers_per_day": 5}
-        return {"auto_fill_enabled": True, "max_triggers_per_day": 5}
+            return {"auto_fill_enabled": False, "max_triggers_per_day": 5, "cron_schedule": "0 * * * *"}
+        return {"auto_fill_enabled": True, "max_triggers_per_day": 5, "cron_schedule": "0 * * * *"}
 
     client.get_proactive_settings.side_effect = proactive_settings
     client.list_rss_feeds.return_value = []
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
 
-    scheduler = ProactiveScheduler(client, interval_seconds=99999)
+    scheduler = ProactiveScheduler(client, poll_seconds=99999)
     await scheduler._tick()
 
     assert client.trigger_job.await_count == 1
@@ -148,11 +148,12 @@ async def test_scheduler_runs_for_all_enabled_teams():
     client.get_proactive_settings.return_value = {
         "auto_fill_enabled": True,
         "max_triggers_per_day": 5,
+        "cron_schedule": "0 * * * *",
     }
     client.list_rss_feeds.return_value = []
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
 
-    scheduler = ProactiveScheduler(client, interval_seconds=99999)
+    scheduler = ProactiveScheduler(client, poll_seconds=99999)
     await scheduler._tick()
 
     assert client.trigger_job.await_count == 2
@@ -165,7 +166,7 @@ async def test_scheduler_start_stop():
     client = AsyncMock(spec=GoloomClient)
     client.list_ai_enabled_teams.return_value = []
 
-    scheduler = ProactiveScheduler(client, interval_seconds=0.01)
+    scheduler = ProactiveScheduler(client, poll_seconds=0.01)
 
     await scheduler.start()
     assert scheduler._task is not None
@@ -180,7 +181,7 @@ async def test_scheduler_empty_teams_skips_gracefully():
     client = AsyncMock(spec=GoloomClient)
     client.list_ai_enabled_teams.return_value = []
 
-    scheduler = ProactiveScheduler(client, interval_seconds=99999)
+    scheduler = ProactiveScheduler(client, poll_seconds=99999)
     await scheduler._tick()
 
     client.list_ai_enabled_teams.assert_awaited_once()

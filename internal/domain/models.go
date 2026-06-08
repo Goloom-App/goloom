@@ -269,17 +269,34 @@ type AIServiceConfig struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type RSSInitialSyncMode string
+
+const (
+	RSSInitialSyncBaseline      RSSInitialSyncMode = "baseline"
+	RSSInitialSyncPublishLatest RSSInitialSyncMode = "publish_latest"
+)
+
+func NormalizeRSSInitialSyncMode(raw string) RSSInitialSyncMode {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case string(RSSInitialSyncPublishLatest):
+		return RSSInitialSyncPublishLatest
+	default:
+		return RSSInitialSyncBaseline
+	}
+}
+
 type RSSFeedConfig struct {
-	ID               string     `json:"id"`
-	TeamID           string     `json:"team_id"`
-	FeedURL          string     `json:"feed_url"`
-	Name             string     `json:"name"`
-	IsActive         bool       `json:"is_active"`
-	PromptHint       string     `json:"prompt_hint"`
-	TargetAccountIDs []string   `json:"target_account_ids"`
-	Tonality         string     `json:"tonality"`
-	LastFetchedAt    *time.Time `json:"last_fetched_at,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
+	ID               string             `json:"id"`
+	TeamID           string             `json:"team_id"`
+	FeedURL          string             `json:"feed_url"`
+	Name             string             `json:"name"`
+	IsActive         bool               `json:"is_active"`
+	PromptHint       string             `json:"prompt_hint"`
+	TargetAccountIDs []string           `json:"target_account_ids"`
+	Tonality         string             `json:"tonality"`
+	InitialSyncMode  RSSInitialSyncMode `json:"initial_sync_mode"`
+	LastFetchedAt    *time.Time         `json:"last_fetched_at,omitempty"`
+	CreatedAt        time.Time          `json:"created_at"`
 }
 
 type ProactiveTriggerSettings struct {

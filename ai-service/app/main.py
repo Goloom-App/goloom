@@ -16,7 +16,7 @@ app = FastAPI(title="AI Service", version="0.1.0")
 job_router = JobRouter(settings)
 goloom_client = GoloomClient(settings.goloom_api_url, settings.goloom_api_token)
 proactive_scheduler = ProactiveScheduler(
-    goloom_client, interval_seconds=settings.proactive_interval_seconds
+    goloom_client, poll_seconds=settings.proactive_poll_seconds
 )
 
 

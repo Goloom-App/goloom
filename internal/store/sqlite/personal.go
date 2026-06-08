@@ -40,6 +40,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column prompt_hint text not null default ''`,
 		`alter table rss_feed_configs add column target_account_ids text not null default '[]'`,
 		`alter table rss_feed_configs add column tonality text not null default ''`,
+		`alter table rss_feed_configs add column initial_sync_mode text not null default 'baseline'`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)

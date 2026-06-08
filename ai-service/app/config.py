@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
 
     proactive_enabled: bool = True
+    proactive_poll_seconds: int = 60
+    # Deprecated: kept for backward-compatible env; scheduler uses per-team cron_schedule.
     proactive_interval_seconds: int = 3600
 
     model_config = {"env_file": ".env", "extra": "allow"}

@@ -289,6 +289,7 @@ create table if not exists rss_feed_configs (
     prompt_hint text not null default '',
     target_account_ids text not null default '[]',
     tonality text not null default '',
+    initial_sync_mode text not null default 'baseline',
     last_fetched_at timestamptz,
     created_at timestamptz not null default now()
 );
@@ -444,3 +445,4 @@ where status = 'posted'
 alter table rss_feed_configs add column if not exists prompt_hint text not null default '';
 alter table rss_feed_configs add column if not exists target_account_ids text not null default '[]';
 alter table rss_feed_configs add column if not exists tonality text not null default '';
+alter table rss_feed_configs add column if not exists initial_sync_mode text not null default 'baseline';

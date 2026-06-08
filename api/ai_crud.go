@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
@@ -146,6 +147,7 @@ func (a *API) handleCreateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
+	input.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode))
 	feed, err := a.store.CreateRSSFeedConfig(r.Context(), teamID, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -171,6 +173,7 @@ type rssFeedPatchRequest struct {
 	TargetAccountIDs *[]string  `json:"target_account_ids"`
 	Tonality         *string    `json:"tonality"`
 	LastFetchedAt    *time.Time `json:"last_fetched_at"`
+	InitialSyncMode  *string    `json:"initial_sync_mode"`
 }
 
 func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
@@ -210,6 +213,9 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	if patch.LastFetchedAt != nil {
 		t := patch.LastFetchedAt.UTC()
 		merged.LastFetchedAt = &t
+	}
+	if patch.InitialSyncMode != nil {
+		merged.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(*patch.InitialSyncMode)
 	}
 
 	feed, err := a.store.UpdateRSSFeedConfig(r.Context(), teamID, feedID, merged)
@@ -255,7 +261,17 @@ func (a *API) handleUpsertAIServiceConfig(w http.ResponseWriter, r *http.Request
 func (a *API) handleGetProactiveSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := a.store.GetProactiveTriggerSettings(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		a.writeError(w, r, "proactive_settings_not_found", http.StatusNotFound)
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			auth.WriteJSON(w, http.StatusOK, domain.ProactiveTriggerSettings{
+				TeamID:                  r.PathValue("teamID"),
+				ContentGapThresholdDays: 3,
+				AutoFillEnabled:         false,
+				MaxTriggersPerDay:       5,
+				CronSchedule:            "0 * * * *",
+			})
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, settings)

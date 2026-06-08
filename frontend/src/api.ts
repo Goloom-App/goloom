@@ -346,6 +346,7 @@ export interface BackendRSSFeedConfig {
   prompt_hint: string
   target_account_ids: string[]
   tonality: string
+  initial_sync_mode?: 'baseline' | 'publish_latest'
   last_fetched_at: string | null
   created_at: string
 }
@@ -1116,6 +1117,7 @@ export function createApiClient(options: ApiClientOptions) {
         prompt_hint?: string
         target_account_ids?: string[]
         tonality?: string
+        initial_sync_mode?: 'baseline' | 'publish_latest'
       },
     ) {
       return request<BackendRSSFeedConfig>(options, `/v1/teams/${teamID}/rss-feeds`, {
@@ -1134,6 +1136,7 @@ export function createApiClient(options: ApiClientOptions) {
         prompt_hint?: string
         target_account_ids?: string[]
         tonality?: string
+        initial_sync_mode?: 'baseline' | 'publish_latest'
       },
     ) {
       return request<BackendRSSFeedConfig>(options, `/v1/teams/${teamID}/rss-feeds/${feedID}`, {

@@ -158,6 +158,8 @@ export interface AIServiceConfig {
   createdAt: string
 }
 
+export type RSSInitialSyncMode = 'baseline' | 'publish_latest'
+
 export interface RSSFeedConfig {
   id: string
   teamId: string
@@ -167,6 +169,7 @@ export interface RSSFeedConfig {
   promptHint: string
   targetAccountIds: string[]
   tonality: string
+  initialSyncMode: RSSInitialSyncMode
   lastFetchedAt: string | null
   createdAt: string
 }

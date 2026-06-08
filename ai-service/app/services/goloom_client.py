@@ -4,6 +4,8 @@ from typing import Any
 
 import httpx
 
+from app.proactive_defaults import default_proactive_settings
+
 
 class GoloomClient:
     def __init__(
@@ -59,7 +61,14 @@ class GoloomClient:
         return payload.get("items", [])
 
     async def get_proactive_settings(self, team_id: str) -> dict:
-        return await self._request("GET", f"/v1/teams/{team_id}/proactive-settings")
+        try:
+            payload = await self._request("GET", f"/v1/teams/{team_id}/proactive-settings")
+            if isinstance(payload, dict):
+                return payload
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code != 404:
+                raise
+        return default_proactive_settings()
 
     async def list_rss_feeds(self, team_id: str) -> list:
         payload = await self._request("GET", f"/v1/teams/{team_id}/rss-feeds")

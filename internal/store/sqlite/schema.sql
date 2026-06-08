@@ -115,6 +115,7 @@ create table if not exists rss_feed_configs (
     prompt_hint text not null default '',
     target_account_ids text not null default '[]',
     tonality text not null default '',
+    initial_sync_mode text not null default 'baseline',
     last_fetched_at text,
     created_at text not null default (datetime('now'))
 );

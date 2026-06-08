@@ -153,15 +153,51 @@ class RSSHook(BaseHook):
                 continue
 
             if not last_fetched_str:
+                sync_mode = str(feed.get("initial_sync_mode") or "baseline").strip()
+                if sync_mode == "publish_latest":
+                    items = self._extractor.fetch_feed(feed_url)
+                    if items:
+                        latest = max(items, key=lambda item: item.published)
+                        latest_item = ContentItem(
+                            title=latest.title,
+                            link=latest.link,
+                            content=latest.content,
+                            published=latest.published,
+                            feed_url=feed_url,
+                        )
+                        try:
+                            await self.client.trigger_job(
+                                team_id,
+                                "proactive_trigger",
+                                _trigger_params(feed, latest_item),
+                            )
+                            any_processed = True
+                            logger.info(
+                                "Published latest RSS item on first fetch for feed %s",
+                                feed_id,
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "Failed to trigger latest RSS item for feed %s: %s",
+                                feed_id,
+                                exc,
+                            )
+                    else:
+                        logger.info(
+                            "No RSS items found on first fetch for feed %s",
+                            feed_id,
+                        )
+                else:
+                    logger.info(
+                        "Baselined RSS feed %s without triggering historical items",
+                        feed_id,
+                    )
+
                 try:
                     await self.client.update_rss_feed(
                         team_id,
                         feed_id,
                         {"last_fetched_at": now.isoformat()},
-                    )
-                    logger.info(
-                        "Baselined RSS feed %s without triggering historical items",
-                        feed_id,
                     )
                 except Exception as exc:
                     logger.warning(

@@ -278,6 +278,7 @@ export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
     promptHint: raw.prompt_hint ?? '',
     targetAccountIds: raw.target_account_ids ?? [],
     tonality: raw.tonality ?? '',
+    initialSyncMode: raw.initial_sync_mode === 'publish_latest' ? 'publish_latest' : 'baseline',
     lastFetchedAt: raw.last_fetched_at,
     createdAt: raw.created_at,
   }
