@@ -4,6 +4,7 @@ import type {
   BackendMembership,
   BackendPost,
   BackendProviderInstance,
+  BackendReviewQueueItem,
   BackendRSSFeedConfig,
   BackendRuntimeConfig,
   BackendAuthStatus,
@@ -25,6 +26,7 @@ import type {
   ProactiveTriggerSettings,
   RSSFeedConfig,
   PostRecord,
+  ReviewQueueItem,
   ProviderInstanceRecord,
   ProviderName,
   StyleExample,
@@ -146,7 +148,8 @@ export function toPostRecord(post: BackendPost): PostRecord {
     durationMinutes: 30,
     targetAccountIds: post.target_accounts ?? [],
     status: mapStatus(post.status),
-    source: post.source === 'imported' ? 'imported' : 'scheduled',
+    source:
+      post.source === 'imported' ? 'imported' : post.source === 'automation' ? 'automation' : 'scheduled',
     publishedLinks: post.published_links,
     mediaIds: post.media_ids?.length ? post.media_ids : undefined,
     mediaExcludeByAccount: post.media_exclude_by_account && Object.keys(post.media_exclude_by_account).length > 0 ? post.media_exclude_by_account : undefined,
@@ -268,13 +271,26 @@ export function mapAIServiceConfig(raw: BackendAIServiceConfig): AIServiceConfig
   }
 }
 
+export function mapReviewQueueItem(raw: BackendReviewQueueItem): ReviewQueueItem {
+  return {
+    ...toPostRecord(raw),
+    isOverdue: Boolean(raw.is_overdue),
+    rssFeedName: raw.rss_feed_name ?? undefined,
+  }
+}
+
 export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
+  const outputMode = raw.output_mode === 'scheduled' || raw.output_mode === 'publish_now' ? raw.output_mode : 'draft'
   return {
     id: raw.id,
     teamId: raw.team_id,
     feedUrl: raw.feed_url,
     name: raw.name,
     isActive: raw.is_active,
+    contentTemplate: raw.content_template ?? '{title}\n\n{link}',
+    outputMode,
+    maxPostsPerDay: raw.max_posts_per_day ?? 10,
+    counterNext: raw.counter_next,
     promptHint: raw.prompt_hint ?? '',
     targetAccountIds: raw.target_account_ids ?? [],
     tonality: raw.tonality ?? '',

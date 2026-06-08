@@ -104,7 +104,7 @@ export interface BackendPost {
   content: string
   scheduled_at: string
   status: 'pending' | 'processing' | 'posted' | 'failed' | 'cancelled' | 'draft'
-  source?: 'scheduled' | 'imported'
+  source?: 'scheduled' | 'imported' | 'automation'
   attempt_count: number
   last_error?: string
   created_at: string
@@ -337,12 +337,21 @@ export interface BackendAIServiceConfig {
   created_at: string
 }
 
+export interface BackendReviewQueueItem extends BackendPost {
+  is_overdue: boolean
+  rss_feed_name?: string
+}
+
 export interface BackendRSSFeedConfig {
   id: string
   team_id: string
   feed_url: string
   name: string
   is_active: boolean
+  content_template?: string
+  output_mode?: 'draft' | 'scheduled' | 'publish_now'
+  max_posts_per_day?: number
+  counter_next?: number
   prompt_hint: string
   target_account_ids: string[]
   tonality: string
@@ -1100,6 +1109,11 @@ export function createApiClient(options: ApiClientOptions) {
         style_examples: BackendStyleExample[]
         recent_posts: BackendPost[]
       }>(options, `/v1/teams/${teamID}/ai-context`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listReviewQueue(teamID: string) {
+      return request<{ items: BackendReviewQueueItem[] }>(options, `/v1/teams/${teamID}/review-queue`, {
         headers: buildHeaders(options.token, false),
       })
     },

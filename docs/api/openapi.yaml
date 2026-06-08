@@ -772,6 +772,24 @@ paths:
           description: RSS feed config deleted
         "404":
           $ref: "#/components/responses/NotFound"
+  /v1/teams/{teamID}/review-queue:
+    get:
+      tags: [Posts]
+      summary: List automation drafts awaiting review
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      responses:
+        "200":
+          description: Review queue items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ReviewQueueItem"
   /v1/teams/{teamID}/ai-service-config:
     get:
       tags: [AI]
@@ -1360,7 +1378,7 @@ components:
           type: string
         source:
           type: string
-          enum: [scheduled, imported]
+          enum: [scheduled, imported, automation]
         scheduled_at:
           type: string
           format: date-time
@@ -1369,6 +1387,15 @@ components:
           items:
             type: string
             format: uuid
+    ReviewQueueItem:
+      allOf:
+        - $ref: "#/components/schemas/ScheduledPost"
+        - type: object
+          properties:
+            is_overdue:
+              type: boolean
+            rss_feed_name:
+              type: string
     CreatePostInput:
       type: object
       required: [content]
@@ -1722,6 +1749,15 @@ components:
           type: string
         is_active:
           type: boolean
+        content_template:
+          type: string
+        output_mode:
+          type: string
+          enum: [draft, scheduled, publish_now]
+        max_posts_per_day:
+          type: integer
+        counter_next:
+          type: integer
         prompt_hint:
           type: string
         target_account_ids:
@@ -1731,6 +1767,9 @@ components:
             format: uuid
         tonality:
           type: string
+        initial_sync_mode:
+          type: string
+          enum: [baseline, publish_latest]
         last_fetched_at:
           type: string
           format: date-time
@@ -1749,6 +1788,13 @@ components:
           type: string
         is_active:
           type: boolean
+        content_template:
+          type: string
+        output_mode:
+          type: string
+          enum: [draft, scheduled, publish_now]
+        max_posts_per_day:
+          type: integer
         prompt_hint:
           type: string
         target_account_ids:
@@ -1758,6 +1804,9 @@ components:
             format: uuid
         tonality:
           type: string
+        initial_sync_mode:
+          type: string
+          enum: [baseline, publish_latest]
     UpdateRSSFeedInput:
       type: object
       properties:
@@ -1768,6 +1817,13 @@ components:
           type: string
         is_active:
           type: boolean
+        content_template:
+          type: string
+        output_mode:
+          type: string
+          enum: [draft, scheduled, publish_now]
+        max_posts_per_day:
+          type: integer
         prompt_hint:
           type: string
         target_account_ids:
@@ -1777,6 +1833,9 @@ components:
             format: uuid
         tonality:
           type: string
+        initial_sync_mode:
+          type: string
+          enum: [baseline, publish_latest]
         last_fetched_at:
           type: string
           format: date-time

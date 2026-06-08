@@ -112,6 +112,12 @@ create table if not exists rss_feed_configs (
     feed_url text not null,
     name text not null,
     is_active integer not null default 1,
+    content_template text not null default '{title}
+
+{link}',
+    output_mode text not null default 'draft',
+    max_posts_per_day integer not null default 10,
+    counter_next integer not null default 1,
     prompt_hint text not null default '',
     target_account_ids text not null default '[]',
     tonality text not null default '',
@@ -119,6 +125,17 @@ create table if not exists rss_feed_configs (
     last_fetched_at text,
     created_at text not null default (datetime('now'))
 );
+
+create table if not exists rss_imported_items (
+    id text primary key,
+    feed_id text not null references rss_feed_configs(id) on delete cascade,
+    item_key text not null,
+    post_id text references scheduled_posts(id) on delete set null,
+    created_at text not null default (datetime('now')),
+    unique (feed_id, item_key)
+);
+
+create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id);
 
 create table if not exists proactive_trigger_settings (
     id text primary key,
@@ -181,7 +198,7 @@ create table if not exists scheduled_posts (
     content text not null,
     scheduled_at text not null,
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft')),
-    source text not null default 'scheduled' check (source in ('scheduled', 'imported')),
+    source text not null default 'scheduled' check (source in ('scheduled', 'imported', 'automation')),
     attempt_count integer not null default 0,
     last_error text,
     visibility text not null default 'public',

@@ -45,8 +45,9 @@ const (
 type PostSource string
 
 const (
-	PostSourceScheduled PostSource = "scheduled"
-	PostSourceImported  PostSource = "imported"
+	PostSourceScheduled  PostSource = "scheduled"
+	PostSourceImported   PostSource = "imported"
+	PostSourceAutomation PostSource = "automation"
 )
 
 type AIJobType string
@@ -285,18 +286,57 @@ func NormalizeRSSInitialSyncMode(raw string) RSSInitialSyncMode {
 	}
 }
 
+type AutomationOutputMode string
+
+const (
+	AutomationOutputDraft      AutomationOutputMode = "draft"
+	AutomationOutputScheduled  AutomationOutputMode = "scheduled"
+	AutomationOutputPublishNow AutomationOutputMode = "publish_now"
+)
+
+const DefaultRSSContentTemplate = "{title}\n\n{link}"
+
+func NormalizeAutomationOutputMode(raw string) AutomationOutputMode {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case string(AutomationOutputScheduled):
+		return AutomationOutputScheduled
+	case string(AutomationOutputPublishNow):
+		return AutomationOutputPublishNow
+	default:
+		return AutomationOutputDraft
+	}
+}
+
 type RSSFeedConfig struct {
-	ID               string             `json:"id"`
-	TeamID           string             `json:"team_id"`
-	FeedURL          string             `json:"feed_url"`
-	Name             string             `json:"name"`
-	IsActive         bool               `json:"is_active"`
-	PromptHint       string             `json:"prompt_hint"`
-	TargetAccountIDs []string           `json:"target_account_ids"`
-	Tonality         string             `json:"tonality"`
-	InitialSyncMode  RSSInitialSyncMode `json:"initial_sync_mode"`
-	LastFetchedAt    *time.Time         `json:"last_fetched_at,omitempty"`
-	CreatedAt        time.Time          `json:"created_at"`
+	ID               string               `json:"id"`
+	TeamID           string               `json:"team_id"`
+	FeedURL          string               `json:"feed_url"`
+	Name             string               `json:"name"`
+	IsActive         bool                 `json:"is_active"`
+	ContentTemplate  string               `json:"content_template"`
+	OutputMode       AutomationOutputMode `json:"output_mode"`
+	MaxPostsPerDay   int                  `json:"max_posts_per_day"`
+	CounterNext      int                  `json:"counter_next"`
+	PromptHint       string               `json:"prompt_hint"`
+	TargetAccountIDs []string             `json:"target_account_ids"`
+	Tonality         string               `json:"tonality"`
+	InitialSyncMode  RSSInitialSyncMode   `json:"initial_sync_mode"`
+	LastFetchedAt    *time.Time           `json:"last_fetched_at,omitempty"`
+	CreatedAt        time.Time            `json:"created_at"`
+}
+
+func (f RSSFeedConfig) NormalizedContentTemplate() string {
+	if strings.TrimSpace(f.ContentTemplate) == "" {
+		return DefaultRSSContentTemplate
+	}
+	return f.ContentTemplate
+}
+
+func (f RSSFeedConfig) NormalizedMaxPostsPerDay() int {
+	if f.MaxPostsPerDay <= 0 {
+		return 10
+	}
+	return f.MaxPostsPerDay
 }
 
 type ProactiveTriggerSettings struct {
@@ -444,6 +484,7 @@ type ScheduledPost struct {
 	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
 	PostTemplateID        *string             `json:"post_template_id,omitempty"`
 	TemplateCounter       *int                `json:"template_counter,omitempty"`
+	RSSFeedID             *string             `json:"rss_feed_id,omitempty"`
 }
 
 // PostTemplate drives recurring scheduled posts (stored in post_templates).
@@ -765,9 +806,11 @@ type CreatePostInput struct {
 	// UseVersions allows per-account content overrides to bypass global character limit validation.
 	UseVersions bool `json:"use_versions,omitempty"`
 	// Internal-only (workers): optional author override and template lineage for dynamic variables.
-	AuthorUserID    *string `json:"-"`
-	PostTemplateID  *string `json:"-"`
-	TemplateCounter *int    `json:"-"`
+	AuthorUserID    *string    `json:"-"`
+	PostTemplateID  *string    `json:"-"`
+	TemplateCounter *int       `json:"-"`
+	Source          PostSource `json:"-"`
+	RSSFeedID       *string    `json:"-"`
 }
 
 func (in CreatePostInput) EffectiveContent(accountID string) string {

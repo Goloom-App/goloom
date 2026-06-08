@@ -8,6 +8,8 @@ export type AppSection =
   | 'management'
   | 'teams'
   | 'recurringPosts'
+  | 'rssFeeds'
+  | 'reviewQueue'
   | 'accounts'
   | 'composer'
   | 'settings'
@@ -27,7 +29,7 @@ export type ProviderName = 'bluesky' | 'friendica' | 'mastodon'
 
 export type PostStatus = 'scheduled' | 'posted' | 'failed' | 'draft'
 
-export type PostSource = 'scheduled' | 'imported'
+export type PostSource = 'scheduled' | 'imported' | 'automation'
 
 export interface ExternalPostMonitorSettings {
   teamId: string
@@ -160,12 +162,18 @@ export interface AIServiceConfig {
 
 export type RSSInitialSyncMode = 'baseline' | 'publish_latest'
 
+export type AutomationOutputMode = 'draft' | 'scheduled' | 'publish_now'
+
 export interface RSSFeedConfig {
   id: string
   teamId: string
   feedUrl: string
   name: string
   isActive: boolean
+  contentTemplate: string
+  outputMode: AutomationOutputMode
+  maxPostsPerDay: number
+  counterNext?: number
   promptHint: string
   targetAccountIds: string[]
   tonality: string
@@ -206,6 +214,11 @@ export interface AITriggerResponse {
 export interface AIInsight {
   label: string
   value: string
+}
+
+export interface ReviewQueueItem extends PostRecord {
+  isOverdue: boolean
+  rssFeedName?: string
 }
 
 export interface PostRecord {

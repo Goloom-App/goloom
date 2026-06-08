@@ -27,6 +27,7 @@ type Config struct {
 	SchedulerMetricsSyncInterval         time.Duration
 	SchedulerAccountHealthInterval       time.Duration
 	SchedulerExternalPostImportInterval  time.Duration
+	SchedulerRSSImportInterval           time.Duration
 	SchedulerWorkers                     int
 
 	// LogLevel: debug, info, warn, error — empty means derive from AppEnv (development=debug, production=info).
@@ -66,6 +67,7 @@ func Load() (Config, error) {
 		SchedulerMetricsSyncInterval:        getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", 10*time.Minute),
 		SchedulerAccountHealthInterval:      getDuration("SCHEDULER_ACCOUNT_HEALTH_INTERVAL", time.Hour),
 		SchedulerExternalPostImportInterval: getDuration("SCHEDULER_EXTERNAL_POST_IMPORT_INTERVAL", 15*time.Minute),
+		SchedulerRSSImportInterval:          getDuration("SCHEDULER_RSS_IMPORT_INTERVAL", 5*time.Minute),
 		SchedulerWorkers:                    getInt("SCHEDULER_WORKERS", 4),
 		LogLevel:                         strings.TrimSpace(getEnv("LOG_LEVEL", "")),
 		LogFormat:                        strings.TrimSpace(getEnv("LOG_FORMAT", "")),

@@ -873,8 +873,8 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	}
 
 	const insertPost = `
-		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, visibility, media_ids, media_exclude_by_account, post_template_id, template_counter)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, source, visibility, media_ids, media_exclude_by_account, post_template_id, template_counter, rss_feed_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		returning id, team_id, author_user_id, title, content, scheduled_at, status,
 		          attempt_count, coalesce(last_error, ''), visibility, media_ids, media_exclude_by_account, created_at, updated_at, post_template_id, template_counter
 	`
@@ -891,6 +891,14 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	if input.TemplateCounter != nil {
 		templateCounter = *input.TemplateCounter
 	}
+	source := input.Source
+	if strings.TrimSpace(string(source)) == "" {
+		source = domain.PostSourceScheduled
+	}
+	var rssFeedID any
+	if input.RSSFeedID != nil && strings.TrimSpace(*input.RSSFeedID) != "" {
+		rssFeedID = strings.TrimSpace(*input.RSSFeedID)
+	}
 
 	post := domain.ScheduledPost{}
 	var mediaRaw, mediaExcludeRaw string
@@ -903,7 +911,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	} else if input.Draft {
 		st = domain.PostStatusDraft
 	}
-	err = tx.QueryRow(ctx, insertPost, teamID, authorID, input.Title, input.Content, input.ScheduledAt, st, visibility, mediaJSON, excludeJSON, templateID, templateCounter).Scan(
+	err = tx.QueryRow(ctx, insertPost, teamID, authorID, input.Title, input.Content, input.ScheduledAt, st, source, visibility, mediaJSON, excludeJSON, templateID, templateCounter, rssFeedID).Scan(
 		&post.ID,
 		&post.TeamID,
 		&post.AuthorUserID,

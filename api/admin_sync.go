@@ -12,6 +12,7 @@ type metricsSyncRunner interface {
 	SyncPostMetricsNow(ctx context.Context)
 	SyncAccountMetricsNow(ctx context.Context)
 	SyncExternalPostsNow(ctx context.Context)
+	SyncRSSFeedsNow(ctx context.Context)
 }
 
 func (a *API) handleAdminSyncStatus(w http.ResponseWriter, r *http.Request) {
@@ -60,5 +61,21 @@ func (a *API) handleAdminSyncExternalPosts(w http.ResponseWriter, r *http.Reques
 	auth.WriteJSON(w, http.StatusAccepted, map[string]any{
 		"status":  "started",
 		"message": "External post import started in the background.",
+	})
+}
+
+func (a *API) handleAdminSyncRSSFeeds(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		a.writeError(w, r, "method_not_allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if a.metricsSync == nil {
+		a.writeError(w, r, "metrics_sync_not_available", http.StatusServiceUnavailable)
+		return
+	}
+	go a.metricsSync.SyncRSSFeedsNow(context.Background())
+	auth.WriteJSON(w, http.StatusAccepted, map[string]any{
+		"status":  "started",
+		"message": "RSS feed import started in the background.",
 	})
 }

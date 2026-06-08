@@ -736,16 +736,24 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	if input.TemplateCounter != nil {
 		templateCounter = *input.TemplateCounter
 	}
+	source := input.Source
+	if strings.TrimSpace(string(source)) == "" {
+		source = domain.PostSourceScheduled
+	}
+	var rssFeedID any
+	if input.RSSFeedID != nil && strings.TrimSpace(*input.RSSFeedID) != "" {
+		rssFeedID = strings.TrimSpace(*input.RSSFeedID)
+	}
 
 	if _, err := tx.ExecContext(ctx, `
 		insert into scheduled_posts (
-			id, team_id, author_user_id, title, content, scheduled_at, status,
+			id, team_id, author_user_id, title, content, scheduled_at, status, source,
 			attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-			post_template_id, template_counter, created_at, updated_at
+			post_template_id, template_counter, rss_feed_id, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?)`,
-		postID, teamID, authorID, input.Title, input.Content, formatTime(input.ScheduledAt), st,
-		visibility, mediaJSON, excludeJSON, templateID, templateCounter, now, now,
+		values (?, ?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		postID, teamID, authorID, input.Title, input.Content, formatTime(input.ScheduledAt), st, source,
+		visibility, mediaJSON, excludeJSON, templateID, templateCounter, rssFeedID, now, now,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}

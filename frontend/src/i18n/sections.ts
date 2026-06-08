@@ -12,6 +12,8 @@ const sectionKeys: Record<AppSection, string> = {
   management: 'section.management',
   teams: 'section.teams',
   recurringPosts: 'section.recurringPosts',
+  rssFeeds: 'section.rssFeeds',
+  reviewQueue: 'section.reviewQueue',
   accounts: 'section.accounts',
   composer: 'section.composer',
   settings: 'section.settings',

@@ -446,3 +446,26 @@ alter table rss_feed_configs add column if not exists prompt_hint text not null 
 alter table rss_feed_configs add column if not exists target_account_ids text not null default '[]';
 alter table rss_feed_configs add column if not exists tonality text not null default '';
 alter table rss_feed_configs add column if not exists initial_sync_mode text not null default 'baseline';
+alter table rss_feed_configs add column if not exists content_template text not null default '{title}
+
+{link}';
+alter table rss_feed_configs add column if not exists output_mode text not null default 'draft';
+alter table rss_feed_configs add column if not exists max_posts_per_day integer not null default 10;
+alter table rss_feed_configs add column if not exists counter_next integer not null default 1;
+
+alter table scheduled_posts add column if not exists rss_feed_id uuid references rss_feed_configs(id) on delete set null;
+
+alter table scheduled_posts drop constraint if exists scheduled_posts_source_check;
+alter table scheduled_posts add constraint scheduled_posts_source_check
+    check (source in ('scheduled', 'imported', 'automation'));
+
+create table if not exists rss_imported_items (
+    id uuid primary key default gen_random_uuid(),
+    feed_id uuid not null references rss_feed_configs(id) on delete cascade,
+    item_key text not null,
+    post_id uuid references scheduled_posts(id) on delete set null,
+    created_at timestamptz not null default now(),
+    unique (feed_id, item_key)
+);
+
+create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id);

@@ -148,6 +148,13 @@ func (a *API) handleCreateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode))
+	input.OutputMode = domain.NormalizeAutomationOutputMode(string(input.OutputMode))
+	if strings.TrimSpace(input.ContentTemplate) == "" {
+		input.ContentTemplate = domain.DefaultRSSContentTemplate
+	}
+	if input.MaxPostsPerDay <= 0 {
+		input.MaxPostsPerDay = 10
+	}
 	feed, err := a.store.CreateRSSFeedConfig(r.Context(), teamID, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -169,6 +176,9 @@ type rssFeedPatchRequest struct {
 	FeedURL          *string    `json:"feed_url"`
 	Name             *string    `json:"name"`
 	IsActive         *bool      `json:"is_active"`
+	ContentTemplate  *string    `json:"content_template"`
+	OutputMode       *string    `json:"output_mode"`
+	MaxPostsPerDay   *int       `json:"max_posts_per_day"`
 	PromptHint       *string    `json:"prompt_hint"`
 	TargetAccountIDs *[]string  `json:"target_account_ids"`
 	Tonality         *string    `json:"tonality"`
@@ -200,6 +210,15 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	if patch.IsActive != nil {
 		merged.IsActive = *patch.IsActive
+	}
+	if patch.ContentTemplate != nil {
+		merged.ContentTemplate = *patch.ContentTemplate
+	}
+	if patch.OutputMode != nil {
+		merged.OutputMode = domain.NormalizeAutomationOutputMode(*patch.OutputMode)
+	}
+	if patch.MaxPostsPerDay != nil {
+		merged.MaxPostsPerDay = *patch.MaxPostsPerDay
 	}
 	if patch.PromptHint != nil {
 		merged.PromptHint = *patch.PromptHint

@@ -24,15 +24,17 @@ type Service struct {
 	metricSyncInterval         time.Duration
 	accountHealthInterval      time.Duration
 	externalPostImportInterval time.Duration
+	rssImportInterval          time.Duration
 	workers                    int
 
 	accountMetricsMu      sync.Mutex
 	postMetricsMu         sync.Mutex
 	accountHealthMu       sync.Mutex
 	externalPostImportMu  sync.Mutex
+	rssImportMu           sync.Mutex
 }
 
-func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration, externalPostImportInterval time.Duration) *Service {
+func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration, externalPostImportInterval time.Duration, rssImportInterval time.Duration) *Service {
 	if workers <= 0 {
 		workers = 1
 	}
@@ -44,6 +46,7 @@ func New(logger *slog.Logger, store store.Store, providers *provider.Registry, p
 		metricSyncInterval:         metricSyncInterval,
 		accountHealthInterval:      accountHealthInterval,
 		externalPostImportInterval: externalPostImportInterval,
+		rssImportInterval:          rssImportInterval,
 		workers:                    workers,
 	}
 }
@@ -97,6 +100,14 @@ func (s *Service) Start(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			s.runExternalPostImportLoop(ctx)
+		}()
+	}
+
+	if s.rssImportInterval > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.runRSSImportLoop(ctx)
 		}()
 	}
 

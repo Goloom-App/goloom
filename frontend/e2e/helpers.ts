@@ -1,11 +1,13 @@
 import { expect, type Page } from '@playwright/test'
-import { e2eBootstrapToken } from './constants'
+import { e2eBootstrapToken, E2E_REVIEW_POST_TITLE } from './constants'
 
 export async function signIn(page: Page) {
   await page.goto('/')
   await page.getByLabel(/access token|administrator token/i).fill(e2eBootstrapToken())
   await page.getByRole('button', { name: 'Sign in with token' }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/too many requests|rate limit/i)).toHaveCount(0, { timeout: 30_000 })
+  await expect(page.getByRole('button', { name: /select team/i })).toHaveCount(0, { timeout: 30_000 })
 }
 
 export async function openContentCalendar(page: Page) {
@@ -32,6 +34,57 @@ async function apiFetch(url: string, opts: RequestInit, retries = 3): Promise<Re
 
 let teamCounter = 0
 const runId = Date.now().toString(36)
+
+export async function getFirstTeamId(baseURL: string, token: string): Promise<string> {
+  const res = await apiFetch(`${baseURL}/v1/teams`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    throw new Error(`list teams ${res.status}: ${await res.text()}`)
+  }
+  const data = (await res.json()) as { items?: { id: string }[] }
+  const teamId = data.items?.[0]?.id
+  if (!teamId) {
+    throw new Error('no team returned')
+  }
+  return teamId
+}
+
+export async function seedAutomationReviewDraft(baseURL: string, token: string, teamId: string) {
+  const listRes = await apiFetch(`${baseURL}/v1/teams/${teamId}/review-queue`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!listRes.ok) {
+    throw new Error(`list review queue ${listRes.status}: ${await listRes.text()}`)
+  }
+  const existing = (await listRes.json()) as { items?: { title?: string }[] }
+  if (existing.items?.some((item) => item.title === E2E_REVIEW_POST_TITLE)) {
+    return
+  }
+
+  const scheduled = new Date()
+  scheduled.setUTCHours(scheduled.getUTCHours() - 4)
+
+  const seedRes = await apiFetch(`${baseURL}/v1/admin/e2e/automation-draft`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      team_id: teamId,
+      title: E2E_REVIEW_POST_TITLE,
+      content: 'Automation draft waiting for review.',
+      target_accounts: [],
+      scheduled_at: scheduled.toISOString(),
+    }),
+  })
+  if (!seedRes.ok) {
+    throw new Error(`seed automation draft ${seedRes.status}: ${await seedRes.text()}`)
+  }
+}
+
+export async function openReviewQueue(page: import('@playwright/test').Page) {
+  await page.getByRole('navigation').getByRole('button', { name: 'Review', exact: true }).click()
+  await expect(page.getByTestId('review-queue')).toBeVisible()
+}
 
 export async function createAITeam(baseURL: string, token: string): Promise<string> {
   teamCounter++

@@ -41,6 +41,22 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column target_account_ids text not null default '[]'`,
 		`alter table rss_feed_configs add column tonality text not null default ''`,
 		`alter table rss_feed_configs add column initial_sync_mode text not null default 'baseline'`,
+		`alter table rss_feed_configs add column content_template text not null default '{title}
+
+{link}'`,
+		`alter table rss_feed_configs add column output_mode text not null default 'draft'`,
+		`alter table rss_feed_configs add column max_posts_per_day integer not null default 10`,
+		`alter table rss_feed_configs add column counter_next integer not null default 1`,
+		`alter table scheduled_posts add column rss_feed_id text references rss_feed_configs(id) on delete set null`,
+		`create table if not exists rss_imported_items (
+			id text primary key,
+			feed_id text not null references rss_feed_configs(id) on delete cascade,
+			item_key text not null,
+			post_id text references scheduled_posts(id) on delete set null,
+			created_at text not null default (datetime('now')),
+			unique (feed_id, item_key)
+		)`,
+		`create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id)`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)
@@ -105,6 +121,63 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	}
 	if err := migrateSQLiteScheduledPostsDraftStatus(ctx, db); err != nil {
 		return err
+	}
+	if err := migrateSQLiteScheduledPostsAutomationSource(ctx, db); err != nil {
+		return err
+	}
+	return nil
+}
+
+func migrateSQLiteScheduledPostsAutomationSource(ctx context.Context, db *sql.DB) error {
+	var createSQL sql.NullString
+	err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name='scheduled_posts'`).Scan(&createSQL)
+	if err != nil || !createSQL.Valid || createSQL.String == "" {
+		return nil
+	}
+	if strings.Contains(createSQL.String, "'automation'") {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `
+PRAGMA foreign_keys=OFF;
+BEGIN TRANSACTION;
+CREATE TABLE scheduled_posts_new (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    author_user_id text not null references users(id) on delete restrict,
+    title text not null default '',
+    content text not null,
+    scheduled_at text not null,
+    status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft')),
+    source text not null default 'scheduled' check (source in ('scheduled', 'imported', 'automation')),
+    attempt_count integer not null default 0,
+    last_error text,
+    visibility text not null default 'public',
+    media_ids text not null default '[]',
+    media_exclude_by_account text not null default '{}',
+    post_template_id text,
+    template_counter integer,
+    rss_feed_id text references rss_feed_configs(id) on delete set null,
+    created_at text not null,
+    updated_at text not null
+);
+INSERT INTO scheduled_posts_new (
+    id, team_id, author_user_id, title, content, scheduled_at, status, source,
+    attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+    post_template_id, template_counter, rss_feed_id, created_at, updated_at
+)
+SELECT id, team_id, author_user_id, title, content, scheduled_at, status,
+    coalesce(nullif(trim(source), ''), 'scheduled'),
+    attempt_count, last_error, visibility, media_ids,
+    coalesce(nullif(trim(media_exclude_by_account), ''), '{}'),
+    post_template_id, template_counter, rss_feed_id, created_at, updated_at
+FROM scheduled_posts;
+DROP TABLE scheduled_posts;
+ALTER TABLE scheduled_posts_new RENAME TO scheduled_posts;
+CREATE INDEX IF NOT EXISTS idx_scheduled_posts_due ON scheduled_posts(status, scheduled_at);
+COMMIT;
+PRAGMA foreign_keys=ON;
+`); err != nil {
+		return fmt.Errorf("sqlite migrate scheduled_posts automation source: %w", err)
 	}
 	return nil
 }

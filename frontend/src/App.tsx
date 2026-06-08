@@ -29,6 +29,8 @@ import { TeamProfileView } from './views/ai/TeamProfileView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
 import { AIGenerateView } from './views/ai/AIGenerateView'
 import { ProactiveTriggersView } from './views/ai/ProactiveTriggersView'
+import { RSSFeedsView } from './views/rss/RSSFeedsView'
+import { ReviewQueueView } from './views/review/ReviewQueueView'
 import {
   ApiError,
   createApiClient,
@@ -1884,6 +1886,44 @@ function App() {
             accounts={teamAccounts}
             canEdit={canEditScheduledPosts}
             onStatus={(msg) => setStatusMessage(msg)}
+          />
+        ) : null}
+
+        {section === 'rssFeeds' && selectedTeam ? (
+          <RSSFeedsView team={selectedTeam} accounts={teamAccounts} canEdit={canEditScheduledPosts} />
+        ) : null}
+
+        {section === 'reviewQueue' && selectedTeam && api ? (
+          <ReviewQueueView
+            team={selectedTeam}
+            accounts={teamAccounts}
+            canEdit={canEditScheduledPosts}
+            onEdit={openEditor}
+            onPublishNow={async (item) => {
+              await api.updatePost(selectedTeam.id, item.id, {
+                title: item.title,
+                content: item.content,
+                scheduled_at: new Date().toISOString(),
+                target_accounts: item.targetAccountIds,
+                draft: false,
+              })
+              await loadDashboard({ silent: true })
+              setStatusMessage(t('review.publishNow'))
+            }}
+            onSchedule={async (item, scheduledAt) => {
+              await api.updatePost(selectedTeam.id, item.id, {
+                title: item.title,
+                content: item.content,
+                scheduled_at: scheduledAt,
+                target_accounts: item.targetAccountIds,
+                draft: false,
+              })
+              await loadDashboard({ silent: true })
+              setStatusMessage(t('review.schedule'))
+            }}
+            onDiscard={async (postId) => {
+              await deletePost(postId)
+            }}
           />
         ) : null}
 
