@@ -750,7 +750,7 @@ function App() {
   }, [selectedTeam])
 
   useEffect(() => {
-    if (!api || !selectedTeam || selectedTeam.isPersonal || myRoleInSelectedTeam !== 'owner') {
+    if (!api || !selectedTeam || myRoleInSelectedTeam !== 'owner') {
       setExternalPostMonitorEnabled(false)
       return
     }
@@ -970,7 +970,7 @@ function App() {
   }
 
   async function handleToggleExternalPostMonitor(enabled: boolean) {
-    if (!api || !selectedTeam || selectedTeam.isPersonal) {
+    if (!api || !selectedTeam || myRoleInSelectedTeam !== 'owner') {
       return
     }
     setExternalPostMonitorEnabled(enabled)
@@ -1963,6 +1963,20 @@ function App() {
                       {t('teams.saveChanges')}
                     </button>
                   </div>
+                </section>
+
+                <section className="stack">
+                  <h3 className="subsection-title">{t('teams.externalPostMonitorTitle')}</h3>
+                  <p className="hint">{t('teams.externalPostMonitorHint')}</p>
+                  <label className="field toggle-row">
+                    <span>{t('teams.externalPostMonitorLabel')}</span>
+                    <input
+                      type="checkbox"
+                      className="toggle"
+                      checked={externalPostMonitorEnabled}
+                      onChange={(event) => void handleToggleExternalPostMonitor(event.target.checked)}
+                    />
+                  </label>
                 </section>
               </>
             ) : myRoleInSelectedTeam === 'owner' ? (
