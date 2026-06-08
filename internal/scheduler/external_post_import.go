@@ -61,6 +61,12 @@ func (s *Service) importExternalPostsForTeam(ctx context.Context, settings domai
 		since = settings.LastSyncAt.UTC()
 	}
 
+	if removed, err := s.store.DeleteRedundantImportedPosts(ctx, teamID); err != nil {
+		s.logger.WarnContext(ctx, "external post import: duplicate cleanup failed", "team_id", teamID, "error", err)
+	} else if removed > 0 {
+		s.logger.InfoContext(ctx, "external post import: removed duplicate imported posts", "team_id", teamID, "removed", removed)
+	}
+
 	ownerID, err := s.teamOwnerUserID(ctx, teamID)
 	if err != nil {
 		s.logger.WarnContext(ctx, "external post import: no team owner", "team_id", teamID, "error", err)
@@ -132,7 +138,7 @@ func (s *Service) importExternalPostsForAccount(ctx context.Context, teamID, own
 	imported := 0
 	utcDay := time.Now().UTC().Format("2006-01-02")
 	for _, ap := range posts {
-		exists, err := s.store.TargetExistsByRemotePostID(ctx, account.ID, ap.RemoteID)
+		exists, err := s.store.AuthorPostAlreadyTracked(ctx, account.ID, ap.RemoteID, ap.URL, ap.Metadata)
 		if err != nil {
 			s.logger.WarnContext(ctx, "external post import dedup check failed", "remote_id", ap.RemoteID, "error", err)
 			continue

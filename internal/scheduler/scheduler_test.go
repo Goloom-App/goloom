@@ -231,6 +231,14 @@ func (m *mockStore) TargetExistsByRemotePostID(ctx context.Context, accountID, r
 	return false, nil
 }
 
+func (m *mockStore) AuthorPostAlreadyTracked(ctx context.Context, accountID, remoteID, publishedURL string, metadata map[string]string) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStore) DeleteRedundantImportedPosts(ctx context.Context, teamID string) (int, error) {
+	return 0, nil
+}
+
 func (m *mockStore) CreateImportedPost(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error) {
 	return domain.ScheduledPost{}, nil
 }

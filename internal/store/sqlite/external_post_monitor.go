@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/postdedup"
+	"git.f4mily.net/goloom/internal/provider"
 	"github.com/google/uuid"
 )
 
@@ -126,17 +128,79 @@ func (s *Store) UpdateExternalPostMonitorSyncState(ctx context.Context, teamID s
 }
 
 func (s *Store) TargetExistsByRemotePostID(ctx context.Context, accountID, remotePostID string) (bool, error) {
-	remotePostID = strings.TrimSpace(remotePostID)
-	if remotePostID == "" {
+	return s.AuthorPostAlreadyTracked(ctx, accountID, remotePostID, "", nil)
+}
+
+func (s *Store) AuthorPostAlreadyTracked(ctx context.Context, accountID, remoteID, publishedURL string, metadata map[string]string) (bool, error) {
+	candidateSet := make(map[string]struct{})
+	for _, id := range provider.CollectAuthorPostIdentifiers(remoteID, publishedURL, metadata) {
+		candidateSet[id] = struct{}{}
+	}
+	if len(candidateSet) == 0 {
 		return false, nil
 	}
-	var count int
-	err := s.db.QueryRowContext(ctx, `
-		select count(1) from scheduled_post_targets
-		where account_id = ? and remote_post_id = ?`,
-		accountID, remotePostID,
-	).Scan(&count)
-	return count > 0, err
+
+	rows, err := s.db.QueryContext(ctx, `
+		select coalesce(remote_post_id, ''), coalesce(published_url, ''), coalesce(publish_metadata, '{}')
+		from scheduled_post_targets
+		where account_id = ? and status = 'posted'`, accountID)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var remote, url, metaRaw string
+		if err := rows.Scan(&remote, &url, &metaRaw); err != nil {
+			return false, err
+		}
+		for _, id := range provider.CollectAuthorPostIdentifiers(remote, url, postdedup.ParsePublishMetadata(metaRaw)) {
+			if _, ok := candidateSet[id]; ok {
+				return true, nil
+			}
+		}
+	}
+	return false, rows.Err()
+}
+
+func (s *Store) DeleteRedundantImportedPosts(ctx context.Context, teamID string) (int, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select p.id, p.source, t.account_id,
+		       coalesce(t.remote_post_id, ''), coalesce(t.published_url, ''), coalesce(t.publish_metadata, '{}')
+		from scheduled_posts p
+		inner join scheduled_post_targets t on t.post_id = p.id
+		where p.team_id = ? and p.status = 'posted' and t.status = 'posted'`,
+		teamID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var refs []postdedup.PostedTargetRef
+	for rows.Next() {
+		var ref postdedup.PostedTargetRef
+		var source string
+		var metaRaw string
+		if err := rows.Scan(&ref.PostID, &source, &ref.AccountID, &ref.RemotePostID, &ref.PublishedURL, &metaRaw); err != nil {
+			return 0, err
+		}
+		ref.PostSource = domain.PostSource(source)
+		ref.PublishMetadata = postdedup.ParsePublishMetadata(metaRaw)
+		refs = append(refs, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	deleted := 0
+	for _, postID := range postdedup.RedundantImportedPostIDs(refs) {
+		if err := s.DeleteScheduledPost(ctx, teamID, postID); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	return deleted, nil
 }
 
 func (s *Store) CreateImportedPost(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error) {

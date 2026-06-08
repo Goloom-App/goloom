@@ -76,6 +76,8 @@ type Store interface {
 	ListTeamsWithExternalPostMonitorEnabled(ctx context.Context, limit int) ([]domain.ExternalPostMonitorSettings, error)
 	UpdateExternalPostMonitorSyncState(ctx context.Context, teamID string, lastSyncAt time.Time, backfillCompleted bool) error
 	TargetExistsByRemotePostID(ctx context.Context, accountID, remotePostID string) (bool, error)
+	AuthorPostAlreadyTracked(ctx context.Context, accountID, remoteID, publishedURL string, metadata map[string]string) (bool, error)
+	DeleteRedundantImportedPosts(ctx context.Context, teamID string) (int, error)
 	CreateImportedPost(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error)
 
 	// AI Context aggregation
