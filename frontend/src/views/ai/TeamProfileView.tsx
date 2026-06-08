@@ -10,6 +10,7 @@ import {
   useDeleteStyleExample,
   useTriggerAIJob,
   useAIJobs,
+  useCancelAIJob,
 } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
 import type { TeamRecord } from '../../types'
@@ -25,6 +26,7 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
   const createExample = useCreateStyleExample()
   const deleteExample = useDeleteStyleExample()
   const triggerJob = useTriggerAIJob()
+  const cancelJob = useCancelAIJob()
   const { data: aiJobs } = useAIJobs(team.id)
   useAIJobStream(team.id)
 
@@ -70,6 +72,17 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
       setAutoPublishEnabled(profile.autoPublishEnabled || false)
     }
   }, [profile])
+
+  const handleCancelAnalysis = async (jobId: string) => {
+    setError(null)
+    setStatusMessage(null)
+    try {
+      await cancelJob.mutateAsync({ teamId: team.id, jobId })
+      setStatusMessage('Analysis cancelled')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel analysis')
+    }
+  }
 
   const handleAnalyzePosts = async () => {
     setError(null)
@@ -341,6 +354,16 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
                   <span className="badge badge--primary" style={{ textTransform: 'capitalize', fontSize: '0.75rem' }}>
                     {job.status}
                   </span>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    data-testid={`profile-cancel-job-${job.id}`}
+                    onClick={() => void handleCancelAnalysis(job.id)}
+                    disabled={cancelJob.isPending}
+                    title="Cancel analysis"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
               </div>
             ))}

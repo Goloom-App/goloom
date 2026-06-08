@@ -1082,6 +1082,12 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    cancelAIJob(teamID: string, jobID: string) {
+      return request<BackendAIJob>(options, `/v1/teams/${teamID}/ai-jobs/${jobID}/cancel`, {
+        method: 'POST',
+        headers: buildHeaders(options.token, false),
+      })
+    },
     getAIContext(teamID: string) {
       return request<{
         team: BackendTeam

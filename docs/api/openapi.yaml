@@ -625,6 +625,31 @@ paths:
                 $ref: "#/components/schemas/AIJob"
         "404":
           $ref: "#/components/responses/NotFound"
+  /v1/teams/{teamID}/ai-jobs/{jobID}/cancel:
+    post:
+      tags: [AI]
+      summary: Cancel a pending or processing AI job
+      description: >-
+        Marks an active AI job as failed with error_message "cancelled".
+        Completed jobs cannot be cancelled. Already-failed jobs return the current state (idempotent).
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/jobID"
+      responses:
+        "200":
+          description: Cancelled AI job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Job is already completed and cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/teams/{teamID}/ai-jobs/stream:
     get:
       tags: [AI]

@@ -201,6 +201,25 @@ export function useAIJob(teamId: string, jobId: string) {
   })
 }
 
+export function useCancelAIJob() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ teamId, jobId }: { teamId: string; jobId: string }) =>
+      mapAIJob(await getApiClient().cancelAIJob(teamId, jobId)),
+    onSuccess: (job, variables) => {
+      queryClient.setQueryData(jobKey(variables.teamId, job.id), job)
+      queryClient.setQueryData<ReturnType<typeof mapAIJob>[]>(['ai-jobs', variables.teamId], (old) => {
+        if (!old) return [job]
+        const idx = old.findIndex((j) => j.id === job.id)
+        if (idx === -1) return [job, ...old]
+        const updated = [...old]
+        updated[idx] = job
+        return updated
+      })
+    },
+  })
+}
+
 export function useRSSFeeds(teamId: string) {
   return useQuery({
     queryKey: [...teamKey(teamId), 'rss-feeds'],

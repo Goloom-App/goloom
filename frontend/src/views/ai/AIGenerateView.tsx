@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Check, Loader2, AlertCircle, Play, Save } from 'lucide-react'
+import { Check, Loader2, AlertCircle, Play, Save, X } from 'lucide-react'
 
 import {
   useTriggerAIJob,
   useAIJobs,
   useCampaignFormats,
   useTeamProfile,
+  useCancelAIJob,
 } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
 import type { TeamRecord, AccountRecord, AIJobType, AIJob } from '../../types'
@@ -21,6 +22,7 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
   const { data: formats } = useCampaignFormats(team.id)
   const { data: jobs } = useAIJobs(team.id)
   const triggerJob = useTriggerAIJob()
+  const cancelJob = useCancelAIJob()
   
   useAIJobStream(team.id)
 
@@ -93,6 +95,17 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
       setPromptHint('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to trigger AI job')
+    }
+  }
+
+  const handleCancelJob = async (job: AIJob) => {
+    setError(null)
+    setStatusMessage(null)
+    try {
+      await cancelJob.mutateAsync({ teamId: team.id, jobId: job.id })
+      setStatusMessage('AI job cancelled')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel AI job')
     }
   }
 
@@ -271,6 +284,16 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
                     <span className="badge badge--primary" style={{ textTransform: 'capitalize' }}>
                       {job.status}
                     </span>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      data-testid={`gen-cancel-job-${job.id}`}
+                      onClick={() => void handleCancelJob(job)}
+                      disabled={cancelJob.isPending}
+                      title="Cancel job"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
                 </div>
               ))}
