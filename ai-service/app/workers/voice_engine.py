@@ -53,12 +53,20 @@ class VoiceEngineWorker:
             )
             prompt = self.prompt_builder.inject_few_shot(base_prompt, context.get("style_examples", []))
 
+            primary_account_id = str(primary.get("id") or "")
             parsed = await self._generate_with_retries(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 primary_limit=primary_limit,
+                primary_account_id=primary_account_id,
                 selected_accounts=selected_accounts,
                 author_user_id=author_user_id,
+            )
+            parsed = self._normalize_multi_account_result(
+                parsed,
+                selected_accounts=selected_accounts,
+                primary_account_id=primary_account_id,
+                primary_limit=primary_limit,
             )
 
             result = {
@@ -67,7 +75,7 @@ class VoiceEngineWorker:
                 "platform_metadata": parsed.get("platform_metadata") or {},
                 "account_content_override": parsed.get("account_content_override") or {},
                 "scheduled_at": format_datetime(scheduled_at),
-                "primary_account_id": str(primary.get("id") or ""),
+                "primary_account_id": primary_account_id,
             }
             await self._try_callback(job_id, "completed", result)
             callback_sent = True
@@ -93,12 +101,29 @@ class VoiceEngineWorker:
         campaign_format: dict[str, Any] | None,
         scheduled_at,
     ) -> str:
-        platform = str(selected_accounts[0].get("provider") or "general")
-        base_prompt = self.prompt_builder.build_generation_prompt(context, params, platform)
+        primary = max(selected_accounts, key=lambda item: int(item["max_chars"]))
+        primary_id = str(primary.get("id") or "")
+        primary_platform = str(primary.get("provider") or "general")
+        base_prompt = self.prompt_builder.build_generation_prompt(context, params, primary_platform)
         account_lines = [
-            f"- {acc.get('username') or acc.get('id')} ({acc.get('provider')}): max {acc.get('max_chars')} characters"
+            f"- {acc.get('username') or acc.get('id')} (id={acc.get('id')}, {acc.get('provider')}): max {acc.get('max_chars')} characters"
             for acc in selected_accounts
         ]
+        lower_limit_accounts = [
+            acc for acc in selected_accounts if int(acc["max_chars"]) < primary_limit
+        ]
+        override_hint = (
+            "No account_content_override entries are needed because every selected account shares the same limit."
+            if not lower_limit_accounts
+            else (
+                "account_content_override must ONLY contain compressed variants for these lower-limit accounts "
+                "when the primary text would exceed their limit: "
+                + ", ".join(
+                    f"{acc.get('username') or acc.get('id')} (id={acc.get('id')}, max {acc.get('max_chars')})"
+                    for acc in lower_limit_accounts
+                )
+            )
+        )
         campaign_hint = ""
         if campaign_format:
             campaign_hint = (
@@ -109,12 +134,18 @@ class VoiceEngineWorker:
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'next available slot'}."
         return (
             f"{base_prompt}\n\n"
-            "Write one primary post body that uses as much of the primary character budget as possible "
-            f"without exceeding {primary_limit} characters.\n"
-            "Also provide shorter per-account overrides for accounts with lower limits.\n"
+            "Multi-account output rules:\n"
+            f"- Primary account: {primary.get('username') or primary_id} (id={primary_id}, {primary_platform}, "
+            f"limit {primary_limit} characters).\n"
+            f"- Write \"content\" ONLY for the primary account. Make it as long and complete as possible, "
+            f"targeting roughly {primary_limit - 20} to {primary_limit} characters.\n"
+            f"- {override_hint}\n"
+            "- Do NOT create a separate version for every account.\n"
+            "- Accounts with the same or higher limit than the primary use \"content\" unchanged.\n"
+            "- Overrides must be shorter compressions of the same message, not alternate drafts.\n"
             "Return JSON only with keys:\n"
-            '- "content": primary text for the account with the highest limit\n'
-            '- "account_content_override": object mapping account_id -> tailored text\n'
+            f'- "content": primary text for account id {primary_id}\n'
+            '- "account_content_override": object mapping account_id -> shorter text ONLY where required\n'
             '- "hashtags": array of hashtags\n'
             '- "platform_metadata": object\n'
             f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
@@ -126,10 +157,12 @@ class VoiceEngineWorker:
         prompt: str,
         system_prompt: str,
         primary_limit: int,
+        primary_account_id: str,
         selected_accounts: list[dict[str, Any]],
         author_user_id: str,
     ) -> dict[str, Any]:
         current_prompt = prompt
+        last_error = "invalid multi-account output"
         for attempt in range(self.max_retries + 1):
             response = await self.adapter.generate(
                 current_prompt,
@@ -140,35 +173,117 @@ class VoiceEngineWorker:
                 author_user_id=author_user_id,
             )
             result = self._parse_result(response.content)
+            result = self._normalize_multi_account_result(
+                result,
+                selected_accounts=selected_accounts,
+                primary_account_id=primary_account_id,
+                primary_limit=primary_limit,
+            )
             try:
-                self._validate_lengths(result, selected_accounts, primary_limit)
+                self._validate_lengths(
+                    result,
+                    selected_accounts,
+                    primary_limit=primary_limit,
+                    primary_account_id=primary_account_id,
+                )
                 return result
-            except ValueError:
+            except ValueError as exc:
+                last_error = str(exc)
                 if attempt >= self.max_retries:
                     raise
             current_prompt = (
                 f"{prompt}\n\nRevise the previous answer and return JSON only. "
-                f"The primary content must be at most {primary_limit} characters and every override must respect its account limit."
+                f"Fix this issue: {last_error}. "
+                f"The primary content for account {primary_account_id} must be long "
+                f"(target {self._min_primary_length(primary_limit, selected_accounts)} to {primary_limit} characters). "
+                "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
             )
 
         raise RuntimeError("voice engine retry loop exited unexpectedly")
 
-    def _validate_lengths(self, result: dict[str, Any], selected_accounts: list[dict[str, Any]], primary_limit: int) -> None:
+    @staticmethod
+    def _min_primary_length(primary_limit: int, selected_accounts: list[dict[str, Any]]) -> int:
+        lower_limits = [
+            int(acc["max_chars"])
+            for acc in selected_accounts
+            if int(acc["max_chars"]) < primary_limit
+        ]
+        if lower_limits:
+            return max(min(primary_limit - 20, int(primary_limit * 0.85)), max(lower_limits) + 1)
+        return max(min(primary_limit - 20, int(primary_limit * 0.85)), int(primary_limit * 0.7))
+
+    @staticmethod
+    def _normalize_multi_account_result(
+        result: dict[str, Any],
+        *,
+        selected_accounts: list[dict[str, Any]],
+        primary_account_id: str,
+        primary_limit: int,
+    ) -> dict[str, Any]:
         content = str(result.get("content") or "")
+        raw_overrides = result.get("account_content_override") or {}
+        if not isinstance(raw_overrides, dict):
+            raw_overrides = {}
+        limits = {str(acc["id"]): int(acc["max_chars"]) for acc in selected_accounts}
+        overrides: dict[str, str] = {}
+
+        for account_id, value in raw_overrides.items():
+            account_key = str(account_id)
+            if account_key == primary_account_id:
+                continue
+            limit = limits.get(account_key)
+            if limit is None or limit >= primary_limit:
+                continue
+            text = str(value).strip()
+            if not text:
+                continue
+            if len(content) <= limit:
+                continue
+            overrides[account_key] = text
+
+        result["content"] = content
+        result["account_content_override"] = overrides
+        return result
+
+    def _validate_lengths(
+        self,
+        result: dict[str, Any],
+        selected_accounts: list[dict[str, Any]],
+        *,
+        primary_limit: int,
+        primary_account_id: str,
+    ) -> None:
+        content = str(result.get("content") or "")
+        min_primary = self._min_primary_length(primary_limit, selected_accounts)
+        if len(content) < min_primary:
+            raise ValueError(
+                f"Primary content is too short ({len(content)} chars); aim for at least {min_primary}"
+            )
         if len(content) > primary_limit:
             raise ValueError(f"Generated primary content exceeds limit of {primary_limit} characters")
         overrides = result.get("account_content_override") or {}
         if not isinstance(overrides, dict):
             raise ValueError("account_content_override must be an object")
         limits = {str(acc["id"]): int(acc["max_chars"]) for acc in selected_accounts}
+
+        if primary_account_id in overrides:
+            raise ValueError("Primary account must not appear in account_content_override")
+
         for account_id, limit in limits.items():
-            override = overrides.get(account_id)
-            if override is None:
-                if len(content) > limit:
-                    raise ValueError(f"Missing override for account {account_id} with limit {limit}")
+            if account_id == primary_account_id:
                 continue
-            if len(str(override)) > limit:
+            override = overrides.get(account_id)
+            if len(content) <= limit:
+                if override is not None:
+                    raise ValueError(f"Remove override for account {account_id}; primary content already fits")
+                continue
+            if override is None:
+                raise ValueError(f"Missing override for account {account_id} with limit {limit}")
+            override_text = str(override)
+            if len(override_text) > limit:
                 raise ValueError(f"Override for account {account_id} exceeds limit of {limit}")
+            if len(override_text) >= len(content):
+                raise ValueError(f"Override for account {account_id} must be shorter than the primary content")
 
     @staticmethod
     def _context_with_style_overrides(context: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:

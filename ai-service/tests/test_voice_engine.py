@@ -46,16 +46,23 @@ def sample_job(**params) -> dict:
     }
 
 
+def _long_primary_text(length: int = 480) -> str:
+    base = "We shipped the release today. Thanks for following along. "
+    return (base * ((length // len(base)) + 1))[:length]
+
+
 @pytest.mark.asyncio
 async def test_process_generates_multi_account_post():
     adapter = AsyncMock()
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    primary_text = _long_primary_text(480)
     adapter.generate.return_value = LLMResponse(
         content=json.dumps(
             {
-                "content": "We shipped the release today. Thanks for following along.",
+                "content": primary_text,
                 "account_content_override": {
                     "acc-bluesky": "Release shipped today.",
+                    "acc-mastodon": "should be stripped",
                 },
                 "hashtags": ["#launch"],
                 "platform_metadata": {"platform": "mastodon"},
@@ -69,8 +76,8 @@ async def test_process_generates_multi_account_post():
 
     result = await worker.process({**sample_job(), "context": sample_context()})
 
-    assert result["content"] == "We shipped the release today. Thanks for following along."
-    assert result["account_content_override"]["acc-bluesky"] == "Release shipped today."
+    assert result["content"] == primary_text
+    assert result["account_content_override"] == {"acc-bluesky": "Release shipped today."}
     assert result["primary_account_id"] == "acc-mastodon"
     assert result["scheduled_at"] is not None
     first_call = adapter.generate.await_args_list[0]
@@ -79,6 +86,47 @@ async def test_process_generates_multi_account_post():
     callback_args = goloom_client.send_callback.await_args.args
     assert callback_args[0] == "job-1"
     assert callback_args[1] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_process_retries_when_primary_content_is_too_short():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    adapter.generate.side_effect = [
+        LLMResponse(
+            content=json.dumps(
+                {
+                    "content": "Too short.",
+                    "account_content_override": {"acc-bluesky": "Too short."},
+                    "hashtags": [],
+                    "platform_metadata": {},
+                }
+            ),
+            model="gpt-4o",
+            usage={},
+        ),
+        LLMResponse(
+            content=json.dumps(
+                {
+                    "content": _long_primary_text(470),
+                    "account_content_override": {"acc-bluesky": "Short release note."},
+                    "hashtags": [],
+                    "platform_metadata": {},
+                }
+            ),
+            model="gpt-4o",
+            usage={},
+        ),
+    ]
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process({**sample_job(), "context": sample_context()})
+
+    assert len(result["content"]) >= 425
+    assert adapter.generate.await_count == 2
+    second_call = adapter.generate.await_args_list[1]
+    assert "too short" in second_call.args[0].casefold()
 
 
 @pytest.mark.asyncio
@@ -119,7 +167,7 @@ async def test_process_retries_until_content_fits_char_limit():
     assert len(result["content"]) == 480
     assert adapter.generate.await_count == 2
     second_call = adapter.generate.await_args_list[1]
-    assert "must be at most 500 characters" in second_call.args[0]
+    assert "exceeds limit of 500 characters" in second_call.args[0]
 
 
 @pytest.mark.asyncio

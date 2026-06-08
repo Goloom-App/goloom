@@ -155,7 +155,10 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
     <div className="two-column-detail" data-testid="ai-generate-view">
       <div className="glass-panel stack">
         <h2 className="section-card__title">Generate Post</h2>
-        <p className="hint">Describe what you want to publish. The AI adapts the text per target account.</p>
+        <p className="hint">
+          Describe what you want to publish. The AI writes one full-length post for the account with the highest
+          character limit and only adds shorter overrides where a target account needs them.
+        </p>
 
         {(error || statusMessage) && (
           <div className="status-banner-panel" style={{ padding: '1rem', marginBottom: '1rem' }}>
@@ -285,29 +288,54 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
 
                 {job.status === 'completed' && typeof job.result?.content === 'string' && job.result.content && (
                   <>
-                    <div
-                      style={{
-                        background: 'var(--bg-secondary)',
-                        padding: '0.75rem',
-                        borderRadius: '4px',
-                        fontSize: '0.9rem',
-                        whiteSpace: 'pre-wrap',
-                      }}
-                    >
-                      {String(job.result.content)}
-                    </div>
+                    {(() => {
+                      const primaryAccountId =
+                        typeof job.result.primary_account_id === 'string'
+                          ? job.result.primary_account_id
+                          : null
+                      const primaryAccount = primaryAccountId
+                        ? accounts.find((item) => item.id === primaryAccountId)
+                        : undefined
+                      const primaryLabel = primaryAccount
+                        ? `${primaryAccount.username || primaryAccount.name} · ${primaryAccount.provider}`
+                        : 'Primary account'
+                      const primaryLimit = primaryAccount?.maxChars
+                      return (
+                        <div className="stack stack--xs">
+                          <p className="hint" style={{ margin: 0 }}>
+                            Primary text
+                            {primaryLimit ? ` (${String(job.result.content).length}/${primaryLimit} chars)` : ''}
+                            {' · '}
+                            {primaryLabel}
+                          </p>
+                          <div
+                            style={{
+                              background: 'var(--bg-secondary)',
+                              padding: '0.75rem',
+                              borderRadius: '4px',
+                              fontSize: '0.9rem',
+                              whiteSpace: 'pre-wrap',
+                            }}
+                          >
+                            {String(job.result.content)}
+                          </div>
+                        </div>
+                      )
+                    })()}
 
                     {job.result.account_content_override &&
-                      typeof job.result.account_content_override === 'object' && (
+                      typeof job.result.account_content_override === 'object' &&
+                      Object.keys(job.result.account_content_override as Record<string, string>).length > 0 && (
                         <div className="stack stack--xs">
-                          <p className="hint" style={{ margin: 0 }}>Per-account overrides</p>
+                          <p className="hint" style={{ margin: 0 }}>Shortened overrides</p>
                           {Object.entries(job.result.account_content_override as Record<string, string>).map(
                             ([accountId, text]) => {
                               const account = accounts.find((item) => item.id === accountId)
                               return (
                                 <div key={accountId} className="glass-panel glass-panel--compact">
                                   <strong style={{ fontSize: '0.8rem' }}>
-                                    {account?.username || accountId}
+                                    {account?.username || account?.name || accountId}
+                                    {account?.maxChars ? ` · ${text.length}/${account.maxChars} chars` : ''}
                                   </strong>
                                   <p style={{ margin: '0.25rem 0 0', whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
                                     {text}
