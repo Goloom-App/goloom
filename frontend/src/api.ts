@@ -104,6 +104,7 @@ export interface BackendPost {
   content: string
   scheduled_at: string
   status: 'pending' | 'processing' | 'posted' | 'failed' | 'cancelled' | 'draft'
+  source?: 'scheduled' | 'imported'
   attempt_count: number
   last_error?: string
   created_at: string
@@ -355,6 +356,16 @@ export interface BackendProactiveTriggerSettings {
   cron_schedule: string
   created_at: string
   updated_at: string
+}
+
+export interface BackendExternalPostMonitorSettings {
+  id?: string
+  team_id: string
+  enabled: boolean
+  backfill_completed_at?: string | null
+  last_sync_at?: string | null
+  created_at?: string
+  updated_at?: string
 }
 
 function currentAcceptLanguage(): string {
@@ -1155,6 +1166,18 @@ export function createApiClient(options: ApiClientOptions) {
       },
     ) {
       return request<BackendProactiveTriggerSettings>(options, `/v1/teams/${teamID}/proactive-settings`, {
+        method: 'PUT',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    getExternalPostMonitor(teamID: string) {
+      return request<BackendExternalPostMonitorSettings>(options, `/v1/teams/${teamID}/external-post-monitor`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    upsertExternalPostMonitor(teamID: string, payload: { enabled: boolean }) {
+      return request<BackendExternalPostMonitorSettings>(options, `/v1/teams/${teamID}/external-post-monitor`, {
         method: 'PUT',
         headers: buildHeaders(options.token),
         body: JSON.stringify(payload),

@@ -42,6 +42,13 @@ const (
 	PostStatusDraft      PostStatus = "draft"
 )
 
+type PostSource string
+
+const (
+	PostSourceScheduled PostSource = "scheduled"
+	PostSourceImported  PostSource = "imported"
+)
+
 type AIJobType string
 
 const (
@@ -283,6 +290,32 @@ type ProactiveTriggerSettings struct {
 	UpdatedAt               time.Time `json:"updated_at"`
 }
 
+// ExternalPostMonitorSettings controls automatic import of posts published outside goloom.
+type ExternalPostMonitorSettings struct {
+	ID                  string     `json:"id,omitempty"`
+	TeamID              string     `json:"team_id"`
+	Enabled             bool       `json:"enabled"`
+	BackfillCompletedAt *time.Time `json:"backfill_completed_at,omitempty"`
+	LastSyncAt          *time.Time `json:"last_sync_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at,omitempty"`
+	UpdatedAt           time.Time  `json:"updated_at,omitempty"`
+}
+
+// UpsertExternalPostMonitorInput is the PUT body for external post monitor settings.
+type UpsertExternalPostMonitorInput struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ImportedPostInput carries provider post data for CreateImportedPost.
+type ImportedPostInput struct {
+	AccountID       string
+	RemotePostID    string
+	Content         string
+	PublishedAt     time.Time
+	PublishedURL    string
+	PublishMetadata map[string]string
+}
+
 type AIContext struct {
 	Team            Team             `json:"team"`
 	Profile         *TeamProfile     `json:"profile,omitempty"`
@@ -349,6 +382,7 @@ type ScheduledPost struct {
 	Content               string              `json:"content"`
 	ScheduledAt           time.Time           `json:"scheduled_at"`
 	Status                PostStatus          `json:"status"`
+	Source                PostSource          `json:"source"`
 	AttemptCount          int                 `json:"attempt_count"`
 	LastError             string              `json:"last_error,omitempty"`
 	CreatedAt             time.Time           `json:"created_at"`
@@ -743,7 +777,10 @@ func (in StyleExample) Validate() error {
 }
 
 // ResolvePostStatusOnUpdate returns the post row status after an update from CreatePostInput.
-func ResolvePostStatusOnUpdate(was PostStatus, in CreatePostInput) PostStatus {
+func ResolvePostStatusOnUpdate(was PostStatus, source PostSource, in CreatePostInput) PostStatus {
+	if source == PostSourceImported {
+		return PostStatusPosted
+	}
 	// If the post was already posted, processing or cancelled, do not change status back to pending/draft.
 	if was == PostStatusPosted || was == PostStatusProcessing || was == PostStatusCancelled {
 		return was

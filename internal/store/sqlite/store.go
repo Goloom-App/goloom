@@ -777,7 +777,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 
 func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
@@ -801,7 +801,7 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 
 func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
-		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
@@ -851,7 +851,7 @@ func (s *Store) PatchScheduledPost(ctx context.Context, teamID, postID string, p
 		if err != nil {
 			return domain.ScheduledPost{}, err
 		}
-		newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, merged)
+		newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, existing.Source, merged)
 		if flags.ScheduledAt && !flags.Title && !flags.Content && !flags.Visibility && !flags.MediaIDs && !flags.MediaExcludeByAccount && !flags.Draft {
 			if _, err := tx.ExecContext(ctx, `
 				update scheduled_posts
@@ -926,7 +926,7 @@ func (s *Store) DeleteScheduledPost(ctx context.Context, teamID, postID string) 
 
 func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
@@ -975,7 +975,7 @@ func (s *Store) MarkPostResult(ctx context.Context, postID string, attemptCount 
 	return err
 }
 
-func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string) error {
+func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string, remotePostID string) error {
 	metaJSON := "{}"
 	if publishMetadata != nil {
 		b, err := json.Marshal(publishMetadata)
@@ -986,9 +986,9 @@ func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID stri
 	}
 	_, err := s.db.ExecContext(ctx, `
 		update scheduled_post_targets
-		set status = ?, published_url = ?, last_error = ?, publish_metadata = ?
+		set status = ?, published_url = ?, last_error = ?, publish_metadata = ?, remote_post_id = ?
 		where post_id = ? and account_id = ?`,
-		status, nullableString(publishedURL), nullableString(lastError), metaJSON, postID, accountID,
+		status, nullableString(publishedURL), nullableString(lastError), metaJSON, nullableString(remotePostID), postID, accountID,
 	)
 	return err
 }
@@ -1339,6 +1339,7 @@ func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 		&post.Content,
 		&scheduled,
 		&post.Status,
+		&post.Source,
 		&post.AttemptCount,
 		&lastError,
 		&post.Visibility,
@@ -1362,6 +1363,9 @@ func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 	}
 	if strings.TrimSpace(post.Visibility) == "" {
 		post.Visibility = domain.PostVisibilityPublic
+	}
+	if strings.TrimSpace(string(post.Source)) == "" {
+		post.Source = domain.PostSourceScheduled
 	}
 	if strings.TrimSpace(mediaIDsJSON) != "" {
 		if err := json.Unmarshal([]byte(mediaIDsJSON), &post.MediaIDs); err != nil {

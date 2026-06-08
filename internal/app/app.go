@@ -43,6 +43,7 @@ func Run(ctx context.Context) error {
 		"scheduler_poll_interval", cfg.SchedulerPollInterval.String(),
 		"scheduler_metrics_sync_interval", cfg.SchedulerMetricsSyncInterval.String(),
 		"scheduler_account_health_interval", cfg.SchedulerAccountHealthInterval.String(),
+		"scheduler_external_post_import_interval", cfg.SchedulerExternalPostImportInterval.String(),
 		"scheduler_workers", cfg.SchedulerWorkers,
 		"rate_limit_per_minute", cfg.RateLimitPerMinute,
 		"rate_limit_authenticated_per_minute", cfg.RateLimitAuthenticatedPerMinute,
@@ -122,6 +123,7 @@ func Run(ctx context.Context) error {
 		cfg.SchedulerWorkers,
 		cfg.SchedulerMetricsSyncInterval,
 		cfg.SchedulerAccountHealthInterval,
+		cfg.SchedulerExternalPostImportInterval,
 	)
 	go schedulerService.Start(ctx)
 

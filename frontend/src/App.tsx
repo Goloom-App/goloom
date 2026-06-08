@@ -129,6 +129,7 @@ function App() {
   const [newApiTokenName, setNewApiTokenName] = useState('')
   const [newApiTokenScopes, setNewApiTokenScopes] = useState<string[]>([])
   const [teamAiEnabled, setTeamAiEnabled] = useState(false)
+  const [externalPostMonitorEnabled, setExternalPostMonitorEnabled] = useState(false)
   const [teamTokenPlaintext, setTeamTokenPlaintext] = useState<string | null>(null)
   const [teamTokenName, setTeamTokenName] = useState('')
   const [teamAiServiceUrl, setTeamAiServiceUrl] = useState('')
@@ -738,6 +739,7 @@ function App() {
       setTeamSettingsName('')
       setTeamSettingsDescription('')
       setTeamAiEnabled(false)
+      setExternalPostMonitorEnabled(false)
       setMemberRoleEdits({})
       return
     }
@@ -746,6 +748,26 @@ function App() {
     setTeamAiEnabled(selectedTeam.isAiEnabled ?? false)
     setMemberRoleEdits(Object.fromEntries(selectedTeam.members.map((member) => [member.userId, member.role])))
   }, [selectedTeam])
+
+  useEffect(() => {
+    if (!api || !selectedTeam || selectedTeam.isPersonal || myRoleInSelectedTeam !== 'owner') {
+      setExternalPostMonitorEnabled(false)
+      return
+    }
+    let cancelled = false
+    void api.getExternalPostMonitor(selectedTeam.id).then((settings) => {
+      if (!cancelled) {
+        setExternalPostMonitorEnabled(settings.enabled)
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setExternalPostMonitorEnabled(false)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [api, selectedTeam, myRoleInSelectedTeam])
 
   const instancesForAccountConnect = useMemo(
     () => providerInstances.filter((p) => p.provider === accountDraft.provider),
@@ -831,7 +853,7 @@ function App() {
 
   async function openEditor(postId: string) {
     const targetPost = teamPosts.find((post) => post.id === postId)
-    if (!targetPost) {
+    if (!targetPost || targetPost.source === 'imported') {
       return
     }
     let accountContentOverride: Record<string, string> = {}
@@ -921,6 +943,16 @@ function App() {
   function directoryUserLabel(userId: string) {
     const user = directoryUsers.find((u) => u.id === userId)
     return user ? `${user.name} · ${user.email}` : userId
+  }
+
+  async function handleToggleExternalPostMonitor(enabled: boolean) {
+    if (!api || !selectedTeam || selectedTeam.isPersonal) {
+      return
+    }
+    setExternalPostMonitorEnabled(enabled)
+    await runAction(async () => {
+      await api.upsertExternalPostMonitor(selectedTeam.id, { enabled })
+    }, t('status.externalPostMonitorUpdated'))
   }
 
   async function handleUpdateTeam() {
@@ -1374,7 +1406,7 @@ function App() {
       return
     }
     const post = posts.find((p) => p.id === postId)
-    if (!post || post.status !== 'scheduled' || post.teamId !== selectedTeam.id) {
+    if (!post || post.status !== 'scheduled' || post.teamId !== selectedTeam.id || post.source === 'imported') {
       return
     }
 
@@ -1673,7 +1705,7 @@ function App() {
                           <Icon name="trash" className="inline-icon" />
                           <span className="desktop-only">{t('common.delete')}</span>
                         </button>
-                        {p.status !== 'posted' && (
+                        {p.status !== 'posted' && p.source !== 'imported' && (
                           <button
                             type="button"
                             className="button button--secondary button--sm"
@@ -1850,6 +1882,20 @@ function App() {
                       {t('teams.saveChanges')}
                     </button>
                   </div>
+                </section>
+
+                <section className="stack">
+                  <h3 className="subsection-title">{t('teams.externalPostMonitorTitle')}</h3>
+                  <p className="hint">{t('teams.externalPostMonitorHint')}</p>
+                  <label className="field toggle-row">
+                    <span>{t('teams.externalPostMonitorLabel')}</span>
+                    <input
+                      type="checkbox"
+                      className="toggle"
+                      checked={externalPostMonitorEnabled}
+                      onChange={(event) => void handleToggleExternalPostMonitor(event.target.checked)}
+                    />
+                  </label>
                 </section>
 
                 <section className="stack">

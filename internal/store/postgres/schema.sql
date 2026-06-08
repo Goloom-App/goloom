@@ -409,3 +409,31 @@ create table if not exists job_locks (
 alter table teams add column if not exists is_ai_enabled boolean not null default false;
 alter table api_tokens add column if not exists scopes text not null default '';
 alter table api_tokens add column if not exists team_id uuid references teams(id) on delete cascade;
+
+create table if not exists external_post_monitor_settings (
+    id uuid primary key default gen_random_uuid(),
+    team_id uuid not null references teams(id) on delete cascade unique,
+    enabled boolean not null default false,
+    backfill_completed_at timestamptz,
+    last_sync_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+alter table scheduled_posts add column if not exists source text not null default 'scheduled';
+alter table scheduled_posts drop constraint if exists scheduled_posts_source_check;
+alter table scheduled_posts add constraint scheduled_posts_source_check
+    check (source in ('scheduled', 'imported'));
+
+alter table scheduled_post_targets add column if not exists remote_post_id text;
+create unique index if not exists ux_post_targets_account_remote_post
+    on scheduled_post_targets(account_id, remote_post_id)
+    where remote_post_id is not null and trim(remote_post_id) <> '';
+
+update scheduled_post_targets
+set remote_post_id = nullif(trim(publish_metadata::json->>'uri'), '')
+where status = 'posted'
+  and (remote_post_id is null or trim(remote_post_id) = '')
+  and publish_metadata is not null
+  and trim(publish_metadata) <> '{}'
+  and nullif(trim(publish_metadata::json->>'uri'), '') is not null;

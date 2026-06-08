@@ -69,6 +69,14 @@ type Store interface {
 	GetProactiveTriggerSettings(ctx context.Context, teamID string) (domain.ProactiveTriggerSettings, error)
 	UpsertProactiveTriggerSettings(ctx context.Context, teamID string, input domain.ProactiveTriggerSettings) (domain.ProactiveTriggerSettings, error)
 
+	// ExternalPostMonitor methods
+	GetExternalPostMonitorSettings(ctx context.Context, teamID string) (domain.ExternalPostMonitorSettings, error)
+	UpsertExternalPostMonitorSettings(ctx context.Context, teamID string, input domain.UpsertExternalPostMonitorInput) (domain.ExternalPostMonitorSettings, error)
+	ListTeamsWithExternalPostMonitorEnabled(ctx context.Context, limit int) ([]domain.ExternalPostMonitorSettings, error)
+	UpdateExternalPostMonitorSyncState(ctx context.Context, teamID string, lastSyncAt time.Time, backfillCompleted bool) error
+	TargetExistsByRemotePostID(ctx context.Context, accountID, remotePostID string) (bool, error)
+	CreateImportedPost(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error)
+
 	// AI Context aggregation
 	GetTeamAIContext(ctx context.Context, teamID string) (domain.AIContext, error)
 
@@ -116,7 +124,7 @@ type Store interface {
 	ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error)
 	MarkPostProcessing(ctx context.Context, postID string) error
 	MarkPostResult(ctx context.Context, postID string, attemptCount int, status domain.PostStatus, lastError string, nextAttempt *time.Time) error
-	MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string) error
+	MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string, remotePostID string) error
 	UpdateSocialAccountTokens(ctx context.Context, accountID string, accessToken, refreshToken string, accessExpiresAt *time.Time) error
 	LoadPostTargets(ctx context.Context, postID string) ([]domain.SocialAccount, error)
 	DecryptAccessToken(account domain.SocialAccount) (string, error)

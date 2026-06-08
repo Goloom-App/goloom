@@ -177,6 +177,7 @@ create table if not exists scheduled_posts (
     content text not null,
     scheduled_at text not null,
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft')),
+    source text not null default 'scheduled' check (source in ('scheduled', 'imported')),
     attempt_count integer not null default 0,
     last_error text,
     visibility text not null default 'public',
@@ -193,9 +194,24 @@ create table if not exists scheduled_post_targets (
     published_url text,
     last_error text,
     publish_metadata text not null default '{}',
+    remote_post_id text,
     metrics_last_sync_date text,
     metrics_last_sync_at text,
     primary key (post_id, account_id)
+);
+
+create unique index if not exists ux_post_targets_account_remote_post
+    on scheduled_post_targets(account_id, remote_post_id)
+    where remote_post_id is not null and trim(remote_post_id) <> '';
+
+create table if not exists external_post_monitor_settings (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade unique,
+    enabled integer not null default 0,
+    backfill_completed_at text,
+    last_sync_at text,
+    created_at text not null,
+    updated_at text not null
 );
 
 create index if not exists idx_social_accounts_team on social_accounts(team_id);

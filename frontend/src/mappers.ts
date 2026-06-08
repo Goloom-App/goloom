@@ -146,6 +146,7 @@ export function toPostRecord(post: BackendPost): PostRecord {
     durationMinutes: 30,
     targetAccountIds: post.target_accounts ?? [],
     status: mapStatus(post.status),
+    source: post.source === 'imported' ? 'imported' : 'scheduled',
     publishedLinks: post.published_links,
     mediaIds: post.media_ids?.length ? post.media_ids : undefined,
     mediaExcludeByAccount: post.media_exclude_by_account && Object.keys(post.media_exclude_by_account).length > 0 ? post.media_exclude_by_account : undefined,

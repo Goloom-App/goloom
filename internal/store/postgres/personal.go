@@ -161,7 +161,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 
 func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error) {
 	const query = `
-		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
+		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
 		       p.post_template_id::text, p.template_counter,

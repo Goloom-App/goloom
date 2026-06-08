@@ -971,7 +971,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 
 func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error) {
 	const query = `
-		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
+		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
 		       p.post_template_id::text, p.template_counter,
@@ -987,7 +987,7 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 
 func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error) {
 	const query = `
-		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
+		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
 		       p.post_template_id::text, p.template_counter,
@@ -1040,7 +1040,7 @@ func (s *Store) PatchScheduledPost(ctx context.Context, teamID, postID string, p
 		if err != nil {
 			return domain.ScheduledPost{}, err
 		}
-		newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, merged)
+		newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, existing.Source, merged)
 		if flags.ScheduledAt && !flags.Title && !flags.Content && !flags.Visibility && !flags.MediaIDs && !flags.MediaExcludeByAccount && !flags.Draft {
 			_, err = tx.Exec(ctx, `
 				update scheduled_posts
@@ -1113,7 +1113,7 @@ func (s *Store) DeleteScheduledPost(ctx context.Context, teamID, postID string) 
 
 func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error) {
 	const query = `
-		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status,
+		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
 		       p.post_template_id::text, p.template_counter,
@@ -1156,7 +1156,7 @@ func (s *Store) MarkPostResult(ctx context.Context, postID string, attemptCount 
 	return err
 }
 
-func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string) error {
+func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID string, status domain.PostStatus, publishedURL, lastError string, publishMetadata map[string]string, remotePostID string) error {
 	metaJSON := "{}"
 	if publishMetadata != nil {
 		b, err := json.Marshal(publishMetadata)
@@ -1168,9 +1168,10 @@ func (s *Store) MarkPostTargetResult(ctx context.Context, postID, accountID stri
 	_, err := s.pool.Exec(
 		ctx,
 		`update scheduled_post_targets
-		 set status = $1, published_url = nullif($2, ''), last_error = nullif($3, ''), publish_metadata = $4
-		 where post_id = $5 and account_id = $6`,
-		status, publishedURL, lastError, metaJSON, postID, accountID,
+		 set status = $1, published_url = nullif($2, ''), last_error = nullif($3, ''), publish_metadata = $4,
+		     remote_post_id = nullif($5, '')
+		 where post_id = $6 and account_id = $7`,
+		status, publishedURL, lastError, metaJSON, strings.TrimSpace(remotePostID), postID, accountID,
 	)
 	return err
 }
@@ -1321,6 +1322,7 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 			&post.Content,
 			&post.ScheduledAt,
 			&post.Status,
+			&post.Source,
 			&post.AttemptCount,
 			&post.LastError,
 			&post.CreatedAt,
@@ -1344,6 +1346,9 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 		}
 		if strings.TrimSpace(post.Visibility) == "" {
 			post.Visibility = domain.PostVisibilityPublic
+		}
+		if strings.TrimSpace(string(post.Source)) == "" {
+			post.Source = domain.PostSourceScheduled
 		}
 		if err := decodePostMediaIDs(mediaRaw, &post.MediaIDs); err != nil {
 			return nil, err

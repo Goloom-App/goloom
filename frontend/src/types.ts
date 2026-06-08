@@ -27,6 +27,15 @@ export type ProviderName = 'bluesky' | 'friendica' | 'mastodon'
 
 export type PostStatus = 'scheduled' | 'posted' | 'failed' | 'draft'
 
+export type PostSource = 'scheduled' | 'imported'
+
+export interface ExternalPostMonitorSettings {
+  teamId: string
+  enabled: boolean
+  backfillCompletedAt?: string
+  lastSyncAt?: string
+}
+
 export type AccountAuthType = 'oauth_token' | 'app_password'
 
 export type AIJobType = 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis'
@@ -202,6 +211,7 @@ export interface PostRecord {
   durationMinutes: number
   targetAccountIds: string[]
   status: PostStatus
+  source?: PostSource
   publishedLinks?: Record<string, string>
   /** Platform media attachment IDs (Mastodon media IDs, Bluesky-encoded payloads, etc.) */
   mediaIds?: string[]

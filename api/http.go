@@ -93,6 +93,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/admin/metrics", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminMetrics))))
 	mux.Handle("GET /v1/admin/sync-status", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncStatus))))
 	mux.Handle("POST /v1/admin/sync-metrics", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncMetrics))))
+	mux.Handle("POST /v1/admin/sync-external-posts", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncExternalPosts))))
 	mux.Handle("POST /v1/admin/repair-future-posted", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminRepairFuturePosted))))
 	mux.Handle("GET /v1/admin/logs", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListLogEntries))))
 	mux.Handle("POST /v1/admin/logs/{id}/archive", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleArchiveLogEntry))))
@@ -137,6 +138,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAllTeamPostVersions))))
 	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePatchPostVersions))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-hours", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamEngagementHourHistogram))))
+	mux.Handle("GET /v1/teams/{teamID}/external-post-monitor", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetExternalPostMonitor))))
+	mux.Handle("PUT /v1/teams/{teamID}/external-post-monitor", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpsertExternalPostMonitor))))
 	mux.Handle("GET /v1/teams/{teamID}/post-templates", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostTemplates))))
 	mux.Handle("POST /v1/teams/{teamID}/post-templates", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreatePostTemplate))))
 	mux.Handle("PATCH /v1/teams/{teamID}/post-templates/{templateID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdatePostTemplate))))
@@ -793,6 +796,10 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	existing, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if existing.Source == domain.PostSourceImported {
+		a.writeError(w, r, "imported_post_read_only", http.StatusForbidden)
 		return
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, existing.TeamID, domain.RoleEditor, domain.RoleOwner)

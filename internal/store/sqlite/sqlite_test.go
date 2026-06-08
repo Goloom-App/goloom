@@ -364,7 +364,7 @@ func TestSQLite_ListDuePosts_and_processingFlow(t *testing.T) {
 	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusFailed, "e", &next); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://u", "", nil); err != nil {
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://u", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	targets, err := s.LoadPostTargets(ctx, post.ID)
@@ -519,7 +519,7 @@ func TestSQLite_ListPostedTargetsForMetricSync_respectsDailyCursor(t *testing.T)
 	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://example.com/1", "", nil); err != nil {
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://example.com/1", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	day := time.Now().UTC().Format("2006-01-02")

@@ -41,6 +41,20 @@ type PublishResult struct {
 	Metadata map[string]string
 }
 
+// AuthorPost is a normalized post from a connected account's public timeline.
+type AuthorPost struct {
+	RemoteID    string
+	URL         string
+	Content     string
+	PublishedAt time.Time
+	Metadata    map[string]string
+}
+
+// AuthorFeedFetcher is implemented by providers that can list an account's own posts.
+type AuthorFeedFetcher interface {
+	ListAuthorPosts(ctx context.Context, account domain.SocialAccount, auth PublishAuth, since time.Time, limit int) ([]AuthorPost, error)
+}
+
 // EngagementMetric is one normalized metric from a provider before persistence.
 type EngagementMetric struct {
 	Name  string

@@ -622,7 +622,7 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 	}
 
 	recentRows, err := s.db.QueryContext(ctx, `
-		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts

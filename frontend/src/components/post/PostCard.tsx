@@ -99,6 +99,7 @@ export function PostCard({
         </div>
         <h3 className="post-card__title">
           {post.status === 'draft' ? <span className="post-card__badge">{t('common.draft')}</span> : null}
+          {post.source === 'imported' ? <span className="post-card__badge">{t('common.importedBadge')}</span> : null}
           {post.title || t('common.untitledPost')}
         </h3>
         <p className="post-card__content">{post.content}</p>

@@ -35,6 +35,8 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table post_templates add column announcement_days_before integer`,
 		`alter table api_tokens add column scopes text not null default ''`,
 		`alter table api_tokens add column team_id text references teams(id) on delete cascade`,
+		`alter table scheduled_posts add column source text not null default 'scheduled'`,
+		`alter table scheduled_post_targets add column remote_post_id text`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)
@@ -47,6 +49,34 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	}
 	if _, err := db.ExecContext(ctx, `create index if not exists idx_post_targets_metrics_sync on scheduled_post_targets(metrics_last_sync_at)`); err != nil {
 		return fmt.Errorf("sqlite migrate metrics sync index: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `create unique index if not exists ux_post_targets_account_remote_post on scheduled_post_targets(account_id, remote_post_id) where remote_post_id is not null and trim(remote_post_id) <> ''`); err != nil {
+		return fmt.Errorf("sqlite migrate remote post id index: %w", err)
+	}
+	for _, stmt := range []string{
+		`create table if not exists external_post_monitor_settings (
+			id text primary key,
+			team_id text not null references teams(id) on delete cascade unique,
+			enabled integer not null default 0,
+			backfill_completed_at text,
+			last_sync_at text,
+			created_at text not null,
+			updated_at text not null
+		)`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("sqlite migrate external post monitor: %w", err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `
+		update scheduled_post_targets
+		set remote_post_id = trim(json_extract(publish_metadata, '$.uri'))
+		where status = 'posted'
+		  and (remote_post_id is null or trim(remote_post_id) = '')
+		  and publish_metadata is not null
+		  and trim(publish_metadata) <> '{}'
+		  and trim(json_extract(publish_metadata, '$.uri')) <> ''`); err != nil {
+		return fmt.Errorf("sqlite migrate remote post id backfill: %w", err)
 	}
 	for _, stmt := range []string{
 		`create table if not exists account_metrics (
@@ -252,7 +282,7 @@ func (s *Store) GetAccountsByIDsGlobal(ctx context.Context, ids []string) ([]dom
 
 func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
-		select id, team_id, author_user_id, title, content, scheduled_at, status,
+		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts

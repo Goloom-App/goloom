@@ -23,10 +23,11 @@ type Config struct {
 	RateLimitPerMinute               int
 	// RateLimitAuthenticatedPerMinute caps Bearer-authenticated API traffic (SPA, tokens). 0 = derive on load.
 	RateLimitAuthenticatedPerMinute int
-	SchedulerPollInterval           time.Duration
-	SchedulerMetricsSyncInterval    time.Duration
-	SchedulerAccountHealthInterval  time.Duration
-	SchedulerWorkers                int
+	SchedulerPollInterval                time.Duration
+	SchedulerMetricsSyncInterval         time.Duration
+	SchedulerAccountHealthInterval       time.Duration
+	SchedulerExternalPostImportInterval  time.Duration
+	SchedulerWorkers                     int
 
 	// LogLevel: debug, info, warn, error — empty means derive from AppEnv (development=debug, production=info).
 	LogLevel string
@@ -61,10 +62,11 @@ func Load() (Config, error) {
 		AllowedOrigins:                   splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
 		RateLimitPerMinute:               getInt("RATE_LIMIT_PER_MINUTE", 120),
 		RateLimitAuthenticatedPerMinute:  getInt("RATE_LIMIT_AUTHENTICATED_PER_MINUTE", 0),
-		SchedulerPollInterval:            getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
-		SchedulerMetricsSyncInterval:     getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", 10*time.Minute),
-		SchedulerAccountHealthInterval:   getDuration("SCHEDULER_ACCOUNT_HEALTH_INTERVAL", time.Hour),
-		SchedulerWorkers:                 getInt("SCHEDULER_WORKERS", 4),
+		SchedulerPollInterval:               getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),
+		SchedulerMetricsSyncInterval:        getDuration("SCHEDULER_METRICS_SYNC_INTERVAL", 10*time.Minute),
+		SchedulerAccountHealthInterval:      getDuration("SCHEDULER_ACCOUNT_HEALTH_INTERVAL", time.Hour),
+		SchedulerExternalPostImportInterval: getDuration("SCHEDULER_EXTERNAL_POST_IMPORT_INTERVAL", 15*time.Minute),
+		SchedulerWorkers:                    getInt("SCHEDULER_WORKERS", 4),
 		LogLevel:                         strings.TrimSpace(getEnv("LOG_LEVEL", "")),
 		LogFormat:                        strings.TrimSpace(getEnv("LOG_FORMAT", "")),
 		OIDCIssuerURL:                    getEnv("OIDC_ISSUER_URL", ""),

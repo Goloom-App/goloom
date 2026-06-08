@@ -17,31 +17,34 @@ import (
 )
 
 type Service struct {
-	logger                *slog.Logger
-	store                 store.Store
-	providers             *provider.Registry
-	pollInterval          time.Duration
-	metricSyncInterval    time.Duration
-	accountHealthInterval time.Duration
-	workers               int
+	logger                     *slog.Logger
+	store                      store.Store
+	providers                  *provider.Registry
+	pollInterval               time.Duration
+	metricSyncInterval         time.Duration
+	accountHealthInterval      time.Duration
+	externalPostImportInterval time.Duration
+	workers                    int
 
-	accountMetricsMu sync.Mutex
-	postMetricsMu    sync.Mutex
-	accountHealthMu  sync.Mutex
+	accountMetricsMu      sync.Mutex
+	postMetricsMu         sync.Mutex
+	accountHealthMu       sync.Mutex
+	externalPostImportMu  sync.Mutex
 }
 
-func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration) *Service {
+func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration, externalPostImportInterval time.Duration) *Service {
 	if workers <= 0 {
 		workers = 1
 	}
 	return &Service{
-		logger:                logger,
-		store:                 store,
-		providers:             providers,
-		pollInterval:          pollInterval,
-		metricSyncInterval:    metricSyncInterval,
-		accountHealthInterval: accountHealthInterval,
-		workers:               workers,
+		logger:                     logger,
+		store:                      store,
+		providers:                  providers,
+		pollInterval:               pollInterval,
+		metricSyncInterval:         metricSyncInterval,
+		accountHealthInterval:      accountHealthInterval,
+		externalPostImportInterval: externalPostImportInterval,
+		workers:                    workers,
 	}
 }
 
@@ -88,6 +91,14 @@ func (s *Service) Start(ctx context.Context) {
 		defer wg.Done()
 		s.runAccountMetricsLoop(ctx)
 	}()
+
+	if s.externalPostImportInterval > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.runExternalPostImportLoop(ctx)
+		}()
+	}
 
 	ticker := time.NewTicker(s.pollInterval)
 	defer ticker.Stop()
@@ -172,7 +183,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		providerImpl, ok := s.providers.Get(account.Provider)
 		if !ok {
 			err := fmt.Errorf("unsupported provider %q", account.Provider)
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -181,7 +192,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		acc, err := socialtokens.EnsureMastodonFresh(ctx, s.store, s.providers, account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -191,7 +202,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		token, err := s.store.DecryptAccessToken(account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -200,7 +211,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		refreshToken, err := s.store.DecryptRefreshToken(account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -222,7 +233,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			RefreshToken: refreshToken,
 		})
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -239,14 +250,14 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			ScheduledAt: nil,
 		})
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil)
+			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 
-		if err := s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusPosted, result.URL, "", result.Metadata); err != nil {
+		if err := s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusPosted, result.URL, "", result.Metadata, provider.ResolveRemotePostID(account.Provider, result)); err != nil {
 			s.logger.Warn("failed to mark post target result", "post_id", post.ID, "account_id", account.ID, "error", err)
 			continue
 		}

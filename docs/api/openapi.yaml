@@ -782,6 +782,39 @@ paths:
                 $ref: "#/components/schemas/AIServiceConfig"
         "400":
           $ref: "#/components/responses/BadRequest"
+  /v1/teams/{teamID}/external-post-monitor:
+    get:
+      tags: [Analytics]
+      summary: Get external post monitor settings
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      responses:
+        "200":
+          description: External post monitor settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalPostMonitorSettings"
+    put:
+      tags: [Analytics]
+      summary: Enable or disable external post monitoring (owner only)
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertExternalPostMonitorInput"
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalPostMonitorSettings"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /v1/teams/{teamID}/proactive-settings:
     get:
       tags: [AI]
@@ -1300,6 +1333,9 @@ components:
           type: string
         status:
           type: string
+        source:
+          type: string
+          enum: [scheduled, imported]
         scheduled_at:
           type: string
           format: date-time
@@ -1716,6 +1752,37 @@ components:
           format: uri
         description:
           type: string
+    ExternalPostMonitorSettings:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        team_id:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        backfill_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_sync_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    UpsertExternalPostMonitorInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
     ProactiveTriggerSettings:
       type: object
       properties:
