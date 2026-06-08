@@ -286,6 +286,9 @@ create table if not exists rss_feed_configs (
     feed_url text not null,
     name text not null,
     is_active boolean not null default true,
+    prompt_hint text not null default '',
+    target_account_ids text not null default '[]',
+    tonality text not null default '',
     last_fetched_at timestamptz,
     created_at timestamptz not null default now()
 );
@@ -437,3 +440,7 @@ where status = 'posted'
   and publish_metadata is not null
   and trim(publish_metadata) <> '{}'
   and nullif(trim(publish_metadata::json->>'uri'), '') is not null;
+
+alter table rss_feed_configs add column if not exists prompt_hint text not null default '';
+alter table rss_feed_configs add column if not exists target_account_ids text not null default '[]';
+alter table rss_feed_configs add column if not exists tonality text not null default '';

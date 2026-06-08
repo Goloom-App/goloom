@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html import unescape
 from typing import Any
 
 import feedparser
@@ -11,6 +13,8 @@ from app.services import GoloomClient
 from app.workers.proactive.event_hooks import BaseHook
 
 logger = logging.getLogger(__name__)
+
+_TAG_RE = re.compile(r"<[^>]+>")
 
 
 @dataclass
@@ -86,6 +90,43 @@ class RSSExtractor:
         return result
 
 
+def _strip_html(value: str) -> str:
+    text = unescape(_TAG_RE.sub(" ", value or ""))
+    return " ".join(text.split())
+
+
+def _build_content_hint(feed: dict[str, Any], item: ContentItem) -> str:
+    parts: list[str] = []
+    prompt_hint = str(feed.get("prompt_hint") or "").strip()
+    if prompt_hint:
+        parts.append(prompt_hint)
+    if item.title:
+        parts.append(f"Article title: {item.title}")
+    if item.link:
+        parts.append(f"Source URL: {item.link}")
+    body = _strip_html(item.content)
+    if body:
+        parts.append(f"Article content:\n{body[:4000]}")
+    return "\n\n".join(parts)
+
+
+def _trigger_params(feed: dict[str, Any], item: ContentItem) -> dict[str, Any]:
+    target_ids = feed.get("target_account_ids") or []
+    if not isinstance(target_ids, list):
+        target_ids = []
+    tonality = str(feed.get("tonality") or "").strip()
+    params: dict[str, Any] = {
+        "trigger_type": "rss",
+        "source_url": item.link,
+        "content_hint": _build_content_hint(feed, item),
+        "target_account_ids": [str(item_id) for item_id in target_ids if str(item_id).strip()],
+        "schedule": False,
+    }
+    if tonality:
+        params["tonality"] = tonality
+    return params
+
+
 class RSSHook(BaseHook):
     def __init__(self, client: GoloomClient) -> None:
         super().__init__(client)
@@ -103,15 +144,38 @@ class RSSHook(BaseHook):
             feed_id = feed["id"]
             feed_url = feed["feed_url"]
             last_fetched_str = feed.get("last_fetched_at")
+            target_ids = feed.get("target_account_ids") or []
+            if not target_ids:
+                logger.warning(
+                    "RSS feed %s has no target accounts configured — skipping triggers",
+                    feed_id,
+                )
+                continue
 
-            if last_fetched_str:
+            if not last_fetched_str:
                 try:
-                    last_fetched = datetime.fromisoformat(last_fetched_str)
-                    if last_fetched.tzinfo is None:
-                        last_fetched = last_fetched.replace(tzinfo=UTC)
-                except (ValueError, TypeError):
-                    last_fetched = datetime.min.replace(tzinfo=UTC)
-            else:
+                    await self.client.update_rss_feed(
+                        team_id,
+                        feed_id,
+                        {"last_fetched_at": now.isoformat()},
+                    )
+                    logger.info(
+                        "Baselined RSS feed %s without triggering historical items",
+                        feed_id,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to baseline last_fetched_at for feed %s: %s",
+                        feed_id,
+                        exc,
+                    )
+                continue
+
+            try:
+                last_fetched = datetime.fromisoformat(last_fetched_str)
+                if last_fetched.tzinfo is None:
+                    last_fetched = last_fetched.replace(tzinfo=UTC)
+            except (ValueError, TypeError):
                 last_fetched = datetime.min.replace(tzinfo=UTC)
 
             items = self._extractor.fetch_feed(feed_url)
@@ -122,11 +186,7 @@ class RSSHook(BaseHook):
                     await self.client.trigger_job(
                         team_id,
                         "proactive_trigger",
-                        {
-                            "trigger_type": "rss",
-                            "source_url": item.link,
-                            "content_hint": item.title,
-                        },
+                        _trigger_params(feed, item),
                     )
                     any_processed = True
                 except Exception as exc:

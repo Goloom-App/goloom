@@ -68,9 +68,13 @@ func (a *API) handleAICallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if input.Status == domain.AIJobStatusCompleted {
-		profile, profErr := a.store.GetTeamProfile(r.Context(), job.TeamID)
-		if profErr == nil && profile.AutoPublishEnabled {
-			a.autoCreatePostFromCallbackResult(r, job, input.Result)
+		if job.Type == domain.AIJobTypeProactiveTrigger {
+			a.autoCreateDraftFromCallbackResult(r, job, input.Result)
+		} else {
+			profile, profErr := a.store.GetTeamProfile(r.Context(), job.TeamID)
+			if profErr == nil && profile.AutoPublishEnabled {
+				a.autoCreatePostFromCallbackResult(r, job, input.Result)
+			}
 		}
 	}
 
@@ -79,6 +83,39 @@ func (a *API) handleAICallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	auth.WriteJSON(w, http.StatusOK, map[string]bool{"acknowledged": true})
+}
+
+func (a *API) autoCreateDraftFromCallbackResult(r *http.Request, job domain.AIJob, rawResult json.RawMessage) {
+	var res aiCallbackResult
+	if len(rawResult) > 0 {
+		_ = json.Unmarshal(rawResult, &res)
+	}
+
+	content := strings.TrimSpace(res.Content)
+	if content == "" {
+		return
+	}
+
+	targetAccounts := targetAccountIDsFromJobPayload(job.Payload)
+	if len(targetAccounts) == 0 {
+		return
+	}
+	overrides := domain.NormalizeAccountContentOverride(res.AccountContentOverride, targetAccounts)
+
+	principal := domain.AuthenticatedPrincipal{
+		User: domain.User{ID: job.AuthorUserID},
+		Kind: "api_token",
+	}
+
+	_, _ = a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
+		Content:                content,
+		TargetAccounts:         targetAccounts,
+		AccountContentOverride: overrides,
+		ScheduledAt:            time.Now().UTC(),
+		Draft:                  true,
+		AuthorUserID:           &job.AuthorUserID,
+		UseVersions:            len(overrides) > 0,
+	})
 }
 
 func (a *API) autoCreatePostFromCallbackResult(r *http.Request, job domain.AIJob, rawResult json.RawMessage) {

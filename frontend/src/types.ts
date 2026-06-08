@@ -164,6 +164,9 @@ export interface RSSFeedConfig {
   feedUrl: string
   name: string
   isActive: boolean
+  promptHint: string
+  targetAccountIds: string[]
+  tonality: string
   lastFetchedAt: string | null
   createdAt: string
 }

@@ -187,6 +187,10 @@ func (m *mockStore) CreateRSSFeedConfig(ctx context.Context, teamID string, inpu
 	return domain.RSSFeedConfig{}, nil
 }
 
+func (m *mockStore) GetRSSFeedConfigByID(ctx context.Context, teamID string, id string) (domain.RSSFeedConfig, error) {
+	return domain.RSSFeedConfig{}, nil
+}
+
 func (m *mockStore) ListRSSFeedConfigs(ctx context.Context, teamID string) ([]domain.RSSFeedConfig, error) {
 	return nil, nil
 }

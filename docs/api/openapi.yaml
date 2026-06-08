@@ -1722,6 +1722,15 @@ components:
           type: string
         is_active:
           type: boolean
+        prompt_hint:
+          type: string
+        target_account_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        tonality:
+          type: string
         last_fetched_at:
           type: string
           format: date-time
@@ -1740,6 +1749,15 @@ components:
           type: string
         is_active:
           type: boolean
+        prompt_hint:
+          type: string
+        target_account_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        tonality:
+          type: string
     UpdateRSSFeedInput:
       type: object
       properties:
@@ -1750,6 +1768,18 @@ components:
           type: string
         is_active:
           type: boolean
+        prompt_hint:
+          type: string
+        target_account_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        tonality:
+          type: string
+        last_fetched_at:
+          type: string
+          format: date-time
     AIServiceConfig:
       type: object
       properties:

@@ -270,13 +270,16 @@ type AIServiceConfig struct {
 }
 
 type RSSFeedConfig struct {
-	ID            string     `json:"id"`
-	TeamID        string     `json:"team_id"`
-	FeedURL       string     `json:"feed_url"`
-	Name          string     `json:"name"`
-	IsActive      bool       `json:"is_active"`
-	LastFetchedAt *time.Time `json:"last_fetched_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID               string     `json:"id"`
+	TeamID           string     `json:"team_id"`
+	FeedURL          string     `json:"feed_url"`
+	Name             string     `json:"name"`
+	IsActive         bool       `json:"is_active"`
+	PromptHint       string     `json:"prompt_hint"`
+	TargetAccountIDs []string   `json:"target_account_ids"`
+	Tonality         string     `json:"tonality"`
+	LastFetchedAt    *time.Time `json:"last_fetched_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
 }
 
 type ProactiveTriggerSettings struct {

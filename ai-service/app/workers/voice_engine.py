@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from typing import Any
@@ -26,13 +27,15 @@ class VoiceEngineWorker:
         try:
             author_user_id = str(job["author_user_id"])
             params = self._params(job)
-            context = job.get("context") or {}
+            context = self._context_with_style_overrides(job.get("context") or {}, params)
             selected_accounts = self._selected_accounts(context, params)
             if not selected_accounts:
                 raise ValueError("target_account_ids must include at least one account")
 
             campaign_format = self._optional_campaign_format(context, params)
-            scheduled_at = resolve_scheduled_at(params=params, campaign_format=campaign_format, context=context)
+            scheduled_at = None if params.get("schedule") is False else resolve_scheduled_at(
+                params=params, campaign_format=campaign_format, context=context
+            )
 
             primary = max(selected_accounts, key=lambda item: int(item["max_chars"]))
             primary_platform = str(primary.get("provider") or "general")
@@ -166,6 +169,20 @@ class VoiceEngineWorker:
                 continue
             if len(str(override)) > limit:
                 raise ValueError(f"Override for account {account_id} exceeds limit of {limit}")
+
+    @staticmethod
+    def _context_with_style_overrides(context: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+        tonality = str(params.get("tonality") or "").strip()
+        if not tonality:
+            return context
+
+        ctx = copy.deepcopy(context)
+        profile = dict(ctx.get("profile") or {})
+        style = dict(profile.get("style_metadata") or profile.get("styleMetadata") or {})
+        style["tonality"] = tonality
+        profile["style_metadata"] = style
+        ctx["profile"] = profile
+        return ctx
 
     @staticmethod
     def _params(job: dict) -> dict[str, Any]:

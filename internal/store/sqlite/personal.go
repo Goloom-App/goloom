@@ -37,6 +37,9 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table api_tokens add column team_id text references teams(id) on delete cascade`,
 		`alter table scheduled_posts add column source text not null default 'scheduled'`,
 		`alter table scheduled_post_targets add column remote_post_id text`,
+		`alter table rss_feed_configs add column prompt_hint text not null default ''`,
+		`alter table rss_feed_configs add column target_account_ids text not null default '[]'`,
+		`alter table rss_feed_configs add column tonality text not null default ''`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)

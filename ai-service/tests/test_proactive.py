@@ -28,7 +28,7 @@ async def test_content_calendar_hook_detects_gap_and_triggers():
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
     hook = ContentCalendarHook(client)
 
-    result = await hook.run("team-1", {})
+    result = await hook.run("team-1", {"auto_fill_enabled": True})
 
     assert result is True
     client.trigger_job.assert_awaited_once_with(
@@ -47,7 +47,7 @@ async def test_content_calendar_hook_no_gap_when_posts_exist():
     )
     hook = ContentCalendarHook(client)
 
-    result = await hook.run("team-1", {"content_gap_threshold_days": 3})
+    result = await hook.run("team-1", {"content_gap_threshold_days": 3, "auto_fill_enabled": True})
 
     assert result is False
     client.trigger_job.assert_not_called()
@@ -62,7 +62,7 @@ async def test_content_calendar_hook_respects_custom_threshold():
     )
     hook = ContentCalendarHook(client)
 
-    result = await hook.run("team-1", {"content_gap_threshold_days": 14})
+    result = await hook.run("team-1", {"content_gap_threshold_days": 14, "auto_fill_enabled": True})
 
     assert result is False
     client.trigger_job.assert_not_called()
@@ -74,7 +74,7 @@ async def test_rate_limiting_blocks_excessive_triggers():
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
     manager = TriggerManager(client)
 
-    settings = {"max_triggers_per_day": 2, "content_gap_threshold_days": 3}
+    settings = {"max_triggers_per_day": 2, "content_gap_threshold_days": 3, "auto_fill_enabled": True}
 
     r1 = await manager.run_for_team("team-rate", settings)
     assert len(r1) == 3
@@ -97,7 +97,7 @@ async def test_rate_limiting_resets_on_new_day():
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
     manager = TriggerManager(client)
 
-    settings = {"max_triggers_per_day": 1, "content_gap_threshold_days": 3}
+    settings = {"max_triggers_per_day": 1, "content_gap_threshold_days": 3, "auto_fill_enabled": True}
 
     r1 = await manager.run_for_team("team-rate2", settings)
     assert r1 != []
@@ -128,6 +128,7 @@ async def test_scheduler_skips_teams_with_auto_fill_disabled():
         return {"auto_fill_enabled": True, "max_triggers_per_day": 5}
 
     client.get_proactive_settings.side_effect = proactive_settings
+    client.list_rss_feeds.return_value = []
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
 
     scheduler = ProactiveScheduler(client, interval_seconds=99999)
@@ -148,6 +149,7 @@ async def test_scheduler_runs_for_all_enabled_teams():
         "auto_fill_enabled": True,
         "max_triggers_per_day": 5,
     }
+    client.list_rss_feeds.return_value = []
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
 
     scheduler = ProactiveScheduler(client, interval_seconds=99999)

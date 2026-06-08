@@ -492,13 +492,17 @@ func scanAIServiceConfig(row interface{ Scan(dest ...any) error }) (domain.AISer
 }
 
 func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error) {
+	targetJSON, err := encodeMediaIDsJSON(domain.NormalizeMediaIDs(input.TargetAccountIDs))
+	if err != nil {
+		return domain.RSSFeedConfig{}, fmt.Errorf("CreateRSSFeedConfig: %w", err)
+	}
 	const query = `
-		INSERT INTO rss_feed_configs (team_id, feed_url, name, is_active)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, team_id, feed_url, name, is_active, last_fetched_at, created_at
+		INSERT INTO rss_feed_configs (team_id, feed_url, name, is_active, prompt_hint, target_account_ids, tonality)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, team_id, feed_url, name, is_active, prompt_hint, target_account_ids, tonality, last_fetched_at, created_at
 	`
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
-		teamID, input.FeedURL, input.Name, input.IsActive,
+		teamID, input.FeedURL, input.Name, input.IsActive, input.PromptHint, targetJSON, input.Tonality,
 	))
 	if err != nil {
 		return domain.RSSFeedConfig{}, fmt.Errorf("CreateRSSFeedConfig: %w", err)
@@ -506,9 +510,25 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 	return feed, nil
 }
 
+func (s *Store) GetRSSFeedConfigByID(ctx context.Context, teamID string, id string) (domain.RSSFeedConfig, error) {
+	const query = `
+		SELECT id, team_id, feed_url, name, is_active, prompt_hint, target_account_ids, tonality, last_fetched_at, created_at
+		FROM rss_feed_configs
+		WHERE team_id = $1 AND id = $2
+	`
+	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query, teamID, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.RSSFeedConfig{}, fmt.Errorf("rss feed config not found: %w", pgx.ErrNoRows)
+		}
+		return domain.RSSFeedConfig{}, fmt.Errorf("GetRSSFeedConfigByID: %w", err)
+	}
+	return feed, nil
+}
+
 func (s *Store) ListRSSFeedConfigs(ctx context.Context, teamID string) ([]domain.RSSFeedConfig, error) {
 	const query = `
-		SELECT id, team_id, feed_url, name, is_active, last_fetched_at, created_at
+		SELECT id, team_id, feed_url, name, is_active, prompt_hint, target_account_ids, tonality, last_fetched_at, created_at
 		FROM rss_feed_configs
 		WHERE team_id = $1
 		ORDER BY created_at ASC
@@ -531,14 +551,19 @@ func (s *Store) ListRSSFeedConfigs(ctx context.Context, teamID string) ([]domain
 }
 
 func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error) {
+	targetJSON, err := encodeMediaIDsJSON(domain.NormalizeMediaIDs(input.TargetAccountIDs))
+	if err != nil {
+		return domain.RSSFeedConfig{}, fmt.Errorf("UpdateRSSFeedConfig: %w", err)
+	}
 	const query = `
 		UPDATE rss_feed_configs
-		SET feed_url = $3, name = $4, is_active = $5
+		SET feed_url = $3, name = $4, is_active = $5, prompt_hint = $6, target_account_ids = $7, tonality = $8,
+		    last_fetched_at = COALESCE($9, last_fetched_at)
 		WHERE team_id = $1 AND id = $2
-		RETURNING id, team_id, feed_url, name, is_active, last_fetched_at, created_at
+		RETURNING id, team_id, feed_url, name, is_active, prompt_hint, target_account_ids, tonality, last_fetched_at, created_at
 	`
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
-		teamID, id, input.FeedURL, input.Name, input.IsActive,
+		teamID, id, input.FeedURL, input.Name, input.IsActive, input.PromptHint, targetJSON, input.Tonality, input.LastFetchedAt,
 	))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -559,6 +584,7 @@ func (s *Store) DeleteRSSFeedConfig(ctx context.Context, teamID string, id strin
 
 func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeedConfig, error) {
 	var feed domain.RSSFeedConfig
+	var targetRaw string
 	var lastFetched sql.NullTime
 	if err := row.Scan(
 		&feed.ID,
@@ -566,9 +592,15 @@ func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeed
 		&feed.FeedURL,
 		&feed.Name,
 		&feed.IsActive,
+		&feed.PromptHint,
+		&targetRaw,
+		&feed.Tonality,
 		&lastFetched,
 		&feed.CreatedAt,
 	); err != nil {
+		return domain.RSSFeedConfig{}, err
+	}
+	if err := decodePostMediaIDs(targetRaw, &feed.TargetAccountIDs); err != nil {
 		return domain.RSSFeedConfig{}, err
 	}
 	if lastFetched.Valid {

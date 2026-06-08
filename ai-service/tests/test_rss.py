@@ -7,7 +7,7 @@ import feedparser as _feedparser_real
 import pytest
 
 from app.services import GoloomClient
-from app.workers.proactive.rss import ContentItem, FeedItem, RSSExtractor, RSSHook
+from app.workers.proactive.rss import ContentItem, FeedItem, RSSExtractor, RSSHook, _build_content_hint
 
 MOCK_RSS_XML = """\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -62,6 +62,9 @@ def _make_feed_config(
     feed_url: str = FEED_URL,
     is_active: bool = True,
     last_fetched_at: str | None = LAST_FETCHED.isoformat(),
+    prompt_hint: str = "Write a short social post about this article.",
+    target_account_ids: list[str] | None = None,
+    tonality: str = "witty",
 ) -> dict:
     return {
         "id": feed_id,
@@ -70,6 +73,9 @@ def _make_feed_config(
         "name": "Test Feed",
         "is_active": is_active,
         "last_fetched_at": last_fetched_at,
+        "prompt_hint": prompt_hint,
+        "target_account_ids": ["acct-1"] if target_account_ids is None else target_account_ids,
+        "tonality": tonality,
     }
 
 
@@ -131,6 +137,24 @@ def test_extract_content_empty_feed_returns_empty(mock_fp: MagicMock) -> None:
     assert new_items == []
 
 
+def test_build_content_hint_includes_prompt_and_article() -> None:
+    feed = _make_feed_config()
+    item = ContentItem(
+        title="New Item 1",
+        link="https://example.com/new-1",
+        content="<p>Body text</p>",
+        published=datetime.now(UTC),
+        feed_url=FEED_URL,
+    )
+
+    hint = _build_content_hint(feed, item)
+
+    assert "Write a short social post about this article." in hint
+    assert "Article title: New Item 1" in hint
+    assert "Source URL: https://example.com/new-1" in hint
+    assert "Body text" in hint
+
+
 @pytest.mark.asyncio
 @patch("app.workers.proactive.rss.feedparser")
 async def test_rss_hook_triggers_new_items(mock_fp: MagicMock) -> None:
@@ -145,24 +169,12 @@ async def test_rss_hook_triggers_new_items(mock_fp: MagicMock) -> None:
     assert result is True
     assert client.trigger_job.await_count == 3
 
-    expected_calls = [
-        call(
-            "team-1",
-            "proactive_trigger",
-            {"trigger_type": "rss", "source_url": "https://example.com/new-1", "content_hint": "New Item 1"},
-        ),
-        call(
-            "team-1",
-            "proactive_trigger",
-            {"trigger_type": "rss", "source_url": "https://example.com/new-2", "content_hint": "New Item 2"},
-        ),
-        call(
-            "team-1",
-            "proactive_trigger",
-            {"trigger_type": "rss", "source_url": "https://example.com/new-3", "content_hint": "New Item 3"},
-        ),
-    ]
-    client.trigger_job.assert_has_awaits(expected_calls, any_order=True)
+    first_call = client.trigger_job.await_args_list[0].args[2]
+    assert first_call["trigger_type"] == "rss"
+    assert first_call["target_account_ids"] == ["acct-1"]
+    assert first_call["tonality"] == "witty"
+    assert first_call["schedule"] is False
+    assert "Write a short social post" in first_call["content_hint"]
 
     client.update_rss_feed.assert_awaited_once()
     update_call = client.update_rss_feed.await_args
@@ -206,7 +218,7 @@ async def test_rss_hook_returns_false_when_no_new_items(mock_fp: MagicMock) -> N
 
 @pytest.mark.asyncio
 @patch("app.workers.proactive.rss.feedparser")
-async def test_rss_hook_handles_no_last_fetched(mock_fp: MagicMock) -> None:
+async def test_rss_hook_baselines_without_trigger_on_first_fetch(mock_fp: MagicMock) -> None:
     mock_fp.parse.return_value = _PARSED_MOCK_FEED
 
     client = AsyncMock(spec=GoloomClient)
@@ -215,5 +227,22 @@ async def test_rss_hook_handles_no_last_fetched(mock_fp: MagicMock) -> None:
     hook = RSSHook(client)
     result = await hook.run("team-1", {})
 
-    assert result is True
-    assert client.trigger_job.await_count == 5  # null last_fetched_at → epoch → all items new
+    assert result is False
+    client.trigger_job.assert_not_called()
+    client.update_rss_feed.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@patch("app.workers.proactive.rss.feedparser")
+async def test_rss_hook_skips_feed_without_target_accounts(mock_fp: MagicMock) -> None:
+    mock_fp.parse.return_value = _PARSED_MOCK_FEED
+
+    client = AsyncMock(spec=GoloomClient)
+    client.list_rss_feeds.return_value = [_make_feed_config(target_account_ids=[])]
+
+    hook = RSSHook(client)
+    result = await hook.run("team-1", {})
+
+    assert result is False
+    client.trigger_job.assert_not_called()
+    client.update_rss_feed.assert_not_called()

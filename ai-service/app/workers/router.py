@@ -25,9 +25,11 @@ class JobRouter:
             self._resolve_base_url(config.llm_generator_provider),
         )
         campaign_worker_cls = importlib.import_module("app.workers.campaign").CampaignWorker
+        voice_worker = VoiceEngineWorker(self.adapter, self.goloom_client, self.prompt_builder)
         self.workers = {
             "campaign_autopilot": campaign_worker_cls(self.adapter, self.goloom_client, self.prompt_builder),
-            "voice_engine": VoiceEngineWorker(self.adapter, self.goloom_client, self.prompt_builder),
+            "voice_engine": voice_worker,
+            "proactive_trigger": voice_worker,
             "profile_analysis": ProfileAnalysisWorker(self.adapter, self.goloom_client, self.prompt_builder),
         }
 

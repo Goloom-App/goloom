@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
@@ -162,15 +163,56 @@ func (a *API) handleListRSSFeeds(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(feeds)})
 }
 
+type rssFeedPatchRequest struct {
+	FeedURL          *string    `json:"feed_url"`
+	Name             *string    `json:"name"`
+	IsActive         *bool      `json:"is_active"`
+	PromptHint       *string    `json:"prompt_hint"`
+	TargetAccountIDs *[]string  `json:"target_account_ids"`
+	Tonality         *string    `json:"tonality"`
+	LastFetchedAt    *time.Time `json:"last_fetched_at"`
+}
+
 func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
 	feedID := r.PathValue("feedID")
-	var input domain.RSSFeedConfig
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var patch rssFeedPatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
-	feed, err := a.store.UpdateRSSFeedConfig(r.Context(), teamID, feedID, input)
+
+	existing, err := a.store.GetRSSFeedConfigByID(r.Context(), teamID, feedID)
+	if err != nil {
+		a.writeError(w, r, "rss_feed_not_found", http.StatusNotFound)
+		return
+	}
+
+	merged := existing
+	if patch.FeedURL != nil {
+		merged.FeedURL = *patch.FeedURL
+	}
+	if patch.Name != nil {
+		merged.Name = *patch.Name
+	}
+	if patch.IsActive != nil {
+		merged.IsActive = *patch.IsActive
+	}
+	if patch.PromptHint != nil {
+		merged.PromptHint = *patch.PromptHint
+	}
+	if patch.TargetAccountIDs != nil {
+		merged.TargetAccountIDs = domain.NormalizeMediaIDs(*patch.TargetAccountIDs)
+	}
+	if patch.Tonality != nil {
+		merged.Tonality = *patch.Tonality
+	}
+	if patch.LastFetchedAt != nil {
+		t := patch.LastFetchedAt.UTC()
+		merged.LastFetchedAt = &t
+	}
+
+	feed, err := a.store.UpdateRSSFeedConfig(r.Context(), teamID, feedID, merged)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

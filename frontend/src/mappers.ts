@@ -275,6 +275,9 @@ export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
     feedUrl: raw.feed_url,
     name: raw.name,
     isActive: raw.is_active,
+    promptHint: raw.prompt_hint ?? '',
+    targetAccountIds: raw.target_account_ids ?? [],
+    tonality: raw.tonality ?? '',
     lastFetchedAt: raw.last_fetched_at,
     createdAt: raw.created_at,
   }

@@ -21,6 +21,9 @@ class BaseHook(ABC):
 
 class ContentCalendarHook(BaseHook):
     async def run(self, team_id: str, settings: dict[str, Any]) -> bool:
+        if not settings.get("auto_fill_enabled", False):
+            return False
+
         threshold = settings.get("content_gap_threshold_days", 3)
         context = await self.client.get_ai_context(team_id)
         scheduled_posts = context.get("scheduled_posts") or []

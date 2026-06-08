@@ -61,6 +61,7 @@ type Store interface {
 
 	// RSSFeedConfig methods
 	CreateRSSFeedConfig(ctx context.Context, teamID string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error)
+	GetRSSFeedConfigByID(ctx context.Context, teamID string, id string) (domain.RSSFeedConfig, error)
 	ListRSSFeedConfigs(ctx context.Context, teamID string) ([]domain.RSSFeedConfig, error)
 	UpdateRSSFeedConfig(ctx context.Context, teamID string, id string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error)
 	DeleteRSSFeedConfig(ctx context.Context, teamID string, id string) error

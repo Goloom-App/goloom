@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Plus, Trash2, Rss, Settings, Clock } from 'lucide-react'
+import { X, Plus, Trash2, Rss, Settings, Clock, Pencil } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
+import { DestinationPicker } from '../../components/ai/DestinationPicker'
 import {
   useRSSFeeds,
   useCreateRSSFeed,
@@ -11,25 +12,54 @@ import {
   useProactiveSettings,
   useUpsertProactiveSettings,
 } from '../../hooks/useAI'
-import type { TeamRecord } from '../../types'
+import type { AccountRecord, RSSFeedConfig, TeamRecord } from '../../types'
 
 interface ProactiveTriggersViewProps {
   team: TeamRecord
+  accounts: AccountRecord[]
 }
 
-export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
+type FeedFormState = {
+  name: string
+  feedUrl: string
+  isActive: boolean
+  promptHint: string
+  targetAccountIds: string[]
+  tonality: string
+}
+
+const emptyFeedForm = (): FeedFormState => ({
+  name: '',
+  feedUrl: '',
+  isActive: true,
+  promptHint: '',
+  targetAccountIds: [],
+  tonality: '',
+})
+
+function feedToForm(feed: RSSFeedConfig): FeedFormState {
+  return {
+    name: feed.name,
+    feedUrl: feed.feedUrl,
+    isActive: feed.isActive,
+    promptHint: feed.promptHint,
+    targetAccountIds: feed.targetAccountIds,
+    tonality: feed.tonality,
+  }
+}
+
+export function ProactiveTriggersView({ team, accounts }: ProactiveTriggersViewProps) {
   const { data: rssFeeds, isLoading: feedsLoading } = useRSSFeeds(team.id)
   const { data: proactiveSettings, isLoading: settingsLoading } = useProactiveSettings(team.id)
-  
+
   const createFeed = useCreateRSSFeed()
   const updateFeed = useUpdateRSSFeed()
   const deleteFeed = useDeleteRSSFeed()
   const upsertSettings = useUpsertProactiveSettings()
 
   const [isFeedDialogOpen, setIsFeedDialogOpen] = useState(false)
-  const [feedName, setFeedName] = useState('')
-  const [feedUrl, setFeedUrl] = useState('')
-  const [feedIsActive, setFeedIsActive] = useState(true)
+  const [editingFeedId, setEditingFeedId] = useState<string | null>(null)
+  const [feedForm, setFeedForm] = useState<FeedFormState>(emptyFeedForm)
 
   const [contentGapThresholdDays, setContentGapThresholdDays] = useState(3)
   const [autoFillEnabled, setAutoFillEnabled] = useState(false)
@@ -46,7 +76,7 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
       setAutoFillEnabled(proactiveSettings.autoFillEnabled ?? false)
       setMaxTriggersPerDay(proactiveSettings.maxTriggersPerDay ?? 5)
       setCronSchedule(proactiveSettings.cronSchedule || '0 9 * * *')
-      
+
       const schedule = proactiveSettings.cronSchedule || '0 9 * * *'
       if (['0 * * * *', '0 9 * * *', '0 18 * * *'].includes(schedule)) {
         setCronPreset(schedule)
@@ -62,6 +92,27 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
         <p className="hint">AI features are not enabled for this team.</p>
       </div>
     )
+  }
+
+  const openAddFeedDialog = () => {
+    setEditingFeedId(null)
+    setFeedForm(emptyFeedForm())
+    setIsFeedDialogOpen(true)
+  }
+
+  const openEditFeedDialog = (feed: RSSFeedConfig) => {
+    setEditingFeedId(feed.id)
+    setFeedForm(feedToForm(feed))
+    setIsFeedDialogOpen(true)
+  }
+
+  const toggleTargetAccount = (accountId: string) => {
+    setFeedForm((prev) => ({
+      ...prev,
+      targetAccountIds: prev.targetAccountIds.includes(accountId)
+        ? prev.targetAccountIds.filter((id) => id !== accountId)
+        : [...prev.targetAccountIds, accountId],
+    }))
   }
 
   const handleSaveSettings = async () => {
@@ -83,26 +134,48 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
     }
   }
 
-  const handleAddFeed = async () => {
-    if (!feedName.trim() || !feedUrl.trim()) return
+  const handleSaveFeed = async () => {
+    if (!feedForm.name.trim() || !feedForm.feedUrl.trim()) return
+    if (feedForm.targetAccountIds.length === 0) {
+      setError('Select at least one target account for this RSS feed')
+      return
+    }
+    if (!feedForm.promptHint.trim()) {
+      setError('Add a prompt describing how the AI should turn articles into posts')
+      return
+    }
+
     setError(null)
     setStatusMessage(null)
+    const payload = {
+      name: feedForm.name.trim(),
+      feed_url: feedForm.feedUrl.trim(),
+      is_active: feedForm.isActive,
+      prompt_hint: feedForm.promptHint.trim(),
+      target_account_ids: feedForm.targetAccountIds,
+      tonality: feedForm.tonality.trim(),
+    }
+
     try {
-      await createFeed.mutateAsync({
-        teamId: team.id,
-        data: {
-          name: feedName.trim(),
-          feed_url: feedUrl.trim(),
-          is_active: feedIsActive,
-        },
-      })
+      if (editingFeedId) {
+        await updateFeed.mutateAsync({
+          teamId: team.id,
+          feedId: editingFeedId,
+          data: payload,
+        })
+        setStatusMessage('RSS feed updated')
+      } else {
+        await createFeed.mutateAsync({
+          teamId: team.id,
+          data: payload,
+        })
+        setStatusMessage('RSS feed added')
+      }
       setIsFeedDialogOpen(false)
-      setFeedName('')
-      setFeedUrl('')
-      setFeedIsActive(true)
-      setStatusMessage('RSS feed added')
+      setEditingFeedId(null)
+      setFeedForm(emptyFeedForm())
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add RSS feed')
+      setError(err instanceof Error ? err.message : 'Failed to save RSS feed')
     }
   }
 
@@ -144,6 +217,13 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
   if (feedsLoading || settingsLoading) {
     return <p className="hint">Loading proactive triggers...</p>
   }
+
+  const feedDialogTitle = editingFeedId ? 'Edit RSS Feed' : 'Add RSS Feed'
+  const feedCanSave =
+    feedForm.name.trim() &&
+    feedForm.feedUrl.trim() &&
+    feedForm.promptHint.trim() &&
+    feedForm.targetAccountIds.length > 0
 
   return (
     <div className="two-column-detail">
@@ -203,8 +283,8 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
 
         <div className="field">
           <span>Cron Schedule</span>
-          <select 
-            value={cronPreset} 
+          <select
+            value={cronPreset}
             onChange={(e) => handleCronPresetChange(e.target.value)}
             style={{ marginBottom: '0.5rem' }}
           >
@@ -213,7 +293,7 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
             <option value="0 18 * * *">Daily at 6pm</option>
             <option value="custom">Custom</option>
           </select>
-          
+
           {cronPreset === 'custom' && (
             <input
               value={cronSchedule}
@@ -244,18 +324,27 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
             <Rss size={20} />
             RSS Feeds
           </h2>
-          <Dialog.Root open={isFeedDialogOpen} onOpenChange={setIsFeedDialogOpen}>
+          <Dialog.Root
+            open={isFeedDialogOpen}
+            onOpenChange={(open) => {
+              setIsFeedDialogOpen(open)
+              if (!open) {
+                setEditingFeedId(null)
+                setFeedForm(emptyFeedForm())
+              }
+            }}
+          >
             <Dialog.Trigger asChild>
-              <button className="btn btn--secondary btn--sm">
+              <button className="btn btn--secondary btn--sm" onClick={openAddFeedDialog}>
                 <Plus size={16} />
                 <span>Add Feed</span>
               </button>
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="dialog-overlay" />
-              <Dialog.Content className="dialog-content">
+              <Dialog.Content className="dialog-content" style={{ maxWidth: '36rem' }}>
                 <div className="drawer-header">
-                  <Dialog.Title className="drawer-title">Add RSS Feed</Dialog.Title>
+                  <Dialog.Title className="drawer-title">{feedDialogTitle}</Dialog.Title>
                   <Dialog.Close asChild>
                     <button className="btn btn--ghost btn--icon-sm">
                       <X size={20} />
@@ -266,8 +355,8 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
                   <label className="field">
                     <span>Feed Name</span>
                     <input
-                      value={feedName}
-                      onChange={(e) => setFeedName(e.target.value)}
+                      value={feedForm.name}
+                      onChange={(e) => setFeedForm((prev) => ({ ...prev, name: e.target.value }))}
                       placeholder="e.g., TechCrunch"
                     />
                   </label>
@@ -275,16 +364,45 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
                     <span>Feed URL</span>
                     <input
                       type="url"
-                      value={feedUrl}
-                      onChange={(e) => setFeedUrl(e.target.value)}
+                      value={feedForm.feedUrl}
+                      onChange={(e) => setFeedForm((prev) => ({ ...prev, feedUrl: e.target.value }))}
                       placeholder="https://example.com/feed.xml"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>AI Prompt</span>
+                    <textarea
+                      rows={4}
+                      value={feedForm.promptHint}
+                      onChange={(e) => setFeedForm((prev) => ({ ...prev, promptHint: e.target.value }))}
+                      placeholder="e.g., Write a concise post highlighting the key takeaway and why our audience should care."
+                    />
+                    <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      Sent to the AI together with each new article title and content.
+                    </p>
+                  </label>
+                  <div className="field">
+                    <span>Target Accounts</span>
+                    <DestinationPicker
+                      accounts={accounts}
+                      selectedIds={feedForm.targetAccountIds}
+                      onToggle={toggleTargetAccount}
+                      testIdPrefix="rss-feed-dest"
+                    />
+                  </div>
+                  <label className="field">
+                    <span>Tonality (optional)</span>
+                    <input
+                      value={feedForm.tonality}
+                      onChange={(e) => setFeedForm((prev) => ({ ...prev, tonality: e.target.value }))}
+                      placeholder="Overrides team profile tonality for this feed"
                     />
                   </label>
                   <label className="field flex-row--center gap-2" style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <input
                       type="checkbox"
-                      checked={feedIsActive}
-                      onChange={(e) => setFeedIsActive(e.target.checked)}
+                      checked={feedForm.isActive}
+                      onChange={(e) => setFeedForm((prev) => ({ ...prev, isActive: e.target.checked }))}
                     />
                     <span>Active</span>
                   </label>
@@ -294,10 +412,10 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
                     </Dialog.Close>
                     <button
                       className="btn btn--primary"
-                      onClick={handleAddFeed}
-                      disabled={!feedName.trim() || !feedUrl.trim() || createFeed.isPending}
+                      onClick={handleSaveFeed}
+                      disabled={!feedCanSave || createFeed.isPending || updateFeed.isPending}
                     >
-                      {createFeed.isPending ? 'Adding...' : 'Add Feed'}
+                      {createFeed.isPending || updateFeed.isPending ? 'Saving...' : editingFeedId ? 'Save Changes' : 'Add Feed'}
                     </button>
                   </div>
                 </div>
@@ -305,6 +423,10 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
             </Dialog.Portal>
           </Dialog.Root>
         </div>
+
+        <p className="hint" style={{ fontSize: '0.85rem' }}>
+          RSS feeds run independently of Auto-Fill. New articles create AI drafts for the selected accounts.
+        </p>
 
         <div className="stack stack--sm mt-4">
           {rssFeeds?.length === 0 ? (
@@ -316,31 +438,53 @@ export function ProactiveTriggersView({ team }: ProactiveTriggersViewProps) {
                   <div className="flex-row--center gap-2">
                     <span className="badge">{feed.name}</span>
                     <label className="flex-row--center gap-1" style={{ fontSize: '0.8rem', cursor: 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={feed.isActive} 
+                      <input
+                        type="checkbox"
+                        checked={feed.isActive}
                         onChange={() => handleToggleFeed(feed.id, feed.isActive)}
                         disabled={updateFeed.isPending}
                       />
                       <span>Active</span>
                     </label>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--xs"
-                    onClick={() => handleDeleteFeed(feed.id)}
-                    disabled={deleteFeed.isPending}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex-row--center gap-1">
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--xs"
+                      onClick={() => openEditFeedDialog(feed)}
+                      disabled={updateFeed.isPending}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--xs"
+                      onClick={() => handleDeleteFeed(feed.id)}
+                      disabled={deleteFeed.isPending}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
                 <p className="hint" style={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>
                   {feed.feedUrl}
                 </p>
+                {feed.promptHint && (
+                  <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                    Prompt: {feed.promptHint}
+                  </p>
+                )}
+                <p className="hint" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                  {feed.targetAccountIds.length} target account{feed.targetAccountIds.length === 1 ? '' : 's'}
+                  {feed.tonality ? ` · Tonality: ${feed.tonality}` : ''}
+                </p>
                 <div className="flex-row--center gap-1 mt-2 hint" style={{ fontSize: '0.75rem' }}>
                   <Clock size={12} />
                   <span>
-                    Last fetched: {feed.lastFetchedAt ? formatDistanceToNow(new Date(feed.lastFetchedAt), { addSuffix: true }) : 'Never'}
+                    Last fetched:{' '}
+                    {feed.lastFetchedAt
+                      ? formatDistanceToNow(new Date(feed.lastFetchedAt), { addSuffix: true })
+                      : 'Never (will baseline on first check)'}
                   </span>
                 </div>
               </div>

@@ -347,10 +347,13 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 	_, team := newAITestTeam(t, s)
 
 	input := domain.RSSFeedConfig{
-		TeamID:   team.ID,
-		FeedURL:  "https://blog.example/feed.xml",
-		Name:     "Example Blog",
-		IsActive: true,
+		TeamID:           team.ID,
+		FeedURL:          "https://blog.example/feed.xml",
+		Name:             "Example Blog",
+		IsActive:         true,
+		PromptHint:       "Summarize this article for social media.",
+		TargetAccountIDs: []string{"acct-1", "acct-2"},
+		Tonality:         "professional",
 	}
 
 	created, err := s.CreateRSSFeedConfig(ctx, team.ID, input)
@@ -363,6 +366,15 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 	if created.FeedURL != input.FeedURL {
 		t.Fatalf("FeedURL: got %q, want %q", created.FeedURL, input.FeedURL)
 	}
+	if created.PromptHint != input.PromptHint {
+		t.Fatalf("PromptHint: got %q, want %q", created.PromptHint, input.PromptHint)
+	}
+	if len(created.TargetAccountIDs) != 2 {
+		t.Fatalf("TargetAccountIDs: got %v", created.TargetAccountIDs)
+	}
+	if created.Tonality != input.Tonality {
+		t.Fatalf("Tonality: got %q, want %q", created.Tonality, input.Tonality)
+	}
 
 	list, err := s.ListRSSFeedConfigs(ctx, team.ID)
 	if err != nil {
@@ -374,6 +386,8 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 
 	input.Name = "Updated Blog"
 	input.IsActive = false
+	fetchedAt := time.Now().UTC().Truncate(time.Second)
+	input.LastFetchedAt = &fetchedAt
 	updated, err := s.UpdateRSSFeedConfig(ctx, team.ID, created.ID, input)
 	if err != nil {
 		t.Fatalf("UpdateRSSFeedConfig: %v", err)
@@ -383,6 +397,9 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 	}
 	if updated.IsActive {
 		t.Fatal("IsActive should be false after update")
+	}
+	if updated.LastFetchedAt == nil {
+		t.Fatal("LastFetchedAt should be set after update")
 	}
 
 	if err := s.DeleteRSSFeedConfig(ctx, team.ID, created.ID); err != nil {
