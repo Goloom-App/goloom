@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 
-import en from '@locales/en.json'
+import en from '../../../locales/en.json'
 
 /** Maps exact English API bodies (and keys) to catalog api.* keys. */
 const englishToKey: Record<string, string> = {}
