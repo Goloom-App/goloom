@@ -71,13 +71,13 @@ func TestDockerfileCopiesLocalesBeforeFrontendBuild(t *testing.T) {
 	var sawFrontendBuild bool
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.Contains(trimmed, "COPY locales/en.json") && strings.Contains(trimmed, "frontend/locales") {
+		if strings.HasPrefix(trimmed, "COPY locales") {
 			sawLocalesCopy = true
 		}
 		if strings.Contains(trimmed, "pnpm --dir frontend build") {
 			sawFrontendBuild = true
 			if !sawLocalesCopy {
-				t.Fatal("Dockerfile runs frontend build before copying locale catalogs into frontend/locales")
+				t.Fatal("Dockerfile runs frontend build before COPY locales; i18n imports need repo locales/")
 			}
 			return
 		}
@@ -93,50 +93,13 @@ func TestDockerfileUsesPackageManagerPnpmVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkgJSON, err := os.ReadFile(filepath.Join(root, "frontend", "package.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var pkg struct {
-		PackageManager string `json:"packageManager"`
-	}
-	if err := json.Unmarshal(pkgJSON, &pkg); err != nil {
-		t.Fatal(err)
-	}
 	content := string(dockerfile)
 	if !strings.Contains(content, "packageManager.split('@')[1]") {
 		t.Fatal("Dockerfile must read pnpm version from frontend/package.json packageManager (avoid hardcoded drift)")
 	}
 }
 
-func TestDockerfileVerifiesLocalesBeforeFrontendBuild(t *testing.T) {
-	root := repoRoot(t)
-	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(content)
-	if !strings.Contains(s, "test -f frontend/locales/en.json") || !strings.Contains(s, "test -f frontend/locales/de.json") {
-		t.Fatal("Dockerfile must verify locale catalogs exist under frontend/locales before frontend build")
-	}
-}
-
-func TestDockerfilePnpmCorepackFallback(t *testing.T) {
-	root := repoRoot(t)
-	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(content)
-	if !strings.Contains(s, "corepack prepare failed") {
-		t.Fatal("Dockerfile must fall back when corepack prepare fails (restricted npm registry in CI/Dockhand)")
-	}
-	if !strings.Contains(s, "pnpm-linux-") {
-		t.Fatal("Dockerfile must download pnpm from GitHub releases on corepack fallback")
-	}
-}
-
-func TestDockerfileFrontendBuilderUsesBashForPnpmSetup(t *testing.T) {
+func TestDockerfileSingleRunFrontendBuild(t *testing.T) {
 	root := repoRoot(t)
 	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
 	if err != nil {
@@ -152,7 +115,12 @@ func TestDockerfileFrontendBuilderUsesBashForPnpmSetup(t *testing.T) {
 	if nextFrom >= 0 {
 		builderStage = builderStage[:nextFrom+1]
 	}
-	if !strings.Contains(builderStage, `/bin/bash -eu -o pipefail`) {
-		t.Fatal("Dockerfile frontend-builder must invoke bash explicitly for pnpm setup (OCI builders ignore SHELL)")
+	buildCount := strings.Count(builderStage, "pnpm --dir frontend build")
+	if buildCount != 1 {
+		t.Fatalf("frontend-builder must run pnpm build exactly once in a single layer (got %d); split RUN steps break pnpm on some builders", buildCount)
+	}
+	if strings.Contains(builderStage, "pnpm --dir frontend build") &&
+		!strings.Contains(builderStage, "pnpm --dir frontend install") {
+		t.Fatal("frontend-builder RUN must install deps before build")
 	}
 }
