@@ -430,9 +430,6 @@ create table if not exists external_post_monitor_settings (
 );
 
 alter table scheduled_posts add column if not exists source text not null default 'scheduled';
-alter table scheduled_posts drop constraint if exists scheduled_posts_source_check;
-alter table scheduled_posts add constraint scheduled_posts_source_check
-    check (source in ('scheduled', 'imported'));
 
 alter table scheduled_post_targets add column if not exists remote_post_id text;
 create unique index if not exists ux_post_targets_account_remote_post
@@ -460,6 +457,10 @@ alter table rss_feed_configs add column if not exists counter_next integer not n
 alter table rss_feed_configs add column if not exists ai_enhance_enabled boolean not null default false;
 
 alter table scheduled_posts add column if not exists rss_feed_id uuid references rss_feed_configs(id) on delete set null;
+
+update scheduled_posts
+set source = 'scheduled'
+where trim(source) = '' or source not in ('scheduled', 'imported', 'automation');
 
 alter table scheduled_posts drop constraint if exists scheduled_posts_source_check;
 alter table scheduled_posts add constraint scheduled_posts_source_check
