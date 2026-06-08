@@ -851,6 +851,30 @@ function App() {
     setSection('composer')
   }
 
+  function openComposerFromGeneratedContent(payload: {
+    content: string
+    targetAccountIds: string[]
+    accountContentOverride?: Record<string, string>
+    scheduledAt?: string
+  }) {
+    const baseDraft = defaultEditorDraft(currentDate, teamAccounts)
+    setEditorDraft({
+      title: '',
+      content: payload.content,
+      scheduledAt: payload.scheduledAt ? toInputDateTime(parseISO(payload.scheduledAt)) : baseDraft.scheduledAt,
+      targetAccountIds: payload.targetAccountIds,
+      status: 'draft',
+      accountContentOverride: payload.accountContentOverride ?? {},
+      mediaIds: [],
+      mediaExcludeByAccount: {},
+    })
+    setComposerMode('create')
+    setEditingPostId(null)
+    setMobilePreviewPostId(null)
+    prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
+    setSection('composer')
+  }
+
   async function openEditor(postId: string) {
     const targetPost = teamPosts.find((post) => post.id === postId)
     if (!targetPost || targetPost.source === 'imported') {
@@ -953,6 +977,26 @@ function App() {
     await runAction(async () => {
       await api.upsertExternalPostMonitor(selectedTeam.id, { enabled })
     }, t('status.externalPostMonitorUpdated'))
+  }
+
+  async function handleSavePersonalAiSettings() {
+    if (!api || !selectedTeam || !selectedTeam.isPersonal) {
+      return
+    }
+    await runAction(async () => {
+      await api.updateTeam(selectedTeam.id, {
+        name: selectedTeam.name,
+        description: selectedTeam.description ?? '',
+        is_ai_enabled: teamAiEnabled,
+      })
+      if (teamAiEnabled && teamAiServiceUrl.trim()) {
+        await api.upsertAIServiceConfig(selectedTeam.id, {
+          service_url: teamAiServiceUrl.trim(),
+          description: teamAiServiceDesc.trim() || 'ai service',
+        })
+      }
+      await loadDashboard({ silent: true })
+    }, t('status.teamSettingsUpdated'))
   }
 
   async function handleUpdateTeam() {
@@ -1633,6 +1677,7 @@ function App() {
                 : undefined
             }
             schedulingPreferences={selectedTeam?.schedulingPreferences}
+            isAiEnabled={selectedTeam?.isAiEnabled ?? false}
             standalone
             previewColumnExternal={!isMobile}
           />
@@ -1854,7 +1899,55 @@ function App() {
             </div>
 
             {selectedTeam.isPersonal ? (
-              <p className="hint">{t('teams.personalNoMembers')}</p>
+              <>
+                <p className="hint">{t('teams.personalNoMembers')}</p>
+                <p className="hint">{t('teams.personalWorkspaceHint')}</p>
+                <section className="stack">
+                  <h3 className="subsection-title">{t('teams.aiAgentTitle')}</h3>
+                  <p className="hint">{t('teams.aiAgentHint')}</p>
+                  <label className="field toggle-row">
+                    <span>{t('teams.aiFeaturesEnabled')}</span>
+                    <input
+                      type="checkbox"
+                      className="toggle"
+                      checked={teamAiEnabled}
+                      onChange={(event) => setTeamAiEnabled(event.target.checked)}
+                    />
+                  </label>
+                  {teamAiEnabled ? (
+                    <div className="stack stack--sm mt-1">
+                      <h4 className="subsection-title">{t('teams.aiServiceUrlTitle')}</h4>
+                      <p className="hint">{t('teams.aiServiceUrlHint')}</p>
+                      <label className="field">
+                        <span>{t('teams.aiServiceUrlLabel')}</span>
+                        <input
+                          value={teamAiServiceUrl}
+                          onChange={(event) => setTeamAiServiceUrl(event.target.value)}
+                          placeholder="http://ai-service:8090"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>{t('common.description')}</span>
+                        <input
+                          value={teamAiServiceDesc}
+                          onChange={(event) => setTeamAiServiceDesc(event.target.value)}
+                          placeholder="ai service"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                  <div>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => void handleSavePersonalAiSettings()}
+                      disabled={syncing || (teamAiEnabled && !teamAiServiceUrl.trim())}
+                    >
+                      {t('teams.saveChanges')}
+                    </button>
+                  </div>
+                </section>
+              </>
             ) : myRoleInSelectedTeam === 'owner' ? (
               <>
                 <section className="stack">
@@ -2111,7 +2204,11 @@ function App() {
         )}
 
         {section === 'aiGenerate' && selectedTeam && (
-          <AIGenerateView team={selectedTeam} accounts={teamAccounts} />
+          <AIGenerateView
+            team={selectedTeam}
+            accounts={teamAccounts}
+            onEditInComposer={openComposerFromGeneratedContent}
+          />
         )}
 
         {section === 'aiProactive' && selectedTeam && (

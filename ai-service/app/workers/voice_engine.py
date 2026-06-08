@@ -42,18 +42,29 @@ class VoiceEngineWorker:
             primary_limit = int(primary["max_chars"])
 
             system_prompt = self.prompt_builder.build_system_prompt(context)
-            constraints = self.prompt_builder.apply_platform_constraints(primary_platform)
-            base_prompt = self._build_multi_account_prompt(
-                context=context,
-                params=params,
-                selected_accounts=selected_accounts,
-                primary_limit=primary_limit,
-                campaign_format=campaign_format,
-                scheduled_at=scheduled_at,
-            )
+            primary_account_id = str(primary.get("id") or "")
+            refine_mode = self._is_refine_mode(params)
+            if refine_mode:
+                base_prompt = self._build_refine_prompt(
+                    context=context,
+                    params=params,
+                    selected_accounts=selected_accounts,
+                    primary_limit=primary_limit,
+                    primary_account_id=primary_account_id,
+                    campaign_format=campaign_format,
+                    scheduled_at=scheduled_at,
+                )
+            else:
+                base_prompt = self._build_multi_account_prompt(
+                    context=context,
+                    params=params,
+                    selected_accounts=selected_accounts,
+                    primary_limit=primary_limit,
+                    campaign_format=campaign_format,
+                    scheduled_at=scheduled_at,
+                )
             prompt = self.prompt_builder.inject_few_shot(base_prompt, context.get("style_examples", []))
 
-            primary_account_id = str(primary.get("id") or "")
             parsed = await self._generate_with_retries(
                 prompt=prompt,
                 system_prompt=system_prompt,
@@ -61,6 +72,7 @@ class VoiceEngineWorker:
                 primary_account_id=primary_account_id,
                 selected_accounts=selected_accounts,
                 author_user_id=author_user_id,
+                refine_mode=refine_mode,
             )
             parsed = self._normalize_multi_account_result(
                 parsed,
@@ -151,6 +163,77 @@ class VoiceEngineWorker:
             f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
         )
 
+    def _build_refine_prompt(
+        self,
+        *,
+        context: dict,
+        params: dict[str, Any],
+        selected_accounts: list[dict[str, Any]],
+        primary_limit: int,
+        primary_account_id: str,
+        campaign_format: dict[str, Any] | None,
+        scheduled_at,
+    ) -> str:
+        primary = max(selected_accounts, key=lambda item: int(item["max_chars"]))
+        primary_platform = str(primary.get("provider") or "general")
+        source_content = str(params.get("source_content") or params.get("existing_content") or "").strip()
+        refinement_hint = str(params.get("prompt_hint") or params.get("instruction") or "").strip()
+        if not refinement_hint:
+            refinement_hint = (
+                "Improve clarity, flow, and engagement while preserving the core message and team voice."
+            )
+        refine_params = {
+            **params,
+            "prompt_hint": refinement_hint,
+        }
+        base_prompt = self.prompt_builder.build_generation_prompt(context, refine_params, primary_platform)
+        account_lines = [
+            f"- {acc.get('username') or acc.get('id')} (id={acc.get('id')}, {acc.get('provider')}): max {acc.get('max_chars')} characters"
+            for acc in selected_accounts
+        ]
+        lower_limit_accounts = [
+            acc for acc in selected_accounts if int(acc["max_chars"]) < primary_limit
+        ]
+        override_hint = (
+            "No account_content_override entries are needed when the refined primary text fits every account."
+            if not lower_limit_accounts
+            else (
+                "account_content_override must ONLY contain compressed variants for: "
+                + ", ".join(
+                    f"{acc.get('username') or acc.get('id')} (id={acc.get('id')}, max {acc.get('max_chars')})"
+                    for acc in lower_limit_accounts
+                )
+            )
+        )
+        campaign_hint = ""
+        if campaign_format:
+            campaign_hint = (
+                f"\nCampaign format: {campaign_format.get('name') or 'unnamed'}.\n"
+                f"Template structure: {json.dumps(campaign_format.get('structure') or {}, ensure_ascii=False)}"
+            )
+        schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'unchanged'}."
+        return (
+            f"{base_prompt}\n\n"
+            "Refine an existing draft for multi-account publishing.\n"
+            f"Primary account: {primary.get('username') or primary_account_id} (id={primary_account_id}, "
+            f"limit {primary_limit} characters).\n"
+            f"Existing draft to refine:\n---\n{source_content}\n---\n\n"
+            f"Refinement goal: {refinement_hint}\n"
+            f"- \"content\": refined primary text for account id {primary_account_id}; "
+            f"use the available character budget where it improves the post\n"
+            f"- {override_hint}\n"
+            "- Do NOT create a separate version for every account.\n"
+            "- Overrides must be shorter compressions of the refined primary text.\n"
+            "Return JSON only with keys content, account_content_override, hashtags, platform_metadata.\n"
+            f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
+        )
+
+    @staticmethod
+    def _is_refine_mode(params: dict[str, Any]) -> bool:
+        if params.get("refine_content") is True or params.get("refine") is True:
+            return True
+        return bool(str(params.get("source_content") or params.get("existing_content") or "").strip())
+
     async def _generate_with_retries(
         self,
         *,
@@ -160,6 +243,7 @@ class VoiceEngineWorker:
         primary_account_id: str,
         selected_accounts: list[dict[str, Any]],
         author_user_id: str,
+        refine_mode: bool = False,
     ) -> dict[str, Any]:
         current_prompt = prompt
         last_error = "invalid multi-account output"
@@ -185,19 +269,28 @@ class VoiceEngineWorker:
                     selected_accounts,
                     primary_limit=primary_limit,
                     primary_account_id=primary_account_id,
+                    refine_mode=refine_mode,
                 )
                 return result
             except ValueError as exc:
                 last_error = str(exc)
                 if attempt >= self.max_retries:
                     raise
-            current_prompt = (
-                f"{prompt}\n\nRevise the previous answer and return JSON only. "
-                f"Fix this issue: {last_error}. "
-                f"The primary content for account {primary_account_id} must be long "
-                f"(target {self._min_primary_length(primary_limit, selected_accounts)} to {primary_limit} characters). "
-                "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
-            )
+            if refine_mode:
+                current_prompt = (
+                    f"{prompt}\n\nRevise the previous answer and return JSON only. "
+                    f"Fix this issue: {last_error}. "
+                    "Keep the refined primary text faithful to the source draft while improving quality. "
+                    "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
+                )
+            else:
+                current_prompt = (
+                    f"{prompt}\n\nRevise the previous answer and return JSON only. "
+                    f"Fix this issue: {last_error}. "
+                    f"The primary content for account {primary_account_id} must be long "
+                    f"(target {self._min_primary_length(primary_limit, selected_accounts)} to {primary_limit} characters). "
+                    "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
+                )
 
         raise RuntimeError("voice engine retry loop exited unexpectedly")
 
@@ -252,13 +345,17 @@ class VoiceEngineWorker:
         *,
         primary_limit: int,
         primary_account_id: str,
+        refine_mode: bool = False,
     ) -> None:
         content = str(result.get("content") or "")
-        min_primary = self._min_primary_length(primary_limit, selected_accounts)
-        if len(content) < min_primary:
-            raise ValueError(
-                f"Primary content is too short ({len(content)} chars); aim for at least {min_primary}"
-            )
+        if not refine_mode:
+            min_primary = self._min_primary_length(primary_limit, selected_accounts)
+            if len(content) < min_primary:
+                raise ValueError(
+                    f"Primary content is too short ({len(content)} chars); aim for at least {min_primary}"
+                )
+        if len(content) < 1:
+            raise ValueError("Primary content is empty")
         if len(content) > primary_limit:
             raise ValueError(f"Generated primary content exceeds limit of {primary_limit} characters")
         overrides = result.get("account_content_override") or {}

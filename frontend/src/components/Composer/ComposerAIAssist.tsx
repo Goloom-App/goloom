@@ -1,0 +1,149 @@
+import { useState } from 'react'
+import type { Dispatch, SetStateAction } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Loader2, Sparkles } from 'lucide-react'
+
+import { getApiClient, useTriggerAIJob } from '../../hooks/useAI'
+import { useAIJobStream } from '../../hooks/useSSE'
+import type { EditorDraftState } from './types'
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function waitForAIJob(teamId: string, jobId: string) {
+  const api = getApiClient()
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    const job = await api.getAIJob(teamId, jobId)
+    if (job.status === 'completed') {
+      return job
+    }
+    if (job.status === 'failed') {
+      throw new Error(job.error_message || 'AI optimization failed')
+    }
+    await sleep(1000)
+  }
+  throw new Error('AI optimization timed out')
+}
+
+export function ComposerAIAssist({
+  teamId,
+  isAiEnabled,
+  draft,
+  setDraft,
+  activeTab,
+}: {
+  teamId: string
+  isAiEnabled: boolean
+  draft: EditorDraftState
+  setDraft: Dispatch<SetStateAction<EditorDraftState>>
+  activeTab: string
+}) {
+  const { t } = useTranslation()
+  const triggerJob = useTriggerAIJob()
+  useAIJobStream(teamId)
+
+  const [instruction, setInstruction] = useState('')
+  const [showInstruction, setShowInstruction] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+
+  if (!isAiEnabled || activeTab !== 'default') {
+    return null
+  }
+
+  const canOptimize = draft.content.trim().length > 0 && draft.targetAccountIds.length > 0
+
+  const handleOptimize = async () => {
+    if (!canOptimize) {
+      return
+    }
+    setError(null)
+    setStatusMessage(null)
+    try {
+      const response = await triggerJob.mutateAsync({
+        teamId,
+        type: 'voice_engine',
+        params: {
+          refine_content: true,
+          source_content: draft.content.trim(),
+          prompt_hint:
+            instruction.trim() ||
+            'Improve clarity, flow, and engagement while preserving the core message and team voice.',
+          target_account_ids: draft.targetAccountIds,
+        },
+      })
+      const job = await waitForAIJob(teamId, response.jobId)
+      const content = typeof job.result?.content === 'string' ? job.result.content : ''
+      if (!content.trim()) {
+        throw new Error('AI returned empty content')
+      }
+      const overrides =
+        job.result?.account_content_override && typeof job.result.account_content_override === 'object'
+          ? (job.result.account_content_override as Record<string, string>)
+          : {}
+      setDraft((current) => ({
+        ...current,
+        content,
+        accountContentOverride: overrides,
+      }))
+      setStatusMessage(t('composer.aiOptimizeApplied'))
+      setShowInstruction(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('composer.aiOptimizeFailed'))
+    }
+  }
+
+  return (
+    <div className="stack stack--sm" data-testid="composer-ai-assist">
+      <div className="flex-row--center gap-2 flex-wrap">
+        <button
+          type="button"
+          className="btn btn--secondary btn--sm"
+          data-testid="composer-ai-optimize"
+          disabled={!canOptimize || triggerJob.isPending}
+          onClick={() => {
+            if (showInstruction) {
+              void handleOptimize()
+            } else {
+              setShowInstruction(true)
+            }
+          }}
+        >
+          {triggerJob.isPending ? (
+            <>
+              <Loader2 size={14} className="spin" /> {t('composer.aiOptimizing')}
+            </>
+          ) : (
+            <>
+              <Sparkles size={14} /> {t('composer.aiOptimize')}
+            </>
+          )}
+        </button>
+        {showInstruction && !triggerJob.isPending ? (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowInstruction(false)}>
+            {t('common.cancel')}
+          </button>
+        ) : null}
+      </div>
+      {showInstruction ? (
+        <label className="field">
+          <span>{t('composer.aiOptimizeHint')}</span>
+          <textarea
+            rows={2}
+            data-testid="composer-ai-instruction"
+            value={instruction}
+            onChange={(event) => setInstruction(event.target.value)}
+            placeholder={t('composer.aiOptimizePlaceholder')}
+          />
+        </label>
+      ) : (
+        <p className="hint" style={{ margin: 0, fontSize: '0.8rem' }}>
+          {t('composer.aiOptimizeDescription')}
+        </p>
+      )}
+      {statusMessage ? <span className="status-banner__success" style={{ fontSize: '0.8rem' }}>{statusMessage}</span> : null}
+      {error ? <span className="status-banner__error" style={{ fontSize: '0.8rem' }}>{error}</span> : null}
+    </div>
+  )
+}

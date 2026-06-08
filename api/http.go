@@ -311,16 +311,30 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "team_not_found", http.StatusNotFound)
 		return
 	}
-	if team.IsPersonal {
-		a.writeError(w, r, "personal_workspace_cannot_update", http.StatusBadRequest)
-		return
-	}
-
 	var input domain.UpdateTeamInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
+
+	if team.IsPersonal {
+		if input.IsAIEnabled == nil {
+			a.writeError(w, r, "personal_workspace_ai_only", http.StatusBadRequest)
+			return
+		}
+		updated, err := a.store.UpdateTeam(r.Context(), team.ID, domain.UpdateTeamInput{
+			Name:        team.Name,
+			Description: team.Description,
+			IsAIEnabled: input.IsAIEnabled,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		auth.WriteJSON(w, http.StatusOK, updated)
+		return
+	}
+
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	if input.Name == "" {

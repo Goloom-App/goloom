@@ -40,7 +40,7 @@ function loadStoredSettings(): SettingsState {
   }
 }
 
-function getApiClient(): ApiClient {
+export function getApiClient(): ApiClient {
   const settings = loadStoredSettings()
   return createApiClient({
     baseUrl: settings.general.apiBaseUrl.trim() || (typeof window !== 'undefined' ? window.location.origin : ''),

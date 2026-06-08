@@ -395,6 +395,12 @@
       "settingsTitle": "Team-Einstellungen",
       "settingsHint": "Mitglieder verwalten, Zugriff aktualisieren und Inhaberschaft für {{teamName}} übertragen.",
       "personalNoMembers": "Persönlicher Arbeitsbereich hat keine gemeinsamen Mitglieder.",
+      "aiAgentTitle": "KI-Agent",
+      "aiAgentHint": "KI-gestützte Inhaltserstellung für diesen Arbeitsbereich aktivieren.",
+      "aiFeaturesEnabled": "KI-Funktionen aktiviert",
+      "aiServiceUrlTitle": "KI-Service-URL",
+      "aiServiceUrlHint": "URL des KI-Verarbeitungsdienstes (z. B. http://ai-service:8090).",
+      "aiServiceUrlLabel": "Service-URL",
       "teamName": "Teamname",
       "descriptionPlaceholder": "Beschreiben Sie Zweck und Fokus Ihres Teams",
       "saveChanges": "Änderungen speichern",
@@ -643,7 +649,19 @@
       "labels24h": "24h-Beschriftung",
       "heatmapAria": "Interaktions-Heatmap nach Stunde",
       "heatmapCellTitle": "{{hour}}:00 UTC — Score {{score}}",
-      "defaultTimeslots": "Standard-Zeitfenster"
+      "defaultTimeslots": "Standard-Zeitfenster",
+      "aiOptimize": "Mit KI optimieren",
+      "aiOptimizing": "Optimiere…",
+      "aiOptimizeDescription": "Die KI verbessert Ihren Entwurf und behält Botschaft sowie Team-Stimme bei.",
+      "aiOptimizeHint": "Optimierungsanweisungen (optional)",
+      "aiOptimizePlaceholder": "z. B. Kürzer und ansprechender formulieren",
+      "aiOptimizeApplied": "Entwurf mit KI-Vorschlägen aktualisiert.",
+      "aiOptimizeFailed": "KI-Optimierung fehlgeschlagen."
+    },
+    "ai": {
+      "generate": {
+        "editInComposer": "Im Editor bearbeiten"
+      }
     },
     "post": {
       "contentPlaceholder": "Beitragsinhalt erscheint hier…",

@@ -89,6 +89,43 @@ async def test_process_generates_multi_account_post():
 
 
 @pytest.mark.asyncio
+async def test_process_refine_mode_skips_minimum_length():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    refined = "Polished release note with clearer flow."
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "content": refined,
+                "account_content_override": {"acc-bluesky": "Release note."},
+                "hashtags": [],
+                "platform_metadata": {},
+            }
+        ),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process(
+        {
+            **sample_job(
+                refine_content=True,
+                source_content="Rough draft about the release.",
+                prompt_hint="Tighten wording.",
+            ),
+            "context": sample_context(),
+        }
+    )
+
+    assert result["content"] == refined
+    first_call = adapter.generate.await_args_list[0]
+    assert "Existing draft to refine" in first_call.args[0]
+    assert adapter.generate.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_process_retries_when_primary_content_is_too_short():
     adapter = AsyncMock()
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")

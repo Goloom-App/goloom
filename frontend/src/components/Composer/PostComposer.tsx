@@ -17,6 +17,7 @@ import {
   isAnyTargetAccountOverCharLimit,
 } from './composerUtils'
 import type { EditorDraftState } from './types'
+import { ComposerAIAssist } from './ComposerAIAssist'
 
 type Api = ReturnType<typeof createApiClient>
 
@@ -44,6 +45,7 @@ export function PostComposer({
   api,
   authHeader,
   schedulingPreferences,
+  isAiEnabled = false,
   standalone,
   previewColumnExternal,
 }: {
@@ -64,9 +66,8 @@ export function PostComposer({
   api?: Api | null
   authHeader?: string
   schedulingPreferences?: TeamSchedulingPreferences | null
-  /** When true, renders as a standalone page view instead of a modal overlay. */
+  isAiEnabled?: boolean
   standalone?: boolean
-  /** When true (standalone desktop), the preview column is rendered externally by the parent */
   previewColumnExternal?: boolean
 }) {
   const { t } = useTranslation()
@@ -385,6 +386,16 @@ export function PostComposer({
             <strong>{bodyLen}</strong>
             <span>/ {maxChars || t('common.emDash')}</span>
           </div>
+
+          {teamId ? (
+            <ComposerAIAssist
+              teamId={teamId}
+              isAiEnabled={isAiEnabled}
+              draft={draft}
+              setDraft={setDraft}
+              activeTab={activeTab}
+            />
+          ) : null}
 
           <ComposerMedia
             mediaIds={draft.mediaIds}

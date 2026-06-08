@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { CalendarClock, Check, Loader2, Play, Save, X } from 'lucide-react'
+import { CalendarClock, Check, Edit, Loader2, Play, Save, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import {
   useTriggerAIJob,
@@ -16,9 +17,16 @@ import { createApiClient } from '../../api'
 interface AIGenerateViewProps {
   team: TeamRecord
   accounts: AccountRecord[]
+  onEditInComposer?: (payload: {
+    content: string
+    targetAccountIds: string[]
+    accountContentOverride?: Record<string, string>
+    scheduledAt?: string
+  }) => void
 }
 
-export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
+export function AIGenerateView({ team, accounts, onEditInComposer }: AIGenerateViewProps) {
+  const { t } = useTranslation()
   const { data: profile } = useTeamProfile(team.id)
   const { data: formats } = useCampaignFormats(team.id)
   const { data: jobs } = useAIJobs(team.id)
@@ -347,7 +355,35 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
                         </div>
                       )}
 
-                    <div className="flex-row--center gap-2">
+                    <div className="flex-row--center gap-2 flex-wrap">
+                      {onEditInComposer ? (
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--sm"
+                          data-testid="ai-generate-edit-composer"
+                          onClick={() => {
+                            const overrides =
+                              job.result?.account_content_override &&
+                              typeof job.result.account_content_override === 'object'
+                                ? (job.result.account_content_override as Record<string, string>)
+                                : undefined
+                            const targetAccountIds = Array.isArray(job.payload?.target_account_ids)
+                              ? (job.payload.target_account_ids as string[])
+                              : selectedAccounts
+                            onEditInComposer({
+                              content: String(job.result?.content ?? ''),
+                              targetAccountIds,
+                              accountContentOverride: overrides,
+                              scheduledAt:
+                                typeof job.result?.scheduled_at === 'string'
+                                  ? job.result.scheduled_at
+                                  : undefined,
+                            })
+                          }}
+                        >
+                          <Edit size={14} /> {t('ai.generate.editInComposer')}
+                        </button>
+                      ) : null}
                       {profile?.autoPublishEnabled ? (
                         <p className="hint" style={{ fontSize: '0.8rem', margin: 0 }}>
                           <Check size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />

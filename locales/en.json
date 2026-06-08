@@ -395,6 +395,12 @@
       "settingsTitle": "Team settings",
       "settingsHint": "Manage members, update access, and transfer ownership for {{teamName}}.",
       "personalNoMembers": "Personal workspace has no shared members.",
+      "aiAgentTitle": "AI Agent",
+      "aiAgentHint": "Enable AI-powered content generation for this workspace.",
+      "aiFeaturesEnabled": "AI features enabled",
+      "aiServiceUrlTitle": "AI Service URL",
+      "aiServiceUrlHint": "URL of the AI processing service (e.g., http://ai-service:8090).",
+      "aiServiceUrlLabel": "Service URL",
       "teamName": "Team name",
       "descriptionPlaceholder": "Describe your team's purpose and focus",
       "saveChanges": "Save Changes",
@@ -593,6 +599,11 @@
       "logNext": "Next",
       "logPageOf": "Page {{page}} of {{total}}"
     },
+    "ai": {
+      "generate": {
+        "editInComposer": "Edit in composer"
+      }
+    },
     "media": {
       "libraryTitle": "Media library",
       "libraryHint": "Persistent uploads for {{team}}. These files are stored on Goloom and synced to providers when you publish.",
@@ -643,7 +654,14 @@
       "labels24h": "24h labels",
       "heatmapAria": "Engagement heatmap by hour",
       "heatmapCellTitle": "{{hour}}:00 UTC — score {{score}}",
-      "defaultTimeslots": "Default timeslots"
+      "defaultTimeslots": "Default timeslots",
+      "aiOptimize": "Optimize with AI",
+      "aiOptimizing": "Optimizing…",
+      "aiOptimizeDescription": "Let AI polish your draft while keeping your message and team voice.",
+      "aiOptimizeHint": "Optimization instructions (optional)",
+      "aiOptimizePlaceholder": "e.g. Make it shorter and more engaging",
+      "aiOptimizeApplied": "Draft updated with AI suggestions.",
+      "aiOptimizeFailed": "AI optimization failed."
     },
     "post": {
       "contentPlaceholder": "Post content will appear here...",
