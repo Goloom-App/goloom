@@ -20,6 +20,8 @@ interface AppShellProps {
   isComposer?: boolean
   onRefresh?: () => void | Promise<void>
   pullToRefreshDisabled?: boolean
+  reviewQueueCount?: number
+  reviewQueueOverdueCount?: number
 }
 
 export function AppShell({
@@ -37,7 +39,9 @@ export function AppShell({
   previewColumn,
   isComposer,
   onRefresh,
-  pullToRefreshDisabled = true
+  pullToRefreshDisabled = true,
+  reviewQueueCount = 0,
+  reviewQueueOverdueCount = 0,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -53,6 +57,8 @@ export function AppShell({
         setSection={setSection}
         teams={teams}
         selectedTeamId={selectedTeamId}
+        reviewQueueCount={reviewQueueCount}
+        reviewQueueOverdueCount={reviewQueueOverdueCount}
         onSelectTeam={onSelectTeam}
         onSignOut={onSignOut}
         openComposer={openComposer}
@@ -86,6 +92,8 @@ export function AppShell({
         setSection={setSection}
         teams={teams}
         selectedTeamId={selectedTeamId}
+        reviewQueueCount={reviewQueueCount}
+        reviewQueueOverdueCount={reviewQueueOverdueCount}
         onSelectTeam={onSelectTeam}
         user={user}
         onSignOut={onSignOut}

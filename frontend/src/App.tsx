@@ -31,6 +31,7 @@ import { AIGenerateView } from './views/ai/AIGenerateView'
 import { ProactiveTriggersView } from './views/ai/ProactiveTriggersView'
 import { RSSFeedsView } from './views/rss/RSSFeedsView'
 import { ReviewQueueView } from './views/review/ReviewQueueView'
+import { useReviewQueueCount } from './hooks/useReviewQueue'
 import {
   ApiError,
   createApiClient,
@@ -664,6 +665,9 @@ function App() {
   }, [api, section])
 
   const effectiveSelectedTeamId = selectedTeamId || teams[0]?.id || ''
+  const { count: reviewQueueCount, overdueCount: reviewQueueOverdueCount } = useReviewQueueCount(
+    principalUser && effectiveSelectedTeamId ? effectiveSelectedTeamId : '',
+  )
   const selectedTeam = useMemo(
     () => teams.find((team) => team.id === effectiveSelectedTeamId) ?? null,
     [effectiveSelectedTeamId, teams],
@@ -1548,6 +1552,8 @@ function App() {
       isComposer={isComposer}
       onRefresh={loadDashboard}
       pullToRefreshDisabled={pullToRefreshDisabled}
+      reviewQueueCount={reviewQueueCount}
+      reviewQueueOverdueCount={reviewQueueOverdueCount}
       previewColumn={
         section === 'composer' && !isMobile ? (
           <div className="preview-content">

@@ -15,3 +15,10 @@ export function useReviewQueue(teamId: string) {
     refetchInterval: 30_000,
   })
 }
+
+export function useReviewQueueCount(teamId: string) {
+  const { data } = useReviewQueue(teamId)
+  const count = data?.length ?? 0
+  const overdueCount = data?.filter((item) => item.isOverdue).length ?? 0
+  return { count, overdueCount, hasPending: count > 0 }
+}

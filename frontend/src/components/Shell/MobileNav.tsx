@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 
 import { CONFIG_NAV_DEF, localizeNav, MAIN_NAV_DEF, MORE_NAV_DEF, WORKSPACE_NAV_DEF } from '../../i18n/nav'
 import type { AppSection, TeamRecord, UserRecord } from '../../types'
+import { NavReviewCount, NavReviewIcon } from './NavReviewIndicator'
 
 interface BottomNavProps {
   currentSection: AppSection
@@ -63,6 +64,8 @@ interface MobileDrawerProps {
   setSection: (section: AppSection) => void
   teams: TeamRecord[]
   selectedTeamId: string
+  reviewQueueCount?: number
+  reviewQueueOverdueCount?: number
   onSelectTeam: (id: string) => void
   user: UserRecord | null
   onSignOut: () => void
@@ -74,7 +77,9 @@ export function MobileDrawer({
   currentSection, 
   setSection, 
   teams, 
-  selectedTeamId, 
+  selectedTeamId,
+  reviewQueueCount = 0,
+  reviewQueueOverdueCount = 0,
   onSelectTeam,
   user,
   onSignOut
@@ -184,8 +189,18 @@ export function MobileDrawer({
                       onOpenChange(false)
                     }}
                   >
-                    <item.icon size={18} />
+                    <NavReviewIcon
+                      sectionId={item.id}
+                      icon={item.icon}
+                      count={reviewQueueCount}
+                      overdueCount={reviewQueueOverdueCount}
+                    />
                     <span className="drawer-item-label">{item.label}</span>
+                    <NavReviewCount
+                      sectionId={item.id}
+                      count={reviewQueueCount}
+                      overdueCount={reviewQueueOverdueCount}
+                    />
                   </button>
                 ))}
                 {teams.find(t => t.id === selectedTeamId)?.isAiEnabled && (

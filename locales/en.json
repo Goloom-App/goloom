@@ -14,6 +14,7 @@
       "recurring": "Recurring",
       "rssFeeds": "RSS Feeds",
       "reviewQueue": "Review",
+      "reviewQueuePending": "{{count}} pending in review queue",
       "archive": "Archive",
       "aiProfile": "AI Profile",
       "aiCampaigns": "Campaign Formats",

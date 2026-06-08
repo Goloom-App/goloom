@@ -4,12 +4,15 @@ import { AI_SERVICE_NAV_DEF, CONFIG_NAV_DEF, localizeNav, MAIN_NAV_DEF, WORKSPAC
 import type { AppSection, TeamRecord } from '../../types'
 import { LogOut, Plus, ChevronDown } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { NavReviewCount, NavReviewIcon } from './NavReviewIndicator'
 
 interface SidebarProps {
   currentSection: AppSection
   setSection: (section: AppSection) => void
   teams: TeamRecord[]
   selectedTeamId: string
+  reviewQueueCount?: number
+  reviewQueueOverdueCount?: number
   onSelectTeam: (id: string) => void
   onSignOut: () => void
   openComposer: () => void
@@ -19,7 +22,9 @@ export function Sidebar({
   currentSection, 
   setSection, 
   teams, 
-  selectedTeamId, 
+  selectedTeamId,
+  reviewQueueCount = 0,
+  reviewQueueOverdueCount = 0,
   onSelectTeam,
   onSignOut,
   openComposer
@@ -103,8 +108,18 @@ export function Sidebar({
                 className={`sidebar-nav-item ${currentSection === item.id ? 'sidebar-nav-item--active' : ''}`}
                 onClick={() => setSection(item.id)}
               >
-                <item.icon size={18} />
-                <span>{item.label}</span>
+                <NavReviewIcon
+                  sectionId={item.id}
+                  icon={item.icon}
+                  count={reviewQueueCount}
+                  overdueCount={reviewQueueOverdueCount}
+                />
+                <span className="sidebar-nav-item__label">{item.label}</span>
+                <NavReviewCount
+                  sectionId={item.id}
+                  count={reviewQueueCount}
+                  overdueCount={reviewQueueOverdueCount}
+                />
               </button>
             ))}
           </div>
