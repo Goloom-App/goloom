@@ -107,9 +107,8 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
         type: 'profile_analysis',
         params: { post_count: postCount },
       })
-      const jobId = (response as { job_id?: string; jobId?: string }).job_id ?? response.jobId
-      if (jobId) {
-        setPendingReviewJobId(jobId)
+      if (response.jobId) {
+        setPendingReviewJobId(response.jobId)
       }
       setStatusMessage(`Analysis started for last ${postCount} posts`)
     } catch (err) {

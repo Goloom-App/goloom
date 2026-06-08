@@ -73,6 +73,9 @@ export function ComposerAIAssist({
           target_account_ids: draft.targetAccountIds,
         },
       })
+      if (!response.jobId?.trim()) {
+        throw new Error('AI job id missing from trigger response')
+      }
       const job = await waitForAIJob(teamId, response.jobId)
       const content = typeof job.result?.content === 'string' ? job.result.content : ''
       if (!content.trim()) {

@@ -1,5 +1,5 @@
 import i18n from './i18n'
-import type { ProviderName } from './types'
+import type { AITriggerResponse, ProviderName } from './types'
 
 export interface ApiClientOptions {
   baseUrl: string
@@ -329,7 +329,7 @@ export interface BackendAIJob {
 }
 
 export interface BackendAITriggerResponse {
-  jobId: string
+  job_id: string
   status: 'pending' | 'processing' | 'completed' | 'failed'
 }
 
@@ -1092,7 +1092,10 @@ export function createApiClient(options: ApiClientOptions) {
         method: 'POST',
         headers: buildHeaders(options.token),
         body: JSON.stringify({ type, params }),
-      })
+      }).then((raw) => ({
+        jobId: raw.job_id,
+        status: raw.status,
+      }) satisfies AITriggerResponse)
     },
     getAIJob(teamID: string, jobID: string) {
       return request<BackendAIJob>(options, `/v1/teams/${teamID}/ai-jobs/${jobID}`, {
