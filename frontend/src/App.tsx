@@ -23,13 +23,11 @@ import { defaultAccountConnectDraft, type AccountConnectDraft } from './views/ac
 import { AdminView } from './views/admin/AdminView'
 import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admin/adminTypes'
 import { MediaLibraryView } from './views/media/MediaLibraryView'
-import { RecurringPostsView } from './views/recurring/RecurringPostsView'
 import { SettingsView } from './views/settings/SettingsView'
 import { TeamProfileView } from './views/ai/TeamProfileView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
 import { AIGenerateView } from './views/ai/AIGenerateView'
-import { ProactiveTriggersView } from './views/ai/ProactiveTriggersView'
-import { RSSFeedsView } from './views/rss/RSSFeedsView'
+import { AutomationView } from './views/automation/AutomationView'
 import { ReviewQueueView } from './views/review/ReviewQueueView'
 import { useReviewQueueCount } from './hooks/useReviewQueue'
 import {
@@ -1885,18 +1883,14 @@ function App() {
           />
         )}
 
-        {section === 'recurringPosts' && api && effectiveSelectedTeamId ? (
-          <RecurringPostsView
-            teamId={effectiveSelectedTeamId}
+        {section === 'automation' && selectedTeam && api ? (
+          <AutomationView
+            team={selectedTeam}
             api={api}
             accounts={teamAccounts}
             canEdit={canEditScheduledPosts}
             onStatus={(msg) => setStatusMessage(msg)}
           />
-        ) : null}
-
-        {section === 'rssFeeds' && selectedTeam ? (
-          <RSSFeedsView team={selectedTeam} accounts={teamAccounts} canEdit={canEditScheduledPosts} />
         ) : null}
 
         {section === 'reviewQueue' && selectedTeam && api ? (
@@ -2286,10 +2280,6 @@ function App() {
             accounts={teamAccounts}
             onEditInComposer={openComposerFromGeneratedContent}
           />
-        )}
-
-        {section === 'aiProactive' && selectedTeam && (
-          <ProactiveTriggersView team={selectedTeam} />
         )}
 
         {section === 'admin' && principalUser?.globalRole === 'admin' && (

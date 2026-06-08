@@ -4,8 +4,8 @@ import { signIn } from './helpers'
 test.describe('recurring posts form', () => {
   test.beforeEach(async ({ page }) => {
     await signIn(page)
-    await page.getByRole('button', { name: /recurring|wiederkehrend/i }).click()
-    await expect(page.getByRole('heading', { level: 1, name: /recurring posts|wiederkehrend/i })).toBeVisible()
+    await page.getByRole('button', { name: /^Automation$/i }).click()
+    await expect(page.getByTestId('automation-view')).toBeVisible()
   })
 
   test('renders kind selector with weekly/monthly options', async ({ page }) => {

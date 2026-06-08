@@ -11,8 +11,7 @@ const sectionKeys: Record<AppSection, string> = {
   mediaLibrary: 'section.mediaLibrary',
   management: 'section.management',
   teams: 'section.teams',
-  recurringPosts: 'section.recurringPosts',
-  rssFeeds: 'section.rssFeeds',
+  automation: 'section.automation',
   reviewQueue: 'section.reviewQueue',
   accounts: 'section.accounts',
   composer: 'section.composer',
@@ -21,7 +20,6 @@ const sectionKeys: Record<AppSection, string> = {
   aiProfile: 'section.aiProfile',
   aiCampaigns: 'section.aiCampaigns',
   aiGenerate: 'section.aiGenerate',
-  aiProactive: 'section.aiProactive',
 }
 
 export function sectionHeading(t: TFunction, section: AppSection): string {

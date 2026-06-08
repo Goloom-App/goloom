@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
 import { translateApiError } from '../../i18n/translateApiError'
-import type { AccountRecord } from '../../types'
+import type { AccountRecord, AutomationOutputMode } from '../../types'
 import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
 import { OccurrencePreview, computeOccurrences } from './OccurrencePreview'
 
@@ -64,12 +64,14 @@ export function RecurringPostsView({
   accounts,
   canEdit,
   onStatus,
+  team,
 }: {
   teamId: string
   api: Api
   accounts: AccountRecord[]
   canEdit: boolean
   onStatus: (msg: string | null) => void
+  team?: { isAiEnabled?: boolean }
 }) {
   const { t } = useTranslation()
   const [items, setItems] = useState<BackendPostTemplate[]>([])
@@ -85,6 +87,16 @@ export function RecurringPostsView({
   const [isAnnouncement, setIsAnnouncement] = useState(false)
   const [announceTemplateId, setAnnounceTemplateId] = useState('')
   const [announceDaysBefore, setAnnounceDaysBefore] = useState(2)
+  const [aiEnhanceEnabled, setAiEnhanceEnabled] = useState(false)
+  const [outputMode, setOutputMode] = useState<AutomationOutputMode>('scheduled')
+  const [promptHint, setPromptHint] = useState('')
+  const [tonality, setTonality] = useState('')
+
+  const outputModeLabel: Record<AutomationOutputMode, string> = {
+    draft: t('rss.outputModeDraft', { defaultValue: 'Draft (review)' }),
+    scheduled: t('rss.outputModeScheduled', { defaultValue: 'Scheduled' }),
+    publish_now: t('rss.outputModePublishNow', { defaultValue: 'Publish now' }),
+  }
 
   const firstOccurrence = useMemo(() => {
     const occ = computeOccurrences(recState, 1)
@@ -117,6 +129,10 @@ export function RecurringPostsView({
     setIsAnnouncement(false)
     setAnnounceTemplateId('')
     setAnnounceDaysBefore(2)
+    setAiEnhanceEnabled(false)
+    setOutputMode('scheduled')
+    setPromptHint('')
+    setTonality('')
     setEditorOpen(true)
   }
 
@@ -137,6 +153,13 @@ export function RecurringPostsView({
       if (isAnnouncement && announceTemplateId) {
         payload.announces_template_id = announceTemplateId
         payload.announcement_days_before = announceDaysBefore
+      } else {
+        payload.output_mode = outputMode
+        if (team?.isAiEnabled) {
+          payload.ai_enhance_enabled = aiEnhanceEnabled
+          payload.prompt_hint = promptHint.trim()
+          payload.tonality = tonality.trim()
+        }
       }
       await api.createPostTemplate(teamId, payload)
       setEditorOpen(false)
@@ -318,6 +341,39 @@ export function RecurringPostsView({
             </div>
 
             <ContentPreview content={content} firstOccurrence={firstOccurrence} announceTemplate={isAnnouncement ? announceTemplateId : undefined} templates={items} />
+
+            {!isAnnouncement ? (
+              <>
+                <label className="field">
+                  <span>{t('rss.outputMode')}</span>
+                  <select value={outputMode} onChange={(e) => setOutputMode(e.target.value as AutomationOutputMode)}>
+                    <option value="draft">{outputModeLabel.draft}</option>
+                    <option value="scheduled">{outputModeLabel.scheduled}</option>
+                    <option value="publish_now">{outputModeLabel.publish_now}</option>
+                  </select>
+                </label>
+                {team?.isAiEnabled ? (
+                  <>
+                    <label className="field field--checkbox">
+                      <input type="checkbox" checked={aiEnhanceEnabled} onChange={(e) => setAiEnhanceEnabled(e.target.checked)} />
+                      <span>{t('rss.aiEnhanceEnabled')}</span>
+                    </label>
+                    {aiEnhanceEnabled ? (
+                      <>
+                        <label className="field">
+                          <span>{t('rss.aiPrompt')}</span>
+                          <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('rss.aiPromptPlaceholder')} />
+                        </label>
+                        <label className="field">
+                          <span>{t('rss.tonalityOverride')}</span>
+                          <input value={tonality} onChange={(e) => setTonality(e.target.value)} placeholder={t('rss.tonalityPlaceholder')} />
+                        </label>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            ) : null}
 
             <p className="hint">{t('common.targets')}</p>
             <div className="composer-destination-row">

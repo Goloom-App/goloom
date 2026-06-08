@@ -501,6 +501,10 @@ type PostTemplate struct {
 	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
 	TargetAccountIDs       []string            `json:"target_account_ids"`
 	Enabled                bool                `json:"enabled"`
+	AiEnhanceEnabled       bool                `json:"ai_enhance_enabled"`
+	OutputMode             AutomationOutputMode `json:"output_mode"`
+	PromptHint             string              `json:"prompt_hint"`
+	Tonality               string              `json:"tonality"`
 	NextMaterializeAt      *time.Time          `json:"next_materialize_at,omitempty"`
 	CounterNext            int                 `json:"counter_next"`
 	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
@@ -518,21 +522,29 @@ type CreatePostTemplateInput struct {
 	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
 	TargetAccountIDs       []string            `json:"target_account_ids"`
 	Enabled                *bool               `json:"enabled,omitempty"`
+	AiEnhanceEnabled       *bool               `json:"ai_enhance_enabled,omitempty"`
+	OutputMode             AutomationOutputMode `json:"output_mode,omitempty"`
+	PromptHint             string              `json:"prompt_hint,omitempty"`
+	Tonality               string              `json:"tonality,omitempty"`
 	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
 	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
 }
 
 type UpdatePostTemplateInput struct {
-	Title                  *string             `json:"title,omitempty"`
-	Content                *string             `json:"content,omitempty"`
-	RecurrenceJSON         *string             `json:"recurrence_json,omitempty"`
-	Visibility             *string             `json:"visibility,omitempty"`
-	MediaIDs               *[]string           `json:"media_ids,omitempty"`
-	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs       *[]string           `json:"target_account_ids,omitempty"`
-	Enabled                *bool               `json:"enabled,omitempty"`
-	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
-	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
+	Title                  *string              `json:"title,omitempty"`
+	Content                *string              `json:"content,omitempty"`
+	RecurrenceJSON         *string              `json:"recurrence_json,omitempty"`
+	Visibility             *string              `json:"visibility,omitempty"`
+	MediaIDs               *[]string            `json:"media_ids,omitempty"`
+	MediaExcludeByAccount  map[string][]string  `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs       *[]string            `json:"target_account_ids,omitempty"`
+	Enabled                *bool                `json:"enabled,omitempty"`
+	AiEnhanceEnabled       *bool                `json:"ai_enhance_enabled,omitempty"`
+	OutputMode             *AutomationOutputMode `json:"output_mode,omitempty"`
+	PromptHint             *string              `json:"prompt_hint,omitempty"`
+	Tonality               *string              `json:"tonality,omitempty"`
+	AnnouncesTemplateID    *string              `json:"announces_template_id,omitempty"`
+	AnnouncementDaysBefore *int                 `json:"announcement_days_before,omitempty"`
 }
 
 // EngagementHourBucket aggregates engagement score by UTC hour-of-day for posted content.

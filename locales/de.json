@@ -11,8 +11,7 @@
       "analytics": "Analysen",
       "team": "Team",
       "accounts": "Konten",
-      "recurring": "Wiederkehrend",
-      "rssFeeds": "RSS-Feeds",
+      "automation": "Automation",
       "reviewQueue": "Review",
       "reviewQueuePending": "{{count}} ausstehend in der Review-Warteschlange",
       "archive": "Archiv",
@@ -33,8 +32,7 @@
       "mediaLibrary": "Medienbibliothek",
       "management": "Verwaltung",
       "teams": "Team-Einstellungen",
-      "recurringPosts": "Wiederkehrende Beiträge",
-      "rssFeeds": "RSS-Feeds",
+      "automation": "Automation",
       "reviewQueue": "Review-Warteschlange",
       "accounts": "Konten",
       "composer": "Editor",
@@ -479,6 +477,12 @@
       "discard": "Verwerfen",
       "discardConfirm": "Diesen Entwurf verwerfen?",
       "actionFailed": "Review-Aktion fehlgeschlagen."
+    },
+    "automation": {
+      "hint": "Zeitbasierte wiederkehrende Beiträge und RSS-Feeds an einem Ort. Optionale KI-Nachbearbeitung nutzt dieselbe Voice Engine wie der Composer.",
+      "tabs": "Automation-Typen",
+      "tabRecurring": "Zeitbasiert",
+      "tabRss": "RSS-Feeds"
     },
     "rss": {
       "title": "RSS-Feeds",

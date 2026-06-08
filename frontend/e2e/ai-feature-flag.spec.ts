@@ -26,7 +26,6 @@ test.describe.serial('ai feature flag', () => {
     await expect(page.getByRole('button', { name: 'AI Profile' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Campaign Formats' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Generate Post' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Proactive Triggers' })).toHaveCount(0)
 
     // Non-AI nav items should still be visible
     await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toBeVisible()
@@ -49,6 +48,5 @@ test.describe.serial('ai feature flag', () => {
     await expect(page.getByRole('button', { name: 'AI Profile' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Campaign Formats' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Generate Post' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Proactive Triggers' })).toBeVisible()
   })
 })

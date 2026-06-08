@@ -29,7 +29,6 @@ class JobRouter:
         self.workers = {
             "campaign_autopilot": campaign_worker_cls(self.adapter, self.goloom_client, self.prompt_builder),
             "voice_engine": voice_worker,
-            "proactive_trigger": voice_worker,
             "profile_analysis": ProfileAnalysisWorker(self.adapter, self.goloom_client, self.prompt_builder),
         }
 

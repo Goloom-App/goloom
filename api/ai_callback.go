@@ -70,8 +70,8 @@ func (a *API) handleAICallback(w http.ResponseWriter, r *http.Request) {
 	if input.Status == domain.AIJobStatusCompleted {
 		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
 			a.finishRSSAutomationFromAI(r, job, input.Result, meta)
-		} else if job.Type == domain.AIJobTypeProactiveTrigger {
-			a.autoCreateDraftFromCallbackResult(r, job, input.Result)
+		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			a.finishRecurringAutomationFromAI(r, job, input.Result, meta)
 		} else {
 			profile, profErr := a.store.GetTeamProfile(r.Context(), job.TeamID)
 			if profErr == nil && profile.AutoPublishEnabled {

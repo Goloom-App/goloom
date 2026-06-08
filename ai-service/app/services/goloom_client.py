@@ -4,8 +4,6 @@ from typing import Any
 
 import httpx
 
-from app.proactive_defaults import default_proactive_settings
-
 
 class GoloomClient:
     def __init__(
@@ -55,20 +53,6 @@ class GoloomClient:
             f"/v1/teams/{team_id}/ai-trigger",
             json={"type": job_type, "params": params},
         )
-
-    async def list_ai_enabled_teams(self) -> list:
-        payload = await self._request("GET", "/v1/admin/ai-enabled-teams")
-        return payload.get("items", [])
-
-    async def get_proactive_settings(self, team_id: str) -> dict:
-        try:
-            payload = await self._request("GET", f"/v1/teams/{team_id}/proactive-settings")
-            if isinstance(payload, dict):
-                return payload
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code != 404:
-                raise
-        return default_proactive_settings()
 
     async def update_team_profile(self, team_id: str, profile: dict) -> dict:
         # Read current to preserve auto_publish_enabled

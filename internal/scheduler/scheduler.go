@@ -688,21 +688,50 @@ func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTem
 }
 
 func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time) error {
+	counterVal := tmpl.CounterNext
+	expandedContent := domain.ExpandDynamicVariables(tmpl.Content, scheduledAt, &counterVal, nil)
+	outputMode := tmpl.OutputMode
+	if outputMode == "" {
+		outputMode = domain.AutomationOutputScheduled
+	} else {
+		outputMode = domain.NormalizeAutomationOutputMode(string(outputMode))
+	}
+	var at time.Time
+	var draft bool
+	switch outputMode {
+	case domain.AutomationOutputDraft:
+		at, draft = rssOutputSchedule(outputMode, scheduledAt)
+	case domain.AutomationOutputPublishNow:
+		at = time.Now().UTC()
+		draft = false
+	default:
+		at = scheduledAt.UTC()
+		draft = false
+	}
+
+	if s.shouldEnhanceRecurringWithAI(ctx, *tmpl) {
+		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, at, draft); err != nil {
+			s.logger.WarnContext(ctx, "recurring materialize: ai unavailable, using template", "template_id", tmpl.ID, "error", err)
+		} else {
+			return nil
+		}
+	}
+
 	authorID := tmpl.AuthorUserID
 	tplID := tmpl.ID
-	counterVal := tmpl.CounterNext
 	input := domain.CreatePostInput{
 		Title:                 tmpl.Title,
 		Content:               tmpl.Content,
-		ScheduledAt:           scheduledAt,
+		ScheduledAt:           at,
 		TargetAccounts:        tmpl.TargetAccountIDs,
 		Visibility:            tmpl.Visibility,
 		MediaIDs:              tmpl.MediaIDs,
 		MediaExcludeByAccount: tmpl.MediaExcludeByAccount,
-		Draft:                 false,
+		Draft:                 draft,
 		AuthorUserID:          &authorID,
 		PostTemplateID:        &tplID,
 		TemplateCounter:       &counterVal,
+		Source:                domain.PostSourceAutomation,
 	}
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
 	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {

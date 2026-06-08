@@ -4,7 +4,6 @@ import {
   mapAIJob,
   mapAIServiceConfig,
   mapCampaignFormat,
-  mapProactiveTriggerSettings,
   mapRSSFeedConfig,
   mapStyleExample,
   mapTeamProfile,
@@ -290,30 +289,6 @@ export function useUpsertAIServiceConfig() {
     }) => mapAIServiceConfig(await getApiClient().upsertAIServiceConfig(teamId, data)),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: [...teamKey(variables.teamId), 'ai-service-config'] })
-    },
-  })
-}
-
-export function useProactiveSettings(teamId: string) {
-  return useQuery({
-    queryKey: [...teamKey(teamId), 'proactive-settings'],
-    queryFn: async () => mapProactiveTriggerSettings(await getApiClient().getProactiveSettings(teamId)),
-    enabled: Boolean(teamId),
-  })
-}
-
-export function useUpsertProactiveSettings() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async ({
-      teamId,
-      data,
-    }: {
-      teamId: string
-      data: Parameters<ApiClient['upsertProactiveSettings']>[1]
-    }) => mapProactiveTriggerSettings(await getApiClient().upsertProactiveSettings(teamId, data)),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: [...teamKey(variables.teamId), 'proactive-settings'] })
     },
   })
 }

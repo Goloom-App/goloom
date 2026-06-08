@@ -54,6 +54,10 @@ export interface BackendPostTemplate {
   media_exclude_by_account?: Record<string, string[]>
   target_account_ids: string[]
   enabled: boolean
+  ai_enhance_enabled?: boolean
+  output_mode?: 'draft' | 'scheduled' | 'publish_now'
+  prompt_hint?: string
+  tonality?: string
   next_materialize_at?: string
   counter_next: number
   announces_template_id?: string
@@ -881,6 +885,10 @@ export function createApiClient(options: ApiClientOptions) {
         media_exclude_by_account?: Record<string, string[]>
         target_account_ids: string[]
         enabled?: boolean
+        ai_enhance_enabled?: boolean
+        output_mode?: 'draft' | 'scheduled' | 'publish_now'
+        prompt_hint?: string
+        tonality?: string
         announces_template_id?: string
         announcement_days_before?: number
       },

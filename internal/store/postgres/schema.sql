@@ -383,6 +383,11 @@ create index if not exists idx_post_templates_due on post_templates (enabled, ne
 alter table post_templates add column if not exists announces_template_id uuid references post_templates(id) on delete set null;
 alter table post_templates add column if not exists announcement_days_before integer;
 
+alter table post_templates add column if not exists ai_enhance_enabled boolean not null default false;
+alter table post_templates add column if not exists output_mode text not null default 'scheduled';
+alter table post_templates add column if not exists prompt_hint text not null default '';
+alter table post_templates add column if not exists tonality text not null default '';
+
 create table if not exists post_template_skips (
     template_id uuid not null references post_templates(id) on delete cascade,
     occurrence_at timestamptz not null,

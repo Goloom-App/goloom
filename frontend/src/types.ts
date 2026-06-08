@@ -7,8 +7,7 @@ export type AppSection =
   | 'mediaLibrary'
   | 'management'
   | 'teams'
-  | 'recurringPosts'
-  | 'rssFeeds'
+  | 'automation'
   | 'reviewQueue'
   | 'accounts'
   | 'composer'
@@ -17,7 +16,6 @@ export type AppSection =
   | 'aiProfile'
   | 'aiCampaigns'
   | 'aiGenerate'
-  | 'aiProactive'
 
 export type CalendarViewMode = 'month' | 'week' | 'day'
 
