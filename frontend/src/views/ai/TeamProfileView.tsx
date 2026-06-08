@@ -13,7 +13,8 @@ import {
   useCancelAIJob,
 } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
-import type { TeamRecord } from '../../types'
+import { ProfileAnalysisReviewDialog } from '../../components/ai/ProfileAnalysisReviewDialog'
+import type { AIJob, TeamRecord } from '../../types'
 
 interface TeamProfileViewProps {
   team: TeamRecord
@@ -56,11 +57,24 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reviewJob, setReviewJob] = useState<AIJob | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [pendingReviewJobId, setPendingReviewJobId] = useState<string | null>(null)
 
   const hasActiveAnalysis = useMemo(
     () => aiJobs?.some((j) => j.type === 'profile_analysis' && (j.status === 'pending' || j.status === 'processing')),
     [aiJobs],
   )
+
+  useEffect(() => {
+    if (!pendingReviewJobId || !aiJobs) return
+    const job = aiJobs.find((item) => item.id === pendingReviewJobId)
+    if (job?.status === 'completed' && job.result && typeof job.result.proposed_profile === 'object') {
+      setReviewJob(job)
+      setReviewOpen(true)
+      setPendingReviewJobId(null)
+    }
+  }, [aiJobs, pendingReviewJobId])
 
   useEffect(() => {
     if (profile) {
@@ -88,15 +102,58 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
     setError(null)
     setStatusMessage(null)
     try {
-      await triggerJob.mutateAsync({
+      const response = await triggerJob.mutateAsync({
         teamId: team.id,
         type: 'profile_analysis',
         params: { post_count: postCount },
       })
+      const jobId = (response as { job_id?: string; jobId?: string }).job_id ?? response.jobId
+      if (jobId) {
+        setPendingReviewJobId(jobId)
+      }
       setStatusMessage(`Analysis started for last ${postCount} posts`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start analysis')
     }
+  }
+
+  const handleApplyAnalysis = async ({
+    profileFields,
+    styleExamples,
+  }: {
+    profileFields: {
+      tonality?: string
+      formattingRules?: string[]
+      bannedWords?: string[]
+      maxHashtags?: number
+      preferredLanguage?: string
+    }
+    styleExamples: Array<{ platform: string; content: string; notes?: string }>
+  }) => {
+    await upsertProfile.mutateAsync({
+      teamId: team.id,
+      data: {
+        style_metadata: {
+          tonality: profileFields.tonality ?? tonality,
+          formatting_rules: profileFields.formattingRules ?? formattingRules,
+          banned_words: profileFields.bannedWords ?? bannedWords,
+          max_hashtags: profileFields.maxHashtags ?? maxHashtags,
+          preferred_language: profileFields.preferredLanguage ?? preferredLanguage,
+        },
+        auto_publish_enabled: autoPublishEnabled,
+      },
+    })
+    for (const example of styleExamples) {
+      await createExample.mutateAsync({
+        teamId: team.id,
+        data: {
+          platform: example.platform,
+          content: example.content,
+          notes: example.notes || 'Imported from profile analysis',
+        },
+      })
+    }
+    setStatusMessage('Profile analysis applied')
   }
 
   const handleSaveProfile = async () => {
@@ -386,6 +443,18 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
                   )}
                 </div>
                 <div className="flex-row--center gap-2">
+                  {job.status === 'completed' && job.result && typeof job.result.proposed_profile === 'object' && (
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => {
+                        setReviewJob(job)
+                        setReviewOpen(true)
+                      }}
+                    >
+                      Review
+                    </button>
+                  )}
                   {job.status === 'completed' ? (
                     <Check size={14} style={{ color: 'var(--success)' }} />
                   ) : (
@@ -502,6 +571,14 @@ export function TeamProfileView({ team }: TeamProfileViewProps) {
           )}
         </div>
       </div>
+
+      <ProfileAnalysisReviewDialog
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        profile={profile}
+        job={reviewJob ?? undefined}
+        onApply={handleApplyAnalysis}
+      />
     </div>
   )
 }

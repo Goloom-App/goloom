@@ -670,18 +670,59 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		FROM scheduled_posts p
 		LEFT JOIN scheduled_post_targets t ON t.post_id = p.id
-		WHERE p.team_id = $1
+		WHERE p.team_id = $1 AND p.status = 'posted' AND trim(p.content) <> ''
 		GROUP BY p.id
 		ORDER BY p.scheduled_at DESC
-		LIMIT 5
+		LIMIT $2
 	`
-	recentPosts, err := s.listPosts(ctx, recentPostsQuery, teamID)
+	recentPosts, err := s.listPosts(ctx, recentPostsQuery, teamID, domain.AIContextRecentPostsLimit)
 	if err != nil {
 		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list recent posts: %w", err)
 	}
 	if recentPosts == nil {
 		recentPosts = []domain.ScheduledPost{}
 	}
+
+	const upcomingPostsQuery = `
+		SELECT p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
+		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
+		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
+		       p.post_template_id::text, p.template_counter,
+		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
+		FROM scheduled_posts p
+		LEFT JOIN scheduled_post_targets t ON t.post_id = p.id
+		WHERE p.team_id = $1 AND p.status IN ('pending', 'draft') AND p.scheduled_at >= now()
+		GROUP BY p.id
+		ORDER BY p.scheduled_at ASC
+		LIMIT $2
+	`
+	upcomingPosts, err := s.listPosts(ctx, upcomingPostsQuery, teamID, domain.AIContextUpcomingPostsLimit)
+	if err != nil {
+		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list upcoming posts: %w", err)
+	}
+	if upcomingPosts == nil {
+		upcomingPosts = []domain.ScheduledPost{}
+	}
+
+	accounts, err := s.ListTeamAccounts(ctx, teamID)
+	if err != nil {
+		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list accounts: %w", err)
+	}
+	accountSummaries := make([]domain.AIAccountSummary, 0, len(accounts))
+	for _, acc := range accounts {
+		accountSummaries = append(accountSummaries, domain.AIAccountSummary{
+			ID:       acc.ID,
+			Provider: acc.Provider,
+			Username: acc.Username,
+			MaxChars: domain.MaxCharsForProvider(acc.Provider, acc.MaxCharsOverride),
+		})
+	}
+
+	engagementHours, err := s.GetTeamEngagementHourHistogram(ctx, teamID, 90)
+	if err != nil {
+		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: engagement hours: %w", err)
+	}
+
 	if formats == nil {
 		formats = []domain.CampaignFormat{}
 	}
@@ -695,6 +736,9 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		CampaignFormats: formats,
 		StyleExamples:   examples,
 		RecentPosts:     recentPosts,
+		Accounts:        accountSummaries,
+		UpcomingPosts:   upcomingPosts,
+		EngagementHours: engagementHours,
 	}, nil
 }
 

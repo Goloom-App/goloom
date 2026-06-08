@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Check, Loader2, AlertCircle, Play, Save, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { CalendarClock, Check, Loader2, Play, Save, X } from 'lucide-react'
 
 import {
   useTriggerAIJob,
@@ -9,7 +9,8 @@ import {
   useCancelAIJob,
 } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
-import type { TeamRecord, AccountRecord, AIJobType, AIJob } from '../../types'
+import { DestinationPicker } from '../../components/ai/DestinationPicker'
+import type { TeamRecord, AccountRecord, AIJob } from '../../types'
 import { createApiClient } from '../../api'
 
 interface AIGenerateViewProps {
@@ -23,21 +24,25 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
   const { data: jobs } = useAIJobs(team.id)
   const triggerJob = useTriggerAIJob()
   const cancelJob = useCancelAIJob()
-  
+
   useAIJobStream(team.id)
 
-  const [jobType, setJobType] = useState<AIJobType>('voice_engine')
-  
-  const [platform, setPlatform] = useState('mastodon')
-  const [promptHint, setPromptHint] = useState('')
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
-  
+  const [prompt, setPrompt] = useState('')
   const [campaignFormatId, setCampaignFormatId] = useState('')
-  const [targetDate, setTargetDate] = useState('')
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savingDraftId, setSavingDraftId] = useState<string | null>(null)
+  const [schedulingId, setSchedulingId] = useState<string | null>(null)
+
+  const activeJobs = jobs?.filter((j) => j.status === 'pending' || j.status === 'processing') || []
+  const recentJobs = jobs?.filter((j) => j.type === 'voice_engine' && (j.status === 'completed' || j.status === 'failed')).slice(0, 10) || []
+
+  const latestCompleted = useMemo(
+    () => recentJobs.find((job) => job.status === 'completed' && typeof job.result?.content === 'string'),
+    [recentJobs],
+  )
 
   if (!team.isAiEnabled) {
     return (
@@ -47,52 +52,36 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
     )
   }
 
+  const toggleAccount = (accountId: string) => {
+    setSelectedAccounts((prev) =>
+      prev.includes(accountId) ? prev.filter((id) => id !== accountId) : [...prev, accountId],
+    )
+  }
+
   const handleTrigger = async () => {
     setError(null)
     setStatusMessage(null)
-    
+
+    if (!prompt.trim()) {
+      setError('Prompt is required')
+      return
+    }
+    if (selectedAccounts.length === 0) {
+      setError('Select at least one target account')
+      return
+    }
+
     try {
-      if (jobType === 'voice_engine') {
-        if (!promptHint.trim()) {
-          setError('Prompt hint is required')
-          return
-        }
-        if (selectedAccounts.length === 0) {
-          setError('Select at least one target account')
-          return
-        }
-        
-        await triggerJob.mutateAsync({
-          teamId: team.id,
-          type: 'voice_engine',
-          params: {
-            platform,
-            prompt_hint: promptHint,
-            target_account_ids: selectedAccounts,
-          }
-        })
-      } else if (jobType === 'campaign_autopilot') {
-        if (!campaignFormatId) {
-          setError('Select a campaign format')
-          return
-        }
-        if (!targetDate) {
-          setError('Target date is required')
-          return
-        }
-        
-        await triggerJob.mutateAsync({
-          teamId: team.id,
-          type: 'campaign_autopilot',
-          params: {
-            campaign_format_id: campaignFormatId,
-            target_date: targetDate,
-          }
-        })
-      }
-      
-      setStatusMessage('AI Job triggered successfully')
-      setPromptHint('')
+      await triggerJob.mutateAsync({
+        teamId: team.id,
+        type: 'voice_engine',
+        params: {
+          prompt_hint: prompt.trim(),
+          target_account_ids: selectedAccounts,
+          ...(campaignFormatId ? { campaign_format_id: campaignFormatId } : {}),
+        },
+      })
+      setStatusMessage('Generation started')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to trigger AI job')
     }
@@ -109,54 +98,64 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
     }
   }
 
-  const handleSaveDraft = async (job: AIJob) => {
-    if (!job.result || !job.result.content) return
-    
-    setSavingDraftId(job.id)
+  const getApi = () => {
+    const raw = window.localStorage.getItem('goloom-ui-settings')
+    let token = ''
+    let baseUrl = window.location.origin
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      token = parsed.general?.bearerToken || ''
+      baseUrl = parsed.general?.apiBaseUrl || baseUrl
+    }
+    return createApiClient({ baseUrl, token })
+  }
+
+  const saveGeneratedPost = async (job: AIJob, schedule: boolean) => {
+    if (!job.result?.content) return
+
+    if (schedule) {
+      setSchedulingId(job.id)
+    } else {
+      setSavingDraftId(job.id)
+    }
     setError(null)
-    
+
     try {
-      const raw = window.localStorage.getItem('goloom-ui-settings')
-      let token = ''
-      let baseUrl = window.location.origin
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        token = parsed.general?.bearerToken || ''
-        baseUrl = parsed.general?.apiBaseUrl || baseUrl
-      }
-      
-      const api = createApiClient({ baseUrl, token })
-      
+      const api = getApi()
+      const scheduledAt =
+        typeof job.result.scheduled_at === 'string' && job.result.scheduled_at
+          ? job.result.scheduled_at
+          : undefined
+      const overrides =
+        job.result.account_content_override && typeof job.result.account_content_override === 'object'
+          ? (job.result.account_content_override as Record<string, string>)
+          : undefined
+
       await api.createAIDraft(team.id, {
-        content: job.result.content,
-        account_ids: job.payload.target_account_ids || [],
-        ai_job_id: job.id
+        content: String(job.result.content),
+        account_ids: Array.isArray(job.payload?.target_account_ids)
+          ? (job.payload.target_account_ids as string[])
+          : selectedAccounts,
+        account_content_override: overrides,
+        scheduled_at: scheduledAt,
+        schedule,
+        ai_job_id: job.id,
       })
-      
-      setStatusMessage('Draft saved successfully')
+
+      setStatusMessage(schedule ? 'Post scheduled' : 'Draft saved')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save draft')
+      setError(err instanceof Error ? err.message : 'Failed to save post')
     } finally {
       setSavingDraftId(null)
+      setSchedulingId(null)
     }
   }
-
-  const toggleAccount = (accountId: string) => {
-    setSelectedAccounts(prev => 
-      prev.includes(accountId) 
-        ? prev.filter(id => id !== accountId)
-        : [...prev, accountId]
-    )
-  }
-
-  const activeJobs = jobs?.filter(j => j.status === 'pending' || j.status === 'processing') || []
-  const recentJobs = jobs?.filter(j => j.status === 'completed' || j.status === 'failed').slice(0, 10) || []
 
   return (
     <div className="two-column-detail" data-testid="ai-generate-view">
       <div className="glass-panel stack">
         <h2 className="section-card__title">Generate Post</h2>
-        <p className="hint">Use AI to generate content for your social media accounts.</p>
+        <p className="hint">Describe what you want to publish. The AI adapts the text per target account.</p>
 
         {(error || statusMessage) && (
           <div className="status-banner-panel" style={{ padding: '1rem', marginBottom: '1rem' }}>
@@ -165,102 +164,58 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
           </div>
         )}
 
+        <label className="field">
+          <span>Prompt</span>
+          <textarea
+            data-testid="gen-prompt"
+            rows={6}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="What should the post be about?"
+          />
+        </label>
+
+        <label className="field">
+          <span>Campaign (optional)</span>
+          <select
+            data-testid="gen-campaign"
+            value={campaignFormatId}
+            onChange={(e) => setCampaignFormatId(e.target.value)}
+          >
+            <option value="">No campaign</option>
+            {(formats ?? []).filter((f) => f.isActive).map((format) => (
+              <option key={format.id} value={format.id}>
+                {format.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <div className="field">
-          <span>Generation Type</span>
-          <div className="flex-row--center gap-2">
-            <button 
-              data-testid="gen-type-voice"
-              className={`btn ${jobType === 'voice_engine' ? 'btn--primary' : 'btn--secondary'}`}
-              onClick={() => setJobType('voice_engine')}
-            >
-              Voice Engine
-            </button>
-            <button 
-              data-testid="gen-type-campaign"
-              className={`btn ${jobType === 'campaign_autopilot' ? 'btn--primary' : 'btn--secondary'}`}
-              onClick={() => setJobType('campaign_autopilot')}
-            >
-              Campaign Auto-Pilot
-            </button>
-          </div>
+          <span>Target accounts</span>
+          <DestinationPicker
+            accounts={accounts}
+            selectedIds={selectedAccounts}
+            onToggle={toggleAccount}
+            testIdPrefix="gen-dest"
+          />
         </div>
-
-        {jobType === 'voice_engine' && (
-          <div className="stack stack--sm mt-4">
-            <label className="field">
-              <span>Platform Context</span>
-              <select data-testid="gen-platform" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-                <option value="mastodon">Mastodon</option>
-                <option value="bluesky">Bluesky</option>
-                <option value="friendica">Friendica</option>
-                <option value="general">General</option>
-              </select>
-            </label>
-
-            <label className="field">
-              <span>Prompt Hint</span>
-              <textarea
-                data-testid="gen-prompt"
-                rows={4}
-                value={promptHint}
-                onChange={(e) => setPromptHint(e.target.value)}
-                placeholder="What should the post be about?"
-              />
-            </label>
-
-            <div className="field">
-              <span>Target Accounts</span>
-              <div className="flex-row--wrap gap-2">
-                {accounts.map(account => (
-                  <button
-                    key={account.id}
-                    className={`badge ${selectedAccounts.includes(account.id) ? 'badge--primary' : 'badge--neutral'}`}
-                    onClick={() => toggleAccount(account.id)}
-                    style={{ cursor: 'pointer', border: 'none' }}
-                  >
-                    {account.name} ({account.provider})
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {jobType === 'campaign_autopilot' && (
-          <div className="stack stack--sm mt-4">
-            <label className="field">
-              <span>Campaign Format</span>
-              <select data-testid="gen-campaign-format" value={campaignFormatId} onChange={(e) => setCampaignFormatId(e.target.value)}>
-                <option value="">Select a format...</option>
-                {formats?.filter(f => f.isActive).map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>Target Date</span>
-              <input
-                data-testid="gen-target-date"
-                type="date"
-                value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-              />
-            </label>
-          </div>
-        )}
 
         <div className="mt-4">
           <button
             data-testid="gen-submit"
             className="btn btn--primary"
-            onClick={handleTrigger}
+            onClick={() => void handleTrigger()}
             disabled={triggerJob.isPending}
           >
             {triggerJob.isPending ? (
-              <><Loader2 size={16} className="spin" /> Generating...</>
+              <>
+                <Loader2 size={16} className="spin" /> Generating...
+              </>
             ) : (
-              <><Play size={16} /> Generate Post</>
+              <>
+                <Play size={16} /> Generate
+              </>
             )}
           </button>
         </div>
@@ -271,10 +226,10 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
           <div className="glass-panel stack" data-testid="gen-active-jobs">
             <h3 className="subsection-title">Active Jobs</h3>
             <div className="stack stack--sm">
-              {activeJobs.map(job => (
+              {activeJobs.map((job) => (
                 <div key={job.id} className="glass-panel glass-panel--compact flex-row--between" style={{ alignItems: 'center' }}>
                   <div>
-                    <strong>{job.type === 'voice_engine' ? 'Voice Engine' : 'Campaign Auto-Pilot'}</strong>
+                    <strong>Voice Engine</strong>
                     <p className="hint" style={{ fontSize: '0.8rem', margin: 0 }}>
                       {new Date(job.createdAt).toLocaleString()}
                     </p>
@@ -301,77 +256,122 @@ export function AIGenerateView({ team, accounts }: AIGenerateViewProps) {
           </div>
         )}
 
-        <div className="glass-panel stack" data-testid="gen-recent-jobs">
-          <h3 className="subsection-title">Recent Jobs</h3>
-          {recentJobs.length === 0 ? (
-            <p className="hint">No recent AI jobs.</p>
-          ) : (
-            <div className="stack stack--sm">
-              {recentJobs.map(job => (
-                <div key={job.id} className="glass-panel glass-panel--compact stack stack--sm">
-                  <div className="flex-row--between" style={{ alignItems: 'center' }}>
-                    <div>
-                      <strong>{job.type === 'voice_engine' ? 'Voice Engine' : 'Campaign Auto-Pilot'}</strong>
+        {(latestCompleted || recentJobs.length > 0) && (
+          <div className="glass-panel stack" data-testid="gen-recent-jobs">
+            <h3 className="subsection-title">Generated content</h3>
+            {(latestCompleted ? [latestCompleted] : recentJobs).map((job) => (
+              <div key={job.id} className="glass-panel glass-panel--compact stack stack--sm">
+                <div className="flex-row--between" style={{ alignItems: 'center' }}>
+                  <div>
+                    <p className="hint" style={{ fontSize: '0.8rem', margin: 0 }}>
+                      {new Date(job.createdAt).toLocaleString()}
+                    </p>
+                    {typeof job.result?.scheduled_at === 'string' && job.result.scheduled_at && (
                       <p className="hint" style={{ fontSize: '0.8rem', margin: 0 }}>
-                        {new Date(job.createdAt).toLocaleString()}
+                        Suggested slot: {new Date(job.result.scheduled_at).toLocaleString()}
                       </p>
-                    </div>
-                    <div className="flex-row--center gap-2">
-                      {job.status === 'completed' ? (
-                        <Check size={16} style={{ color: 'var(--success)' }} />
-                      ) : (
-                        <AlertCircle size={16} style={{ color: 'var(--danger)' }} />
-                      )}
-                      <span className={`badge ${job.status === 'completed' ? 'badge--success' : 'badge--danger'}`} style={{ textTransform: 'capitalize' }}>
-                        {job.status}
-                      </span>
-                    </div>
+                    )}
                   </div>
-                  
-                  {job.status === 'failed' && job.errorMessage && (
-                    <div className="status-banner__error" style={{ fontSize: '0.8rem', padding: '0.5rem' }}>
-                      {job.errorMessage}
-                    </div>
-                  )}
-                  
-                  {job.status === 'completed' && job.result && !!job.result.content && (
-                    <div className="mt-2">
-                      <div style={{ 
-                        background: 'var(--bg-secondary)', 
-                        padding: '0.75rem', 
+                  <span className={`badge ${job.status === 'completed' ? 'badge--success' : 'badge--danger'}`}>
+                    {job.status}
+                  </span>
+                </div>
+
+                {job.status === 'failed' && job.errorMessage && (
+                  <div className="status-banner__error" style={{ fontSize: '0.8rem', padding: '0.5rem' }}>
+                    {job.errorMessage}
+                  </div>
+                )}
+
+                {job.status === 'completed' && typeof job.result?.content === 'string' && job.result.content && (
+                  <>
+                    <div
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        padding: '0.75rem',
                         borderRadius: '4px',
                         fontSize: '0.9rem',
                         whiteSpace: 'pre-wrap',
-                        marginBottom: '0.75rem'
-                      }}>
-                        {String(job.result.content)}
-                      </div>
-                      
+                      }}
+                    >
+                      {String(job.result.content)}
+                    </div>
+
+                    {job.result.account_content_override &&
+                      typeof job.result.account_content_override === 'object' && (
+                        <div className="stack stack--xs">
+                          <p className="hint" style={{ margin: 0 }}>Per-account overrides</p>
+                          {Object.entries(job.result.account_content_override as Record<string, string>).map(
+                            ([accountId, text]) => {
+                              const account = accounts.find((item) => item.id === accountId)
+                              return (
+                                <div key={accountId} className="glass-panel glass-panel--compact">
+                                  <strong style={{ fontSize: '0.8rem' }}>
+                                    {account?.username || accountId}
+                                  </strong>
+                                  <p style={{ margin: '0.25rem 0 0', whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>
+                                    {text}
+                                  </p>
+                                </div>
+                              )
+                            },
+                          )}
+                        </div>
+                      )}
+
+                    <div className="flex-row--center gap-2">
                       {profile?.autoPublishEnabled ? (
                         <p className="hint" style={{ fontSize: '0.8rem', margin: 0 }}>
                           <Check size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-                          Draft auto-created
+                          Auto-publish enabled
                         </p>
                       ) : (
-                        <button
-                          className="btn btn--secondary btn--sm"
-                          onClick={() => handleSaveDraft(job)}
-                          disabled={savingDraftId === job.id}
-                        >
-                          {savingDraftId === job.id ? (
-                            <><Loader2 size={14} className="spin" /> Saving...</>
-                          ) : (
-                            <><Save size={14} /> Save as Draft</>
-                          )}
-                        </button>
+                        <>
+                          <button
+                            className="btn btn--secondary btn--sm"
+                            onClick={() => void saveGeneratedPost(job, false)}
+                            disabled={savingDraftId === job.id || schedulingId === job.id}
+                          >
+                            {savingDraftId === job.id ? (
+                              <>
+                                <Loader2 size={14} className="spin" /> Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Save size={14} /> Save draft
+                              </>
+                            )}
+                          </button>
+                          <button
+                            className="btn btn--primary btn--sm"
+                            onClick={() => void saveGeneratedPost(job, true)}
+                            disabled={savingDraftId === job.id || schedulingId === job.id}
+                          >
+                            {schedulingId === job.id ? (
+                              <>
+                                <Loader2 size={14} className="spin" /> Scheduling...
+                              </>
+                            ) : (
+                              <>
+                                <CalendarClock size={14} /> Schedule
+                              </>
+                            )}
+                          </button>
+                        </>
                       )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!latestCompleted && recentJobs.length === 0 && activeJobs.length === 0 && (
+          <div className="glass-panel">
+            <p className="hint">Generated posts will appear here.</p>
+          </div>
+        )}
       </div>
     </div>
   )

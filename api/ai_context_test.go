@@ -64,11 +64,15 @@ func TestAIContext(t *testing.T) {
 			t.Fatal(err)
 		}
 		longContent := strings.Repeat("0123456789", 32)
-		if _, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{
+		post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{
 			Content:     longContent,
 			ScheduledAt: time.Now().UTC(),
-			Draft:       true,
-		}); err != nil {
+			Draft:       false,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
 			t.Fatal(err)
 		}
 

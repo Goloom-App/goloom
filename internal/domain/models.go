@@ -316,12 +316,42 @@ type ImportedPostInput struct {
 	PublishMetadata map[string]string
 }
 
+type AIAccountSummary struct {
+	ID       string `json:"id"`
+	Provider string `json:"provider"`
+	Username string `json:"username"`
+	MaxChars int    `json:"max_chars"`
+}
+
 type AIContext struct {
-	Team            Team             `json:"team"`
-	Profile         *TeamProfile     `json:"profile,omitempty"`
-	CampaignFormats []CampaignFormat `json:"campaign_formats"`
-	StyleExamples   []StyleExample   `json:"style_examples"`
-	RecentPosts     []ScheduledPost  `json:"recent_posts"`
+	Team            Team                   `json:"team"`
+	Profile         *TeamProfile           `json:"profile,omitempty"`
+	CampaignFormats []CampaignFormat       `json:"campaign_formats"`
+	StyleExamples   []StyleExample         `json:"style_examples"`
+	RecentPosts     []ScheduledPost        `json:"recent_posts"`
+	Accounts        []AIAccountSummary     `json:"accounts,omitempty"`
+	UpcomingPosts   []ScheduledPost        `json:"upcoming_posts,omitempty"`
+	EngagementHours []EngagementHourBucket `json:"engagement_hours,omitempty"`
+}
+
+const AIContextRecentPostsLimit = 100
+const AIContextUpcomingPostsLimit = 200
+
+// MaxCharsForProvider returns the default character limit for a provider, honoring per-account overrides.
+func MaxCharsForProvider(provider string, override *int) int {
+	if override != nil && *override > 0 {
+		return *override
+	}
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "bluesky":
+		return 300
+	case "friendica":
+		return 5000
+	case "mastodon":
+		return 500
+	default:
+		return 500
+	}
 }
 
 type TeamInvitation struct {

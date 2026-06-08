@@ -9,6 +9,12 @@ import {
   useDeleteCampaignFormat,
 } from '../../hooks/useAI'
 import type { TeamRecord, CampaignFormat } from '../../types'
+import {
+  defaultCampaignStructure,
+  recordFromStructure,
+  structureFromRecord,
+  type CampaignStructureFields,
+} from './campaignFormatStructure'
 
 interface CampaignFormatViewProps {
   team: TeamRecord
@@ -36,7 +42,10 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
   
   const [name, setName] = useState('')
   const [weekday, setWeekday] = useState<string>('null')
-  const [structure, setStructure] = useState('{\n  "topic": "...",\n  "tone": "..."\n}')
+  const [structureFields, setStructureFields] = useState<CampaignStructureFields>(defaultCampaignStructure())
+  const [newSection, setNewSection] = useState('')
+  const [advancedMode, setAdvancedMode] = useState(false)
+  const [structureJson, setStructureJson] = useState('{}')
   const [hashtags, setHashtags] = useState<string[]>([])
   const [newHashtag, setNewHashtag] = useState('')
   const [isActive, setIsActive] = useState(true)
@@ -56,7 +65,10 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     setEditingId(null)
     setName('')
     setWeekday('null')
-    setStructure('{\n  "topic": "...",\n  "tone": "..."\n}')
+    setStructureFields(defaultCampaignStructure())
+    setStructureJson('{}')
+    setAdvancedMode(false)
+    setNewSection('')
     setHashtags([])
     setNewHashtag('')
     setIsActive(true)
@@ -72,7 +84,10 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     setEditingId(format.id)
     setName(format.name)
     setWeekday(format.weekday === null ? 'null' : format.weekday.toString())
-    setStructure(JSON.stringify(format.structure, null, 2))
+    const parsed = structureFromRecord(format.structure)
+    setStructureFields(parsed.fields)
+    setAdvancedMode(parsed.hasAdvancedKeys)
+    setStructureJson(JSON.stringify(format.structure, null, 2))
     setHashtags(format.requiredHashtags || [])
     setNewHashtag('')
     setIsActive(format.isActive)
@@ -87,11 +102,19 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     }
 
     let parsedStructure: Record<string, unknown>
-    try {
-      parsedStructure = JSON.parse(structure)
-    } catch (err) {
-      setError('Structure must be valid JSON')
-      return
+    if (advancedMode) {
+      try {
+        parsedStructure = JSON.parse(structureJson)
+      } catch {
+        setError('Structure must be valid JSON')
+        return
+      }
+    } else {
+      parsedStructure = recordFromStructure(structureFields)
+      if (Object.keys(parsedStructure).length === 0) {
+        setError('Add at least a topic, tone, section, or instruction')
+        return
+      }
     }
 
     setError(null)
@@ -325,19 +348,117 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
                 </div>
               </div>
 
-              <label className="field">
-                <span>Structure Template (JSON)</span>
-                <p className="hint" style={{ marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
-                  Define the JSON structure the AI should follow when generating this campaign.
-                </p>
-                <textarea
-                  data-testid="campaign-dialog-structure"
-                  rows={8}
-                  value={structure}
-                  onChange={(e) => setStructure(e.target.value)}
-                  style={{ fontFamily: 'monospace' }}
-                />
-              </label>
+              <div className="field stack stack--sm">
+                <div className="flex-row--between" style={{ alignItems: 'center' }}>
+                  <span>Content blueprint</span>
+                  <label className="flex-row--center gap-2" style={{ fontSize: '0.85rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={advancedMode}
+                      onChange={(e) => setAdvancedMode(e.target.checked)}
+                    />
+                    <span>Advanced JSON</span>
+                  </label>
+                </div>
+
+                {!advancedMode ? (
+                  <>
+                    <label className="field">
+                      <span>Topic</span>
+                      <input
+                        value={structureFields.topic}
+                        onChange={(e) => setStructureFields((prev) => ({ ...prev, topic: e.target.value }))}
+                        placeholder="e.g. product update, community question"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Tone</span>
+                      <input
+                        value={structureFields.tone}
+                        onChange={(e) => setStructureFields((prev) => ({ ...prev, tone: e.target.value }))}
+                        placeholder="e.g. informative, playful, concise"
+                      />
+                    </label>
+                    <div className="field">
+                      <span>Sections</span>
+                      <div className="flex-row--wrap gap-2 mb-2">
+                        {structureFields.sections.map((section, idx) => (
+                          <div key={idx} className="badge flex-row--center gap-1">
+                            <span>{section}</span>
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--xs"
+                              onClick={() =>
+                                setStructureFields((prev) => ({
+                                  ...prev,
+                                  sections: prev.sections.filter((_, i) => i !== idx),
+                                }))
+                              }
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex-row--center gap-2">
+                        <input
+                          value={newSection}
+                          onChange={(e) => setNewSection(e.target.value)}
+                          placeholder="Add section, e.g. hook, CTA, takeaway"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && newSection.trim()) {
+                              e.preventDefault()
+                              setStructureFields((prev) => ({
+                                ...prev,
+                                sections: [...prev.sections, newSection.trim()],
+                              }))
+                              setNewSection('')
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn--secondary"
+                          onClick={() => {
+                            if (!newSection.trim()) return
+                            setStructureFields((prev) => ({
+                              ...prev,
+                              sections: [...prev.sections, newSection.trim()],
+                            }))
+                            setNewSection('')
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    <label className="field">
+                      <span>Extra instructions</span>
+                      <textarea
+                        rows={4}
+                        value={structureFields.instructions}
+                        onChange={(e) =>
+                          setStructureFields((prev) => ({ ...prev, instructions: e.target.value }))
+                        }
+                        placeholder="Optional guidance for the AI, placeholders like {weekday_name} still work in advanced JSON."
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <p className="hint" style={{ marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+                      Full JSON template. Supported placeholders include {'{weekday_name}'}, {'{day+1}'}, {'{campaign_name}'}.
+                    </p>
+                    <textarea
+                      data-testid="campaign-dialog-structure"
+                      rows={8}
+                      value={structureJson}
+                      onChange={(e) => setStructureJson(e.target.value)}
+                      style={{ fontFamily: 'monospace' }}
+                    />
+                  </>
+                )}
+              </div>
 
               <div className="flex-row--center gap-2 mt-2">
                 <input

@@ -6,10 +6,6 @@ import { mapAIJob } from '../mappers'
 import type { AIJob } from '../types'
 import { useAIJob } from './useAI'
 
-function teamProfileKey(teamId: string) {
-  return ['ai', teamId, 'profile']
-}
-
 const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 
 function getSseSettings(): { baseUrl: string; token: string } {
@@ -85,10 +81,6 @@ export function useAIJobStream(teamId: string): { isConnected: boolean; lastEven
           return updated
         })
 
-        // Auto-refresh profile when profile analysis completes
-        if (job.type === 'profile_analysis' && job.status === 'completed') {
-          void queryClient.invalidateQueries({ queryKey: teamProfileKey(teamId) })
-        }
       } catch {
         // noop
       }

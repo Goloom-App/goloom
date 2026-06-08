@@ -11,11 +11,13 @@ import (
 )
 
 type createAIDraftRequest struct {
-	Content     string         `json:"content"`
-	AccountIDs  []string       `json:"account_ids"`
-	ScheduledAt *time.Time     `json:"scheduled_at"`
-	AIJobID     string         `json:"ai_job_id"`
-	Metadata    map[string]any `json:"metadata"`
+	Content                string            `json:"content"`
+	AccountIDs             []string          `json:"account_ids"`
+	AccountContentOverride map[string]string `json:"account_content_override"`
+	ScheduledAt            *time.Time        `json:"scheduled_at"`
+	Schedule               bool              `json:"schedule"`
+	AIJobID                string            `json:"ai_job_id"`
+	Metadata               map[string]any    `json:"metadata"`
 }
 
 func (a *API) handleCreateAIDraft(w http.ResponseWriter, r *http.Request) {
@@ -39,14 +41,19 @@ func (a *API) handleCreateAIDraft(w http.ResponseWriter, r *http.Request) {
 
 	teamID := r.PathValue("teamID")
 	postInput := domain.CreatePostInput{
-		Content:        content,
-		TargetAccounts: domain.NormalizeMediaIDs(input.AccountIDs),
-		ScheduledAt:    time.Now().UTC(),
-		Draft:          true,
-		AuthorUserID:   &principal.User.ID,
+		Content:                content,
+		TargetAccounts:         domain.NormalizeMediaIDs(input.AccountIDs),
+		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.AccountIDs),
+		ScheduledAt:            time.Now().UTC(),
+		Draft:                  true,
+		AuthorUserID:           &principal.User.ID,
+		UseVersions:            len(input.AccountContentOverride) > 0,
 	}
 	if input.ScheduledAt != nil && !input.ScheduledAt.IsZero() {
 		postInput.ScheduledAt = input.ScheduledAt.UTC()
+	}
+	if input.Schedule {
+		postInput.Draft = false
 	}
 
 	profile, err := a.store.GetTeamProfile(r.Context(), teamID)

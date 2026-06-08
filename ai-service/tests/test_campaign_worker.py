@@ -55,10 +55,11 @@ def sample_context() -> dict:
 
 def sample_job(**params) -> dict:
     return {
-        "id": "job-1",
+        "job_id": "job-1",
         "type": "campaign_autopilot",
         "team_id": "team-1",
         "author_user_id": "user-1",
+        "context": sample_context(),
         "params": {"campaign_format_id": "fmt-tools-day", "topic": "automation", **params},
     }
 
@@ -78,7 +79,6 @@ async def test_campaign_worker_applies_template_and_finds_slot():
         usage={},
     )
     goloom_client = AsyncMock()
-    goloom_client.get_ai_context.return_value = sample_context()
     worker = CampaignWorker(adapter, goloom_client, PromptBuilder())
     worker._utcnow = lambda: datetime(2026, 6, 1, 8, 0, tzinfo=UTC)
 
@@ -93,7 +93,7 @@ async def test_campaign_worker_applies_template_and_finds_slot():
     assert "Tue toolkit spotlight" in first_call.args[0]
     assert "Share one practical tool before 06/02." in first_call.args[0]
     assert "Suggested schedule: 2026-06-02T11:30:00Z" in first_call.args[0]
-    goloom_client.send_callback.assert_awaited_once_with("job-1", "completed", result)
+    goloom_client.send_callback.assert_awaited_once_with("job-1", "completed", result, "")
 
 
 @pytest.mark.asyncio
@@ -111,7 +111,6 @@ async def test_campaign_worker_ensures_required_hashtags_are_included():
         usage={},
     )
     goloom_client = AsyncMock()
-    goloom_client.get_ai_context.return_value = sample_context()
     worker = CampaignWorker(adapter, goloom_client, PromptBuilder())
 
     result = await worker.process(sample_job(target_date="2026-06-10"))
@@ -127,15 +126,12 @@ async def test_campaign_worker_sends_failure_callback_on_llm_error():
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
     adapter.generate.side_effect = RuntimeError("LLM exploded")
     goloom_client = AsyncMock()
-    goloom_client.get_ai_context.return_value = sample_context()
     worker = CampaignWorker(adapter, goloom_client, PromptBuilder())
 
     with pytest.raises(RuntimeError, match="LLM exploded"):
         await worker.process(sample_job())
 
-    goloom_client.send_callback.assert_awaited_once_with(
-        "job-1", "failed", {}, error_message="LLM exploded"
-    )
+    goloom_client.send_callback.assert_awaited_once_with("job-1", "failed", {}, "LLM exploded")
 
 
 @pytest.mark.asyncio

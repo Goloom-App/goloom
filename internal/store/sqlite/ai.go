@@ -626,14 +626,50 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
-		where team_id = ?
+		where team_id = ? and status = 'posted' and trim(content) != ''
 		order by scheduled_at desc
-		limit 5`, teamID)
+		limit ?`, teamID, domain.AIContextRecentPostsLimit)
 	if err != nil {
 		return domain.AIContext{}, err
 	}
 	defer recentRows.Close()
 	recentPosts, err := collectPosts(recentRows)
+	if err != nil {
+		return domain.AIContext{}, err
+	}
+
+	upcomingRows, err := s.db.QueryContext(ctx, `
+		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
+		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+		       post_template_id, template_counter, created_at, updated_at
+		from scheduled_posts
+		where team_id = ? and status in ('pending', 'draft') and scheduled_at >= ?
+		order by scheduled_at asc
+		limit ?`, teamID, nowString(), domain.AIContextUpcomingPostsLimit)
+	if err != nil {
+		return domain.AIContext{}, err
+	}
+	defer upcomingRows.Close()
+	upcomingPosts, err := collectPosts(upcomingRows)
+	if err != nil {
+		return domain.AIContext{}, err
+	}
+
+	accounts, err := s.ListTeamAccounts(ctx, teamID)
+	if err != nil {
+		return domain.AIContext{}, err
+	}
+	accountSummaries := make([]domain.AIAccountSummary, 0, len(accounts))
+	for _, acc := range accounts {
+		accountSummaries = append(accountSummaries, domain.AIAccountSummary{
+			ID:       acc.ID,
+			Provider: acc.Provider,
+			Username: acc.Username,
+			MaxChars: domain.MaxCharsForProvider(acc.Provider, acc.MaxCharsOverride),
+		})
+	}
+
+	engagementHours, err := s.GetTeamEngagementHourHistogram(ctx, teamID, 90)
 	if err != nil {
 		return domain.AIContext{}, err
 	}
@@ -644,6 +680,9 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		CampaignFormats: formats,
 		StyleExamples:   examples,
 		RecentPosts:     recentPosts,
+		Accounts:        accountSummaries,
+		UpcomingPosts:   upcomingPosts,
+		EngagementHours: engagementHours,
 	}, nil
 }
 

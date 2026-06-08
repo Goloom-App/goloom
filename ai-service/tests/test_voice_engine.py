@@ -25,49 +25,60 @@ def sample_context() -> dict:
             {"platform": "bluesky", "content": "Short and helpful updates.", "notes": "warm"}
         ],
         "recent_posts": [{"content": "Yesterday we shipped a fix."}],
+        "accounts": [
+            {"id": "acc-bluesky", "provider": "bluesky", "username": "@launch", "max_chars": 300},
+            {"id": "acc-mastodon", "provider": "mastodon", "username": "@launch", "max_chars": 500},
+        ],
     }
 
 
 def sample_job(**params) -> dict:
     return {
-        "id": "job-1",
+        "job_id": "job-1",
         "type": "voice_engine",
         "team_id": "team-1",
         "author_user_id": "user-1",
-        "params": {"platform": "bluesky", "prompt_hint": "Announce the release.", **params},
+        "params": {
+            "prompt_hint": "Announce the release.",
+            "target_account_ids": ["acc-bluesky", "acc-mastodon"],
+            **params,
+        },
     }
 
 
 @pytest.mark.asyncio
-async def test_process_generates_platform_specific_post():
+async def test_process_generates_multi_account_post():
     adapter = AsyncMock()
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
     adapter.generate.return_value = LLMResponse(
         content=json.dumps(
             {
                 "content": "We shipped the release today. Thanks for following along.",
+                "account_content_override": {
+                    "acc-bluesky": "Release shipped today.",
+                },
                 "hashtags": ["#launch"],
-                "platform_metadata": {"platform": "bluesky"},
+                "platform_metadata": {"platform": "mastodon"},
             }
         ),
         model="gpt-4o",
         usage={},
     )
     goloom_client = AsyncMock()
-    goloom_client.get_ai_context.return_value = sample_context()
     worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
 
-    result = await worker.process(sample_job())
+    result = await worker.process({**sample_job(), "context": sample_context()})
 
-    assert result == {
-        "content": "We shipped the release today. Thanks for following along.",
-        "hashtags": ["#launch"],
-        "platform_metadata": {"platform": "bluesky"},
-    }
+    assert result["content"] == "We shipped the release today. Thanks for following along."
+    assert result["account_content_override"]["acc-bluesky"] == "Release shipped today."
+    assert result["primary_account_id"] == "acc-mastodon"
+    assert result["scheduled_at"] is not None
     first_call = adapter.generate.await_args_list[0]
-    assert "Platform: bluesky" in first_call.args[0]
     assert "Tonality: clear" in first_call.args[1]
-    goloom_client.send_callback.assert_awaited_once_with("job-1", "completed", result)
+    goloom_client.send_callback.assert_awaited_once()
+    callback_args = goloom_client.send_callback.await_args.args
+    assert callback_args[0] == "job-1"
+    assert callback_args[1] == "completed"
 
 
 @pytest.mark.asyncio
@@ -79,6 +90,7 @@ async def test_process_retries_until_content_fits_char_limit():
             content=json.dumps(
                 {
                     "content": "x" * 600,
+                    "account_content_override": {"acc-bluesky": "short"},
                     "hashtags": ["#launch"],
                     "platform_metadata": {"platform": "mastodon"},
                 }
@@ -90,6 +102,7 @@ async def test_process_retries_until_content_fits_char_limit():
             content=json.dumps(
                 {
                     "content": "y" * 480,
+                    "account_content_override": {"acc-bluesky": "short"},
                     "hashtags": ["#launch"],
                     "platform_metadata": {"platform": "mastodon"},
                 }
@@ -99,10 +112,9 @@ async def test_process_retries_until_content_fits_char_limit():
         ),
     ]
     goloom_client = AsyncMock()
-    goloom_client.get_ai_context.return_value = sample_context()
     worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
 
-    result = await worker.process(sample_job(platform="mastodon"))
+    result = await worker.process({**sample_job(), "context": sample_context()})
 
     assert len(result["content"]) == 480
     assert adapter.generate.await_count == 2
@@ -116,15 +128,12 @@ async def test_process_sends_failure_callback_on_llm_error():
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
     adapter.generate.side_effect = RuntimeError("LLM exploded")
     goloom_client = AsyncMock()
-    goloom_client.get_ai_context.return_value = sample_context()
     worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
 
     with pytest.raises(RuntimeError, match="LLM exploded"):
-        await worker.process(sample_job())
+        await worker.process({**sample_job(), "context": sample_context()})
 
-    goloom_client.send_callback.assert_awaited_once_with(
-        "job-1", "failed", {}, error_message="LLM exploded"
-    )
+    goloom_client.send_callback.assert_awaited_once_with("job-1", "failed", {}, "LLM exploded")
 
 
 @pytest.mark.asyncio
@@ -136,9 +145,18 @@ async def test_router_dispatches_voice_engine_jobs():
         llm_generator_model="gpt-4o",
     )
     router = JobRouter(config)
-    router.workers["voice_engine"].process = AsyncMock(return_value={"content": "ok", "hashtags": [], "platform_metadata": {}})
+    router.workers["voice_engine"].process = AsyncMock(
+        return_value={
+            "content": "ok",
+            "hashtags": [],
+            "platform_metadata": {},
+            "account_content_override": {},
+            "scheduled_at": "2026-06-09T09:00:00Z",
+            "primary_account_id": "acc-mastodon",
+        }
+    )
 
     result = await router.route(sample_job())
 
-    assert result == {"content": "ok", "hashtags": [], "platform_metadata": {}}
+    assert result["content"] == "ok"
     router.workers["voice_engine"].process.assert_awaited_once()

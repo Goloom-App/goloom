@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -18,8 +19,10 @@ type aiCallbackRequest struct {
 }
 
 type aiCallbackResult struct {
-	Content     string     `json:"content"`
-	ScheduledAt *time.Time `json:"scheduled_at"`
+	Content                string            `json:"content"`
+	ScheduledAt            *time.Time        `json:"scheduled_at"`
+	SuggestedScheduledAt   *time.Time        `json:"suggested_scheduled_at"`
+	AccountContentOverride map[string]string `json:"account_content_override"`
 }
 
 func (a *API) handleAICallback(w http.ResponseWriter, r *http.Request) {
@@ -90,9 +93,15 @@ func (a *API) autoCreatePostFromCallbackResult(r *http.Request, job domain.AIJob
 	}
 
 	scheduledAt := time.Now().UTC()
-	if res.ScheduledAt != nil && !res.ScheduledAt.IsZero() {
+	switch {
+	case res.ScheduledAt != nil && !res.ScheduledAt.IsZero():
 		scheduledAt = res.ScheduledAt.UTC()
+	case res.SuggestedScheduledAt != nil && !res.SuggestedScheduledAt.IsZero():
+		scheduledAt = res.SuggestedScheduledAt.UTC()
 	}
+
+	targetAccounts := targetAccountIDsFromJobPayload(job.Payload)
+	overrides := domain.NormalizeAccountContentOverride(res.AccountContentOverride, targetAccounts)
 
 	principal := domain.AuthenticatedPrincipal{
 		User: domain.User{ID: job.AuthorUserID},
@@ -100,9 +109,27 @@ func (a *API) autoCreatePostFromCallbackResult(r *http.Request, job domain.AIJob
 	}
 
 	_, _ = a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
-		Content:      content,
-		ScheduledAt:  scheduledAt,
-		Draft:        false,
-		AuthorUserID: &job.AuthorUserID,
+		Content:                content,
+		TargetAccounts:         targetAccounts,
+		AccountContentOverride: overrides,
+		ScheduledAt:            scheduledAt,
+		Draft:                  false,
+		AuthorUserID:           &job.AuthorUserID,
+		UseVersions:            len(overrides) > 0,
 	})
+}
+
+func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {
+	if len(bytes.TrimSpace(payload)) == 0 {
+		return nil
+	}
+	var envelope struct {
+		Params struct {
+			TargetAccountIDs []string `json:"target_account_ids"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return nil
+	}
+	return domain.NormalizeMediaIDs(envelope.Params.TargetAccountIDs)
 }

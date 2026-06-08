@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from app.adapters import LLMAdapter
@@ -9,6 +10,9 @@ from app.prompts import PromptBuilder
 from app.services import GoloomClient
 
 logger = logging.getLogger(__name__)
+
+TOP_STYLE_EXAMPLE_COUNT = 5
+MIN_POST_CHARS = 40
 
 
 class ProfileAnalysisWorker:
@@ -22,7 +26,6 @@ class ProfileAnalysisWorker:
         callback_sent = False
 
         try:
-            team_id = str(job["team_id"])
             params = self._params(job)
             post_count = int(params.get("post_count", 20))
 
@@ -41,15 +44,14 @@ class ProfileAnalysisWorker:
                 system_prompt="You are a brand voice analyst. Extract the team's writing style from their recent posts.",
             )
 
-            profile = self._parse_analysis(result.content)
+            proposed_profile = self._parse_analysis(result.content)
+            suggested_examples = self._rank_style_examples(recent_posts)[:TOP_STYLE_EXAMPLE_COUNT]
 
-            await self.goloom_client.update_team_profile(team_id, profile)
-
-            examples = params.get("examples", [])
-            for example in examples:
-                await self.goloom_client.create_style_example(team_id, example)
-
-            payload = {"profile": profile, "examples_count": len(examples)}
+            payload = {
+                "proposed_profile": proposed_profile,
+                "suggested_style_examples": suggested_examples,
+                "analyzed_post_count": len(recent_posts),
+            }
             await self._try_callback(job_id, "completed", payload)
             callback_sent = True
             return payload
@@ -63,7 +65,7 @@ class ProfileAnalysisWorker:
         try:
             await self.goloom_client.send_callback(job_id, status, result, error_message)
         except Exception:
-            pass  # callback failure must not swallow the original error
+            pass
 
     def _params(self, job: dict) -> dict:
         raw = job.get("params") or {}
@@ -75,12 +77,57 @@ class ProfileAnalysisWorker:
         team = context.get("team") or {}
         return str(team.get("name") or team.get("display_name") or "Unknown Team")
 
-    def _get_recent_posts(self, context: dict, count: int) -> list[str]:
+    def _get_recent_posts(self, context: dict, count: int) -> list[dict[str, Any]]:
         posts = context.get("recent_posts") or context.get("recentPosts") or []
-        return [str(p.get("content", "")) for p in posts if isinstance(p, dict) and p.get("content")][:count]
+        parsed: list[dict[str, Any]] = []
+        for item in posts:
+            if not isinstance(item, dict):
+                continue
+            content = str(item.get("content") or "").strip()
+            if not content:
+                continue
+            parsed.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "content": content,
+                    "status": str(item.get("status") or ""),
+                    "scheduled_at": str(item.get("scheduled_at") or item.get("scheduledAt") or ""),
+                }
+            )
+        return parsed[:count]
 
-    def _build_analysis_prompt(self, system_prompt: str, team_name: str, recent_posts: list[str]) -> str:
-        posts_text = "\n\n".join(f"--- Post {i+1} ---\n{post}" for i, post in enumerate(recent_posts))
+    def _rank_style_examples(self, posts: list[dict[str, Any]]) -> list[dict[str, str]]:
+        ranked = sorted(posts, key=self._post_score, reverse=True)
+        examples: list[dict[str, str]] = []
+        for post in ranked:
+            content = post.get("content", "").strip()
+            if len(content) < MIN_POST_CHARS:
+                continue
+            examples.append(
+                {
+                    "platform": "general",
+                    "content": content,
+                    "notes": "Suggested from published post analysis",
+                    "source_post_id": post.get("id", ""),
+                }
+            )
+            if len(examples) >= TOP_STYLE_EXAMPLE_COUNT:
+                break
+        return examples
+
+    @staticmethod
+    def _post_score(post: dict[str, Any]) -> float:
+        content = str(post.get("content") or "")
+        words = len(re.findall(r"\w+", content))
+        length_bonus = min(len(content), 500) / 10.0
+        word_bonus = min(words, 80)
+        status_bonus = 20.0 if str(post.get("status") or "").lower() == "posted" else 0.0
+        return status_bonus + length_bonus + word_bonus
+
+    def _build_analysis_prompt(self, system_prompt: str, team_name: str, recent_posts: list[dict[str, Any]]) -> str:
+        posts_text = "\n\n".join(
+            f"--- Post {i + 1} ---\n{post['content']}" for i, post in enumerate(recent_posts)
+        )
 
         return f"""{system_prompt}
 
@@ -108,7 +155,6 @@ Respond with ONLY a valid JSON object using this exact structure (no markdown, n
 
     def _parse_analysis(self, raw: str) -> dict:
         cleaned = raw.strip()
-        # Strip markdown code fences if present
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[-1]
             cleaned = cleaned.rsplit("```", 1)[0]
@@ -117,7 +163,6 @@ Respond with ONLY a valid JSON object using this exact structure (no markdown, n
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
-            # Attempt to extract JSON object from the text
             start = cleaned.find("{")
             end = cleaned.rfind("}")
             if start != -1 and end != -1:
