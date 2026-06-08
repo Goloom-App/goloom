@@ -354,6 +354,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
                   <label className="flex-row--center gap-2" style={{ fontSize: '0.85rem' }}>
                     <input
                       type="checkbox"
+                      data-testid="campaign-dialog-advanced"
                       checked={advancedMode}
                       onChange={(e) => setAdvancedMode(e.target.checked)}
                     />
@@ -366,6 +367,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
                     <label className="field">
                       <span>Topic</span>
                       <input
+                        data-testid="campaign-dialog-topic"
                         value={structureFields.topic}
                         onChange={(e) => setStructureFields((prev) => ({ ...prev, topic: e.target.value }))}
                         placeholder="e.g. product update, community question"
@@ -374,6 +376,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
                     <label className="field">
                       <span>Tone</span>
                       <input
+                        data-testid="campaign-dialog-tone"
                         value={structureFields.tone}
                         onChange={(e) => setStructureFields((prev) => ({ ...prev, tone: e.target.value }))}
                         placeholder="e.g. informative, playful, concise"

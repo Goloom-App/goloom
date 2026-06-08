@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { e2eBootstrapToken } from './constants'
-import { signIn, createAITeam } from './helpers'
+import { createAITeam } from './helpers'
 
 test.describe.serial('AI campaign formats', () => {
   let teamId: string
@@ -36,10 +36,10 @@ test.describe.serial('AI campaign formats', () => {
 
     await page.getByTestId('campaign-dialog-name').fill('E2E Test Tuesday')
     await page.getByTestId('campaign-dialog-weekday').selectOption('2')
-    await page.getByTestId('campaign-dialog-structure').fill('{"topic": "test", "tone": "casual"}')
+    await page.getByTestId('campaign-dialog-topic').fill('test')
+    await page.getByTestId('campaign-dialog-tone').fill('casual')
     await page.getByTestId('campaign-dialog-save').click()
 
-    // Dialog should close and format should appear in the list
     await expect(page.getByTestId('campaign-dialog')).toHaveCount(0)
     await expect(page.getByText('E2E Test Tuesday')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('Tuesday', { exact: true })).toBeVisible()
@@ -50,36 +50,29 @@ test.describe.serial('AI campaign formats', () => {
     await expect(page.getByTestId('campaign-dialog')).toBeVisible()
 
     await page.getByTestId('campaign-dialog-name').fill('Bad Format')
+    await page.getByTestId('campaign-dialog-advanced').check()
     await page.getByTestId('campaign-dialog-structure').fill('not valid json')
     await page.getByTestId('campaign-dialog-save').click()
 
-    // Validation error should appear
     await expect(page.getByText('Structure must be valid JSON')).toBeVisible()
   })
 
   test('can create and then delete a format', async ({ page }) => {
-    // First confirm existing format is visible
     await expect(page.getByText('E2E Test Tuesday')).toBeVisible({ timeout: 5_000 })
 
-    // Create a second format
     await page.getByTestId('campaign-create-btn').click()
     await expect(page.getByTestId('campaign-dialog')).toBeVisible()
     await page.getByTestId('campaign-dialog-name').fill('Delete Me Format')
-    await page.getByTestId('campaign-dialog-structure').fill('{"topic": "delete"}')
+    await page.getByTestId('campaign-dialog-topic').fill('delete')
 
-    // Wait for the create API response, then the list refetch
-    const responsePromise = page.waitForResponse(resp =>
-      resp.url().includes('/campaign-formats') && resp.status() === 201
+    const responsePromise = page.waitForResponse((resp) =>
+      resp.url().includes('/campaign-formats') && resp.status() === 201,
     )
     await page.getByTestId('campaign-dialog-save').click()
     await responsePromise
 
-    // Wait for dialog to close and list to update
     await expect(page.getByTestId('campaign-dialog')).toHaveCount(0, { timeout: 10_000 })
-
-    // Both formats should now appear
     await expect(page.getByText('E2E Test Tuesday')).toBeVisible()
-    const formatCard = page.getByText('Delete Me Format')
-    await expect(formatCard).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('Delete Me Format')).toBeVisible({ timeout: 10_000 })
   })
 })

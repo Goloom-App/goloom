@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { e2eBootstrapToken } from './constants'
-import { signIn, createAITeam } from './helpers'
+import { createAITeam } from './helpers'
 
 test.describe.serial('AI generation view', () => {
   let teamId: string
@@ -25,48 +25,29 @@ test.describe.serial('AI generation view', () => {
     await expect(page.getByTestId('ai-generate-view')).toBeVisible({ timeout: 10_000 })
   })
 
-  test('renders Voice Engine mode by default', async ({ page }) => {
-    // Voice Engine should be the active/default mode
-    await expect(page.getByTestId('gen-type-voice')).toBeVisible()
-    await expect(page.getByTestId('gen-type-campaign')).toBeVisible()
-
-    // Voice Engine fields should be visible
-    await expect(page.getByTestId('gen-platform')).toBeVisible()
+  test('renders generate form by default', async ({ page }) => {
     await expect(page.getByTestId('gen-prompt')).toBeVisible()
+    await expect(page.getByTestId('gen-campaign')).toBeVisible()
     await expect(page.getByTestId('gen-submit')).toBeVisible()
+    await expect(page.getByText('Target accounts')).toBeVisible()
   })
 
-  test('can switch to Campaign Auto-Pilot mode', async ({ page }) => {
-    await page.getByTestId('gen-type-campaign').click()
-
-    // Campaign fields should be visible
-    await expect(page.getByTestId('gen-campaign-format')).toBeVisible()
-    await expect(page.getByTestId('gen-target-date')).toBeVisible()
-
-    // The submit button should still be visible
-    await expect(page.getByTestId('gen-submit')).toBeVisible()
-  })
-
-  test('shows validation error when triggering without prompt hint', async ({ page }) => {
-    // Leave prompt empty and try to generate
+  test('shows validation error when triggering without prompt', async ({ page }) => {
     await page.getByTestId('gen-submit').click()
 
-    // Should show validation error
     await expect(page.getByTestId('gen-status-error')).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByTestId('gen-status-error')).toHaveText('Prompt hint is required')
+    await expect(page.getByTestId('gen-status-error')).toHaveText('Prompt is required')
   })
 
-  test('shows validation error when triggering campaign without format', async ({ page }) => {
-    await page.getByTestId('gen-type-campaign').click()
+  test('shows validation error when no target accounts selected', async ({ page }) => {
+    await page.getByTestId('gen-prompt').fill('E2E test prompt for generation')
     await page.getByTestId('gen-submit').click()
 
-    // Should show validation error for missing campaign format
     await expect(page.getByTestId('gen-status-error')).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByTestId('gen-status-error')).toHaveText('Select a campaign format')
+    await expect(page.getByTestId('gen-status-error')).toHaveText('Select at least one target account')
   })
 
-  test('renders recent jobs section as empty initially', async ({ page }) => {
-    await expect(page.getByTestId('gen-recent-jobs')).toBeVisible()
-    await expect(page.getByText('No recent AI jobs.')).toBeVisible()
+  test('renders empty generated content placeholder initially', async ({ page }) => {
+    await expect(page.getByText('Generated posts will appear here.')).toBeVisible()
   })
 })
