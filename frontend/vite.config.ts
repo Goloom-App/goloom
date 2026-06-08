@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@locales': path.resolve(__dirname, '../locales'),
+      '@locales': path.resolve(__dirname, 'locales'),
     },
   },
   build: {

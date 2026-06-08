@@ -71,13 +71,13 @@ func TestDockerfileCopiesLocalesBeforeFrontendBuild(t *testing.T) {
 	var sawFrontendBuild bool
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "COPY locales") {
+		if strings.Contains(trimmed, "COPY locales/en.json") && strings.Contains(trimmed, "frontend/locales") {
 			sawLocalesCopy = true
 		}
 		if strings.Contains(trimmed, "pnpm --dir frontend build") {
 			sawFrontendBuild = true
 			if !sawLocalesCopy {
-				t.Fatal("Dockerfile runs frontend build before COPY locales; i18n imports need repo locales/")
+				t.Fatal("Dockerfile runs frontend build before copying locale catalogs into frontend/locales")
 			}
 			return
 		}
@@ -116,8 +116,8 @@ func TestDockerfileVerifiesLocalesBeforeFrontendBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(content)
-	if !strings.Contains(s, "test -f locales/en.json") || !strings.Contains(s, "test -f locales/de.json") {
-		t.Fatal("Dockerfile must verify locale catalogs exist before frontend build (tsc imports ../../../locales/*.json)")
+	if !strings.Contains(s, "test -f frontend/locales/en.json") || !strings.Contains(s, "test -f frontend/locales/de.json") {
+		t.Fatal("Dockerfile must verify locale catalogs exist under frontend/locales before frontend build")
 	}
 }
 
@@ -136,7 +136,7 @@ func TestDockerfilePnpmCorepackFallback(t *testing.T) {
 	}
 }
 
-func TestDockerfileFrontendBuilderUsesBash(t *testing.T) {
+func TestDockerfileFrontendBuilderUsesBashForPnpmSetup(t *testing.T) {
 	root := repoRoot(t)
 	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
 	if err != nil {
@@ -152,7 +152,7 @@ func TestDockerfileFrontendBuilderUsesBash(t *testing.T) {
 	if nextFrom >= 0 {
 		builderStage = builderStage[:nextFrom+1]
 	}
-	if !strings.Contains(builderStage, `SHELL ["/bin/bash"`) {
-		t.Fatal("Dockerfile frontend-builder must use bash (dash /bin/sh lacks pipefail and breaks RUN scripts)")
+	if !strings.Contains(builderStage, `/bin/bash -eu -o pipefail`) {
+		t.Fatal("Dockerfile frontend-builder must invoke bash explicitly for pnpm setup (OCI builders ignore SHELL)")
 	}
 }
