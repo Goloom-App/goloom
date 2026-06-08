@@ -10,7 +10,7 @@ import { accountContentOverrideForSave, isAccountOverCharLimit } from './compone
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
 import { AppShell } from './components/Shell/AppShell'
-import { Sun, Moon, Edit, X } from 'lucide-react'
+import { Sun, Moon, Edit, Trash2, X } from 'lucide-react'
 import { Icon } from './icons'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
@@ -1571,16 +1571,33 @@ function App() {
                 </div>
                 {selectedPost &&
                 (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
+                selectedPost.source !== 'imported' &&
                 canEditScheduledPosts ? (
-                  <button
-                    type="button"
-                    className="btn btn--ghost preview-header__edit"
-                    data-testid="preview-edit-button"
-                    onClick={() => void openEditor(selectedPost.id)}
-                  >
-                    <Edit size={16} />
-                    <span>{t('common.edit')}</span>
-                  </button>
+                  <div className="preview-header__actions flex-row--center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      data-testid="preview-delete-button"
+                      style={{ color: 'var(--danger)' }}
+                      onClick={() => {
+                        if (window.confirm(t('common.confirmDeletePost'))) {
+                          void deletePost(selectedPost.id)
+                        }
+                      }}
+                    >
+                      <Trash2 size={16} />
+                      <span>{t('common.delete')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost preview-header__edit"
+                      data-testid="preview-edit-button"
+                      onClick={() => void openEditor(selectedPost.id)}
+                    >
+                      <Edit size={16} />
+                      <span>{t('common.edit')}</span>
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </div>
