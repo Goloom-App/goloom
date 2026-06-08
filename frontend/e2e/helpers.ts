@@ -82,7 +82,7 @@ export async function seedAutomationReviewDraft(baseURL: string, token: string, 
 }
 
 export async function openReviewQueue(page: import('@playwright/test').Page) {
-  await page.getByRole('navigation').getByRole('button', { name: 'Review', exact: true }).click()
+  await page.getByTestId('nav-review-queue').click()
   await expect(page.getByTestId('review-queue')).toBeVisible()
 }
 

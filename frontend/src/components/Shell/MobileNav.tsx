@@ -183,6 +183,8 @@ export function MobileDrawer({
                 {workspaceNav.map((item) => (
                   <button
                     key={item.id}
+                    type="button"
+                    data-testid={item.id === 'reviewQueue' ? 'nav-review-queue' : undefined}
                     className={`btn btn--ghost btn--justify-start ${currentSection === item.id ? 'btn--active' : ''}`}
                     onClick={() => {
                       setSection(item.id)

@@ -105,6 +105,8 @@ export function Sidebar({
             {workspaceNav.map(item => (
               <button
                 key={item.id}
+                type="button"
+                data-testid={item.id === 'reviewQueue' ? 'nav-review-queue' : undefined}
                 className={`sidebar-nav-item ${currentSection === item.id ? 'sidebar-nav-item--active' : ''}`}
                 onClick={() => setSection(item.id)}
               >

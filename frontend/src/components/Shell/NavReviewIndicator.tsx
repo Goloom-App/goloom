@@ -42,6 +42,7 @@ export function NavReviewCount({
       className={`sidebar-nav-item__count${overdueCount > 0 ? ' sidebar-nav-item__count--warning' : ''}`}
       data-testid="nav-review-badge"
       aria-label={t('nav.reviewQueuePending', { count })}
+      aria-hidden="true"
     >
       {display}
     </span>
