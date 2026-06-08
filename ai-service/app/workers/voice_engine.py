@@ -332,9 +332,7 @@ class VoiceEngineWorker:
         primary_limit: int,
     ) -> dict[str, Any]:
         content = str(result.get("content") or "")
-        raw_overrides = result.get("account_content_override") or {}
-        if not isinstance(raw_overrides, dict):
-            raw_overrides = {}
+        raw_overrides = VoiceEngineWorker._coerce_account_content_override(result.get("account_content_override"))
         limits = {str(acc["id"]): int(acc["max_chars"]) for acc in selected_accounts}
         overrides: dict[str, str] = {}
 
@@ -455,6 +453,39 @@ class VoiceEngineWorker:
         return [str(value)]
 
     @staticmethod
+    def _coerce_account_content_override(value: Any) -> dict[str, str]:
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return {
+                str(key): str(item).strip()
+                for key, item in value.items()
+                if str(key).strip() and str(item).strip()
+            }
+        if isinstance(value, list):
+            overrides: dict[str, str] = {}
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                account_id = str(
+                    item.get("account_id") or item.get("accountId") or item.get("id") or ""
+                ).strip()
+                text = str(item.get("content") or item.get("text") or item.get("override") or "").strip()
+                if account_id and text:
+                    overrides[account_id] = text
+            return overrides
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if not cleaned or cleaned.casefold() in {"null", "none", "n/a"}:
+                return {}
+            try:
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                return {}
+            return VoiceEngineWorker._coerce_account_content_override(parsed)
+        return {}
+
+    @staticmethod
     def _parse_result(raw_content: str) -> dict[str, Any]:
         cleaned = raw_content.strip()
         if cleaned.startswith("```"):
@@ -481,20 +512,18 @@ class VoiceEngineWorker:
         content = payload.get("content")
         hashtags = payload.get("hashtags") or []
         platform_metadata = payload.get("platform_metadata") or {}
-        overrides = payload.get("account_content_override") or {}
+        overrides = VoiceEngineWorker._coerce_account_content_override(payload.get("account_content_override"))
 
         if not isinstance(content, str) or not content.strip():
             raise ValueError("LLM response missing content")
         if not isinstance(hashtags, list):
-            raise ValueError("LLM response hashtags must be a list")
+            hashtags = []
         if not isinstance(platform_metadata, dict):
-            raise ValueError("LLM response platform_metadata must be an object")
-        if not isinstance(overrides, dict):
-            raise ValueError("LLM response account_content_override must be an object")
+            platform_metadata = {}
 
         return {
             "content": content.strip(),
             "hashtags": [str(hashtag) for hashtag in hashtags],
             "platform_metadata": platform_metadata,
-            "account_content_override": {str(key): str(value).strip() for key, value in overrides.items() if str(value).strip()},
+            "account_content_override": overrides,
         }

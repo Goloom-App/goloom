@@ -126,6 +126,69 @@ async def test_process_refine_mode_skips_minimum_length():
 
 
 @pytest.mark.asyncio
+async def test_process_refine_mode_coerces_invalid_account_content_override():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    refined = "Polished release note with clearer flow."
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "content": refined,
+                "account_content_override": "none",
+                "hashtags": "not-a-list",
+                "platform_metadata": [],
+            }
+        ),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process(
+        {
+            **sample_job(
+                refine_content=True,
+                source_content="Rough draft about the release.",
+                prompt_hint="Tighten wording.",
+                target_account_ids=["acc-mastodon"],
+            ),
+            "context": sample_context(),
+        }
+    )
+
+    assert result["content"] == refined
+    assert result["account_content_override"] == {}
+
+
+@pytest.mark.asyncio
+async def test_process_coerces_array_account_content_override():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    primary_text = _long_primary_text(480)
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "content": primary_text,
+                "account_content_override": [
+                    {"account_id": "acc-bluesky", "content": "Release shipped today."}
+                ],
+                "hashtags": [],
+                "platform_metadata": {},
+            }
+        ),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process({**sample_job(), "context": sample_context()})
+
+    assert result["account_content_override"] == {"acc-bluesky": "Release shipped today."}
+
+
+@pytest.mark.asyncio
 async def test_process_retries_when_primary_content_is_too_short():
     adapter = AsyncMock()
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
