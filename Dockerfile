@@ -5,10 +5,16 @@ WORKDIR /src
 
 COPY frontend/package.json frontend/pnpm-lock.yaml ./frontend/
 COPY frontend ./frontend
-COPY locales ./locales
-RUN mkdir -p /src/internal/webui && corepack enable && \
-    PNPM_VERSION="$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")" && \
-    corepack prepare "pnpm@${PNPM_VERSION}" --activate && \
+# Explicit files: empty locales/ in build context otherwise passes COPY but tsc exits 2.
+COPY locales/en.json locales/de.json ./locales/
+RUN mkdir -p /src/internal/webui && \
+    test -s locales/en.json && test -s locales/de.json || \
+      (echo "ERROR: locales/en.json and locales/de.json missing or empty in Docker build context" >&2; ls -la locales/ 2>&1 || true; exit 1) && \
+    corepack enable && \
+    (corepack prepare pnpm@10.33.0 --activate || \
+      (curl -fsSL https://github.com/pnpm/pnpm/releases/download/v10.33.4/pnpm-linux-x64 -o /usr/local/bin/pnpm && \
+       chmod +x /usr/local/bin/pnpm)) && \
+    pnpm --version && \
     CI=true pnpm --dir frontend install --frozen-lockfile && \
     pnpm --dir frontend build
 

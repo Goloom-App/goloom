@@ -71,7 +71,7 @@ func TestDockerfileCopiesLocalesBeforeFrontendBuild(t *testing.T) {
 	var sawFrontendBuild bool
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "COPY locales") {
+		if strings.HasPrefix(trimmed, "COPY locales/en.json") || strings.HasPrefix(trimmed, "COPY locales ./locales") {
 			sawLocalesCopy = true
 		}
 		if strings.Contains(trimmed, "pnpm --dir frontend build") {
@@ -87,15 +87,29 @@ func TestDockerfileCopiesLocalesBeforeFrontendBuild(t *testing.T) {
 	}
 }
 
-func TestDockerfileUsesPackageManagerPnpmVersion(t *testing.T) {
+func TestDockerfileVerifiesLocaleFilesBeforeFrontendBuild(t *testing.T) {
 	root := repoRoot(t)
-	dockerfile, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	content := string(dockerfile)
-	if !strings.Contains(content, "packageManager.split('@')[1]") {
-		t.Fatal("Dockerfile must read pnpm version from frontend/package.json packageManager (avoid hardcoded drift)")
+	s := string(content)
+	if !strings.Contains(s, "test -s locales/en.json") || !strings.Contains(s, "test -s locales/de.json") {
+		t.Fatal("Dockerfile must verify locale JSON files exist and are non-empty before frontend build")
+	}
+	if !strings.Contains(s, "COPY locales/en.json") {
+		t.Fatal("Dockerfile must copy locale JSON files explicitly (empty locales/ dir passes COPY but breaks tsc)")
+	}
+}
+
+func TestDockerfileUsesPinnedPnpmForCorepack(t *testing.T) {
+	root := repoRoot(t)
+	content, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "corepack prepare pnpm@10.33.0") {
+		t.Fatal("Dockerfile must pin corepack pnpm@10.33.0 (Dockhand blocks npm registry lookups for other versions)")
 	}
 }
 
