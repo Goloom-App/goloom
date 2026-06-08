@@ -70,13 +70,6 @@ class GoloomClient:
                 raise
         return default_proactive_settings()
 
-    async def list_rss_feeds(self, team_id: str) -> list:
-        payload = await self._request("GET", f"/v1/teams/{team_id}/rss-feeds")
-        return payload.get("items", [])
-
-    async def update_rss_feed(self, team_id: str, feed_id: str, data: dict) -> dict:
-        return await self._request("PATCH", f"/v1/teams/{team_id}/rss-feeds/{feed_id}", json=data)
-
     async def update_team_profile(self, team_id: str, profile: dict) -> dict:
         # Read current to preserve auto_publish_enabled
         current = {}

@@ -121,7 +121,7 @@ async def test_process_refine_mode_skips_minimum_length():
 
     assert result["content"] == refined
     first_call = adapter.generate.await_args_list[0]
-    assert "Existing draft to refine" in first_call.args[0]
+    assert "Template starting point" in first_call.args[0]
     assert adapter.generate.await_count == 1
 
 

@@ -112,6 +112,7 @@ create table if not exists rss_feed_configs (
     feed_url text not null,
     name text not null,
     is_active integer not null default 1,
+    ai_enhance_enabled integer not null default 0,
     content_template text not null default '{title}
 
 {link}',

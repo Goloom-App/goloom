@@ -502,15 +502,15 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 	maxPosts := input.NormalizedMaxPostsPerDay()
 	const query = `
 		INSERT INTO rss_feed_configs (
-			team_id, feed_url, name, is_active, content_template, output_mode, max_posts_per_day,
+			team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day,
 			prompt_hint, target_account_ids, tonality, initial_sync_mode
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id, team_id, feed_url, name, is_active, content_template, output_mode, max_posts_per_day, counter_next,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day, counter_next,
 		          prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
 	`
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
-		teamID, input.FeedURL, input.Name, input.IsActive, contentTemplate, outputMode, maxPosts,
+		teamID, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, contentTemplate, outputMode, maxPosts,
 		input.PromptHint, targetJSON, input.Tonality, syncMode,
 	))
 	if err != nil {
@@ -521,7 +521,7 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 
 func (s *Store) GetRSSFeedConfigByID(ctx context.Context, teamID string, id string) (domain.RSSFeedConfig, error) {
 	const query = `
-		SELECT id, team_id, feed_url, name, is_active, content_template, output_mode, max_posts_per_day, counter_next,
+		SELECT id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day, counter_next,
 		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
 		FROM rss_feed_configs
 		WHERE team_id = $1 AND id = $2
@@ -538,7 +538,7 @@ func (s *Store) GetRSSFeedConfigByID(ctx context.Context, teamID string, id stri
 
 func (s *Store) ListRSSFeedConfigs(ctx context.Context, teamID string) ([]domain.RSSFeedConfig, error) {
 	const query = `
-		SELECT id, team_id, feed_url, name, is_active, content_template, output_mode, max_posts_per_day, counter_next,
+		SELECT id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day, counter_next,
 		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
 		FROM rss_feed_configs
 		WHERE team_id = $1
@@ -571,16 +571,16 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 	maxPosts := input.NormalizedMaxPostsPerDay()
 	const query = `
 		UPDATE rss_feed_configs
-		SET feed_url = $3, name = $4, is_active = $5, content_template = $6, output_mode = $7, max_posts_per_day = $8,
-		    prompt_hint = $9, target_account_ids = $10, tonality = $11,
-		    initial_sync_mode = $12, last_fetched_at = COALESCE($13, last_fetched_at)
+		SET feed_url = $3, name = $4, is_active = $5, ai_enhance_enabled = $6, content_template = $7, output_mode = $8, max_posts_per_day = $9,
+		    prompt_hint = $10, target_account_ids = $11, tonality = $12,
+		    initial_sync_mode = $13, last_fetched_at = COALESCE($14, last_fetched_at)
 		WHERE team_id = $1 AND id = $2
-		RETURNING id, team_id, feed_url, name, is_active, content_template, output_mode, max_posts_per_day, counter_next,
+		RETURNING id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day, counter_next,
 		          prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
 	`
 	syncMode := string(domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode)))
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
-		teamID, id, input.FeedURL, input.Name, input.IsActive, contentTemplate, outputMode, maxPosts,
+		teamID, id, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, contentTemplate, outputMode, maxPosts,
 		input.PromptHint, targetJSON, input.Tonality, syncMode, input.LastFetchedAt,
 	))
 	if err != nil {
@@ -612,6 +612,7 @@ func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeed
 		&feed.FeedURL,
 		&feed.Name,
 		&feed.IsActive,
+		&feed.AiEnhanceEnabled,
 		&feed.ContentTemplate,
 		&outputMode,
 		&feed.MaxPostsPerDay,

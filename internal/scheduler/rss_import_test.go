@@ -95,7 +95,7 @@ func TestImportRSSFeed_createsPublishNowPost(t *testing.T) {
 		},
 	}
 
-	svc := New(testLogger(), st, nil, time.Minute, 1, 0, 0, 0, 0)
+	svc := New(testLogger(), st, nil, time.Minute, 1, 0, 0, 0, 0, nil)
 	svc.importRSSFeed(context.Background(), stubRSSFetcher{items: []rss.Item{{
 		GUID:        "item-1",
 		Link:        "https://example.com/post",

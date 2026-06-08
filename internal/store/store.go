@@ -69,6 +69,7 @@ type Store interface {
 	CountRSSFeedPostsToday(ctx context.Context, feedID string) (int, error)
 	RSSItemAlreadyImported(ctx context.Context, feedID, itemKey string) (bool, error)
 	RecordRSSImportedItem(ctx context.Context, feedID, itemKey, postID string) error
+	UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error
 	IncrementRSSFeedCounter(ctx context.Context, feedID string) error
 	UpdateRSSFeedLastFetched(ctx context.Context, feedID string, lastFetchedAt time.Time) error
 	ListAutomationReviewDrafts(ctx context.Context, teamID string, limit int) ([]domain.ReviewQueueItem, error)

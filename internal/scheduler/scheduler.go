@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/scheduling"
@@ -20,6 +21,7 @@ type Service struct {
 	logger                     *slog.Logger
 	store                      store.Store
 	providers                  *provider.Registry
+	jobManager                 *aijobs.Manager
 	pollInterval               time.Duration
 	metricSyncInterval         time.Duration
 	accountHealthInterval      time.Duration
@@ -34,7 +36,7 @@ type Service struct {
 	rssImportMu           sync.Mutex
 }
 
-func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration, externalPostImportInterval time.Duration, rssImportInterval time.Duration) *Service {
+func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration, externalPostImportInterval time.Duration, rssImportInterval time.Duration, jobManager *aijobs.Manager) *Service {
 	if workers <= 0 {
 		workers = 1
 	}
@@ -42,6 +44,7 @@ func New(logger *slog.Logger, store store.Store, providers *provider.Registry, p
 		logger:                     logger,
 		store:                      store,
 		providers:                  providers,
+		jobManager:                 jobManager,
 		pollInterval:               pollInterval,
 		metricSyncInterval:         metricSyncInterval,
 		accountHealthInterval:      accountHealthInterval,

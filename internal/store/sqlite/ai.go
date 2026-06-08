@@ -472,11 +472,11 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 	maxPosts := input.NormalizedMaxPostsPerDay()
 	_, err = s.db.ExecContext(ctx, `
 		insert into rss_feed_configs (
-			id, team_id, feed_url, name, is_active, content_template, output_mode, max_posts_per_day,
+			id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day,
 			prompt_hint, target_account_ids, tonality, initial_sync_mode, created_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, teamID, input.FeedURL, input.Name, boolToInt(input.IsActive), contentTemplate, outputMode, maxPosts,
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, teamID, input.FeedURL, input.Name, boolToInt(input.IsActive), boolToInt(input.AiEnhanceEnabled), contentTemplate, outputMode, maxPosts,
 		input.PromptHint, targetJSON, input.Tonality, syncMode, now,
 	)
 	if err != nil {
@@ -525,11 +525,11 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 	maxPosts := input.NormalizedMaxPostsPerDay()
 	_, err = s.db.ExecContext(ctx, `
 		update rss_feed_configs
-		set feed_url = ?, name = ?, is_active = ?, content_template = ?, output_mode = ?, max_posts_per_day = ?,
+		set feed_url = ?, name = ?, is_active = ?, ai_enhance_enabled = ?, content_template = ?, output_mode = ?, max_posts_per_day = ?,
 		    prompt_hint = ?, target_account_ids = ?, tonality = ?,
 		    initial_sync_mode = ?, last_fetched_at = coalesce(?, last_fetched_at)
 		where team_id = ? and id = ?`,
-		input.FeedURL, input.Name, boolToInt(input.IsActive), contentTemplate, outputMode, maxPosts,
+		input.FeedURL, input.Name, boolToInt(input.IsActive), boolToInt(input.AiEnhanceEnabled), contentTemplate, outputMode, maxPosts,
 		input.PromptHint, targetJSON, input.Tonality, syncMode, lastFetched, teamID, id,
 	)
 	if err != nil {
@@ -540,7 +540,7 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 }
 
 const rssFeedSelectQuery = `
-		select id, team_id, feed_url, name, is_active, content_template, output_mode, max_posts_per_day, counter_next,
+		select id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day, counter_next,
 		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
 		from rss_feed_configs
 `
@@ -552,16 +552,17 @@ func (s *Store) DeleteRSSFeedConfig(ctx context.Context, teamID string, id strin
 
 func scanRSSFeedConfig(scanner rowScanner) (domain.RSSFeedConfig, error) {
 	var (
-		cfg           domain.RSSFeedConfig
-		isActive      int
-		targetRaw     string
-		lastFetchedAt sql.NullString
-		createdAt     string
-		outputMode    string
+		cfg               domain.RSSFeedConfig
+		isActive          int
+		aiEnhanceEnabled  int
+		targetRaw         string
+		lastFetchedAt     sql.NullString
+		createdAt         string
+		outputMode        string
 	)
 	var syncMode string
 	if err := scanner.Scan(
-		&cfg.ID, &cfg.TeamID, &cfg.FeedURL, &cfg.Name, &isActive, &cfg.ContentTemplate, &outputMode, &cfg.MaxPostsPerDay, &cfg.CounterNext,
+		&cfg.ID, &cfg.TeamID, &cfg.FeedURL, &cfg.Name, &isActive, &aiEnhanceEnabled, &cfg.ContentTemplate, &outputMode, &cfg.MaxPostsPerDay, &cfg.CounterNext,
 		&cfg.PromptHint, &targetRaw, &cfg.Tonality, &syncMode, &lastFetchedAt, &createdAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -570,6 +571,7 @@ func scanRSSFeedConfig(scanner rowScanner) (domain.RSSFeedConfig, error) {
 		return domain.RSSFeedConfig{}, err
 	}
 	cfg.IsActive = isActive != 0
+	cfg.AiEnhanceEnabled = aiEnhanceEnabled != 0
 	cfg.OutputMode = domain.NormalizeAutomationOutputMode(outputMode)
 	cfg.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(syncMode)
 	if err := json.Unmarshal([]byte(targetRaw), &cfg.TargetAccountIDs); err != nil {

@@ -116,6 +116,8 @@ func Run(ctx context.Context) error {
 		}),
 	)
 
+	jobManager := aijobs.NewManager(dataStore, nil, cfg.PublicBaseURL)
+
 	schedulerService := scheduler.New(
 		logger,
 		dataStore,
@@ -126,6 +128,7 @@ func Run(ctx context.Context) error {
 		cfg.SchedulerAccountHealthInterval,
 		cfg.SchedulerExternalPostImportInterval,
 		cfg.SchedulerRSSImportInterval,
+		jobManager,
 	)
 	go schedulerService.Start(ctx)
 
@@ -134,7 +137,6 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("load i18n catalog: %w", err)
 	}
 
-	jobManager := aijobs.NewManager(dataStore, nil, cfg.PublicBaseURL)
 	sseHub := sse.NewHub()
 	defer sseHub.Close()
 	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog, jobManager, sseHub)

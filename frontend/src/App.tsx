@@ -2283,7 +2283,7 @@ function App() {
         )}
 
         {section === 'aiProactive' && selectedTeam && (
-          <ProactiveTriggersView team={selectedTeam} accounts={teamAccounts} />
+          <ProactiveTriggersView team={selectedTeam} />
         )}
 
         {section === 'admin' && principalUser?.globalRole === 'admin' && (

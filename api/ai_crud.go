@@ -179,6 +179,7 @@ type rssFeedPatchRequest struct {
 	ContentTemplate  *string    `json:"content_template"`
 	OutputMode       *string    `json:"output_mode"`
 	MaxPostsPerDay   *int       `json:"max_posts_per_day"`
+	AiEnhanceEnabled *bool      `json:"ai_enhance_enabled"`
 	PromptHint       *string    `json:"prompt_hint"`
 	TargetAccountIDs *[]string  `json:"target_account_ids"`
 	Tonality         *string    `json:"tonality"`
@@ -219,6 +220,9 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	if patch.MaxPostsPerDay != nil {
 		merged.MaxPostsPerDay = *patch.MaxPostsPerDay
+	}
+	if patch.AiEnhanceEnabled != nil {
+		merged.AiEnhanceEnabled = *patch.AiEnhanceEnabled
 	}
 	if patch.PromptHint != nil {
 		merged.PromptHint = *patch.PromptHint

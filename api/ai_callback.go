@@ -68,13 +68,19 @@ func (a *API) handleAICallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if input.Status == domain.AIJobStatusCompleted {
-		if job.Type == domain.AIJobTypeProactiveTrigger {
+		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			a.finishRSSAutomationFromAI(r, job, input.Result, meta)
+		} else if job.Type == domain.AIJobTypeProactiveTrigger {
 			a.autoCreateDraftFromCallbackResult(r, job, input.Result)
 		} else {
 			profile, profErr := a.store.GetTeamProfile(r.Context(), job.TeamID)
 			if profErr == nil && profile.AutoPublishEnabled {
 				a.autoCreatePostFromCallbackResult(r, job, input.Result)
 			}
+		}
+	} else if input.Status == domain.AIJobStatusFailed {
+		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			a.finishRSSAutomationFallback(r, job, meta)
 		}
 	}
 

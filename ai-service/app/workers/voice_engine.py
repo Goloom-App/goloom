@@ -212,12 +212,14 @@ class VoiceEngineWorker:
                 f"Template structure: {json.dumps(campaign_format.get('structure') or {}, ensure_ascii=False)}"
             )
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'unchanged'}."
+        article_section = self._rss_article_section(params)
         return (
             f"{base_prompt}\n\n"
             "Refine an existing draft for multi-account publishing.\n"
             f"Primary account: {primary.get('username') or primary_account_id} (id={primary_account_id}, "
             f"limit {primary_limit} characters).\n"
-            f"Existing draft to refine:\n---\n{source_content}\n---\n\n"
+            f"Template starting point (adapt using the source article facts):\n---\n{source_content}\n---\n"
+            f"{article_section}\n"
             f"Refinement goal: {refinement_hint}\n"
             f"- \"content\": refined primary text for account id {primary_account_id}; "
             f"use the available character budget where it improves the post\n"
@@ -227,6 +229,22 @@ class VoiceEngineWorker:
             "Return JSON only with keys content, account_content_override, hashtags, platform_metadata.\n"
             f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
         )
+
+    @staticmethod
+    def _rss_article_section(params: dict[str, Any]) -> str:
+        title = str(params.get("rss_article_title") or "").strip()
+        content = str(params.get("rss_article_content") or params.get("rss_article_summary") or "").strip()
+        link = str(params.get("rss_article_link") or "").strip()
+        if not title and not content and not link:
+            return ""
+        lines = ["Source RSS article (use as factual basis for the post):"]
+        if title:
+            lines.append(f"Title: {title}")
+        if link:
+            lines.append(f"Link: {link}")
+        if content:
+            lines.append(f"Article text:\n---\n{content}\n---")
+        return "\n".join(lines) + "\n"
 
     @staticmethod
     def _is_refine_mode(params: dict[str, Any]) -> bool:

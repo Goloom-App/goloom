@@ -47,6 +47,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column output_mode text not null default 'draft'`,
 		`alter table rss_feed_configs add column max_posts_per_day integer not null default 10`,
 		`alter table rss_feed_configs add column counter_next integer not null default 1`,
+		`alter table rss_feed_configs add column ai_enhance_enabled integer not null default 0`,
 		`alter table scheduled_posts add column rss_feed_id text references rss_feed_configs(id) on delete set null`,
 		`create table if not exists rss_imported_items (
 			id text primary key,

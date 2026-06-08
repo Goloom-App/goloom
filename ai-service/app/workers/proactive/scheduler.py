@@ -67,11 +67,9 @@ class ProactiveScheduler:
 
             try:
                 settings = await self.client.get_proactive_settings(team_id)
-                feeds = await self.client.list_rss_feeds(team_id)
-                has_active_rss = any(feed.get("is_active") for feed in feeds)
-                if not settings.get("auto_fill_enabled", False) and not has_active_rss:
+                if not settings.get("auto_fill_enabled", False):
                     logger.debug(
-                        "Team %s has no auto-fill and no active RSS feeds — skipping",
+                        "Team %s has auto-fill disabled — skipping",
                         team_id,
                     )
                     continue

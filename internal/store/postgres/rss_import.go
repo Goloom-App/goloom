@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
@@ -72,8 +73,26 @@ func (s *Store) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, post
 		VALUES ($1, $2, $3)
 		ON CONFLICT (feed_id, item_key) DO NOTHING
 	`
-	if _, err := s.pool.Exec(ctx, query, feedID, itemKey, postID); err != nil {
+	var postArg any
+	if strings.TrimSpace(postID) != "" {
+		postArg = postID
+	}
+	if _, err := s.pool.Exec(ctx, query, feedID, itemKey, postArg); err != nil {
 		return fmt.Errorf("RecordRSSImportedItem: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE rss_imported_items
+		SET post_id = $3
+		WHERE feed_id = $1 AND item_key = $2`, feedID, itemKey, postID)
+	if err != nil {
+		return fmt.Errorf("UpdateRSSImportedItemPostID: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("rss imported item not found: %w", pgx.ErrNoRows)
 	}
 	return nil
 }

@@ -8,7 +8,6 @@ from typing import Any
 from app.services import GoloomClient
 
 from .event_hooks import BaseHook, ContentCalendarHook, TrendingTopicHook
-from .rss import RSSHook
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,6 @@ class TriggerManager:
         self.hooks: list[BaseHook] = [
             ContentCalendarHook(client),
             TrendingTopicHook(client),
-            RSSHook(client),
         ]
         self._rate_counter: dict[str, dict[str, int]] = defaultdict(
             lambda: defaultdict(int)

@@ -1749,6 +1749,8 @@ components:
           type: string
         is_active:
           type: boolean
+        ai_enhance_enabled:
+          type: boolean
         content_template:
           type: string
         output_mode:
@@ -1788,6 +1790,8 @@ components:
           type: string
         is_active:
           type: boolean
+        ai_enhance_enabled:
+          type: boolean
         content_template:
           type: string
         output_mode:
@@ -1816,6 +1820,8 @@ components:
         name:
           type: string
         is_active:
+          type: boolean
+        ai_enhance_enabled:
           type: boolean
         content_template:
           type: string

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
@@ -66,13 +67,37 @@ func (s *Store) RSSItemAlreadyImported(ctx context.Context, feedID, itemKey stri
 }
 
 func (s *Store) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, postID string) error {
+	var postArg any
+	if strings.TrimSpace(postID) != "" {
+		postArg = postID
+	}
 	_, err := s.db.ExecContext(ctx, `
 		insert or ignore into rss_imported_items (id, feed_id, item_key, post_id, created_at)
 		values (?, ?, ?, ?, ?)`,
-		uuid.NewString(), feedID, itemKey, postID, nowString(),
+		uuid.NewString(), feedID, itemKey, postArg, nowString(),
 	)
 	if err != nil {
 		return fmt.Errorf("RecordRSSImportedItem: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error {
+	res, err := s.db.ExecContext(ctx, `
+		update rss_imported_items
+		set post_id = ?
+		where feed_id = ? and item_key = ?`,
+		postID, feedID, itemKey,
+	)
+	if err != nil {
+		return fmt.Errorf("UpdateRSSImportedItemPostID: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("UpdateRSSImportedItemPostID: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("rss imported item not found: %w", sql.ErrNoRows)
 	}
 	return nil
 }

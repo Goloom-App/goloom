@@ -348,6 +348,7 @@ export interface BackendRSSFeedConfig {
   feed_url: string
   name: string
   is_active: boolean
+  ai_enhance_enabled?: boolean
   content_template?: string
   output_mode?: 'draft' | 'scheduled' | 'publish_now'
   max_posts_per_day?: number
@@ -1128,6 +1129,10 @@ export function createApiClient(options: ApiClientOptions) {
         feed_url: string
         name: string
         is_active: boolean
+        ai_enhance_enabled?: boolean
+        content_template?: string
+        output_mode?: 'draft' | 'scheduled' | 'publish_now'
+        max_posts_per_day?: number
         prompt_hint?: string
         target_account_ids?: string[]
         tonality?: string
@@ -1147,6 +1152,10 @@ export function createApiClient(options: ApiClientOptions) {
         feed_url?: string
         name?: string
         is_active?: boolean
+        ai_enhance_enabled?: boolean
+        content_template?: string
+        output_mode?: 'draft' | 'scheduled' | 'publish_now'
+        max_posts_per_day?: number
         prompt_hint?: string
         target_account_ids?: string[]
         tonality?: string

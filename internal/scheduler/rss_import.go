@@ -172,30 +172,15 @@ func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeed
 		title = feed.Name
 	}
 
-	feedID := feed.ID
-	input := domain.CreatePostInput{
-		Title:          title,
-		Content:        content,
-		ScheduledAt:    scheduledAt,
-		TargetAccounts: feed.TargetAccountIDs,
-		Draft:          draft,
-		AuthorUserID:   &ownerID,
-		Source:         domain.PostSourceAutomation,
-		RSSFeedID:      &feedID,
+	if s.shouldEnhanceRSSWithAI(ctx, feed) {
+		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
+			s.logger.WarnContext(ctx, "rss import: ai enhancement unavailable, using template", "feed_id", feed.ID, "error", err)
+		} else {
+			return nil
+		}
 	}
-	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: ownerID}, Kind: "system"}
-	post, err := s.store.CreateScheduledPost(ctx, feed.TeamID, principal, input)
-	if err != nil {
-		return err
-	}
-	if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
-		return err
-	}
-	if err := s.store.IncrementRSSFeedCounter(ctx, feed.ID); err != nil {
-		return err
-	}
-	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)
-	return nil
+
+	return s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID)
 }
 
 func rssOutputSchedule(mode domain.AutomationOutputMode, publishedAt time.Time) (time.Time, bool) {

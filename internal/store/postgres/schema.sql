@@ -452,6 +452,7 @@ alter table rss_feed_configs add column if not exists content_template text not 
 alter table rss_feed_configs add column if not exists output_mode text not null default 'draft';
 alter table rss_feed_configs add column if not exists max_posts_per_day integer not null default 10;
 alter table rss_feed_configs add column if not exists counter_next integer not null default 1;
+alter table rss_feed_configs add column if not exists ai_enhance_enabled boolean not null default false;
 
 alter table scheduled_posts add column if not exists rss_feed_id uuid references rss_feed_configs(id) on delete set null;
 

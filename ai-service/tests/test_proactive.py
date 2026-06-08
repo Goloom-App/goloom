@@ -77,10 +77,9 @@ async def test_rate_limiting_blocks_excessive_triggers():
     settings = {"max_triggers_per_day": 2, "content_gap_threshold_days": 3, "auto_fill_enabled": True}
 
     r1 = await manager.run_for_team("team-rate", settings)
-    assert len(r1) == 3
+    assert len(r1) == 2
     assert r1[0] is True
     assert r1[1] is False
-    assert r1[2] is False
 
     r2 = await manager.run_for_team("team-rate", settings)
     assert r2 == [True]
@@ -128,7 +127,6 @@ async def test_scheduler_skips_teams_with_auto_fill_disabled():
         return {"auto_fill_enabled": True, "max_triggers_per_day": 5, "cron_schedule": "0 * * * *"}
 
     client.get_proactive_settings.side_effect = proactive_settings
-    client.list_rss_feeds.return_value = []
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
 
     scheduler = ProactiveScheduler(client, poll_seconds=99999)
@@ -150,7 +148,6 @@ async def test_scheduler_runs_for_all_enabled_teams():
         "max_triggers_per_day": 5,
         "cron_schedule": "0 * * * *",
     }
-    client.list_rss_feeds.return_value = []
     client.get_ai_context.return_value = make_context(scheduled_posts=[])
 
     scheduler = ProactiveScheduler(client, poll_seconds=99999)

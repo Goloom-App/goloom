@@ -313,6 +313,7 @@ type RSSFeedConfig struct {
 	FeedURL          string               `json:"feed_url"`
 	Name             string               `json:"name"`
 	IsActive         bool                 `json:"is_active"`
+	AiEnhanceEnabled bool                 `json:"ai_enhance_enabled"`
 	ContentTemplate  string               `json:"content_template"`
 	OutputMode       AutomationOutputMode `json:"output_mode"`
 	MaxPostsPerDay   int                  `json:"max_posts_per_day"`

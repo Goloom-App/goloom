@@ -18,6 +18,7 @@ type FeedFormState = {
   name: string
   feedUrl: string
   isActive: boolean
+  aiEnhanceEnabled: boolean
   contentTemplate: string
   outputMode: AutomationOutputMode
   maxPostsPerDay: number
@@ -33,6 +34,7 @@ const emptyFeedForm = (): FeedFormState => ({
   name: '',
   feedUrl: '',
   isActive: true,
+  aiEnhanceEnabled: false,
   contentTemplate: defaultTemplate,
   outputMode: 'draft',
   maxPostsPerDay: 10,
@@ -47,6 +49,7 @@ function feedToForm(feed: RSSFeedConfig): FeedFormState {
     name: feed.name,
     feedUrl: feed.feedUrl,
     isActive: feed.isActive,
+    aiEnhanceEnabled: feed.aiEnhanceEnabled,
     contentTemplate: feed.contentTemplate || defaultTemplate,
     outputMode: feed.outputMode,
     maxPostsPerDay: feed.maxPostsPerDay ?? 10,
@@ -107,6 +110,10 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       setError(t('rss.templateRequired'))
       return
     }
+    if (feedForm.aiEnhanceEnabled && team.isAiEnabled && !feedForm.promptHint.trim()) {
+      setError(t('rss.promptRequired'))
+      return
+    }
 
     setError(null)
     setStatusMessage(null)
@@ -114,6 +121,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       name: feedForm.name.trim(),
       feed_url: feedForm.feedUrl.trim(),
       is_active: feedForm.isActive,
+      ai_enhance_enabled: feedForm.aiEnhanceEnabled,
       content_template: feedForm.contentTemplate.trim(),
       output_mode: feedForm.outputMode,
       max_posts_per_day: feedForm.maxPostsPerDay,
@@ -274,6 +282,47 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                       }
                     />
                   </label>
+                  {team.isAiEnabled ? (
+                    <>
+                      <label className="field flex-row--center gap-2" style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={feedForm.aiEnhanceEnabled}
+                          onChange={(e) => setFeedForm((prev) => ({ ...prev, aiEnhanceEnabled: e.target.checked }))}
+                          data-testid="rss-ai-enhance"
+                        />
+                        <span>{t('rss.aiEnhanceEnabled')}</span>
+                      </label>
+                      {feedForm.aiEnhanceEnabled ? (
+                        <>
+                          <label className="field">
+                            <span>{t('rss.aiPrompt')}</span>
+                            <textarea
+                              rows={4}
+                              value={feedForm.promptHint}
+                              onChange={(e) => setFeedForm((prev) => ({ ...prev, promptHint: e.target.value }))}
+                              placeholder={t('rss.aiPromptPlaceholder')}
+                              data-testid="rss-ai-prompt"
+                            />
+                            <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                              {t('rss.aiPromptHint')}
+                            </p>
+                          </label>
+                          <label className="field">
+                            <span>{t('rss.tonalityOverride')}</span>
+                            <input
+                              value={feedForm.tonality}
+                              onChange={(e) => setFeedForm((prev) => ({ ...prev, tonality: e.target.value }))}
+                              placeholder={t('rss.tonalityPlaceholder')}
+                              data-testid="rss-ai-tonality"
+                            />
+                          </label>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="hint">{t('rss.aiRequiresTeam')}</p>
+                  )}
                   <div className="field">
                     <span>{t('rss.targetAccounts')}</span>
                     <DestinationPicker
@@ -379,6 +428,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
               </p>
               <p className="hint" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
                 {outputModeLabel[feed.outputMode]} · {feed.targetAccountIds.length} {t('rss.accounts')}
+                {feed.aiEnhanceEnabled ? ` · ${t('rss.aiEnhanceEnabled')}` : ''}
                 {feed.initialSyncMode === 'publish_latest' ? ` · ${t('rss.firstCheckLatest')}` : ''}
               </p>
               <div className="flex-row--center gap-1 mt-2 hint" style={{ fontSize: '0.75rem' }}>
