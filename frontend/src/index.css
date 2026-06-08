@@ -2304,10 +2304,23 @@ select {
   color: var(--accent);
 }
 
+.post-card__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.post-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .post-card__title {
   font-size: 1rem;
   font-weight: 700;
   color: var(--text);
+  margin: 0;
 }
 
 .post-card__content {

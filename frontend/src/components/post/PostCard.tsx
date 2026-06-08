@@ -97,11 +97,16 @@ export function PostCard({
             <DestinationStack accounts={sharedAccountLabels(post, accounts)} publishedLinks={isArchived ? publishedLinks : undefined} />
           </div>
         </div>
-        <h3 className="post-card__title">
-          {post.status === 'draft' ? <span className="post-card__badge">{t('common.draft')}</span> : null}
-          {post.source === 'imported' ? <span className="post-card__badge">{t('common.importedBadge')}</span> : null}
-          {post.title || t('common.untitledPost')}
-        </h3>
+        <div className="post-card__title-block">
+          {post.status === 'draft' || post.source === 'imported' || post.source === 'automation' ? (
+            <div className="post-card__badges">
+              {post.status === 'draft' ? <span className="badge badge--default">{t('common.draft')}</span> : null}
+              {post.source === 'imported' ? <span className="badge badge--info">{t('common.importedBadge')}</span> : null}
+              {post.source === 'automation' ? <span className="badge badge--accent">{t('review.automationBadge')}</span> : null}
+            </div>
+          ) : null}
+          <h3 className="post-card__title">{post.title || t('common.untitledPost')}</h3>
+        </div>
         <p className="post-card__content">{post.content}</p>
       </article>
     </div>

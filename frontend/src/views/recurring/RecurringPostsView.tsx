@@ -1,9 +1,12 @@
 import { format, parseISO } from 'date-fns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
+import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
+import { DestinationPicker } from '../../components/ai/DestinationPicker'
 import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord, AutomationOutputMode } from '../../types'
 import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
@@ -119,6 +122,16 @@ export function RecurringPostsView({
     void refresh()
   }, [refresh])
 
+  function toggleTargetAccount(accountId: string) {
+    setTargetIds((cur) =>
+      cur.includes(accountId) ? cur.filter((id) => id !== accountId) : [...cur, accountId],
+    )
+  }
+
+  function closeEditor() {
+    setEditorOpen(false)
+  }
+
   function openEditor() {
     setTitle('')
     setContent('')
@@ -162,7 +175,7 @@ export function RecurringPostsView({
         }
       }
       await api.createPostTemplate(teamId, payload)
-      setEditorOpen(false)
+      closeEditor()
       setTitle('')
       setContent('')
       await refresh()
@@ -298,112 +311,114 @@ export function RecurringPostsView({
       </div>
 
       {editorOpen ? (
-        <div className="modal-backdrop" onClick={() => setEditorOpen(false)}>
-          <div className="glass-panel recurring-editor-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="section-card__title">{t('recurring.editorTitle')}</h3>
-
-            <label className="field">
-              <span>{t('common.title')}</span>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </label>
-
-            <label className="field">
-              <span>{t('common.content')}</span>
-              <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} />
-            </label>
-
-            <RecurrenceForm state={recState} onChange={setRecState} />
-            <OccurrencePreview state={recState} />
-
-            <div className="recurrence-form__section">
-              <label className="field field--checkbox">
-                <input type="checkbox" checked={isAnnouncement} onChange={(e) => setIsAnnouncement(e.target.checked)} />
-                <span>{t('recurring.announcement')}</span>
-              </label>
-              {isAnnouncement ? (
-                <div className="recurrence-form__announcement-config">
-                  <label className="field">
-                    <span>{t('recurring.announcementFor')}</span>
-                    <select value={announceTemplateId} onChange={(e) => setAnnounceTemplateId(e.target.value)}>
-                      <option value="">—</option>
-                      {items.filter((i) => i.enabled && i.next_materialize_at).map((i) => (
-                        <option key={i.id} value={i.id}>{i.title || t('recurring.untitled')}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>{t('recurring.announcementDaysBefore')}</span>
-                    <input type="number" min={1} max={30} value={announceDaysBefore} onChange={(e) => setAnnounceDaysBefore(parseInt(e.target.value, 10) || 2)} />
-                  </label>
-                  <p className="hint">{t('recurring.announcementHint')}</p>
-                </div>
-              ) : null}
-            </div>
-
-            <ContentPreview content={content} firstOccurrence={firstOccurrence} announceTemplate={isAnnouncement ? announceTemplateId : undefined} templates={items} />
-
-            {!isAnnouncement ? (
-              <>
+        <Dialog.Root open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="dialog-overlay" />
+            <Dialog.Content className="dialog-content" style={{ maxWidth: '36rem' }} data-testid="recurring-template-dialog">
+              <div className="drawer-header">
+                <Dialog.Title className="drawer-title">{t('recurring.editorTitle')}</Dialog.Title>
+                <Dialog.Close asChild>
+                  <button type="button" className="btn btn--ghost btn--icon-sm" aria-label={t('common.cancel')}>
+                    <X size={20} />
+                  </button>
+                </Dialog.Close>
+              </div>
+              <div className="drawer-body stack">
                 <label className="field">
-                  <span>{t('rss.outputMode')}</span>
-                  <select value={outputMode} onChange={(e) => setOutputMode(e.target.value as AutomationOutputMode)}>
-                    <option value="draft">{outputModeLabel.draft}</option>
-                    <option value="scheduled">{outputModeLabel.scheduled}</option>
-                    <option value="publish_now">{outputModeLabel.publish_now}</option>
-                  </select>
+                  <span>{t('common.title')}</span>
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} />
                 </label>
-                {team?.isAiEnabled ? (
+
+                <label className="field">
+                  <span>{t('common.content')}</span>
+                  <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} />
+                </label>
+
+                <RecurrenceForm state={recState} onChange={setRecState} />
+                <OccurrencePreview state={recState} />
+
+                <div className="field">
+                  <span>{t('common.targets')}</span>
+                  <DestinationPicker
+                    accounts={accounts}
+                    selectedIds={targetIds}
+                    onToggle={toggleTargetAccount}
+                    testIdPrefix="recurring-template-dest"
+                  />
+                </div>
+
+                <div className="recurrence-form__section">
+                  <label className="field field--checkbox">
+                    <input type="checkbox" checked={isAnnouncement} onChange={(e) => setIsAnnouncement(e.target.checked)} />
+                    <span>{t('recurring.announcement')}</span>
+                  </label>
+                  {isAnnouncement ? (
+                    <div className="recurrence-form__announcement-config">
+                      <label className="field">
+                        <span>{t('recurring.announcementFor')}</span>
+                        <select value={announceTemplateId} onChange={(e) => setAnnounceTemplateId(e.target.value)}>
+                          <option value="">—</option>
+                          {items.filter((i) => i.enabled && i.next_materialize_at).map((i) => (
+                            <option key={i.id} value={i.id}>{i.title || t('recurring.untitled')}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>{t('recurring.announcementDaysBefore')}</span>
+                        <input type="number" min={1} max={30} value={announceDaysBefore} onChange={(e) => setAnnounceDaysBefore(parseInt(e.target.value, 10) || 2)} />
+                      </label>
+                      <p className="hint">{t('recurring.announcementHint')}</p>
+                    </div>
+                  ) : null}
+                </div>
+
+                <ContentPreview content={content} firstOccurrence={firstOccurrence} announceTemplate={isAnnouncement ? announceTemplateId : undefined} templates={items} />
+
+                {!isAnnouncement ? (
                   <>
-                    <label className="field field--checkbox">
-                      <input type="checkbox" checked={aiEnhanceEnabled} onChange={(e) => setAiEnhanceEnabled(e.target.checked)} />
-                      <span>{t('rss.aiEnhanceEnabled')}</span>
+                    <label className="field">
+                      <span>{t('rss.outputMode')}</span>
+                      <select value={outputMode} onChange={(e) => setOutputMode(e.target.value as AutomationOutputMode)}>
+                        <option value="draft">{outputModeLabel.draft}</option>
+                        <option value="scheduled">{outputModeLabel.scheduled}</option>
+                        <option value="publish_now">{outputModeLabel.publish_now}</option>
+                      </select>
                     </label>
-                    {aiEnhanceEnabled ? (
+                    {team?.isAiEnabled ? (
                       <>
-                        <label className="field">
-                          <span>{t('rss.aiPrompt')}</span>
-                          <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('rss.aiPromptPlaceholder')} />
+                        <label className="field field--checkbox">
+                          <input type="checkbox" checked={aiEnhanceEnabled} onChange={(e) => setAiEnhanceEnabled(e.target.checked)} />
+                          <span>{t('rss.aiEnhanceEnabled')}</span>
                         </label>
-                        <label className="field">
-                          <span>{t('rss.tonalityOverride')}</span>
-                          <input value={tonality} onChange={(e) => setTonality(e.target.value)} placeholder={t('rss.tonalityPlaceholder')} />
-                        </label>
+                        {aiEnhanceEnabled ? (
+                          <>
+                            <label className="field">
+                              <span>{t('rss.aiPrompt')}</span>
+                              <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('rss.aiPromptPlaceholder')} />
+                            </label>
+                            <label className="field">
+                              <span>{t('rss.tonalityOverride')}</span>
+                              <input value={tonality} onChange={(e) => setTonality(e.target.value)} placeholder={t('rss.tonalityPlaceholder')} />
+                            </label>
+                          </>
+                        ) : null}
                       </>
                     ) : null}
                   </>
                 ) : null}
-              </>
-            ) : null}
 
-            <p className="hint">{t('common.targets')}</p>
-            <div className="composer-destination-row">
-              {accounts.map((a) => {
-                const on = targetIds.includes(a.id)
-                return (
-                  <button
-                    key={a.id}
-                    type="button"
-                    className={`composer-destination-toggle ${on ? 'composer-destination-toggle--selected' : ''}`}
-                    onClick={() =>
-                      setTargetIds((cur) => (cur.includes(a.id) ? cur.filter((x) => x !== a.id) : [...cur, a.id]))
-                    }
-                  >
-                    @{a.username}
+                <div className="flex-row--end gap-2 mt-4">
+                  <Dialog.Close asChild>
+                    <button type="button" className="btn btn--ghost">{t('common.cancel')}</button>
+                  </Dialog.Close>
+                  <button type="button" className="btn btn--primary" onClick={() => void handleCreate()}>
+                    {t('common.create')}
                   </button>
-                )
-              })}
-            </div>
-
-            <div className="inline-cluster mt-1">
-              <button type="button" className="button button--primary" onClick={() => void handleCreate()}>
-                {t('common.create')}
-              </button>
-              <button type="button" className="button button--secondary" onClick={() => setEditorOpen(false)}>
-                {t('common.cancel')}
-              </button>
-            </div>
-          </div>
-        </div>
+                </div>
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       ) : null}
     </div>
   )
