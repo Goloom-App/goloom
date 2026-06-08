@@ -10,6 +10,11 @@ COPY locales/en.json locales/de.json ./locales/
 RUN mkdir -p /src/internal/webui && \
     test -s locales/en.json && test -s locales/de.json || \
       (echo "ERROR: locales/en.json and locales/de.json missing or empty in Docker build context" >&2; ls -la locales/ 2>&1 || true; exit 1) && \
+    # Stale-file sweep: some deploy tools (Dockhand) cp without --delete, so removed
+    # source files reappear in the build context. Drop known-removed files explicitly.
+    rm -f frontend/src/views/ai/ProactiveTriggersView.tsx \
+          frontend/src/views/recurring/RecurringPostsView.tsx.bak \
+          frontend/src/views/rss/RSSFeedsView.tsx.bak && \
     corepack enable && \
     (corepack prepare pnpm@10.33.0 --activate || \
       (curl -fsSL https://github.com/pnpm/pnpm/releases/download/v10.33.4/pnpm-linux-x64 -o /usr/local/bin/pnpm && \
