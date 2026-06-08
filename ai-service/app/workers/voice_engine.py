@@ -222,7 +222,8 @@ class VoiceEngineWorker:
             f"{article_section}\n"
             f"Refinement goal: {refinement_hint}\n"
             f"- \"content\": refined primary text for account id {primary_account_id}; "
-            f"use the available character budget where it improves the post\n"
+            f"MUST NOT exceed {primary_limit} characters (hard limit)\n"
+            f"- The source draft is {len(source_content)} characters; keep the refined text within {primary_limit}\n"
             f"- {override_hint}\n"
             "- Do NOT create a separate version for every account.\n"
             "- Overrides must be shorter compressions of the refined primary text.\n"
@@ -298,6 +299,7 @@ class VoiceEngineWorker:
                 current_prompt = (
                     f"{prompt}\n\nRevise the previous answer and return JSON only. "
                     f"Fix this issue: {last_error}. "
+                    f"The primary content MUST be at most {primary_limit} characters. "
                     "Keep the refined primary text faithful to the source draft while improving quality. "
                     "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
                 )
@@ -324,6 +326,23 @@ class VoiceEngineWorker:
         return max(min(primary_limit - 20, int(primary_limit * 0.85)), int(primary_limit * 0.7))
 
     @staticmethod
+    def _truncate_to_limit(text: str, limit: int) -> str:
+        if limit <= 0:
+            return ""
+        cleaned = text.strip()
+        if len(cleaned) <= limit:
+            return cleaned
+        if limit == 1:
+            return cleaned[:1]
+        clipped = cleaned[:limit]
+        window_start = max(0, limit - max(20, limit // 6))
+        slice_ = clipped[window_start:limit]
+        last_space = slice_.rfind(" ")
+        if last_space > 0:
+            return clipped[: window_start + last_space].rstrip()
+        return clipped.rstrip()
+
+    @staticmethod
     def _normalize_multi_account_result(
         result: dict[str, Any],
         *,
@@ -332,6 +351,8 @@ class VoiceEngineWorker:
         primary_limit: int,
     ) -> dict[str, Any]:
         content = str(result.get("content") or "")
+        if len(content) > primary_limit:
+            content = VoiceEngineWorker._truncate_to_limit(content, primary_limit)
         raw_overrides = VoiceEngineWorker._coerce_account_content_override(result.get("account_content_override"))
         limits = {str(acc["id"]): int(acc["max_chars"]) for acc in selected_accounts}
         overrides: dict[str, str] = {}
@@ -347,6 +368,10 @@ class VoiceEngineWorker:
             if not text:
                 continue
             if len(content) <= limit:
+                continue
+            if len(text) > limit:
+                text = VoiceEngineWorker._truncate_to_limit(text, limit)
+            if len(text) >= len(content):
                 continue
             overrides[account_key] = text
 

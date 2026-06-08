@@ -230,15 +230,75 @@ async def test_process_retries_when_primary_content_is_too_short():
 
 
 @pytest.mark.asyncio
-async def test_process_retries_until_content_fits_char_limit():
+async def test_process_fits_primary_content_to_char_limit():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "content": "x" * 600,
+                "account_content_override": {"acc-bluesky": "short"},
+                "hashtags": ["#launch"],
+                "platform_metadata": {"platform": "mastodon"},
+            }
+        ),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process({**sample_job(), "context": sample_context()})
+
+    assert len(result["content"]) == 500
+    assert adapter.generate.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_process_refine_mode_fits_oversized_primary_content():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "content": "word " * 140,
+                "account_content_override": {},
+                "hashtags": [],
+                "platform_metadata": {},
+            }
+        ),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process(
+        {
+            **sample_job(
+                refine_content=True,
+                source_content="Rough draft about the release.",
+                target_account_ids=["acc-mastodon"],
+            ),
+            "context": sample_context(),
+        }
+    )
+
+    assert len(result["content"]) <= 500
+    assert result["content"]
+    assert adapter.generate.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_process_retries_when_override_missing_for_lower_limit_account():
     adapter = AsyncMock()
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
     adapter.generate.side_effect = [
         LLMResponse(
             content=json.dumps(
                 {
-                    "content": "x" * 600,
-                    "account_content_override": {"acc-bluesky": "short"},
+                    "content": _long_primary_text(480),
+                    "account_content_override": {},
                     "hashtags": ["#launch"],
                     "platform_metadata": {"platform": "mastodon"},
                 }
@@ -249,8 +309,8 @@ async def test_process_retries_until_content_fits_char_limit():
         LLMResponse(
             content=json.dumps(
                 {
-                    "content": "y" * 480,
-                    "account_content_override": {"acc-bluesky": "short"},
+                    "content": _long_primary_text(480),
+                    "account_content_override": {"acc-bluesky": "Short release note."},
                     "hashtags": ["#launch"],
                     "platform_metadata": {"platform": "mastodon"},
                 }
@@ -265,9 +325,10 @@ async def test_process_retries_until_content_fits_char_limit():
     result = await worker.process({**sample_job(), "context": sample_context()})
 
     assert len(result["content"]) == 480
+    assert result["account_content_override"] == {"acc-bluesky": "Short release note."}
     assert adapter.generate.await_count == 2
     second_call = adapter.generate.await_args_list[1]
-    assert "exceeds limit of 500 characters" in second_call.args[0]
+    assert "missing override" in second_call.args[0].casefold()
 
 
 @pytest.mark.asyncio
