@@ -16,8 +16,7 @@ func (s *Store) ListActiveRSSFeedConfigs(ctx context.Context, limit int) ([]doma
 		limit = 200
 	}
 	const query = `
-		SELECT id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, output_mode, max_posts_per_day, counter_next,
-		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
+		SELECT` + rssFeedConfigSelectList + `
 		FROM rss_feed_configs
 		WHERE is_active = true
 		ORDER BY created_at ASC
