@@ -14,10 +14,24 @@
       "matchFileNames": [
         "frontend/package.json"
       ],
-      "rangeStrategy": "bump",
+      "rangeStrategy": "replace",
       "postUpdateOptions": [
         "pnpmDedupe"
       ]
+    },
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "frontend/package.json"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "frontend non-major dependencies"
     }
   ]
 }
