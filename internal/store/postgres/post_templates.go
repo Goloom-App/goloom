@@ -137,6 +137,10 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	promptHint := strings.TrimSpace(input.PromptHint)
 	titleHint := strings.TrimSpace(input.TitleHint)
 	tonality := strings.TrimSpace(input.Tonality)
+	counterNext := 1
+	if input.CounterNext != nil && *input.CounterNext >= 1 {
+		counterNext = *input.CounterNext
+	}
 	row := s.pool.QueryRow(ctx, `
 		insert into post_templates (
 			id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
@@ -144,14 +148,14 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 			next_materialize_at, counter_next,
 			announces_template_id, announcement_days_before
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 1, $18, $19)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 		returning id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
 		          media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, output_mode, prompt_hint, title_hint, tonality,
 		          next_materialize_at, counter_next,
 		          announces_template_id, announcement_days_before, created_at, updated_at`,
 		id, teamID, principal.User.ID, strings.TrimSpace(input.Title), strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.RecurrenceJSON), visibility, mediaJSON, excludeJSON, targetJSON, enabled,
-		aiEnhance, outputMode, promptHint, titleHint, tonality, next,
+		aiEnhance, outputMode, promptHint, titleHint, tonality, next, counterNext,
 		announcesID, annDays,
 	)
 	return scanPostTemplate(row)
@@ -268,21 +272,25 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 	if input.Tonality != nil {
 		tonality = strings.TrimSpace(*input.Tonality)
 	}
+	counterNext := existing.CounterNext
+	if input.CounterNext != nil && *input.CounterNext >= 1 {
+		counterNext = *input.CounterNext
+	}
 
 	row := s.pool.QueryRow(ctx, `
 		update post_templates
 		set title = $3, content = $4, recurrence_json = $5, visibility = $6, media_ids = $7,
 		    media_exclude_by_account = $8, target_account_ids = $9, enabled = $10,
 		    ai_enhance_enabled = $11, output_mode = $12, prompt_hint = $13, title_hint = $14, tonality = $15,
-		    next_materialize_at = $16,
-		    announces_template_id = $17, announcement_days_before = $18, updated_at = now()
+		    next_materialize_at = $16, counter_next = $17,
+		    announces_template_id = $18, announcement_days_before = $19, updated_at = now()
 		where team_id = $1 and id = $2
 		returning id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
 		          media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, output_mode, prompt_hint, title_hint, tonality,
 		          next_materialize_at, counter_next,
 		          announces_template_id, announcement_days_before, created_at, updated_at`,
 		teamID, templateID, title, content, recJSON, visibility, mediaJSON, excludeJSON, targetJSON, enabled,
-		aiEnhance, string(outputMode), promptHint, titleHint, tonality, nextAny,
+		aiEnhance, string(outputMode), promptHint, titleHint, tonality, nextAny, counterNext,
 		announcesID, annDays,
 	)
 	return scanPostTemplate(row)

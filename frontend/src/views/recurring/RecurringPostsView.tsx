@@ -42,7 +42,7 @@ function zeroPad(n: number): string { return n < 10 ? '0' + n : String(n) }
 function clampDay(d: number): number { return Math.max(1, Math.min(31, d)) }
 function clampMonth(m: number): number { return Math.max(1, Math.min(12, m)) }
 
-function ContentPreview({ content, firstOccurrence, announceTemplate, templates }: { content: string; firstOccurrence: Date | null; announceTemplate?: string; templates: BackendPostTemplate[] }) {
+function ContentPreview({ content, firstOccurrence, counterStart, announceTemplate, templates }: { content: string; firstOccurrence: Date | null; counterStart: number; announceTemplate?: string; templates: BackendPostTemplate[] }) {
   const { t } = useTranslation()
   if (!content.trim() || !firstOccurrence) return null
   // For announcement templates, show expanded preview with {main_*} variables expanded from parent
@@ -56,7 +56,7 @@ function ContentPreview({ content, firstOccurrence, announceTemplate, templates 
   return (
     <div className="recurrence-form__preview">
       <span className="recurrence-form__label">{t('recurring.expandedPreview')}</span>
-      <div className="recurrence-form__expanded">{expandContent(content, firstOccurrence, 1, mainEvent)}</div>
+      <div className="recurrence-form__expanded">{expandContent(content, firstOccurrence, counterStart, mainEvent)}</div>
     </div>
   )
 }
@@ -80,8 +80,10 @@ export function RecurringPostsView({
   const [items, setItems] = useState<BackendPostTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
+  const [counterStart, setCounterStart] = useState(1)
   const [recState, setRecState] = useState<RecurrenceState>(() => parseRecurrenceJSON(
     JSON.stringify({ kind: 'weekly', weekdays: [1], hour: 9, minute: 0, timezone: 'UTC' }),
   ))
@@ -129,13 +131,11 @@ export function RecurringPostsView({
     )
   }
 
-  function closeEditor() {
-    setEditorOpen(false)
-  }
-
-  function openEditor() {
+  function resetEditorFields() {
+    setEditingId(null)
     setTitle('')
     setContent('')
+    setCounterStart(1)
     setRecState(parseRecurrenceJSON(
       JSON.stringify({ kind: 'weekly', weekdays: [1], hour: 9, minute: 0, timezone: 'UTC' }),
     ))
@@ -148,43 +148,83 @@ export function RecurringPostsView({
     setPromptHint('')
     setTitleHint('')
     setTonality('')
+  }
+
+  function closeEditor() {
+    setEditorOpen(false)
+    resetEditorFields()
+  }
+
+  function openEditor() {
+    resetEditorFields()
     setEditorOpen(true)
   }
 
-  async function handleCreate() {
+  function openEditorForEdit(item: BackendPostTemplate) {
+    setEditingId(item.id)
+    setTitle(item.title)
+    setContent(item.content)
+    setCounterStart(item.counter_next || 1)
+    setRecState(parseRecurrenceJSON(item.recurrence_json))
+    setTargetIds(item.target_account_ids ?? [])
+    setIsAnnouncement(Boolean(item.announces_template_id))
+    setAnnounceTemplateId(item.announces_template_id ?? '')
+    setAnnounceDaysBefore(item.announcement_days_before ?? 2)
+    setAiEnhanceEnabled(Boolean(item.ai_enhance_enabled))
+    setOutputMode(item.output_mode ?? 'scheduled')
+    setPromptHint(item.prompt_hint ?? '')
+    setTitleHint(item.title_hint ?? '')
+    setTonality(item.tonality ?? '')
+    setEditorOpen(true)
+  }
+
+  function buildAutomationPayload() {
+    const payload: Record<string, unknown> = {
+      title: title.trim(),
+      content: content.trim(),
+      recurrence_json: recurrenceStateToJSON(recState),
+      target_account_ids: targetIds,
+      counter_next: Math.max(1, counterStart),
+    }
+    if (isAnnouncement && announceTemplateId) {
+      payload.announces_template_id = announceTemplateId
+      payload.announcement_days_before = announceDaysBefore
+    } else {
+      payload.output_mode = outputMode
+      if (team?.isAiEnabled) {
+        payload.ai_enhance_enabled = aiEnhanceEnabled
+        payload.prompt_hint = promptHint.trim()
+        payload.title_hint = titleHint.trim()
+        payload.tonality = tonality.trim()
+      }
+    }
+    return payload
+  }
+
+  async function handleSave() {
     if (!title.trim() || !content.trim() || targetIds.length === 0) {
       onStatus(t('recurring.requiredFields'))
       return
     }
     onStatus(null)
     try {
-      const payload: Parameters<typeof api.createPostTemplate>[1] = {
-        title: title.trim(),
-        content: content.trim(),
-        recurrence_json: recurrenceStateToJSON(recState),
-        target_account_ids: targetIds,
-        enabled: true,
-      }
-      if (isAnnouncement && announceTemplateId) {
-        payload.announces_template_id = announceTemplateId
-        payload.announcement_days_before = announceDaysBefore
+      const payload = buildAutomationPayload()
+      if (editingId) {
+        await api.updatePostTemplate(teamId, editingId, payload)
+        closeEditor()
+        await refresh()
+        onStatus(t('status.templateUpdated'))
       } else {
-        payload.output_mode = outputMode
-        if (team?.isAiEnabled) {
-          payload.ai_enhance_enabled = aiEnhanceEnabled
-          payload.prompt_hint = promptHint.trim()
-          payload.title_hint = titleHint.trim()
-          payload.tonality = tonality.trim()
-        }
+        await api.createPostTemplate(teamId, {
+          ...payload,
+          enabled: true,
+        } as Parameters<typeof api.createPostTemplate>[1])
+        closeEditor()
+        await refresh()
+        onStatus(t('status.templateCreated'))
       }
-      await api.createPostTemplate(teamId, payload)
-      closeEditor()
-      setTitle('')
-      setContent('')
-      await refresh()
-      onStatus(t('status.templateCreated'))
     } catch (e) {
-      const raw = e instanceof Error ? e.message : t('status.templateCreateFailed')
+      const raw = e instanceof Error ? e.message : editingId ? t('status.templateUpdateFailed') : t('status.templateCreateFailed')
       onStatus(translateApiError(raw, t))
     }
   }
@@ -249,7 +289,7 @@ export function RecurringPostsView({
   }
 
   return (
-    <div className="recurring-posts-view two-column-detail">
+    <div className="recurring-posts-view">
       <div className="glass-panel">
         <div className="flex-row--wrap" style={{ justifyContent: 'space-between' }}>
           <div>
@@ -271,6 +311,7 @@ export function RecurringPostsView({
                 <strong>{item.title || t('recurring.untitled')}</strong>
                 <span className="hint">
                   {item.announces_template_id ? <span className="badge badge--info">{t('recurring.announcementBadge')}</span> : null}
+                  {item.ai_enhance_enabled ? <span className="badge badge--info">{t('recurring.aiEnabledBadge')}</span> : null}
                   {item.enabled ? t('analytics.enabled') : t('analytics.paused')}
                 </span>
               </div>
@@ -286,6 +327,9 @@ export function RecurringPostsView({
               </p>
               {canEdit ? (
                 <div className="inline-cluster mt-1" style={{ flexWrap: 'wrap' }}>
+                  <button type="button" className="button button--secondary" onClick={() => openEditorForEdit(item)}>
+                    {t('recurring.editTemplate')}
+                  </button>
                   <button type="button" className="button button--secondary" onClick={() => void toggleEnabled(item.id, item.enabled)}>
                     {item.enabled ? t('recurring.pause') : t('recurring.resume')}
                   </button>
@@ -317,9 +361,11 @@ export function RecurringPostsView({
         <Dialog.Root open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
           <Dialog.Portal>
             <Dialog.Overlay className="dialog-overlay" />
-            <Dialog.Content className="dialog-content" style={{ maxWidth: '36rem' }} data-testid="recurring-template-dialog">
+            <Dialog.Content className="dialog-content dialog-content--wide" data-testid="recurring-template-dialog">
               <div className="drawer-header">
-                <Dialog.Title className="drawer-title">{t('recurring.editorTitle')}</Dialog.Title>
+                <Dialog.Title className="drawer-title">
+                  {editingId ? t('recurring.editTitle') : t('recurring.editorTitle')}
+                </Dialog.Title>
                 <Dialog.Close asChild>
                   <button type="button" className="btn btn--ghost btn--icon-sm" aria-label={t('common.cancel')}>
                     <X size={20} />
@@ -342,6 +388,20 @@ export function RecurringPostsView({
 
                 <RecurrenceForm state={recState} onChange={setRecState} />
                 <OccurrencePreview state={recState} />
+
+                <label className="field">
+                  <span>{t('recurring.counterStart')}</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={counterStart}
+                    onChange={(e) => setCounterStart(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    data-testid="recurring-counter-start"
+                  />
+                  <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    {t('recurring.counterStartHint')}
+                  </p>
+                </label>
 
                 <div className="field">
                   <span>{t('common.targets')}</span>
@@ -378,7 +438,7 @@ export function RecurringPostsView({
                   ) : null}
                 </div>
 
-                <ContentPreview content={content} firstOccurrence={firstOccurrence} announceTemplate={isAnnouncement ? announceTemplateId : undefined} templates={items} />
+                <ContentPreview content={content} firstOccurrence={firstOccurrence} counterStart={counterStart} announceTemplate={isAnnouncement ? announceTemplateId : undefined} templates={items} />
 
                 {!isAnnouncement ? (
                   <>
@@ -393,7 +453,12 @@ export function RecurringPostsView({
                     {team?.isAiEnabled ? (
                       <>
                         <label className="field field--checkbox">
-                          <input type="checkbox" checked={aiEnhanceEnabled} onChange={(e) => setAiEnhanceEnabled(e.target.checked)} />
+                          <input
+                            type="checkbox"
+                            checked={aiEnhanceEnabled}
+                            onChange={(e) => setAiEnhanceEnabled(e.target.checked)}
+                            data-testid="recurring-ai-enhance"
+                          />
                           <span>{t('rss.aiEnhanceEnabled')}</span>
                         </label>
                         {aiEnhanceEnabled ? (
@@ -416,7 +481,9 @@ export function RecurringPostsView({
                           </>
                         ) : null}
                       </>
-                    ) : null}
+                    ) : (
+                      <p className="hint">{t('rss.aiRequiresTeam')}</p>
+                    )}
                   </>
                 ) : null}
 
@@ -424,8 +491,8 @@ export function RecurringPostsView({
                   <Dialog.Close asChild>
                     <button type="button" className="btn btn--ghost">{t('common.cancel')}</button>
                   </Dialog.Close>
-                  <button type="button" className="btn btn--primary" onClick={() => void handleCreate()}>
-                    {t('common.create')}
+                  <button type="button" className="btn btn--primary" onClick={() => void handleSave()} data-testid="recurring-template-save">
+                    {editingId ? t('common.save') : t('common.create')}
                   </button>
                 </div>
               </div>
