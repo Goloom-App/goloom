@@ -540,6 +540,7 @@ type CreatePostTemplateInput struct {
 	Tonality               string              `json:"tonality,omitempty"`
 	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
 	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
+	CounterNext            *int                `json:"counter_next,omitempty"`
 }
 
 type UpdatePostTemplateInput struct {
@@ -558,6 +559,7 @@ type UpdatePostTemplateInput struct {
 	Tonality               *string              `json:"tonality,omitempty"`
 	AnnouncesTemplateID    *string              `json:"announces_template_id,omitempty"`
 	AnnouncementDaysBefore *int                 `json:"announcement_days_before,omitempty"`
+	CounterNext            *int                 `json:"counter_next,omitempty"`
 }
 
 // ResolveAutomationPostTitle prefers an AI-generated title when present.

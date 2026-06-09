@@ -136,6 +136,10 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	promptHint := strings.TrimSpace(input.PromptHint)
 	titleHint := strings.TrimSpace(input.TitleHint)
 	tonality := strings.TrimSpace(input.Tonality)
+	counterNext := 1
+	if input.CounterNext != nil && *input.CounterNext >= 1 {
+		counterNext = *input.CounterNext
+	}
 	_, err = s.db.ExecContext(ctx, `
 		insert into post_templates (
 			id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
@@ -143,11 +147,11 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 			next_materialize_at, counter_next,
 			announces_template_id, announcement_days_before, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, teamID, principal.User.ID, strings.TrimSpace(input.Title), strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.RecurrenceJSON), visibility, mediaJSON, excludeJSON, targetJSON, enabled,
 		aiEnhance, outputMode, promptHint, titleHint, tonality,
-		nextStr, announcesID, annDays, now, now,
+		nextStr, counterNext, announcesID, annDays, now, now,
 	)
 	if err != nil {
 		return domain.PostTemplate{}, err
@@ -281,17 +285,21 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 	if input.Tonality != nil {
 		tonality = strings.TrimSpace(*input.Tonality)
 	}
+	counterNext := existing.CounterNext
+	if input.CounterNext != nil && *input.CounterNext >= 1 {
+		counterNext = *input.CounterNext
+	}
 
 	_, err = s.db.ExecContext(ctx, `
 		update post_templates
 		set title = ?, content = ?, recurrence_json = ?, visibility = ?, media_ids = ?,
 		    media_exclude_by_account = ?, target_account_ids = ?, enabled = ?,
 		    ai_enhance_enabled = ?, output_mode = ?, prompt_hint = ?, title_hint = ?, tonality = ?,
-		    next_materialize_at = ?,
+		    next_materialize_at = ?, counter_next = ?,
 		    announces_template_id = ?, announcement_days_before = ?, updated_at = ?
 		where team_id = ? and id = ?`,
 		title, content, recJSON, visibility, mediaJSON, excludeJSON, targetJSON, en,
-		aiEnhance, string(outputMode), promptHint, titleHint, tonality, nextStr,
+		aiEnhance, string(outputMode), promptHint, titleHint, tonality, nextStr, counterNext,
 		announcesIDAny, annDaysAny, nowString(), teamID, templateID,
 	)
 	if err != nil {

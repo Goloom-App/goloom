@@ -895,6 +895,7 @@ export function createApiClient(options: ApiClientOptions) {
         tonality?: string
         announces_template_id?: string
         announcement_days_before?: number
+        counter_next?: number
       },
     ) {
       return request<BackendPostTemplate>(options, `/v1/teams/${teamID}/post-templates`, {

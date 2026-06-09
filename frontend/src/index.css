@@ -1667,6 +1667,30 @@ select {
     from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
     to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   }
+
+  .dialog-content--wide {
+    max-width: min(56rem, 95vw);
+  }
+}
+
+.recurring-posts-view {
+  width: 100%;
+}
+
+.recurring-template-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  list-style: none;
+  padding: 0;
+  margin: var(--space-4) 0 0;
+}
+
+@media (min-width: 768px) {
+  .recurring-template-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  }
 }
 
 /* ==========================================================================
