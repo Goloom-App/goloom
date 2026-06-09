@@ -11,6 +11,7 @@ import (
 )
 
 type createAIDraftRequest struct {
+	Title                  string            `json:"title"`
 	Content                string            `json:"content"`
 	AccountIDs             []string          `json:"account_ids"`
 	AccountContentOverride map[string]string `json:"account_content_override"`
@@ -41,6 +42,7 @@ func (a *API) handleCreateAIDraft(w http.ResponseWriter, r *http.Request) {
 
 	teamID := r.PathValue("teamID")
 	postInput := domain.CreatePostInput{
+		Title:                  strings.TrimSpace(input.Title),
 		Content:                content,
 		TargetAccounts:         domain.NormalizeMediaIDs(input.AccountIDs),
 		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.AccountIDs),

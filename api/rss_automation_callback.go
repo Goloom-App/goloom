@@ -55,7 +55,7 @@ func (a *API) createRSSAutomationPost(
 		Kind: "api_token",
 	}
 	post, err := a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
-		Title:                  meta.PostTitle,
+		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
 		AccountContentOverride: normalizedOverrides,

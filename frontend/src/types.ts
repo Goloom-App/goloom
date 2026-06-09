@@ -170,6 +170,8 @@ export interface RSSFeedConfig {
   isActive: boolean
   aiEnhanceEnabled: boolean
   contentTemplate: string
+  titleTemplate: string
+  titleHint: string
   outputMode: AutomationOutputMode
   maxPostsPerDay: number
   counterNext?: number

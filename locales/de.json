@@ -428,6 +428,8 @@
       "delete": "Löschen",
       "confirmDelete": "Diese Wiederholungsvorlage löschen?",
       "editorTitle": "Neue Wiederholungsvorlage",
+      "titlePlaceholder": "Folge #{counter}",
+      "titleTemplateHint": "Unterstützt Variablen wie {counter}, {year}, {month}, {day}, {weekday_name}.",
       "contentPlaceholder": "Frohes {year}-{month}-{day}! (#{counter})",
       "recurrenceJson": "Wiederholung (JSON)",
       "requiredFields": "Titel, Inhalt und mindestens ein Konto sind erforderlich.",
@@ -501,6 +503,11 @@
       "feedName": "Feed-Name",
       "feedUrl": "Feed-URL",
       "contentTemplate": "Beitrags-Template",
+      "titleTemplate": "Titel-Template",
+      "titleTemplateHint": "Goloom-Beitragstitel. Standard ist der RSS-Artikeltitel. Beispiel: Ankündigung #{counter}",
+      "titleHint": "KI-Titel-Anweisung (optional)",
+      "titleHintPlaceholder": "z. B. Tool-Name aus dem Artikel als Titel",
+      "titleHintHelp": "Bei aktiver KI-Verbesserung überschreibt dies das Titel-Template, wenn die KI einen Titel liefert.",
       "templateVars": "Variablen: {title}, {link}, {summary}, {feed_name}, {published_date}, {counter} sowie Datums-Helfer wie bei wiederkehrenden Beiträgen.",
       "outputMode": "Bei neuem Artikel",
       "maxPostsPerDay": "Max. Beiträge pro Tag",
@@ -722,7 +729,10 @@
     },
     "ai": {
       "generate": {
-        "editInComposer": "Im Editor bearbeiten"
+        "editInComposer": "Im Editor bearbeiten",
+        "titleHint": "Titel-Anweisung (optional)",
+        "titleHintPlaceholder": "z. B. Name des vorgestellten Tools",
+        "titleHintHelp": "Die KI setzt den internen Goloom-Beitragstitel. Leer lassen für einen automatischen Kurztitel."
       }
     },
     "post": {

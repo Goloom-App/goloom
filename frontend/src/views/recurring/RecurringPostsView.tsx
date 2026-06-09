@@ -93,6 +93,7 @@ export function RecurringPostsView({
   const [aiEnhanceEnabled, setAiEnhanceEnabled] = useState(false)
   const [outputMode, setOutputMode] = useState<AutomationOutputMode>('scheduled')
   const [promptHint, setPromptHint] = useState('')
+  const [titleHint, setTitleHint] = useState('')
   const [tonality, setTonality] = useState('')
 
   const outputModeLabel: Record<AutomationOutputMode, string> = {
@@ -145,6 +146,7 @@ export function RecurringPostsView({
     setAiEnhanceEnabled(false)
     setOutputMode('scheduled')
     setPromptHint('')
+    setTitleHint('')
     setTonality('')
     setEditorOpen(true)
   }
@@ -171,6 +173,7 @@ export function RecurringPostsView({
         if (team?.isAiEnabled) {
           payload.ai_enhance_enabled = aiEnhanceEnabled
           payload.prompt_hint = promptHint.trim()
+          payload.title_hint = titleHint.trim()
           payload.tonality = tonality.trim()
         }
       }
@@ -326,7 +329,10 @@ export function RecurringPostsView({
               <div className="drawer-body stack">
                 <label className="field">
                   <span>{t('common.title')}</span>
-                  <input value={title} onChange={(e) => setTitle(e.target.value)} />
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('recurring.titlePlaceholder')} />
+                  <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    {t('recurring.titleTemplateHint')}
+                  </p>
                 </label>
 
                 <label className="field">
@@ -399,6 +405,13 @@ export function RecurringPostsView({
                             <label className="field">
                               <span>{t('rss.tonalityOverride')}</span>
                               <input value={tonality} onChange={(e) => setTonality(e.target.value)} placeholder={t('rss.tonalityPlaceholder')} />
+                            </label>
+                            <label className="field">
+                              <span>{t('rss.titleHint')}</span>
+                              <input value={titleHint} onChange={(e) => setTitleHint(e.target.value)} placeholder={t('rss.titleHintPlaceholder')} />
+                              <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                                {t('rss.titleHintHelp')}
+                              </p>
                             </label>
                           </>
                         ) : null}

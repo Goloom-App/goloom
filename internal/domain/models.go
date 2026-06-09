@@ -295,6 +295,7 @@ const (
 )
 
 const DefaultRSSContentTemplate = "{title}\n\n{link}"
+const DefaultRSSTitleTemplate = "{title}"
 
 func NormalizeAutomationOutputMode(raw string) AutomationOutputMode {
 	switch strings.TrimSpace(strings.ToLower(raw)) {
@@ -315,6 +316,8 @@ type RSSFeedConfig struct {
 	IsActive         bool                 `json:"is_active"`
 	AiEnhanceEnabled bool                 `json:"ai_enhance_enabled"`
 	ContentTemplate  string               `json:"content_template"`
+	TitleTemplate    string               `json:"title_template"`
+	TitleHint        string               `json:"title_hint"`
 	OutputMode       AutomationOutputMode `json:"output_mode"`
 	MaxPostsPerDay   int                  `json:"max_posts_per_day"`
 	CounterNext      int                  `json:"counter_next"`
@@ -331,6 +334,13 @@ func (f RSSFeedConfig) NormalizedContentTemplate() string {
 		return DefaultRSSContentTemplate
 	}
 	return f.ContentTemplate
+}
+
+func (f RSSFeedConfig) NormalizedTitleTemplate() string {
+	if strings.TrimSpace(f.TitleTemplate) == "" {
+		return DefaultRSSTitleTemplate
+	}
+	return f.TitleTemplate
 }
 
 func (f RSSFeedConfig) NormalizedMaxPostsPerDay() int {
@@ -504,6 +514,7 @@ type PostTemplate struct {
 	AiEnhanceEnabled       bool                `json:"ai_enhance_enabled"`
 	OutputMode             AutomationOutputMode `json:"output_mode"`
 	PromptHint             string              `json:"prompt_hint"`
+	TitleHint              string              `json:"title_hint"`
 	Tonality               string              `json:"tonality"`
 	NextMaterializeAt      *time.Time          `json:"next_materialize_at,omitempty"`
 	CounterNext            int                 `json:"counter_next"`
@@ -525,6 +536,7 @@ type CreatePostTemplateInput struct {
 	AiEnhanceEnabled       *bool               `json:"ai_enhance_enabled,omitempty"`
 	OutputMode             AutomationOutputMode `json:"output_mode,omitempty"`
 	PromptHint             string              `json:"prompt_hint,omitempty"`
+	TitleHint              string              `json:"title_hint,omitempty"`
 	Tonality               string              `json:"tonality,omitempty"`
 	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
 	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
@@ -542,9 +554,24 @@ type UpdatePostTemplateInput struct {
 	AiEnhanceEnabled       *bool                `json:"ai_enhance_enabled,omitempty"`
 	OutputMode             *AutomationOutputMode `json:"output_mode,omitempty"`
 	PromptHint             *string              `json:"prompt_hint,omitempty"`
+	TitleHint              *string              `json:"title_hint,omitempty"`
 	Tonality               *string              `json:"tonality,omitempty"`
 	AnnouncesTemplateID    *string              `json:"announces_template_id,omitempty"`
 	AnnouncementDaysBefore *int                 `json:"announcement_days_before,omitempty"`
+}
+
+// ResolveAutomationPostTitle prefers an AI-generated title when present.
+func ResolveAutomationPostTitle(templateTitle, aiTitle string) string {
+	if t := strings.TrimSpace(aiTitle); t != "" {
+		return t
+	}
+	return strings.TrimSpace(templateTitle)
+}
+
+// ExpandPostTemplateTitle renders dynamic variables in a recurring template title.
+func ExpandPostTemplateTitle(title string, scheduledAt time.Time, counter int, mainEventAt *time.Time) string {
+	counterVal := counter
+	return strings.TrimSpace(ExpandDynamicVariables(title, scheduledAt, &counterVal, mainEventAt))
 }
 
 // EngagementHourBucket aggregates engagement score by UTC hour-of-day for posted content.

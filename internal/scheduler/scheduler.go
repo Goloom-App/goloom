@@ -651,8 +651,9 @@ func (s *Service) materializeAnnouncements(ctx context.Context, parent *domain.P
 		counterVal := a.CounterNext
 		// For announcement posts, counter is incremented on every materialization.
 		content := domain.ExpandDynamicVariables(a.Content, announceAt, &counterVal, &mainEventAt)
+		expandedTitle := domain.ExpandPostTemplateTitle(a.Title, announceAt, counterVal, &mainEventAt)
 		input := domain.CreatePostInput{
-			Title:                 a.Title,
+			Title:                 expandedTitle,
 			Content:               content,
 			ScheduledAt:           announceAt,
 			TargetAccounts:        a.TargetAccountIDs,
@@ -710,7 +711,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 	}
 
 	if s.shouldEnhanceRecurringWithAI(ctx, *tmpl) {
-		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, at, draft); err != nil {
+		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, expandedTitle, at, draft); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: ai unavailable, using template", "template_id", tmpl.ID, "error", err)
 		} else {
 			return nil
@@ -719,8 +720,9 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 
 	authorID := tmpl.AuthorUserID
 	tplID := tmpl.ID
+	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.Title, scheduledAt, counterVal, nil)
 	input := domain.CreatePostInput{
-		Title:                 tmpl.Title,
+		Title:                 expandedTitle,
 		Content:               tmpl.Content,
 		ScheduledAt:           at,
 		TargetAccounts:        tmpl.TargetAccountIDs,

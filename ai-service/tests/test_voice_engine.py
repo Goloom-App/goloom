@@ -51,6 +51,18 @@ def _long_primary_text(length: int = 480) -> str:
     return (base * ((length // len(base)) + 1))[:length]
 
 
+def _generation_payload(**overrides):
+    payload = {
+        "content": _long_primary_text(480),
+        "title": "Release update",
+        "account_content_override": {"acc-bluesky": "Release shipped today."},
+        "hashtags": ["#launch"],
+        "platform_metadata": {"platform": "mastodon"},
+    }
+    payload.update(overrides)
+    return payload
+
+
 @pytest.mark.asyncio
 async def test_process_generates_multi_account_post():
     adapter = AsyncMock()
@@ -58,15 +70,14 @@ async def test_process_generates_multi_account_post():
     primary_text = _long_primary_text(480)
     adapter.generate.return_value = LLMResponse(
         content=json.dumps(
-            {
-                "content": primary_text,
-                "account_content_override": {
+            _generation_payload(
+                content=primary_text,
+                title="Release day",
+                account_content_override={
                     "acc-bluesky": "Release shipped today.",
                     "acc-mastodon": "should be stripped",
                 },
-                "hashtags": ["#launch"],
-                "platform_metadata": {"platform": "mastodon"},
-            }
+            )
         ),
         model="gpt-4o",
         usage={},
@@ -77,6 +88,7 @@ async def test_process_generates_multi_account_post():
     result = await worker.process({**sample_job(), "context": sample_context()})
 
     assert result["content"] == primary_text
+    assert result.get("title")
     assert result["account_content_override"] == {"acc-bluesky": "Release shipped today."}
     assert result["primary_account_id"] == "acc-mastodon"
     assert result["scheduled_at"] is not None
@@ -168,14 +180,12 @@ async def test_process_coerces_array_account_content_override():
     primary_text = _long_primary_text(480)
     adapter.generate.return_value = LLMResponse(
         content=json.dumps(
-            {
-                "content": primary_text,
-                "account_content_override": [
-                    {"account_id": "acc-bluesky", "content": "Release shipped today."}
-                ],
-                "hashtags": [],
-                "platform_metadata": {},
-            }
+            _generation_payload(
+                content=primary_text,
+                account_content_override=[{"account_id": "acc-bluesky", "content": "Release shipped today."}],
+                hashtags=[],
+                platform_metadata={},
+            )
         ),
         model="gpt-4o",
         usage={},
@@ -195,24 +205,24 @@ async def test_process_retries_when_primary_content_is_too_short():
     adapter.generate.side_effect = [
         LLMResponse(
             content=json.dumps(
-                {
-                    "content": "Too short.",
-                    "account_content_override": {"acc-bluesky": "Too short."},
-                    "hashtags": [],
-                    "platform_metadata": {},
-                }
+                _generation_payload(
+                    content="Too short.",
+                    account_content_override={"acc-bluesky": "Too short."},
+                    hashtags=[],
+                    platform_metadata={},
+                )
             ),
             model="gpt-4o",
             usage={},
         ),
         LLMResponse(
             content=json.dumps(
-                {
-                    "content": _long_primary_text(470),
-                    "account_content_override": {"acc-bluesky": "Short release note."},
-                    "hashtags": [],
-                    "platform_metadata": {},
-                }
+                _generation_payload(
+                    content=_long_primary_text(470),
+                    account_content_override={"acc-bluesky": "Short release note."},
+                    hashtags=[],
+                    platform_metadata={},
+                )
             ),
             model="gpt-4o",
             usage={},
@@ -234,14 +244,7 @@ async def test_process_fits_primary_content_to_char_limit():
     adapter = AsyncMock()
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
     adapter.generate.return_value = LLMResponse(
-        content=json.dumps(
-            {
-                "content": "x" * 600,
-                "account_content_override": {"acc-bluesky": "short"},
-                "hashtags": ["#launch"],
-                "platform_metadata": {"platform": "mastodon"},
-            }
-        ),
+        content=json.dumps(_generation_payload(content="x" * 600, account_content_override={"acc-bluesky": "short"})),
         model="gpt-4o",
         usage={},
     )
@@ -295,25 +298,16 @@ async def test_process_retries_when_override_missing_for_lower_limit_account():
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
     adapter.generate.side_effect = [
         LLMResponse(
-            content=json.dumps(
-                {
-                    "content": _long_primary_text(480),
-                    "account_content_override": {},
-                    "hashtags": ["#launch"],
-                    "platform_metadata": {"platform": "mastodon"},
-                }
-            ),
+            content=json.dumps(_generation_payload(content=_long_primary_text(480), account_content_override={})),
             model="gpt-4o",
             usage={},
         ),
         LLMResponse(
             content=json.dumps(
-                {
-                    "content": _long_primary_text(480),
-                    "account_content_override": {"acc-bluesky": "Short release note."},
-                    "hashtags": ["#launch"],
-                    "platform_metadata": {"platform": "mastodon"},
-                }
+                _generation_payload(
+                    content=_long_primary_text(480),
+                    account_content_override={"acc-bluesky": "Short release note."},
+                )
             ),
             model="gpt-4o",
             usage={},

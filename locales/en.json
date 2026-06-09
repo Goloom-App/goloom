@@ -428,6 +428,8 @@
       "delete": "Delete",
       "confirmDelete": "Delete this recurring template?",
       "editorTitle": "New recurring template",
+      "titlePlaceholder": "Episode #{counter}",
+      "titleTemplateHint": "Supports variables like {counter}, {year}, {month}, {day}, {weekday_name}.",
       "contentPlaceholder": "Happy {year}-{month}-{day}! (#{counter})",
       "recurrenceJson": "Recurrence (JSON)",
       "requiredFields": "Title, content, and at least one account are required.",
@@ -501,6 +503,11 @@
       "feedName": "Feed name",
       "feedUrl": "Feed URL",
       "contentTemplate": "Post template",
+      "titleTemplate": "Title template",
+      "titleTemplateHint": "Goloom post title. Default uses the RSS article title. Example: Announce #{counter}",
+      "titleHint": "AI title instruction (optional)",
+      "titleHintPlaceholder": "e.g. Use the tool name from the article as the title",
+      "titleHintHelp": "When AI enhancement is on, overrides the title template if the model returns a title.",
       "templateVars": "Variables: {title}, {link}, {summary}, {feed_name}, {published_date}, {counter}, plus date helpers from recurring templates.",
       "outputMode": "When a new article arrives",
       "maxPostsPerDay": "Max posts per day",
@@ -663,7 +670,10 @@
     },
     "ai": {
       "generate": {
-        "editInComposer": "Edit in composer"
+        "editInComposer": "Edit in composer",
+        "titleHint": "Title instruction (optional)",
+        "titleHintPlaceholder": "e.g. Name the tool being introduced",
+        "titleHintHelp": "The AI sets the internal Goloom post title. Leave empty for an automatic short title."
       }
     },
     "media": {

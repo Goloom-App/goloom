@@ -57,6 +57,7 @@ export interface BackendPostTemplate {
   ai_enhance_enabled?: boolean
   output_mode?: 'draft' | 'scheduled' | 'publish_now'
   prompt_hint?: string
+  title_hint?: string
   tonality?: string
   next_materialize_at?: string
   counter_next: number
@@ -354,6 +355,8 @@ export interface BackendRSSFeedConfig {
   is_active: boolean
   ai_enhance_enabled?: boolean
   content_template?: string
+  title_template?: string
+  title_hint?: string
   output_mode?: 'draft' | 'scheduled' | 'publish_now'
   max_posts_per_day?: number
   counter_next?: number
@@ -888,6 +891,7 @@ export function createApiClient(options: ApiClientOptions) {
         ai_enhance_enabled?: boolean
         output_mode?: 'draft' | 'scheduled' | 'publish_now'
         prompt_hint?: string
+        title_hint?: string
         tonality?: string
         announces_template_id?: string
         announcement_days_before?: number
@@ -1142,6 +1146,8 @@ export function createApiClient(options: ApiClientOptions) {
         is_active: boolean
         ai_enhance_enabled?: boolean
         content_template?: string
+        title_template?: string
+        title_hint?: string
         output_mode?: 'draft' | 'scheduled' | 'publish_now'
         max_posts_per_day?: number
         prompt_hint?: string
@@ -1165,6 +1171,8 @@ export function createApiClient(options: ApiClientOptions) {
         is_active?: boolean
         ai_enhance_enabled?: boolean
         content_template?: string
+        title_template?: string
+        title_hint?: string
         output_mode?: 'draft' | 'scheduled' | 'publish_now'
         max_posts_per_day?: number
         prompt_hint?: string

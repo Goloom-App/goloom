@@ -289,6 +289,8 @@ export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
     isActive: raw.is_active,
     aiEnhanceEnabled: Boolean(raw.ai_enhance_enabled),
     contentTemplate: raw.content_template ?? '{title}\n\n{link}',
+    titleTemplate: raw.title_template ?? '{title}',
+    titleHint: raw.title_hint ?? '',
     outputMode,
     maxPostsPerDay: raw.max_posts_per_day ?? 10,
     counterNext: raw.counter_next,

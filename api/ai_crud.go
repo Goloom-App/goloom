@@ -152,6 +152,9 @@ func (a *API) handleCreateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(input.ContentTemplate) == "" {
 		input.ContentTemplate = domain.DefaultRSSContentTemplate
 	}
+	if strings.TrimSpace(input.TitleTemplate) == "" {
+		input.TitleTemplate = domain.DefaultRSSTitleTemplate
+	}
 	if input.MaxPostsPerDay <= 0 {
 		input.MaxPostsPerDay = 10
 	}
@@ -177,6 +180,8 @@ type rssFeedPatchRequest struct {
 	Name             *string    `json:"name"`
 	IsActive         *bool      `json:"is_active"`
 	ContentTemplate  *string    `json:"content_template"`
+	TitleTemplate    *string    `json:"title_template"`
+	TitleHint        *string    `json:"title_hint"`
 	OutputMode       *string    `json:"output_mode"`
 	MaxPostsPerDay   *int       `json:"max_posts_per_day"`
 	AiEnhanceEnabled *bool      `json:"ai_enhance_enabled"`
@@ -214,6 +219,12 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	if patch.ContentTemplate != nil {
 		merged.ContentTemplate = *patch.ContentTemplate
+	}
+	if patch.TitleTemplate != nil {
+		merged.TitleTemplate = *patch.TitleTemplate
+	}
+	if patch.TitleHint != nil {
+		merged.TitleHint = *patch.TitleHint
 	}
 	if patch.OutputMode != nil {
 		merged.OutputMode = domain.NormalizeAutomationOutputMode(*patch.OutputMode)

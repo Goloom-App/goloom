@@ -44,6 +44,7 @@ class VoiceEngineWorker:
             system_prompt = self.prompt_builder.build_system_prompt(context)
             primary_account_id = str(primary.get("id") or "")
             refine_mode = self._is_refine_mode(params)
+            include_title = self._include_title_in_response(params, refine_mode)
             if refine_mode:
                 base_prompt = self._build_refine_prompt(
                     context=context,
@@ -53,6 +54,7 @@ class VoiceEngineWorker:
                     primary_account_id=primary_account_id,
                     campaign_format=campaign_format,
                     scheduled_at=scheduled_at,
+                    include_title=include_title,
                 )
             else:
                 base_prompt = self._build_multi_account_prompt(
@@ -62,6 +64,7 @@ class VoiceEngineWorker:
                     primary_limit=primary_limit,
                     campaign_format=campaign_format,
                     scheduled_at=scheduled_at,
+                    include_title=include_title,
                 )
             prompt = self.prompt_builder.inject_few_shot(base_prompt, context.get("style_examples", []))
 
@@ -73,6 +76,7 @@ class VoiceEngineWorker:
                 selected_accounts=selected_accounts,
                 author_user_id=author_user_id,
                 refine_mode=refine_mode,
+                include_title=include_title,
             )
             parsed = self._normalize_multi_account_result(
                 parsed,
@@ -89,6 +93,8 @@ class VoiceEngineWorker:
                 "scheduled_at": format_datetime(scheduled_at),
                 "primary_account_id": primary_account_id,
             }
+            if parsed.get("title"):
+                result["title"] = parsed["title"]
             await self._try_callback(job_id, "completed", result)
             callback_sent = True
             return result
@@ -112,6 +118,7 @@ class VoiceEngineWorker:
         primary_limit: int,
         campaign_format: dict[str, Any] | None,
         scheduled_at,
+        include_title: bool = False,
     ) -> str:
         primary = max(selected_accounts, key=lambda item: int(item["max_chars"]))
         primary_id = str(primary.get("id") or "")
@@ -144,6 +151,7 @@ class VoiceEngineWorker:
                 f"Required hashtags: {', '.join(self._string_list(campaign_format.get('required_hashtags'))) or 'none'}"
             )
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'next available slot'}."
+        title_hint = self._title_json_instruction(params, include_title)
         return (
             f"{base_prompt}\n\n"
             "Multi-account output rules:\n"
@@ -156,7 +164,7 @@ class VoiceEngineWorker:
             "- Accounts with the same or higher limit than the primary use \"content\" unchanged.\n"
             "- Overrides must be shorter compressions of the same message, not alternate drafts.\n"
             "Return JSON only with keys:\n"
-            f'- "content": primary text for account id {primary_id}\n'
+            f'{title_hint}- "content": primary text for account id {primary_id}\n'
             '- "account_content_override": object mapping account_id -> shorter text ONLY where required\n'
             '- "hashtags": array of hashtags\n'
             '- "platform_metadata": object\n'
@@ -173,6 +181,7 @@ class VoiceEngineWorker:
         primary_account_id: str,
         campaign_format: dict[str, Any] | None,
         scheduled_at,
+        include_title: bool = False,
     ) -> str:
         primary = max(selected_accounts, key=lambda item: int(item["max_chars"]))
         primary_platform = str(primary.get("provider") or "general")
@@ -213,6 +222,7 @@ class VoiceEngineWorker:
             )
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'unchanged'}."
         article_section = self._rss_article_section(params)
+        title_hint = self._title_json_instruction(params, include_title)
         return (
             f"{base_prompt}\n\n"
             "Refine an existing draft for multi-account publishing.\n"
@@ -225,9 +235,10 @@ class VoiceEngineWorker:
             f"MUST NOT exceed {primary_limit} characters (hard limit)\n"
             f"- The source draft is {len(source_content)} characters; keep the refined text within {primary_limit}\n"
             f"- {override_hint}\n"
+            f"{title_hint}"
             "- Do NOT create a separate version for every account.\n"
             "- Overrides must be shorter compressions of the refined primary text.\n"
-            "Return JSON only with keys content, account_content_override, hashtags, platform_metadata.\n"
+            f"Return JSON only with keys {self._title_json_keys(include_title)}content, account_content_override, hashtags, platform_metadata.\n"
             f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
         )
 
@@ -248,6 +259,33 @@ class VoiceEngineWorker:
         return "\n".join(lines) + "\n"
 
     @staticmethod
+    def _include_title_in_response(params: dict[str, Any], refine_mode: bool) -> bool:
+        if not refine_mode:
+            return True
+        return bool(str(params.get("title_hint") or "").strip())
+
+    @staticmethod
+    def _title_json_keys(include_title: bool) -> str:
+        return "title, " if include_title else ""
+
+    def _title_json_instruction(self, params: dict[str, Any], include_title: bool) -> str:
+        if not include_title:
+            return ""
+        hint = str(params.get("title_hint") or "").strip()
+        if hint:
+            return f'- "title": internal Goloom post title (max 120 characters). Instruction: {hint}\n'
+        return '- "title": short internal Goloom post title (max 120 characters) for editors, based on the post content\n'
+
+    @staticmethod
+    def _normalize_title(value: Any, *, required: bool) -> str:
+        title = str(value or "").strip()
+        if len(title) > 120:
+            title = title[:120].rstrip()
+        if required and not title:
+            raise ValueError("LLM response missing title")
+        return title
+
+    @staticmethod
     def _is_refine_mode(params: dict[str, Any]) -> bool:
         if params.get("refine_content") is True or params.get("refine") is True:
             return True
@@ -263,6 +301,7 @@ class VoiceEngineWorker:
         selected_accounts: list[dict[str, Any]],
         author_user_id: str,
         refine_mode: bool = False,
+        include_title: bool = False,
     ) -> dict[str, Any]:
         current_prompt = prompt
         last_error = "invalid multi-account output"
@@ -275,7 +314,7 @@ class VoiceEngineWorker:
                 max_tokens=1500,
                 author_user_id=author_user_id,
             )
-            result = self._parse_result(response.content)
+            result = self._parse_result(response.content, include_title=include_title, refine_mode=refine_mode)
             result = self._normalize_multi_account_result(
                 result,
                 selected_accounts=selected_accounts,
@@ -511,7 +550,7 @@ class VoiceEngineWorker:
         return {}
 
     @staticmethod
-    def _parse_result(raw_content: str) -> dict[str, Any]:
+    def _parse_result(raw_content: str, *, include_title: bool = False, refine_mode: bool = False) -> dict[str, Any]:
         cleaned = raw_content.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.split("\n", 1)[-1]
@@ -546,9 +585,16 @@ class VoiceEngineWorker:
         if not isinstance(platform_metadata, dict):
             platform_metadata = {}
 
-        return {
+        parsed = {
             "content": content.strip(),
             "hashtags": [str(hashtag) for hashtag in hashtags],
             "platform_metadata": platform_metadata,
             "account_content_override": overrides,
         }
+        if include_title:
+            title = VoiceEngineWorker._normalize_title(payload.get("title"), required=False)
+            if title:
+                parsed["title"] = title
+            elif not refine_mode:
+                raise ValueError("LLM response missing title")
+        return parsed

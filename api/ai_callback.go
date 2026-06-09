@@ -19,6 +19,7 @@ type aiCallbackRequest struct {
 }
 
 type aiCallbackResult struct {
+	Title                  string            `json:"title"`
 	Content                string            `json:"content"`
 	ScheduledAt            *time.Time        `json:"scheduled_at"`
 	SuggestedScheduledAt   *time.Time        `json:"suggested_scheduled_at"`
@@ -114,6 +115,7 @@ func (a *API) autoCreateDraftFromCallbackResult(r *http.Request, job domain.AIJo
 	}
 
 	_, _ = a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
+		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
 		AccountContentOverride: overrides,
@@ -152,6 +154,7 @@ func (a *API) autoCreatePostFromCallbackResult(r *http.Request, job domain.AIJob
 	}
 
 	_, _ = a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
+		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
 		AccountContentOverride: overrides,

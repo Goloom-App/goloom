@@ -387,6 +387,7 @@ alter table post_templates add column if not exists ai_enhance_enabled boolean n
 alter table post_templates add column if not exists output_mode text not null default 'scheduled';
 alter table post_templates add column if not exists prompt_hint text not null default '';
 alter table post_templates add column if not exists tonality text not null default '';
+alter table post_templates add column if not exists title_hint text not null default '';
 
 create table if not exists post_template_skips (
     template_id uuid not null references post_templates(id) on delete cascade,
@@ -451,6 +452,8 @@ alter table rss_feed_configs add column if not exists initial_sync_mode text not
 alter table rss_feed_configs add column if not exists content_template text not null default '{title}
 
 {link}';
+alter table rss_feed_configs add column if not exists title_template text not null default '{title}';
+alter table rss_feed_configs add column if not exists title_hint text not null default '';
 alter table rss_feed_configs add column if not exists output_mode text not null default 'draft';
 alter table rss_feed_configs add column if not exists max_posts_per_day integer not null default 10;
 alter table rss_feed_configs add column if not exists counter_next integer not null default 1;

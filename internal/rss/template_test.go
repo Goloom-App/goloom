@@ -21,6 +21,19 @@ func TestExpandContent(t *testing.T) {
 	}
 }
 
+func TestExpandTitle(t *testing.T) {
+	ts := time.Date(2026, 3, 15, 10, 30, 0, 0, time.UTC)
+	got := ExpandTitle("Announce #{counter}", ItemFields{
+		Title:       "Episode 42",
+		Link:        "https://example.com/ep42",
+		PublishedAt: ts,
+		Counter:     7,
+	})
+	if got != "Announce #7" {
+		t.Fatalf("ExpandTitle = %q, want %q", got, "Announce #7")
+	}
+}
+
 func TestStripHTML(t *testing.T) {
 	got := StripHTML("<p>Hello <b>world</b></p>")
 	if got != "Hello world" {

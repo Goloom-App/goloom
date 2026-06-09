@@ -18,6 +18,7 @@ interface AIGenerateViewProps {
   team: TeamRecord
   accounts: AccountRecord[]
   onEditInComposer?: (payload: {
+    title?: string
     content: string
     targetAccountIds: string[]
     accountContentOverride?: Record<string, string>
@@ -36,6 +37,7 @@ export function AIGenerateView({ team, accounts, onEditInComposer }: AIGenerateV
   useAIJobStream(team.id)
 
   const [prompt, setPrompt] = useState('')
+  const [titleHint, setTitleHint] = useState('')
   const [campaignFormatId, setCampaignFormatId] = useState('')
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
 
@@ -85,6 +87,7 @@ export function AIGenerateView({ team, accounts, onEditInComposer }: AIGenerateV
         type: 'voice_engine',
         params: {
           prompt_hint: prompt.trim(),
+          ...(titleHint.trim() ? { title_hint: titleHint.trim() } : {}),
           target_account_ids: selectedAccounts,
           ...(campaignFormatId ? { campaign_format_id: campaignFormatId } : {}),
         },
@@ -140,6 +143,7 @@ export function AIGenerateView({ team, accounts, onEditInComposer }: AIGenerateV
           : undefined
 
       await api.createAIDraft(team.id, {
+        title: typeof job.result.title === 'string' ? job.result.title : '',
         content: String(job.result.content),
         account_ids: Array.isArray(job.payload?.target_account_ids)
           ? (job.payload.target_account_ids as string[])
@@ -184,6 +188,19 @@ export function AIGenerateView({ team, accounts, onEditInComposer }: AIGenerateV
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="What should the post be about?"
           />
+        </label>
+
+        <label className="field">
+          <span>{t('ai.generate.titleHint')}</span>
+          <input
+            data-testid="gen-title-hint"
+            value={titleHint}
+            onChange={(e) => setTitleHint(e.target.value)}
+            placeholder={t('ai.generate.titleHintPlaceholder')}
+          />
+          <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            {t('ai.generate.titleHintHelp')}
+          </p>
         </label>
 
         <label className="field">
@@ -296,6 +313,11 @@ export function AIGenerateView({ team, accounts, onEditInComposer }: AIGenerateV
 
                 {job.status === 'completed' && typeof job.result?.content === 'string' && job.result.content && (
                   <>
+                    {typeof job.result.title === 'string' && job.result.title.trim() ? (
+                      <p className="hint" style={{ margin: 0 }}>
+                        <strong>{t('common.title')}:</strong> {job.result.title}
+                      </p>
+                    ) : null}
                     {(() => {
                       const primaryAccountId =
                         typeof job.result.primary_account_id === 'string'
@@ -371,6 +393,7 @@ export function AIGenerateView({ team, accounts, onEditInComposer }: AIGenerateV
                               ? (job.payload.target_account_ids as string[])
                               : selectedAccounts
                             onEditInComposer({
+                              title: typeof job.result?.title === 'string' ? job.result.title : undefined,
                               content: String(job.result?.content ?? ''),
                               targetAccountIds,
                               accountContentOverride: overrides,

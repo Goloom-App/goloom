@@ -26,6 +26,11 @@ func StripHTML(value string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
+// ExpandTitle renders a post title template with RSS fields and shared date/counter variables.
+func ExpandTitle(template string, fields ItemFields) string {
+	return ExpandContent(template, fields)
+}
+
 // ExpandContent renders an automation content template with RSS fields and shared date/counter variables.
 func ExpandContent(template string, fields ItemFields) string {
 	template = strings.TrimSpace(template)

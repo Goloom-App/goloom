@@ -153,21 +153,25 @@ func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeed
 		return err
 	}
 
-	content := rss.ExpandContent(feed.NormalizedContentTemplate(), rss.ItemFields{
+	fields := rss.ItemFields{
 		Title:       item.Title,
 		Link:        item.Link,
 		Summary:     item.Content,
 		FeedName:    feed.Name,
 		PublishedAt: item.PublishedAt,
 		Counter:     feed.CounterNext,
-	})
+	}
+	content := rss.ExpandContent(feed.NormalizedContentTemplate(), fields)
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return fmt.Errorf("rendered rss content is empty")
 	}
 
 	scheduledAt, draft := rssOutputSchedule(feed.OutputMode, item.PublishedAt)
-	title := strings.TrimSpace(item.Title)
+	title := strings.TrimSpace(rss.ExpandTitle(feed.NormalizedTitleTemplate(), fields))
+	if title == "" {
+		title = strings.TrimSpace(item.Title)
+	}
 	if title == "" {
 		title = feed.Name
 	}

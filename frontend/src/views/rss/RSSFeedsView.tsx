@@ -20,6 +20,8 @@ type FeedFormState = {
   isActive: boolean
   aiEnhanceEnabled: boolean
   contentTemplate: string
+  titleTemplate: string
+  titleHint: string
   outputMode: AutomationOutputMode
   maxPostsPerDay: number
   promptHint: string
@@ -29,6 +31,7 @@ type FeedFormState = {
 }
 
 const defaultTemplate = '{title}\n\n{link}'
+const defaultTitleTemplate = '{title}'
 
 const emptyFeedForm = (): FeedFormState => ({
   name: '',
@@ -36,6 +39,8 @@ const emptyFeedForm = (): FeedFormState => ({
   isActive: true,
   aiEnhanceEnabled: false,
   contentTemplate: defaultTemplate,
+  titleTemplate: defaultTitleTemplate,
+  titleHint: '',
   outputMode: 'draft',
   maxPostsPerDay: 10,
   promptHint: '',
@@ -51,6 +56,8 @@ function feedToForm(feed: RSSFeedConfig): FeedFormState {
     isActive: feed.isActive,
     aiEnhanceEnabled: feed.aiEnhanceEnabled,
     contentTemplate: feed.contentTemplate || defaultTemplate,
+    titleTemplate: feed.titleTemplate || defaultTitleTemplate,
+    titleHint: feed.titleHint ?? '',
     outputMode: feed.outputMode,
     maxPostsPerDay: feed.maxPostsPerDay ?? 10,
     promptHint: feed.promptHint,
@@ -123,6 +130,8 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       is_active: feedForm.isActive,
       ai_enhance_enabled: feedForm.aiEnhanceEnabled,
       content_template: feedForm.contentTemplate.trim(),
+      title_template: feedForm.titleTemplate.trim(),
+      title_hint: feedForm.titleHint.trim(),
       output_mode: feedForm.outputMode,
       max_posts_per_day: feedForm.maxPostsPerDay,
       prompt_hint: feedForm.promptHint.trim(),
@@ -252,6 +261,17 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                     </p>
                   </label>
                   <label className="field">
+                    <span>{t('rss.titleTemplate')}</span>
+                    <input
+                      value={feedForm.titleTemplate}
+                      onChange={(e) => setFeedForm((prev) => ({ ...prev, titleTemplate: e.target.value }))}
+                      placeholder={defaultTitleTemplate}
+                    />
+                    <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                      {t('rss.titleTemplateHint')}
+                    </p>
+                  </label>
+                  <label className="field">
                     <span>{t('rss.outputMode')}</span>
                     <select
                       value={feedForm.outputMode}
@@ -316,6 +336,17 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                               placeholder={t('rss.tonalityPlaceholder')}
                               data-testid="rss-ai-tonality"
                             />
+                          </label>
+                          <label className="field">
+                            <span>{t('rss.titleHint')}</span>
+                            <input
+                              value={feedForm.titleHint}
+                              onChange={(e) => setFeedForm((prev) => ({ ...prev, titleHint: e.target.value }))}
+                              placeholder={t('rss.titleHintPlaceholder')}
+                            />
+                            <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                              {t('rss.titleHintHelp')}
+                            </p>
                           </label>
                         </>
                       ) : null}

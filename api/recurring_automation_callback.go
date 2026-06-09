@@ -61,7 +61,7 @@ func (a *API) createRecurringAutomationPost(
 		Kind: "api_token",
 	}
 	_, err := a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
-		Title:                  meta.PostTitle,
+		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
 		AccountContentOverride: normalizedOverrides,

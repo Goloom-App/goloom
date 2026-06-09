@@ -116,6 +116,8 @@ create table if not exists rss_feed_configs (
     content_template text not null default '{title}
 
 {link}',
+    title_template text not null default '{title}',
+    title_hint text not null default '',
     output_mode text not null default 'draft',
     max_posts_per_day integer not null default 10,
     counter_next integer not null default 1,
@@ -331,6 +333,7 @@ create table if not exists post_templates (
     ai_enhance_enabled integer not null default 0,
     output_mode text not null default 'scheduled',
     prompt_hint text not null default '',
+    title_hint text not null default '',
     tonality text not null default '',
     next_materialize_at text,
     counter_next integer not null default 1,

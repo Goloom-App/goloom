@@ -37,6 +37,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table post_templates add column output_mode text not null default 'scheduled'`,
 		`alter table post_templates add column prompt_hint text not null default ''`,
 		`alter table post_templates add column tonality text not null default ''`,
+		`alter table post_templates add column title_hint text not null default ''`,
 		`alter table api_tokens add column scopes text not null default ''`,
 		`alter table api_tokens add column team_id text references teams(id) on delete cascade`,
 		`alter table scheduled_posts add column source text not null default 'scheduled'`,
@@ -52,6 +53,8 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column max_posts_per_day integer not null default 10`,
 		`alter table rss_feed_configs add column counter_next integer not null default 1`,
 		`alter table rss_feed_configs add column ai_enhance_enabled integer not null default 0`,
+		`alter table rss_feed_configs add column title_template text not null default '{title}'`,
+		`alter table rss_feed_configs add column title_hint text not null default ''`,
 		`alter table scheduled_posts add column rss_feed_id text references rss_feed_configs(id) on delete set null`,
 		`create table if not exists rss_imported_items (
 			id text primary key,

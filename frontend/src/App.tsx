@@ -856,6 +856,7 @@ function App() {
   }
 
   function openComposerFromGeneratedContent(payload: {
+    title?: string
     content: string
     targetAccountIds: string[]
     accountContentOverride?: Record<string, string>
@@ -863,7 +864,7 @@ function App() {
   }) {
     const baseDraft = defaultEditorDraft(currentDate, teamAccounts)
     setEditorDraft({
-      title: '',
+      title: payload.title?.trim() ?? '',
       content: payload.content,
       scheduledAt: payload.scheduledAt ? toInputDateTime(parseISO(payload.scheduledAt)) : baseDraft.scheduledAt,
       targetAccountIds: payload.targetAccountIds,
