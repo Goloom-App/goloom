@@ -1,5 +1,10 @@
 import type { TFunction } from 'i18next'
 
+export interface OrdinalOccurrence {
+  ordinal: number
+  weekday: number
+}
+
 const GO_WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 const ORDINAL_I18N: Record<number, string> = {
   1: 'recurring.ordinal1',
@@ -31,7 +36,7 @@ export function ordinalWeekdayDay(year: number, month: number, ordinal: number, 
   return day
 }
 
-export function normalizeOrdinals(raw: unknown, legacyOrdinal?: unknown): number[] {
+function normalizeOrdinals(raw: unknown, legacyOrdinal?: unknown): number[] {
   if (Array.isArray(raw)) {
     const out: number[] = []
     for (const value of raw) {
@@ -55,6 +60,50 @@ export function normalizeOrdinals(raw: unknown, legacyOrdinal?: unknown): number
   return [1]
 }
 
+function isValidOccurrence(value: unknown): value is OrdinalOccurrence {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const occ = value as Record<string, unknown>
+  const ordinal = occ.ordinal
+  const weekday = occ.weekday
+  return (
+    typeof ordinal === 'number'
+    && typeof weekday === 'number'
+    && ordinal >= -1
+    && ordinal !== 0
+    && ordinal <= 5
+    && weekday >= 0
+    && weekday <= 6
+  )
+}
+
+export function normalizeOrdinalOccurrences(obj: Record<string, unknown>): OrdinalOccurrence[] {
+  if (Array.isArray(obj.occurrences)) {
+    const out: OrdinalOccurrence[] = []
+    const seen = new Set<string>()
+    for (const value of obj.occurrences) {
+      if (!isValidOccurrence(value)) {
+        continue
+      }
+      const key = `${value.ordinal}:${value.weekday}`
+      if (seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      out.push({ ordinal: value.ordinal, weekday: value.weekday })
+    }
+    if (out.length > 0) {
+      return out
+    }
+  }
+
+  const weekday = typeof obj.ordinal_weekday === 'number' ? obj.ordinal_weekday : 1
+  return normalizeOrdinals(obj.ordinals, obj.ordinal).map((ordinal) => ({ ordinal, weekday }))
+}
+
+export const DEFAULT_ORDINAL_OCCURRENCE: OrdinalOccurrence = { ordinal: 1, weekday: 1 }
+
 function formatTime(hour: number, minute: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
@@ -64,8 +113,14 @@ function weekdayLabel(t: TFunction, goWeekday: number): string {
   return t(`weekdays.${key}`)
 }
 
-function ordinalLabels(t: TFunction, ordinals: number[]): string {
-  const labels = ordinals.map((ordinal) => t(ORDINAL_I18N[ordinal] as 'recurring.ordinal1'))
+function occurrencePairLabel(t: TFunction, occ: OrdinalOccurrence): string {
+  return t('recurring.summaryOccurrencePair', {
+    ordinal: t(ORDINAL_I18N[occ.ordinal] as 'recurring.ordinal1'),
+    weekday: weekdayLabel(t, occ.weekday),
+  })
+}
+
+function joinLabels(t: TFunction, labels: string[]): string {
   if (labels.length <= 1) {
     return labels[0] ?? ''
   }
@@ -98,11 +153,9 @@ export function formatRecurrenceSummary(raw: string, t: TFunction): string {
     }
 
     if (kind === 'monthly_ordinal_weekday') {
-      const ordinals = normalizeOrdinals(obj.ordinals, obj.ordinal)
-      const weekday = weekdayLabel(t, typeof obj.ordinal_weekday === 'number' ? obj.ordinal_weekday : 1)
+      const pairs = normalizeOrdinalOccurrences(obj).map((occ) => occurrencePairLabel(t, occ))
       return t('recurring.summaryMonthlyOrdinal', {
-        ordinals: ordinalLabels(t, ordinals),
-        weekday,
+        pairs: joinLabels(t, pairs),
         time,
         tz,
       })

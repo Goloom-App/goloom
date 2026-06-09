@@ -1,6 +1,10 @@
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { normalizeOrdinals } from './recurrenceUtils'
+import {
+  DEFAULT_ORDINAL_OCCURRENCE,
+  normalizeOrdinalOccurrences,
+  type OrdinalOccurrence,
+} from './recurrenceUtils'
 
 export type RecurrenceKind = 'weekly' | 'monthly_dom' | 'monthly_anchor_offset' | 'monthly_ordinal_weekday'
 
@@ -13,8 +17,7 @@ export interface RecurrenceState {
   dayOfMonth: number
   anchorDay: number
   offsetDays: number
-  ordinals: number[]
-  ordinalWeekday: number
+  ordinalOccurrences: OrdinalOccurrence[]
 }
 
 export const DEFAULT_RECURRENCE: RecurrenceState = {
@@ -26,8 +29,7 @@ export const DEFAULT_RECURRENCE: RecurrenceState = {
   dayOfMonth: 15,
   anchorDay: 15,
   offsetDays: -3,
-  ordinals: [1],
-  ordinalWeekday: 1,
+  ordinalOccurrences: [{ ...DEFAULT_ORDINAL_OCCURRENCE }],
 }
 
 export function recurrenceStateToJSON(state: RecurrenceState): string {
@@ -45,26 +47,27 @@ export function recurrenceStateToJSON(state: RecurrenceState): string {
     obj.anchor_day = state.anchorDay
     obj.offset_days = state.offsetDays
   } else if (state.kind === 'monthly_ordinal_weekday') {
-    obj.ordinals = state.ordinals
-    obj.ordinal_weekday = state.ordinalWeekday
+    obj.occurrences = state.ordinalOccurrences.map((occ) => ({
+      ordinal: occ.ordinal,
+      weekday: occ.weekday,
+    }))
   }
   return JSON.stringify(obj, null, 2)
 }
 
 export function parseRecurrenceJSON(raw: string): RecurrenceState {
   try {
-    const obj = JSON.parse(raw)
+    const obj = JSON.parse(raw) as Record<string, unknown>
     return {
-      kind: obj.kind || 'weekly',
-      weekdays: Array.isArray(obj.weekdays) ? obj.weekdays : [1],
+      kind: (obj.kind as RecurrenceKind) || 'weekly',
+      weekdays: Array.isArray(obj.weekdays) ? obj.weekdays.filter((value): value is number => typeof value === 'number') : [1],
       hour: typeof obj.hour === 'number' ? obj.hour : 9,
       minute: typeof obj.minute === 'number' ? obj.minute : 0,
-      timezone: obj.timezone || 'UTC',
-      dayOfMonth: obj.day_of_month || 15,
-      anchorDay: obj.anchor_day || 15,
-      offsetDays: obj.offset_days ?? -3,
-      ordinals: normalizeOrdinals(obj.ordinals, obj.ordinal),
-      ordinalWeekday: obj.ordinal_weekday ?? 1,
+      timezone: typeof obj.timezone === 'string' && obj.timezone ? obj.timezone : 'UTC',
+      dayOfMonth: typeof obj.day_of_month === 'number' ? obj.day_of_month : 15,
+      anchorDay: typeof obj.anchor_day === 'number' ? obj.anchor_day : 15,
+      offsetDays: typeof obj.offset_days === 'number' ? obj.offset_days : -3,
+      ordinalOccurrences: normalizeOrdinalOccurrences(obj),
     }
   } catch {
     return { ...DEFAULT_RECURRENCE }
@@ -106,8 +109,6 @@ const COMMON_TZ = [
 ]
 
 const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-// Go weekday: 0=Sun, 1=Mon...6=Sat
-// UI order (Mon-Sun) index 0 → Go weekday 1
 const UI_TO_GO_WEEKDAY = [1, 2, 3, 4, 5, 6, 0]
 const ORDINAL_OPTIONS = [1, 2, 3, 4, 5, -1] as const
 const ORDINAL_I18N: Record<number, string> = {
@@ -147,19 +148,30 @@ export function RecurrenceForm({
     [state.weekdays, set],
   )
 
-  const toggleOrdinal = useCallback(
-    (ordinal: number) => {
-      const exists = state.ordinals.includes(ordinal)
-      const next = exists
-        ? state.ordinals.filter((value) => value !== ordinal)
-        : [...state.ordinals, ordinal].sort((a, b) => {
-            if (a === -1) return 1
-            if (b === -1) return -1
-            return a - b
-          })
-      set({ ordinals: next.length > 0 ? next : [ordinal] })
+  const updateOccurrence = useCallback(
+    (index: number, patch: Partial<OrdinalOccurrence>) => {
+      const next = state.ordinalOccurrences.map((occ, i) => (i === index ? { ...occ, ...patch } : occ))
+      set({ ordinalOccurrences: next })
     },
-    [state.ordinals, set],
+    [state.ordinalOccurrences, set],
+  )
+
+  const addOccurrence = useCallback(() => {
+    set({
+      ordinalOccurrences: [...state.ordinalOccurrences, { ...DEFAULT_ORDINAL_OCCURRENCE }],
+    })
+  }, [state.ordinalOccurrences, set])
+
+  const removeOccurrence = useCallback(
+    (index: number) => {
+      if (state.ordinalOccurrences.length <= 1) {
+        return
+      }
+      set({
+        ordinalOccurrences: state.ordinalOccurrences.filter((_, i) => i !== index),
+      })
+    },
+    [state.ordinalOccurrences, set],
   )
 
   return (
@@ -251,48 +263,78 @@ export function RecurrenceForm({
 
       {state.kind === 'monthly_ordinal_weekday' && (
         <div className="recurrence-form__ordinal-block">
-          <div className="recurrence-form__weekdays">
-            <span className="recurrence-form__label">{t('recurring.ordinals')}</span>
-            <div className="recurrence-form__weekday-row">
-              {ORDINAL_OPTIONS.map((ordinal) => {
-                const active = state.ordinals.includes(ordinal)
-                return (
-                  <button
-                    key={ordinal}
-                    type="button"
-                    className={`recurrence-form__weekday-btn${active ? ' recurrence-form__weekday-btn--active' : ''}`}
-                    onClick={() => toggleOrdinal(ordinal)}
-                    aria-pressed={active}
-                    data-testid={`recurring-ordinal-${ordinal}`}
-                  >
-                    {t(ORDINAL_I18N[ordinal] as 'recurring.ordinal1')}
-                  </button>
-                )
-              })}
-            </div>
-            <p className="hint recurrence-form__ordinal-hint">{t('recurring.ordinalsHint')}</p>
+          <span className="recurrence-form__label">{t('recurring.occurrences')}</span>
+          <p className="hint recurrence-form__ordinal-hint">{t('recurring.occurrencesHint')}</p>
+          <div className="recurrence-form__occurrence-list">
+            {state.ordinalOccurrences.map((occ, index) => (
+              <div key={index} className="recurrence-form__occurrence-row" data-testid={`recurring-occurrence-row-${index}`}>
+                <div className="recurrence-form__occurrence-row-head">
+                  <span className="recurrence-form__occurrence-title">
+                    {t('recurring.occurrenceNumber', { number: index + 1 })}
+                  </span>
+                  {state.ordinalOccurrences.length > 1 ? (
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => removeOccurrence(index)}
+                      data-testid={`recurring-occurrence-remove-${index}`}
+                    >
+                      {t('recurring.removeOccurrence')}
+                    </button>
+                  ) : null}
+                </div>
+                <div className="recurrence-form__weekdays">
+                  <span className="recurrence-form__label">{t('recurring.ordinal')}</span>
+                  <div className="recurrence-form__weekday-row">
+                    {ORDINAL_OPTIONS.map((ordinal) => {
+                      const active = occ.ordinal === ordinal
+                      return (
+                        <button
+                          key={ordinal}
+                          type="button"
+                          className={`recurrence-form__weekday-btn${active ? ' recurrence-form__weekday-btn--active' : ''}`}
+                          onClick={() => updateOccurrence(index, { ordinal })}
+                          aria-pressed={active}
+                          data-testid={`recurring-ordinal-${index}-${ordinal}`}
+                        >
+                          {t(ORDINAL_I18N[ordinal] as 'recurring.ordinal1')}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="recurrence-form__weekdays">
+                  <span className="recurrence-form__label">{t('recurring.weekday')}</span>
+                  <div className="recurrence-form__weekday-row">
+                    {WEEKDAY_KEYS.map((key, i) => {
+                      const goWd = UI_TO_GO_WEEKDAY[i]
+                      const active = occ.weekday === goWd
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`recurrence-form__weekday-btn${active ? ' recurrence-form__weekday-btn--active' : ''}`}
+                          onClick={() => updateOccurrence(index, { weekday: goWd })}
+                          aria-pressed={active}
+                          data-testid={`recurring-ordinal-weekday-${index}-${key}`}
+                        >
+                          {t(`weekdays.${key}` as 'weekdays.mon').slice(0, 2)}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="recurrence-form__weekdays">
-            <span className="recurrence-form__label">{t('recurring.weekday')}</span>
-            <div className="recurrence-form__weekday-row">
-              {WEEKDAY_KEYS.map((key, i) => {
-                const goWd = UI_TO_GO_WEEKDAY[i]
-                const active = state.ordinalWeekday === goWd
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`recurrence-form__weekday-btn${active ? ' recurrence-form__weekday-btn--active' : ''}`}
-                    onClick={() => set({ ordinalWeekday: goWd })}
-                    aria-pressed={active}
-                    data-testid={`recurring-ordinal-weekday-${key}`}
-                  >
-                    {t(`weekdays.${key}` as 'weekdays.mon').slice(0, 2)}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={addOccurrence}
+            data-testid="recurring-add-occurrence"
+          >
+            {t('recurring.addOccurrence')}
+          </button>
         </div>
       )}
 

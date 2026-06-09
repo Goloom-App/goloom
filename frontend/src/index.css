@@ -4592,6 +4592,34 @@ select {
   font-size: 0.8rem;
 }
 
+.recurrence-form__occurrence-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.recurrence-form__occurrence-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken, rgba(255, 255, 255, 0.02));
+}
+
+.recurrence-form__occurrence-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.recurrence-form__occurrence-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
 .recurrence-form__row {
   display: flex;
   gap: var(--space-3);

@@ -83,9 +83,11 @@ test.describe('recurring posts form', () => {
   test('monthly ordinal weekday supports multiple occurrences', async ({ page }) => {
     await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
     await page.getByRole('radio', { name: /monthly.*ordinal|monatlich.*wochentag/i }).click()
-    await page.getByTestId('recurring-ordinal-1').click()
-    await page.getByTestId('recurring-ordinal-3').click()
-    await page.getByTestId('recurring-ordinal-weekday-fri').click()
+    await page.getByTestId('recurring-ordinal-0-1').click()
+    await page.getByTestId('recurring-ordinal-weekday-0-fri').click()
+    await page.getByTestId('recurring-add-occurrence').click()
+    await page.getByTestId('recurring-ordinal-1-3').click()
+    await page.getByTestId('recurring-ordinal-weekday-1-mon').click()
     await expect(page.locator('.occurrence-preview__item')).toHaveCount(5)
   })
 

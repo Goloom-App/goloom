@@ -112,12 +112,14 @@ func TestNextOccurrence_ordinalFifthFriday(t *testing.T) {
 func TestNextOccurrence_ordinalMultipleFridays(t *testing.T) {
 	t.Parallel()
 	rule := &RecurrenceRule{
-		Kind:           RecurrenceMonthlyOrdinalWeekday,
-		Ordinals:       []int{1, 3},
-		OrdinalWeekday: 5, // Friday
-		Hour:           9,
-		Minute:         0,
-		Timezone:       "UTC",
+		Kind: RecurrenceMonthlyOrdinalWeekday,
+		Occurrences: []OrdinalOccurrence{
+			{Ordinal: 1, Weekday: 5},
+			{Ordinal: 3, Weekday: 5},
+		},
+		Hour:     9,
+		Minute:   0,
+		Timezone: "UTC",
 	}
 	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
 	next, err := NextOccurrence(rule, start)
@@ -135,6 +137,39 @@ func TestNextOccurrence_ordinalMultipleFridays(t *testing.T) {
 		t.Fatal(err)
 	}
 	want = time.Date(2025, 6, 20, 9, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("after first Friday got %v want %v", next, want)
+	}
+}
+
+func TestNextOccurrence_ordinalMixedWeekdays(t *testing.T) {
+	t.Parallel()
+	rule := &RecurrenceRule{
+		Kind: RecurrenceMonthlyOrdinalWeekday,
+		Occurrences: []OrdinalOccurrence{
+			{Ordinal: 1, Weekday: 5},
+			{Ordinal: 3, Weekday: 1},
+		},
+		Hour:     9,
+		Minute:   0,
+		Timezone: "UTC",
+	}
+	start := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	next, err := NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2025, 6, 6, 9, 0, 0, 0, time.UTC)
+	if !next.Equal(want) {
+		t.Fatalf("got %v want %v", next, want)
+	}
+
+	start = time.Date(2025, 6, 7, 0, 0, 0, 0, time.UTC)
+	next, err = NextOccurrence(rule, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = time.Date(2025, 6, 16, 9, 0, 0, 0, time.UTC)
 	if !next.Equal(want) {
 		t.Fatalf("after first Friday got %v want %v", next, want)
 	}

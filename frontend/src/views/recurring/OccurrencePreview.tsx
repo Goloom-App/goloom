@@ -50,8 +50,8 @@ export function computeOccurrences(state: RecurrenceState, count: number): Date[
     } else if (state.kind === 'monthly_ordinal_weekday') {
       const year = cursor.getFullYear()
       const month = cursor.getMonth() + 1
-      for (const ordinal of state.ordinals) {
-        const day = ordinalWeekdayDay(year, month, ordinal, state.ordinalWeekday)
+      for (const occ of state.ordinalOccurrences) {
+        const day = ordinalWeekdayDay(year, month, occ.ordinal, occ.weekday)
         if (day !== null && cursor.getDate() === day) {
           cursor.setHours(state.hour, state.minute, 0, 0)
           if (cursor.getTime() > now.getTime()) {

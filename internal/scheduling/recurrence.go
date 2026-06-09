@@ -29,9 +29,18 @@ type RecurrenceRule struct {
 	AnchorDay  int `json:"anchor_day,omitempty"`
 	OffsetDays int `json:"offset_days,omitempty"`
 
+	// Occurrences lists ordinal+weekday pairs (e.g. 1st Friday and 3rd Monday).
+	Occurrences []OrdinalOccurrence `json:"occurrences,omitempty"`
+
+	// Legacy single/multi-ordinal fields; migrated into Occurrences when parsing.
 	Ordinal        int   `json:"ordinal,omitempty"`
 	Ordinals       []int `json:"ordinals,omitempty"`
 	OrdinalWeekday int   `json:"ordinal_weekday,omitempty"`
+}
+
+type OrdinalOccurrence struct {
+	Ordinal int `json:"ordinal"`
+	Weekday int `json:"weekday"`
 }
 
 // ParseRecurrenceJSON validates and parses recurrence_json from the database.
@@ -89,20 +98,52 @@ func ValidateRecurrenceRule(r *RecurrenceRule) error {
 			return errors.New("anchor_day must be 1–31")
 		}
 	case RecurrenceMonthlyOrdinalWeekday:
-		ordinals := effectiveOrdinals(r)
-		if len(ordinals) == 0 {
-			return errors.New("ordinals requires at least one occurrence (1–5 or -1 for last)")
+		occurrences := effectiveOrdinalOccurrences(r)
+		if len(occurrences) == 0 {
+			return errors.New("occurrences requires at least one ordinal weekday pair")
 		}
-		for _, ord := range ordinals {
-			if ord < -1 || ord == 0 || ord > 5 {
+		for _, occ := range occurrences {
+			if occ.Ordinal < -1 || occ.Ordinal == 0 || occ.Ordinal > 5 {
 				return errors.New("each ordinal must be -1 (last), or 1–5")
 			}
-		}
-		if r.OrdinalWeekday < 0 || r.OrdinalWeekday > 6 {
-			return errors.New("ordinal_weekday must be 0–6 (Sunday–Saturday)")
+			if occ.Weekday < 0 || occ.Weekday > 6 {
+				return errors.New("each weekday must be 0–6 (Sunday–Saturday)")
+			}
 		}
 	}
 	return nil
+}
+
+func effectiveOrdinalOccurrences(r *RecurrenceRule) []OrdinalOccurrence {
+	if len(r.Occurrences) > 0 {
+		out := make([]OrdinalOccurrence, 0, len(r.Occurrences))
+		seen := make(map[string]struct{}, len(r.Occurrences))
+		for _, occ := range r.Occurrences {
+			if occ.Ordinal < -1 || occ.Ordinal == 0 || occ.Ordinal > 5 {
+				continue
+			}
+			if occ.Weekday < 0 || occ.Weekday > 6 {
+				continue
+			}
+			key := fmt.Sprintf("%d:%d", occ.Ordinal, occ.Weekday)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, occ)
+		}
+		return out
+	}
+	weekday := r.OrdinalWeekday
+	ordinals := effectiveOrdinals(r)
+	if len(ordinals) == 0 {
+		return nil
+	}
+	out := make([]OrdinalOccurrence, 0, len(ordinals))
+	for _, ord := range ordinals {
+		out = append(out, OrdinalOccurrence{Ordinal: ord, Weekday: weekday})
+	}
+	return out
 }
 
 func effectiveOrdinals(r *RecurrenceRule) []int {
@@ -221,15 +262,15 @@ func nextMonthlyAnchorOffset(rule *RecurrenceRule, after time.Time, loc *time.Lo
 func nextMonthlyOrdinalWeekday(rule *RecurrenceRule, after time.Time, loc *time.Location) time.Time {
 	ref := after.In(loc)
 	y, mo := ref.Year(), ref.Month()
-	ordinals := effectiveOrdinals(rule)
+	occurrences := effectiveOrdinalOccurrences(rule)
 	for i := 0; i < 120; i++ {
 		candMonth := time.Date(y, mo, 1, 0, 0, 0, 0, loc).AddDate(0, i, 0)
 		yy, mm := candMonth.Year(), candMonth.Month()
 
 		var earliest time.Time
 		found := false
-		for _, ord := range ordinals {
-			day, ok := ordinalWeekdayDay(yy, int(mm), ord, rule.OrdinalWeekday, loc)
+		for _, occ := range occurrences {
+			day, ok := ordinalWeekdayDay(yy, int(mm), occ.Ordinal, occ.Weekday, loc)
 			if !ok {
 				continue
 			}
