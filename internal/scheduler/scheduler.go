@@ -691,6 +691,7 @@ func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTem
 func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time) error {
 	counterVal := tmpl.CounterNext
 	expandedContent := domain.ExpandDynamicVariables(tmpl.Content, scheduledAt, &counterVal, nil)
+	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.Title, scheduledAt, counterVal, nil)
 	outputMode := tmpl.OutputMode
 	if outputMode == "" {
 		outputMode = domain.AutomationOutputScheduled
@@ -720,7 +721,6 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 
 	authorID := tmpl.AuthorUserID
 	tplID := tmpl.ID
-	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.Title, scheduledAt, counterVal, nil)
 	input := domain.CreatePostInput{
 		Title:                 expandedTitle,
 		Content:               tmpl.Content,
