@@ -11,6 +11,7 @@ import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord, AutomationOutputMode } from '../../types'
 import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
 import { OccurrencePreview, computeOccurrences } from './OccurrencePreview'
+import { formatRecurrenceSummary } from './recurrenceUtils'
 
 type Api = ReturnType<typeof createApiClient>
 
@@ -315,7 +316,7 @@ export function RecurringPostsView({
                   {item.enabled ? t('analytics.enabled') : t('analytics.paused')}
                 </span>
               </div>
-              <p className="hint monospace-small">{item.recurrence_json}</p>
+              <p className="hint">{formatRecurrenceSummary(item.recurrence_json, t)}</p>
               <p className="hint">
                 {t('recurring.next')}{' '}
                 {item.next_materialize_at ? format(parseISO(item.next_materialize_at), 'PPpp') : t('common.emDash')} · {t('common.counter')}:{' '}
