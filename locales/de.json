@@ -447,6 +447,8 @@
       "minute": "Minute",
       "timezone": "Zeitzone",
       "ordinal": "Vorkommen",
+      "ordinals": "Vorkommen im Monat",
+      "ordinalsHint": "Mehrere auswählbar, z. B. 1. und 3. Freitag.",
       "ordinal1": "1.",
       "ordinal2": "2.",
       "ordinal3": "3.",

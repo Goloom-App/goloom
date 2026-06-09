@@ -29,8 +29,9 @@ type RecurrenceRule struct {
 	AnchorDay  int `json:"anchor_day,omitempty"`
 	OffsetDays int `json:"offset_days,omitempty"`
 
-	Ordinal        int `json:"ordinal,omitempty"`
-	OrdinalWeekday int `json:"ordinal_weekday,omitempty"`
+	Ordinal        int   `json:"ordinal,omitempty"`
+	Ordinals       []int `json:"ordinals,omitempty"`
+	OrdinalWeekday int   `json:"ordinal_weekday,omitempty"`
 }
 
 // ParseRecurrenceJSON validates and parses recurrence_json from the database.
@@ -88,12 +89,40 @@ func ValidateRecurrenceRule(r *RecurrenceRule) error {
 			return errors.New("anchor_day must be 1–31")
 		}
 	case RecurrenceMonthlyOrdinalWeekday:
-		if r.Ordinal < -1 || r.Ordinal == 0 || r.Ordinal > 5 {
-			return errors.New("ordinal must be -1 (last), or 1–5")
+		ordinals := effectiveOrdinals(r)
+		if len(ordinals) == 0 {
+			return errors.New("ordinals requires at least one occurrence (1–5 or -1 for last)")
+		}
+		for _, ord := range ordinals {
+			if ord < -1 || ord == 0 || ord > 5 {
+				return errors.New("each ordinal must be -1 (last), or 1–5")
+			}
 		}
 		if r.OrdinalWeekday < 0 || r.OrdinalWeekday > 6 {
 			return errors.New("ordinal_weekday must be 0–6 (Sunday–Saturday)")
 		}
+	}
+	return nil
+}
+
+func effectiveOrdinals(r *RecurrenceRule) []int {
+	if len(r.Ordinals) > 0 {
+		out := make([]int, 0, len(r.Ordinals))
+		seen := make(map[int]struct{}, len(r.Ordinals))
+		for _, ord := range r.Ordinals {
+			if ord < -1 || ord == 0 || ord > 5 {
+				continue
+			}
+			if _, ok := seen[ord]; ok {
+				continue
+			}
+			seen[ord] = struct{}{}
+			out = append(out, ord)
+		}
+		return out
+	}
+	if r.Ordinal != 0 {
+		return []int{r.Ordinal}
 	}
 	return nil
 }
@@ -192,40 +221,51 @@ func nextMonthlyAnchorOffset(rule *RecurrenceRule, after time.Time, loc *time.Lo
 func nextMonthlyOrdinalWeekday(rule *RecurrenceRule, after time.Time, loc *time.Location) time.Time {
 	ref := after.In(loc)
 	y, mo := ref.Year(), ref.Month()
+	ordinals := effectiveOrdinals(rule)
 	for i := 0; i < 120; i++ {
 		candMonth := time.Date(y, mo, 1, 0, 0, 0, 0, loc).AddDate(0, i, 0)
 		yy, mm := candMonth.Year(), candMonth.Month()
-		maxd := daysInMonth(yy, int(mm))
 
-		var day int
-		if rule.Ordinal == -1 {
-			day = maxd
-			for day > 0 {
-				t := time.Date(yy, mm, day, 0, 0, 0, 0, loc)
-				if int(t.Weekday()) == rule.OrdinalWeekday {
-					break
-				}
-				day--
-			}
-			if day < 1 {
+		var earliest time.Time
+		found := false
+		for _, ord := range ordinals {
+			day, ok := ordinalWeekdayDay(yy, int(mm), ord, rule.OrdinalWeekday, loc)
+			if !ok {
 				continue
 			}
-		} else {
-			firstDay := 1
-			t := time.Date(yy, mm, firstDay, 0, 0, 0, 0, loc)
-			offset := (rule.OrdinalWeekday - int(t.Weekday()) + 7) % 7
-			day = 1 + offset + (rule.Ordinal-1)*7
-			if day > maxd {
-				continue
+			instant := time.Date(yy, mm, day, rule.Hour, rule.Minute, 0, 0, loc)
+			if instant.After(ref) && (!found || instant.Before(earliest)) {
+				earliest = instant
+				found = true
 			}
 		}
-
-		instant := time.Date(yy, mm, day, rule.Hour, rule.Minute, 0, 0, loc)
-		if instant.After(ref) {
-			return instant.UTC()
+		if found {
+			return earliest.UTC()
 		}
 	}
 	return after.AddDate(10, 0, 0).UTC()
+}
+
+func ordinalWeekdayDay(year, month, ordinal, weekday int, loc *time.Location) (int, bool) {
+	maxd := daysInMonth(year, month)
+	if ordinal == -1 {
+		day := maxd
+		for day > 0 {
+			t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, loc)
+			if int(t.Weekday()) == weekday {
+				return day, true
+			}
+			day--
+		}
+		return 0, false
+	}
+	firstDay := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc)
+	offset := (weekday - int(firstDay.Weekday()) + 7) % 7
+	day := 1 + offset + (ordinal-1)*7
+	if day < 1 || day > maxd {
+		return 0, false
+	}
+	return day, true
 }
 
 func daysInMonth(year, month int) int {

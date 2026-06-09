@@ -80,6 +80,15 @@ test.describe('recurring posts form', () => {
     await expect(page.getByText(/required|erforderlich/i)).toBeVisible()
   })
 
+  test('monthly ordinal weekday supports multiple occurrences', async ({ page }) => {
+    await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
+    await page.getByRole('radio', { name: /monthly.*ordinal|monatlich.*wochentag/i }).click()
+    await page.getByTestId('recurring-ordinal-1').click()
+    await page.getByTestId('recurring-ordinal-3').click()
+    await page.getByTestId('recurring-ordinal-weekday-fri').click()
+    await expect(page.locator('.occurrence-preview__item')).toHaveCount(5)
+  })
+
   test('preview shows upcoming occurrences', async ({ page }) => {
     await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
 

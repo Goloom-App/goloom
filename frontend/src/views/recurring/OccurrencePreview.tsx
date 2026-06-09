@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RecurrenceState } from './RecurrenceForm'
+import { ordinalWeekdayDay } from './recurrenceUtils'
 
 export function computeOccurrences(state: RecurrenceState, count: number): Date[] {
   const results: Date[] = []
@@ -47,24 +48,16 @@ export function computeOccurrences(state: RecurrenceState, count: number): Date[
         }
       }
     } else if (state.kind === 'monthly_ordinal_weekday') {
-      const maxd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
-      let day: number
-      if (state.ordinal === -1) {
-        day = maxd
-        while (day > 0) {
-          const t = new Date(cursor.getFullYear(), cursor.getMonth(), day)
-          if (t.getDay() === state.ordinalWeekday) { break }
-          day--
-        }
-      } else {
-        const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1).getDay()
-        const offset = (state.ordinalWeekday - first + 7) % 7
-        day = 1 + offset + (state.ordinal - 1) * 7
-      }
-      if (day >= 1 && day <= maxd && cursor.getDate() === day) {
-        cursor.setHours(state.hour, state.minute, 0, 0)
-        if (cursor.getTime() > now.getTime()) {
-          matches = true
+      const year = cursor.getFullYear()
+      const month = cursor.getMonth() + 1
+      for (const ordinal of state.ordinals) {
+        const day = ordinalWeekdayDay(year, month, ordinal, state.ordinalWeekday)
+        if (day !== null && cursor.getDate() === day) {
+          cursor.setHours(state.hour, state.minute, 0, 0)
+          if (cursor.getTime() > now.getTime()) {
+            matches = true
+            break
+          }
         }
       }
     }

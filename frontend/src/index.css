@@ -4581,6 +4581,17 @@ select {
   border-color: var(--accent);
 }
 
+.recurrence-form__ordinal-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.recurrence-form__ordinal-hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
 .recurrence-form__row {
   display: flex;
   gap: var(--space-3);
