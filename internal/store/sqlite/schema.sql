@@ -84,6 +84,18 @@ create table if not exists style_examples (
     created_at text not null default (datetime('now'))
 );
 
+create table if not exists knowledge_sources (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    source_type text not null check (source_type in ('text', 'url', 'file')),
+    name text not null,
+    content text not null default '',
+    source_url text not null default '',
+    media_id text not null default '',
+    created_at text not null default (datetime('now')),
+    updated_at text not null default (datetime('now'))
+);
+
 create table if not exists ai_jobs (
     id text primary key,
     team_id text not null references teams(id) on delete cascade,
@@ -155,6 +167,7 @@ create index if not exists idx_team_profiles_team on team_profiles(team_id);
 create unique index if not exists idx_team_profiles_team_unique on team_profiles(team_id);
 create index if not exists idx_campaign_formats_team on campaign_formats(team_id);
 create index if not exists idx_style_examples_team on style_examples(team_id);
+create index if not exists idx_knowledge_sources_team on knowledge_sources(team_id);
 create index if not exists idx_ai_jobs_team_status on ai_jobs(team_id, status);
 create index if not exists idx_ai_jobs_status on ai_jobs(status);
 create index if not exists idx_rss_feed_configs_team on rss_feed_configs(team_id);

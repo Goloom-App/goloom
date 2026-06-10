@@ -1,0 +1,36 @@
+---
+const repoUrl = 'https://git.f4mily.net/goloom';
+const dockerOneLiner =
+	'docker run --rm -p 8080:8080 -v "$(pwd)/data:/app/data" goloom';
+---
+
+<section class="hero landing-section landing-section--tight-top">
+	<div class="landing-container hero__inner">
+		<img
+			class="hero__logo"
+			src="/favicon.svg"
+			alt="goloom logo"
+			width="72"
+			height="72"
+		/>
+		<h1 class="hero__title">goloom</h1>
+		<p class="hero__tagline">
+			Lightweight social planning for teams and AI agents. Schedule posts,
+			manage accounts, and automate your federated social workflow — all from
+			one self-hosted binary.
+		</p>
+		<div class="hero__actions">
+			<a class="btn btn--primary" href="/docs/">Documentation</a>
+			<a
+				class="btn btn--secondary"
+				href={repoUrl}
+				target="_blank"
+				rel="noopener noreferrer">View source</a
+			>
+		</div>
+		<div class="hero__docker">
+			<span class="hero__docker-label">Quick start with Docker</span>
+			<code>{dockerOneLiner}</code>
+		</div>
+	</div>
+</section>

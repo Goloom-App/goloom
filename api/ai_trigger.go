@@ -86,7 +86,7 @@ func (a *API) handleGetAIJob(w http.ResponseWriter, r *http.Request) {
 
 func isValidAIJobType(jobType domain.AIJobType) bool {
 	switch jobType {
-	case domain.AIJobTypeVoiceEngine, domain.AIJobTypeCampaignAutopilot, domain.AIJobTypeProactiveTrigger, domain.AIJobTypeProfileAnalysis:
+	case domain.AIJobTypeVoiceEngine, domain.AIJobTypeCampaignAutopilot, domain.AIJobTypeProactiveTrigger, domain.AIJobTypeProfileAnalysis, domain.AIJobTypeVibePreview:
 		return true
 	default:
 		return false

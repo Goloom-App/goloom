@@ -15,9 +15,8 @@
       "reviewQueue": "Review",
       "reviewQueuePending": "{{count}} ausstehend in der Review-Warteschlange",
       "archive": "Archiv",
-      "aiProfile": "KI-Profil",
+      "aiStudio": "KI Studio",
       "aiCampaigns": "Kampagnenformate",
-      "aiGenerate": "Beitrag generieren",
       "aiProactive": "Proaktive Trigger",
       "settings": "Einstellungen",
       "admin": "Administration",
@@ -37,7 +36,9 @@
       "accounts": "Konten",
       "composer": "Editor",
       "settings": "Einstellungen",
-      "admin": "Administration"
+      "admin": "Administration",
+      "aiStudio": "KI Studio",
+      "aiCampaigns": "Kampagnenformate"
     },
     "eyebrow": {
       "workspace": "Arbeitsbereich",
@@ -544,9 +545,7 @@
       "aiEnhanceEnabled": "Mit KI verbessern",
       "aiPrompt": "KI-Anweisung",
       "aiPromptPlaceholder": "z. B. Fasse die Kernaussage zusammen und stelle eine Frage zur Diskussion.",
-      "aiPromptHint": "Wird zusammen mit dem Template-Entwurf und dem vollständigen RSS-Artikeltext an die KI gesendet.",
-      "tonalityOverride": "Tonalität überschreiben (optional)",
-      "tonalityPlaceholder": "Überschreibt die Team-Tonalität für diesen Feed",
+      "aiPromptHint": "Aufgaben-spezifische Anweisung für diesen Feed (z. B. Fokus auf Releases). Der Marken-Vibe kommt aus dem KI Studio.",
       "aiRequiresTeam": "Aktiviere KI unter Team-Einstellungen, um die KI-Verbesserung zu nutzen.",
       "promptRequired": "Bitte eine KI-Anweisung angeben, wenn die Verbesserung aktiv ist.",
       "loading": "RSS-Feeds werden geladen…",

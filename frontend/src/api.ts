@@ -283,12 +283,44 @@ export interface BackendOAuthAuthorization {
   authorization_url: string
 }
 
+export interface BackendBrandIdentity {
+  industry: string
+  main_value: string
+  target_audience: string
+}
+
+export interface BackendBrandLanguageDNA {
+  sentence_style: string
+  preferred_words: string[]
+  humor_style: string
+}
+
+export interface BackendBrandReachStrategy {
+  hook_style: string
+  cta_focus: string
+}
+
 export interface BackendStyleMetadata {
-  tonality: string
+  tonality?: string
   formatting_rules: string[]
   banned_words: string[]
   max_hashtags: number
   preferred_language: string
+  identity?: BackendBrandIdentity
+  language_dna?: BackendBrandLanguageDNA
+  reach_strategy?: BackendBrandReachStrategy
+}
+
+export interface BackendKnowledgeSource {
+  id: string
+  team_id: string
+  type: 'text' | 'url' | 'file'
+  name: string
+  content: string
+  source_url?: string
+  media_id?: string
+  created_at: string
+  updated_at: string
 }
 
 export interface BackendTeamProfile {
@@ -325,7 +357,7 @@ export interface BackendAIJob {
   id: string
   team_id: string
   author_user_id: string
-  type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis'
+  type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview'
   status: 'pending' | 'processing' | 'completed' | 'failed'
   payload: Record<string, unknown>
   result: Record<string, unknown> | null
@@ -1104,7 +1136,49 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
-    triggerAIJob(teamID: string, type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis', params: Record<string, unknown>) {
+    listKnowledgeSources(teamID: string) {
+      return request<{ items: BackendKnowledgeSource[] }>(options, `/v1/teams/${teamID}/knowledge-sources`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    createKnowledgeSource(
+      teamID: string,
+      payload: {
+        type: 'text' | 'url' | 'file'
+        name: string
+        content?: string
+        source_url?: string
+        media_id?: string
+      },
+    ) {
+      return request<BackendKnowledgeSource>(options, `/v1/teams/${teamID}/knowledge-sources`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
+    deleteKnowledgeSource(teamID: string, sourceID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/knowledge-sources/${sourceID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    previewAIPrompt(teamID: string, params: Record<string, unknown>) {
+      return request<{ system_prompt: string; generation_prompt: string }>(
+        options,
+        `/v1/teams/${teamID}/ai/prompt-preview`,
+        {
+          method: 'POST',
+          headers: buildHeaders(options.token),
+          body: JSON.stringify({ params }),
+        },
+      )
+    },
+    triggerAIJob(
+      teamID: string,
+      type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview',
+      params: Record<string, unknown>,
+    ) {
       return request<BackendAITriggerResponse>(options, `/v1/teams/${teamID}/ai-trigger`, {
         method: 'POST',
         headers: buildHeaders(options.token),

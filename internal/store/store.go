@@ -47,6 +47,13 @@ type Store interface {
 	ListStyleExamples(ctx context.Context, teamID string) ([]domain.StyleExample, error)
 	DeleteStyleExample(ctx context.Context, teamID string, id string) error
 
+	// KnowledgeSource methods
+	CreateKnowledgeSource(ctx context.Context, teamID string, input domain.KnowledgeSource) (domain.KnowledgeSource, error)
+	ListKnowledgeSources(ctx context.Context, teamID string) ([]domain.KnowledgeSource, error)
+	GetKnowledgeSourceByID(ctx context.Context, teamID string, id string) (domain.KnowledgeSource, error)
+	UpdateKnowledgeSource(ctx context.Context, teamID string, id string, input domain.KnowledgeSource) (domain.KnowledgeSource, error)
+	DeleteKnowledgeSource(ctx context.Context, teamID string, id string) error
+
 	// AIJob methods
 	CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJob, error)
 	GetAIJobByID(ctx context.Context, teamID string, id string) (domain.AIJob, error)

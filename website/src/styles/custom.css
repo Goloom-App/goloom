@@ -1,0 +1,20 @@
+/* goloom brand tokens — dark theme with purple accents */
+:root {
+	--sl-color-accent-low: #1a1033;
+	--sl-color-accent: #8b5cf6;
+	--sl-color-accent-high: #a78bfa;
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: #f4f4f5;
+	--sl-color-gray-2: #a1a1aa;
+	--sl-color-gray-3: #7f7f8c;
+	--sl-color-gray-4: #3f3f46;
+	--sl-color-gray-5: #1c1c1c;
+	--sl-color-gray-6: #141414;
+	--sl-color-black: #0a0a0a;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #ede9fe;
+	--sl-color-accent: #7c3aed;
+	--sl-color-accent-high: #6d28d9;
+}

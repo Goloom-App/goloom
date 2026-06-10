@@ -26,7 +26,6 @@ type FeedFormState = {
   maxPostsPerDay: number
   promptHint: string
   targetAccountIds: string[]
-  tonality: string
   initialSyncMode: RSSInitialSyncMode
 }
 
@@ -45,7 +44,6 @@ const emptyFeedForm = (): FeedFormState => ({
   maxPostsPerDay: 10,
   promptHint: '',
   targetAccountIds: [],
-  tonality: '',
   initialSyncMode: 'baseline',
 })
 
@@ -62,7 +60,6 @@ function feedToForm(feed: RSSFeedConfig): FeedFormState {
     maxPostsPerDay: feed.maxPostsPerDay ?? 10,
     promptHint: feed.promptHint,
     targetAccountIds: feed.targetAccountIds,
-    tonality: feed.tonality,
     initialSyncMode: feed.initialSyncMode,
   }
 }
@@ -136,7 +133,6 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       max_posts_per_day: feedForm.maxPostsPerDay,
       prompt_hint: feedForm.promptHint.trim(),
       target_account_ids: feedForm.targetAccountIds,
-      tonality: feedForm.tonality.trim(),
       initial_sync_mode: feedForm.initialSyncMode,
     }
 
@@ -327,15 +323,6 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                             <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
                               {t('rss.aiPromptHint')}
                             </p>
-                          </label>
-                          <label className="field">
-                            <span>{t('rss.tonalityOverride')}</span>
-                            <input
-                              value={feedForm.tonality}
-                              onChange={(e) => setFeedForm((prev) => ({ ...prev, tonality: e.target.value }))}
-                              placeholder={t('rss.tonalityPlaceholder')}
-                              data-testid="rss-ai-tonality"
-                            />
                           </label>
                           <label className="field">
                             <span>{t('rss.titleHint')}</span>

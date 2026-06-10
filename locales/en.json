@@ -15,9 +15,8 @@
       "reviewQueue": "Review",
       "reviewQueuePending": "{{count}} pending in review queue",
       "archive": "Archive",
-      "aiProfile": "AI Profile",
+      "aiStudio": "AI Studio",
       "aiCampaigns": "Campaign Formats",
-      "aiGenerate": "Generate Post",
       "aiProactive": "Proactive Triggers",
       "settings": "Settings",
       "admin": "Admin",
@@ -37,7 +36,9 @@
       "accounts": "Accounts",
       "composer": "Composer",
       "settings": "Settings",
-      "admin": "Admin"
+      "admin": "Admin",
+      "aiStudio": "AI Studio",
+      "aiCampaigns": "Campaign Formats"
     },
     "eyebrow": {
       "workspace": "Workspace",
@@ -544,9 +545,7 @@
       "aiEnhanceEnabled": "Enhance with AI",
       "aiPrompt": "AI instructions",
       "aiPromptPlaceholder": "e.g. Summarize the key takeaway and add a question for engagement.",
-      "aiPromptHint": "Sent to the AI together with the template draft and full RSS article text.",
-      "tonalityOverride": "Tonality override (optional)",
-      "tonalityPlaceholder": "Overrides team profile tonality for this feed",
+      "aiPromptHint": "Task-specific instruction for this feed (e.g. focus on releases). Brand voice comes from AI Studio.",
       "aiRequiresTeam": "Enable AI for this workspace under Team settings to use AI enhancement.",
       "promptRequired": "Add AI instructions when enhancement is enabled.",
       "loading": "Loading RSS feeds…",

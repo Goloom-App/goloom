@@ -1,0 +1,48 @@
+name: Website CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/api/**"
+      - "Makefile"
+      - ".forgejo/workflows/pages.yaml"
+      - ".forgejo/workflows/website-ci.yaml"
+
+jobs:
+  website-build:
+    runs-on: docker
+    name: Build website
+    container:
+      image: ghcr.io/psarossy/node:lts
+    steps:
+      - name: Install git
+        run: |
+          if command -v apk >/dev/null 2>&1; then
+            apk add --no-cache git make
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends git make
+            rm -rf /var/lib/apt/lists/*
+          fi
+
+      - uses: actions/checkout@v6
+
+      - name: Install pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          PNPM_VERSION="$(node -p "require('./website/package.json').packageManager.split('@')[1]")"
+          if ! corepack prepare "pnpm@${PNPM_VERSION}" --activate; then
+            echo "corepack prepare failed; installing pnpm ${PNPM_VERSION} from GitHub release"
+            mkdir -p "${HOME}/.local/bin"
+            curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-x64" \
+              -o "${HOME}/.local/bin/pnpm"
+            chmod +x "${HOME}/.local/bin/pnpm"
+            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          fi
+          pnpm --version
+
+      - name: Build website
+        run: make website-build

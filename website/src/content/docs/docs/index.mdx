@@ -1,0 +1,75 @@
+---
+title: Welcome
+description: Documentation for goloom — lightweight social planning for teams and AI agents.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+goloom is a self-hosted social media planning application built as one Go binary (API + web UI). Plan posts across Mastodon, Friendica, and Bluesky, collaborate in workspaces, and automate with RSS and recurring templates — with an API built for AI agents.
+
+## Get started
+
+<CardGrid>
+	<Card title="Installation" icon="rocket">
+		Configure your environment, build the binary, and run goloom locally.
+		[Install goloom →](/docs/getting-started/installation/)
+	</Card>
+	<Card title="Configuration" icon="setting">
+		Environment variables for database, auth, scheduling, and providers.
+		[Configure goloom →](/docs/getting-started/configuration/)
+	</Card>
+	<Card title="First login" icon="approve-check">
+		Bootstrap your first admin account and rotate secrets.
+		[First login →](/docs/getting-started/first-login/)
+	</Card>
+</CardGrid>
+
+## Guides
+
+<CardGrid>
+	<Card title="Dashboard & calendar" icon="document">
+		Overview, content calendar, composer, and media library.
+		[Dashboard →](/docs/guides/dashboard/) · [Calendar →](/docs/guides/content-calendar/)
+	</Card>
+	<Card title="Teams & accounts" icon="puzzle">
+		Workspaces, roles, and connecting social accounts.
+		[Teams →](/docs/guides/teams/) · [Accounts →](/docs/guides/accounts/)
+	</Card>
+	<Card title="Automation & AI" icon="star">
+		Recurring posts, RSS, review queue, and voice profile generation.
+		[Automation →](/docs/guides/automation/) · [AI features →](/docs/guides/ai-features/)
+	</Card>
+	<Card title="Analytics" icon="document">
+		Engagement, reach, and top-performing posts.
+		[Analytics →](/docs/guides/analytics/)
+	</Card>
+</CardGrid>
+
+## API & operations
+
+<CardGrid>
+	<Card title="API overview" icon="open-book">
+		Base paths, bearer auth, curl quickstart, and agent integration notes.
+		[API overview →](/docs/api/)
+	</Card>
+	<Card title="API reference" icon="external">
+		Interactive Redoc generated from the OpenAPI spec.
+		[Open reference →](/docs/api-reference/index.html)
+	</Card>
+	<Card title="Administration" icon="setting">
+		Metrics, providers, users, logs, and AI-enabled teams.
+		[Administration →](/docs/admin/administration/)
+	</Card>
+	<Card title="Migrations" icon="rocket">
+		Move from Docker PostgreSQL to Kubernetes.
+		[Docker → Kubernetes →](/docs/migrations/docker-to-kubernetes/)
+	</Card>
+</CardGrid>
+
+## Source on Forgejo
+
+Documentation is markdown in the repository. Use **Edit page** in the footer to propose changes, or view raw files at:
+
+`https://git.f4mily.net/goloom/raw/branch/main/website/src/content/docs/{path}`
+
+Replace `{path}` with the doc path (for example `guides/dashboard.md`).

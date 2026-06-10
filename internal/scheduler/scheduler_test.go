@@ -160,6 +160,26 @@ func (m *mockStore) DeleteStyleExample(ctx context.Context, teamID string, id st
 	return nil
 }
 
+func (m *mockStore) CreateKnowledgeSource(ctx context.Context, teamID string, input domain.KnowledgeSource) (domain.KnowledgeSource, error) {
+	return domain.KnowledgeSource{}, nil
+}
+
+func (m *mockStore) ListKnowledgeSources(ctx context.Context, teamID string) ([]domain.KnowledgeSource, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetKnowledgeSourceByID(ctx context.Context, teamID string, id string) (domain.KnowledgeSource, error) {
+	return domain.KnowledgeSource{}, nil
+}
+
+func (m *mockStore) UpdateKnowledgeSource(ctx context.Context, teamID string, id string, input domain.KnowledgeSource) (domain.KnowledgeSource, error) {
+	return domain.KnowledgeSource{}, nil
+}
+
+func (m *mockStore) DeleteKnowledgeSource(ctx context.Context, teamID string, id string) error {
+	return nil
+}
+
 func (m *mockStore) CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJob, error) {
 	return domain.AIJob{}, nil
 }

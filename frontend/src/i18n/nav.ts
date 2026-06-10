@@ -34,9 +34,8 @@ export const WORKSPACE_NAV_DEF: NavItemDef[] = [
 ]
 
 export const AI_SERVICE_NAV_DEF: NavItemDef[] = [
-  { id: 'aiProfile', labelKey: 'nav.aiProfile', icon: Bot },
+  { id: 'aiStudio', labelKey: 'nav.aiStudio', icon: Sparkles },
   { id: 'aiCampaigns', labelKey: 'nav.aiCampaigns', icon: Bot },
-  { id: 'aiGenerate', labelKey: 'nav.aiGenerate', icon: Sparkles },
 ]
 
 export const CONFIG_NAV_DEF: NavItemDef[] = [

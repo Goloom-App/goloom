@@ -263,6 +263,95 @@ func (s *Store) DeleteStyleExample(ctx context.Context, teamID string, id string
 	return err
 }
 
+func (s *Store) CreateKnowledgeSource(ctx context.Context, teamID string, input domain.KnowledgeSource) (domain.KnowledgeSource, error) {
+	id := uuid.NewString()
+	now := nowString()
+	_, err := s.db.ExecContext(ctx, `
+		insert into knowledge_sources (id, team_id, source_type, name, content, source_url, media_id, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, teamID, string(input.Type), input.Name, input.Content, input.SourceURL, input.MediaID, now, now,
+	)
+	if err != nil {
+		return domain.KnowledgeSource{}, err
+	}
+	return s.GetKnowledgeSourceByID(ctx, teamID, id)
+}
+
+func (s *Store) ListKnowledgeSources(ctx context.Context, teamID string) ([]domain.KnowledgeSource, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, team_id, source_type, name, content, source_url, media_id, created_at, updated_at
+		from knowledge_sources
+		where team_id = ?
+		order by created_at asc`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectKnowledgeSources(rows)
+}
+
+func (s *Store) GetKnowledgeSourceByID(ctx context.Context, teamID string, id string) (domain.KnowledgeSource, error) {
+	row := s.db.QueryRowContext(ctx, `
+		select id, team_id, source_type, name, content, source_url, media_id, created_at, updated_at
+		from knowledge_sources
+		where team_id = ? and id = ?`, teamID, id)
+	return scanKnowledgeSource(row)
+}
+
+func (s *Store) UpdateKnowledgeSource(ctx context.Context, teamID string, id string, input domain.KnowledgeSource) (domain.KnowledgeSource, error) {
+	now := nowString()
+	_, err := s.db.ExecContext(ctx, `
+		update knowledge_sources
+		set source_type = ?, name = ?, content = ?, source_url = ?, media_id = ?, updated_at = ?
+		where team_id = ? and id = ?`,
+		string(input.Type), input.Name, input.Content, input.SourceURL, input.MediaID, now, teamID, id,
+	)
+	if err != nil {
+		return domain.KnowledgeSource{}, err
+	}
+	return s.GetKnowledgeSourceByID(ctx, teamID, id)
+}
+
+func (s *Store) DeleteKnowledgeSource(ctx context.Context, teamID string, id string) error {
+	_, err := s.db.ExecContext(ctx, `delete from knowledge_sources where team_id = ? and id = ?`, teamID, id)
+	return err
+}
+
+func scanKnowledgeSource(scanner rowScanner) (domain.KnowledgeSource, error) {
+	var (
+		ks          domain.KnowledgeSource
+		sourceType  string
+		createdAt   string
+		updatedAt   string
+	)
+	if err := scanner.Scan(&ks.ID, &ks.TeamID, &sourceType, &ks.Name, &ks.Content, &ks.SourceURL, &ks.MediaID, &createdAt, &updatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.KnowledgeSource{}, fmt.Errorf("knowledge source not found: %w", sql.ErrNoRows)
+		}
+		return domain.KnowledgeSource{}, err
+	}
+	ks.Type = domain.KnowledgeSourceType(sourceType)
+	var err error
+	ks.CreatedAt, err = parseTime(createdAt)
+	if err != nil {
+		return domain.KnowledgeSource{}, err
+	}
+	ks.UpdatedAt, err = parseTime(updatedAt)
+	return ks, err
+}
+
+func collectKnowledgeSources(rows *sql.Rows) ([]domain.KnowledgeSource, error) {
+	var out []domain.KnowledgeSource
+	for rows.Next() {
+		ks, err := scanKnowledgeSource(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ks)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJob, error) {
 	payloadJSON := marshalRawMessage(input.Payload, "{}")
 	id := input.ID
@@ -664,6 +753,11 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		return domain.AIContext{}, err
 	}
 
+	knowledgeSources, err := s.ListKnowledgeSources(ctx, teamID)
+	if err != nil {
+		return domain.AIContext{}, err
+	}
+
 	recentRows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
@@ -718,14 +812,15 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 	}
 
 	return domain.AIContext{
-		Team:            team,
-		Profile:         aiCtxProfile,
-		CampaignFormats: formats,
-		StyleExamples:   examples,
-		RecentPosts:     recentPosts,
-		Accounts:        accountSummaries,
-		UpcomingPosts:   upcomingPosts,
-		EngagementHours: engagementHours,
+		Team:             team,
+		Profile:          aiCtxProfile,
+		CampaignFormats:  formats,
+		StyleExamples:    examples,
+		KnowledgeSources: knowledgeSources,
+		RecentPosts:      recentPosts,
+		Accounts:         accountSummaries,
+		UpcomingPosts:    upcomingPosts,
+		EngagementHours:  engagementHours,
 	}, nil
 }
 

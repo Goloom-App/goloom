@@ -17,9 +17,8 @@ const sectionKeys: Record<AppSection, string> = {
   composer: 'section.composer',
   settings: 'section.settings',
   admin: 'section.admin',
-  aiProfile: 'section.aiProfile',
+  aiStudio: 'section.aiStudio',
   aiCampaigns: 'section.aiCampaigns',
-  aiGenerate: 'section.aiGenerate',
 }
 
 export function sectionHeading(t: TFunction, section: AppSection): string {

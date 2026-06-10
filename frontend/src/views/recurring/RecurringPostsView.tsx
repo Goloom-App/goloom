@@ -95,7 +95,6 @@ export function RecurringPostsView({
   const [outputMode, setOutputMode] = useState<AutomationOutputMode>('scheduled')
   const [promptHint, setPromptHint] = useState('')
   const [titleHint, setTitleHint] = useState('')
-  const [tonality, setTonality] = useState('')
 
   const outputModeLabel: Record<AutomationOutputMode, string> = {
     draft: t('rss.outputModeDraft', { defaultValue: 'Draft (review)' }),
@@ -164,7 +163,6 @@ export function RecurringPostsView({
     setOutputMode('scheduled')
     setPromptHint('')
     setTitleHint('')
-    setTonality('')
   }
 
   function closeEditor() {
@@ -198,7 +196,6 @@ export function RecurringPostsView({
     setOutputMode(item.output_mode ?? 'scheduled')
     setPromptHint(item.prompt_hint ?? '')
     setTitleHint(item.title_hint ?? '')
-    setTonality(item.tonality ?? '')
     setEditorOpen(true)
   }
 
@@ -217,7 +214,6 @@ export function RecurringPostsView({
       payload.ai_enhance_announcement = aiEnhanceEnabled && announcementEnabled && aiEnhanceAnnouncement
       payload.prompt_hint = promptHint.trim()
       payload.title_hint = titleHint.trim()
-      payload.tonality = tonality.trim()
     }
     if (announcementEnabled) {
       payload.announcement_enabled = true
@@ -533,10 +529,6 @@ export function RecurringPostsView({
                         <label className="field">
                           <span>{t('rss.aiPrompt')}</span>
                           <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('rss.aiPromptPlaceholder')} />
-                        </label>
-                        <label className="field">
-                          <span>{t('rss.tonalityOverride')}</span>
-                          <input value={tonality} onChange={(e) => setTonality(e.target.value)} placeholder={t('rss.tonalityPlaceholder')} />
                         </label>
                         <label className="field">
                           <span>{t('rss.titleHint')}</span>

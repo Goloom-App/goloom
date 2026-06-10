@@ -1,6 +1,6 @@
 APP_NAME := goloom
 
-.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build ai-service-build ai-service-run ai-service-test
+.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-install website-dev website-build website-screenshots ai-service-build ai-service-run ai-service-test
 
 fmt:
 	go fmt ./...
@@ -45,6 +45,24 @@ docs-api-lint:
 docs-api-build:
 	mkdir -p docs/api/dist
 	pnpm --package=@redocly/cli dlx redocly build-docs docs/api/openapi.yaml -o docs/api/dist/index.html
+
+website-install:
+	pnpm --dir website install
+
+website-dev:
+	pnpm --dir website dev
+
+website-screenshots: frontend-build
+	go build -o bin/goloom ./cmd/server
+	pnpm --dir frontend install --frozen-lockfile
+	pnpm --dir frontend exec playwright install chromium
+	pnpm --dir frontend exec playwright test e2e/website-screenshots.spec.ts
+
+website-build: docs-api-build
+	pnpm --dir website install --frozen-lockfile
+	pnpm --dir website build
+	mkdir -p website/dist/docs/api-reference
+	cp docs/api/dist/index.html website/dist/docs/api-reference/index.html
 
 ai-service-build:
 	cd ai-service && uv sync --dev

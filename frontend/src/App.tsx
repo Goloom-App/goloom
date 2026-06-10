@@ -25,9 +25,8 @@ import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admi
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { SettingsView } from './views/settings/SettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
-import { TeamProfileView } from './views/ai/TeamProfileView'
+import { BrandWizardView } from './views/ai/BrandWizardView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
-import { AIGenerateView } from './views/ai/AIGenerateView'
 import { AutomationView } from './views/automation/AutomationView'
 import { ReviewQueueView } from './views/review/ReviewQueueView'
 import { useReviewQueueCount } from './hooks/useReviewQueue'
@@ -2301,20 +2300,16 @@ function App() {
           />
         )}
 
-        {section === 'aiProfile' && selectedTeam && (
-          <TeamProfileView team={selectedTeam} />
-        )}
-
-        {section === 'aiCampaigns' && selectedTeam && (
-          <CampaignFormatView team={selectedTeam} />
-        )}
-
-        {section === 'aiGenerate' && selectedTeam && (
-          <AIGenerateView
+        {section === 'aiStudio' && selectedTeam && (
+          <BrandWizardView
             team={selectedTeam}
             accounts={teamAccounts}
             onEditInComposer={openComposerFromGeneratedContent}
           />
+        )}
+
+        {section === 'aiCampaigns' && selectedTeam && (
+          <CampaignFormatView team={selectedTeam} />
         )}
 
         {section === 'admin' && principalUser?.globalRole === 'admin' && (

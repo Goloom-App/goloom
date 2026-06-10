@@ -1,0 +1,21 @@
+---
+interface Props {
+	href: string;
+}
+
+const { href } = Astro.props;
+---
+
+<a class="raw-source-link" href={href} target="_blank" rel="noopener noreferrer">
+	View raw markdown
+</a>
+
+<style>
+	.raw-source-link {
+		text-decoration: none;
+		color: var(--sl-color-gray-3);
+	}
+	.raw-source-link:hover {
+		color: var(--sl-color-white);
+	}
+</style>

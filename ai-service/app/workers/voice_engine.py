@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import json
 import logging
 from typing import Any
@@ -27,7 +26,7 @@ class VoiceEngineWorker:
         try:
             author_user_id = str(job["author_user_id"])
             params = self._params(job)
-            context = self._context_with_style_overrides(job.get("context") or {}, params)
+            context = job.get("context") or {}
             selected_accounts = self._selected_accounts(context, params)
             if not selected_accounts:
                 raise ValueError("target_account_ids must include at least one account")
@@ -496,20 +495,6 @@ class VoiceEngineWorker:
                 raise ValueError(f"Override for account {account_id} exceeds limit of {limit}")
             if len(override_text) >= len(content):
                 raise ValueError(f"Override for account {account_id} must be shorter than the primary content")
-
-    @staticmethod
-    def _context_with_style_overrides(context: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-        tonality = str(params.get("tonality") or "").strip()
-        if not tonality:
-            return context
-
-        ctx = copy.deepcopy(context)
-        profile = dict(ctx.get("profile") or {})
-        style = dict(profile.get("style_metadata") or profile.get("styleMetadata") or {})
-        style["tonality"] = tonality
-        profile["style_metadata"] = style
-        ctx["profile"] = profile
-        return ctx
 
     @staticmethod
     def _params(job: dict) -> dict[str, Any]:

@@ -13,9 +13,8 @@ export type AppSection =
   | 'composer'
   | 'settings'
   | 'admin'
-  | 'aiProfile'
+  | 'aiStudio'
   | 'aiCampaigns'
-  | 'aiGenerate'
 
 export type CalendarViewMode = 'month' | 'week' | 'day'
 
@@ -38,17 +37,55 @@ export interface ExternalPostMonitorSettings {
 
 export type AccountAuthType = 'oauth_token' | 'app_password'
 
-export type AIJobType = 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis'
+export type AIJobType = 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview'
 
 export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
+export interface BrandIdentity {
+  industry: string
+  mainValue: string
+  targetAudience: string
+}
+
+export interface BrandLanguageDNA {
+  sentenceStyle: 'short_punchy' | 'calm_explanatory' | ''
+  preferredWords: string[]
+  humorStyle: 'dry_sarcastic' | 'friendly_empathetic' | 'neutral' | ''
+}
+
+export interface BrandReachStrategy {
+  hookStyle: 'ask_question' | 'controversial_thesis' | 'solve_problem' | ''
+  ctaFocus: 'community_discussion' | 'direct_booking' | ''
+}
+
 export interface StyleMetadata {
-  tonality: string
+  tonality?: string
   formattingRules: string[]
   bannedWords: string[]
   maxHashtags: number
   preferredLanguage: string
+  identity?: BrandIdentity
+  languageDna?: BrandLanguageDNA
+  reachStrategy?: BrandReachStrategy
 }
+
+export type KnowledgeSourceType = 'text' | 'url' | 'file'
+
+export interface KnowledgeSource {
+  id: string
+  teamId: string
+  type: KnowledgeSourceType
+  name: string
+  content: string
+  sourceUrl?: string
+  mediaId?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type AIOutputFormat = 'post' | 'teaser' | 'poll' | 'thread'
+
+export type AIMoodAdjustment = 'more_expertise' | 'shorter_punchier' | 'remove_marketing_speak'
 
 export interface UserRecord {
   id: string

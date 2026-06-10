@@ -9,6 +9,7 @@ import type {
   BackendRuntimeConfig,
   BackendAuthStatus,
   BackendCampaignFormat,
+  BackendKnowledgeSource,
   BackendProactiveTriggerSettings,
   BackendStyleExample,
   BackendStyleMetadata,
@@ -21,6 +22,7 @@ import type {
   AIJob,
   AIServiceConfig,
   CampaignFormat,
+  KnowledgeSource,
   AccountRecord,
   AuthStatusRecord,
   ProactiveTriggerSettings,
@@ -337,12 +339,46 @@ function fallbackTitle(content: string) {
   return `${trimmed.slice(0, 33)}...`
 }
 
+export function mapKnowledgeSource(raw: BackendKnowledgeSource): KnowledgeSource {
+  return {
+    id: raw.id,
+    teamId: raw.team_id,
+    type: raw.type,
+    name: raw.name,
+    content: raw.content,
+    sourceUrl: raw.source_url,
+    mediaId: raw.media_id,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  }
+}
+
 function mapStyleMetadata(raw: BackendStyleMetadata): StyleMetadata {
   return {
-    tonality: raw.tonality,
+    tonality: raw.tonality ?? '',
     formattingRules: raw.formatting_rules ?? [],
     bannedWords: raw.banned_words ?? [],
     maxHashtags: raw.max_hashtags,
     preferredLanguage: raw.preferred_language,
+    identity: raw.identity
+      ? {
+          industry: raw.identity.industry ?? '',
+          mainValue: raw.identity.main_value ?? '',
+          targetAudience: raw.identity.target_audience ?? '',
+        }
+      : undefined,
+    languageDna: raw.language_dna
+      ? {
+          sentenceStyle: (raw.language_dna.sentence_style || '') as NonNullable<StyleMetadata['languageDna']>['sentenceStyle'],
+          preferredWords: raw.language_dna.preferred_words ?? [],
+          humorStyle: (raw.language_dna.humor_style || '') as NonNullable<StyleMetadata['languageDna']>['humorStyle'],
+        }
+      : undefined,
+    reachStrategy: raw.reach_strategy
+      ? {
+          hookStyle: (raw.reach_strategy.hook_style || '') as NonNullable<StyleMetadata['reachStrategy']>['hookStyle'],
+          ctaFocus: (raw.reach_strategy.cta_focus || '') as NonNullable<StyleMetadata['reachStrategy']>['ctaFocus'],
+        }
+      : undefined,
   }
 }

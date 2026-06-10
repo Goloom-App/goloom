@@ -1,0 +1,61 @@
+---
+import { Image } from 'astro:assets';
+import contentCalendar from '../../assets/screenshots/content-calendar.png';
+import composer from '../../assets/screenshots/composer.png';
+import analytics from '../../assets/screenshots/analytics.png';
+
+const screenshots = [
+	{
+		label: 'Content Calendar',
+		caption: 'Visualize your posting schedule across teams and accounts.',
+		image: contentCalendar,
+		alt: 'goloom content calendar month grid view',
+	},
+	{
+		label: 'Composer',
+		caption: 'Draft posts with previews for each connected platform.',
+		image: composer,
+		alt: 'goloom post composer with scheduling sidebar',
+	},
+	{
+		label: 'Analytics',
+		caption: 'Monitor engagement and spot trends at a glance.',
+		image: analytics,
+		alt: 'goloom team performance analytics dashboard',
+	},
+];
+---
+
+<section class="landing-section">
+	<div class="landing-container">
+		<div class="landing-section__header">
+			<p class="landing-section__eyebrow">Product</p>
+			<h2 class="landing-section__title">See it in action</h2>
+			<p class="landing-section__subtitle">
+				Plan content, publish across platforms, and track performance from one
+				self-hosted workspace.
+			</p>
+		</div>
+		<div class="screenshot-grid">
+			{
+				screenshots.map((shot) => (
+					<article class="screenshot-card glass-panel">
+						<div class="screenshot-card__frame">
+							<Image
+								class="screenshot-card__image"
+								src={shot.image}
+								alt={shot.alt}
+								width={1440}
+								height={900}
+								loading="lazy"
+								decoding="async"
+							/>
+						</div>
+						<p class="screenshot-card__label">{shot.label}</p>
+						<p class="screenshot-card__caption">{shot.caption}</p>
+					</article>
+				))
+			}
+		</div>
+	</div>
+</section>

@@ -5,6 +5,7 @@ import {
   mapAIServiceConfig,
   mapCampaignFormat,
   mapRSSFeedConfig,
+  mapKnowledgeSource,
   mapStyleExample,
   mapTeamProfile,
 } from '../mappers'
@@ -149,6 +150,51 @@ export function useCreateStyleExample() {
       void queryClient.invalidateQueries({ queryKey: [...teamKey(variables.teamId), 'style-examples'] })
       void queryClient.invalidateQueries({ queryKey: ['ai-context', variables.teamId] })
     },
+  })
+}
+
+export function useKnowledgeSources(teamId: string) {
+  return useQuery({
+    queryKey: [...teamKey(teamId), 'knowledge-sources'],
+    queryFn: async () => (await getApiClient().listKnowledgeSources(teamId)).items.map(mapKnowledgeSource),
+    enabled: Boolean(teamId),
+  })
+}
+
+export function useCreateKnowledgeSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      teamId,
+      data,
+    }: {
+      teamId: string
+      data: Parameters<ApiClient['createKnowledgeSource']>[1]
+    }) => mapKnowledgeSource(await getApiClient().createKnowledgeSource(teamId, data)),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: [...teamKey(variables.teamId), 'knowledge-sources'] })
+      void queryClient.invalidateQueries({ queryKey: ['ai-context', variables.teamId] })
+    },
+  })
+}
+
+export function useDeleteKnowledgeSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ teamId, sourceId }: { teamId: string; sourceId: string }) => {
+      await getApiClient().deleteKnowledgeSource(teamId, sourceId)
+    },
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: [...teamKey(variables.teamId), 'knowledge-sources'] })
+      void queryClient.invalidateQueries({ queryKey: ['ai-context', variables.teamId] })
+    },
+  })
+}
+
+export function useAIPromptPreview() {
+  return useMutation({
+    mutationFn: async ({ teamId, params }: { teamId: string; params: Record<string, unknown> }) =>
+      getApiClient().previewAIPrompt(teamId, params),
   })
 }
 

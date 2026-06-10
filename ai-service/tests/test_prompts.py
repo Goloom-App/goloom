@@ -28,13 +28,13 @@ def sample_context() -> dict:
     }
 
 
-def test_build_system_prompt_injects_tonality_and_banned_words():
+def test_build_system_prompt_injects_writing_rules_and_banned_words():
     builder = PromptBuilder()
 
     prompt = builder.build_system_prompt(sample_context())
 
     assert 'team "Launch Crew"' in prompt
-    assert "Tonality: playful" in prompt
+    assert "Writing rules:" in prompt
     assert "Keep sentences short" in prompt
     assert "synergy" in prompt
     assert "crypto" in prompt
@@ -79,7 +79,7 @@ def test_build_generation_prompt_combines_system_and_platform_constraints():
         "bluesky",
     )
 
-    assert "Tonality: playful" in prompt
+    assert "Writing rules:" in prompt
     assert "Platform: bluesky" in prompt
     assert "Character limit: 300" in prompt
     assert "Announce the new feature rollout." in prompt

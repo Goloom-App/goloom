@@ -23,9 +23,8 @@ test.describe.serial('ai feature flag', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 30_000 })
 
     // AI nav items should NOT appear for personal team
-    await expect(page.getByRole('button', { name: 'AI Profile' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'AI Studio' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Campaign Formats' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Generate Post' })).toHaveCount(0)
 
     // Non-AI nav items should still be visible
     await expect(page.getByRole('button', { name: 'Calendar', exact: true })).toBeVisible()
@@ -45,8 +44,7 @@ test.describe.serial('ai feature flag', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 30_000 })
 
     // AI nav items should now be visible
-    await expect(page.getByRole('button', { name: 'AI Profile' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'AI Studio' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Campaign Formats' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Generate Post' })).toBeVisible()
   })
 })

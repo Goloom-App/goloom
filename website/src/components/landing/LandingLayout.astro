@@ -1,0 +1,71 @@
+---
+import '../../styles/landing.css';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const {
+	title = 'goloom',
+	description = 'Lightweight social planning for teams and AI agents.',
+} = Astro.props;
+
+const repoUrl = 'https://git.f4mily.net/goloom';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="description" content={description} />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<title>{title}</title>
+	</head>
+	<body class="landing">
+		<header class="landing-header">
+			<div class="landing-container landing-header__inner">
+				<a class="landing-header__brand" href="/">
+					<img
+						class="landing-header__logo"
+						src="/favicon.svg"
+						alt=""
+						width="28"
+						height="28"
+					/>
+					goloom
+				</a>
+				<nav class="landing-header__nav" aria-label="Main">
+					<a class="landing-header__link" href="/docs/">Docs</a>
+					<a
+						class="landing-header__link"
+						href={repoUrl}
+						target="_blank"
+						rel="noopener noreferrer">Git</a
+					>
+				</nav>
+			</div>
+		</header>
+
+		<slot />
+
+		<footer class="landing-footer">
+			<div class="landing-container landing-footer__inner">
+				<nav class="landing-footer__links" aria-label="Footer">
+					<a class="landing-footer__link" href="/docs/">Documentation</a>
+					<a class="landing-footer__link" href="/docs/getting-started/installation/"
+						>Getting started</a
+					>
+					<a
+						class="landing-footer__link"
+						href={repoUrl}
+						target="_blank"
+						rel="noopener noreferrer">Source repository</a
+					>
+				</nav>
+				<p class="landing-footer__note">Open source · MIT License</p>
+			</div>
+		</footer>
+	</body>
+</html>

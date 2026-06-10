@@ -134,6 +134,26 @@ Generated output:
 - Validation endpoint before scheduling: `POST /v1/teams/{teamID}/posts/validate`.
 - API token lifecycle endpoints for secure agent onboarding.
 
+## Website & Documentation
+
+The project website (Astro + Starlight) lives in `website/` and bundles the Redoc API reference.
+
+Local dev server:
+
+```bash
+make website-dev
+```
+
+Build static site (includes API docs):
+
+```bash
+make website-build
+```
+
+Generated output: `website/dist/`
+
+Deployed via Forgejo Pages on push to `main` when `website/` or `docs/api/` changes. Site URL: [https://git.f4mily.net/goloom](https://git.f4mily.net/goloom) (Forgejo Pages).
+
 ## Provider Support
 
 ### Mastodon

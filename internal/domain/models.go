@@ -62,6 +62,7 @@ const (
 	AIJobTypeCampaignAutopilot AIJobType = "campaign_autopilot"
 	AIJobTypeProactiveTrigger  AIJobType = "proactive_trigger"
 	AIJobTypeProfileAnalysis   AIJobType = "profile_analysis"
+	AIJobTypeVibePreview       AIJobType = "vibe_preview"
 )
 
 type AIJobStatus string
@@ -215,12 +216,52 @@ type Team struct {
 	CreatedAt         time.Time                 `json:"created_at"`
 }
 
+type BrandIdentity struct {
+	Industry       string `json:"industry"`
+	MainValue      string `json:"main_value"`
+	TargetAudience string `json:"target_audience"`
+}
+
+type BrandLanguageDNA struct {
+	SentenceStyle  string   `json:"sentence_style"`
+	PreferredWords []string `json:"preferred_words"`
+	HumorStyle     string   `json:"humor_style"`
+}
+
+type BrandReachStrategy struct {
+	HookStyle string `json:"hook_style"`
+	CTAFocus  string `json:"cta_focus"`
+}
+
 type StyleMetadata struct {
-	Tonality          string   `json:"tonality"`
-	FormattingRules   []string `json:"formatting_rules"`
-	BannedWords       []string `json:"banned_words"`
-	MaxHashtags       int      `json:"max_hashtags"`
-	PreferredLanguage string   `json:"preferred_language"`
+	Tonality          string              `json:"tonality"`
+	FormattingRules   []string            `json:"formatting_rules"`
+	BannedWords       []string            `json:"banned_words"`
+	MaxHashtags       int                 `json:"max_hashtags"`
+	PreferredLanguage string              `json:"preferred_language"`
+	Identity          *BrandIdentity      `json:"identity,omitempty"`
+	LanguageDNA       *BrandLanguageDNA   `json:"language_dna,omitempty"`
+	ReachStrategy     *BrandReachStrategy `json:"reach_strategy,omitempty"`
+}
+
+type KnowledgeSourceType string
+
+const (
+	KnowledgeSourceText KnowledgeSourceType = "text"
+	KnowledgeSourceURL  KnowledgeSourceType = "url"
+	KnowledgeSourceFile KnowledgeSourceType = "file"
+)
+
+type KnowledgeSource struct {
+	ID        string              `json:"id"`
+	TeamID    string              `json:"team_id"`
+	Type      KnowledgeSourceType `json:"type"`
+	Name      string              `json:"name"`
+	Content   string              `json:"content"`
+	SourceURL string              `json:"source_url,omitempty"`
+	MediaID   string              `json:"media_id,omitempty"`
+	CreatedAt time.Time           `json:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at"`
 }
 
 type TeamProfile struct {
@@ -400,14 +441,15 @@ type AIAccountSummary struct {
 }
 
 type AIContext struct {
-	Team            Team                   `json:"team"`
-	Profile         *TeamProfile           `json:"profile,omitempty"`
-	CampaignFormats []CampaignFormat       `json:"campaign_formats"`
-	StyleExamples   []StyleExample         `json:"style_examples"`
-	RecentPosts     []ScheduledPost        `json:"recent_posts"`
-	Accounts        []AIAccountSummary     `json:"accounts,omitempty"`
-	UpcomingPosts   []ScheduledPost        `json:"upcoming_posts,omitempty"`
-	EngagementHours []EngagementHourBucket `json:"engagement_hours,omitempty"`
+	Team             Team                   `json:"team"`
+	Profile          *TeamProfile           `json:"profile,omitempty"`
+	CampaignFormats  []CampaignFormat       `json:"campaign_formats"`
+	StyleExamples    []StyleExample         `json:"style_examples"`
+	KnowledgeSources []KnowledgeSource      `json:"knowledge_sources"`
+	RecentPosts      []ScheduledPost        `json:"recent_posts"`
+	Accounts         []AIAccountSummary     `json:"accounts,omitempty"`
+	UpcomingPosts    []ScheduledPost        `json:"upcoming_posts,omitempty"`
+	EngagementHours  []EngagementHourBucket `json:"engagement_hours,omitempty"`
 }
 
 const AIContextRecentPostsLimit = 100
@@ -903,12 +945,65 @@ func (in CreatePostInput) Validate() error {
 	return nil
 }
 
+func (m StyleMetadata) HasLegacyFields() bool {
+	return strings.TrimSpace(m.Tonality) != "" ||
+		len(m.FormattingRules) > 0 ||
+		len(m.BannedWords) > 0 ||
+		m.MaxHashtags > 0 ||
+		strings.TrimSpace(m.PreferredLanguage) != ""
+}
+
+func (m StyleMetadata) HasBrandDimensions() bool {
+	if m.Identity != nil {
+		if strings.TrimSpace(m.Identity.Industry) != "" ||
+			strings.TrimSpace(m.Identity.MainValue) != "" ||
+			strings.TrimSpace(m.Identity.TargetAudience) != "" {
+			return true
+		}
+	}
+	if m.LanguageDNA != nil {
+		if strings.TrimSpace(m.LanguageDNA.SentenceStyle) != "" ||
+			len(m.LanguageDNA.PreferredWords) > 0 ||
+			strings.TrimSpace(m.LanguageDNA.HumorStyle) != "" {
+			return true
+		}
+	}
+	if m.ReachStrategy != nil {
+		if strings.TrimSpace(m.ReachStrategy.HookStyle) != "" ||
+			strings.TrimSpace(m.ReachStrategy.CTAFocus) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (in TeamProfile) Validate() error {
 	if strings.TrimSpace(in.TeamID) == "" {
 		return errors.New("team_id is required")
 	}
-	if in.StyleMetadata.Tonality == "" && len(in.StyleMetadata.FormattingRules) == 0 && len(in.StyleMetadata.BannedWords) == 0 && in.StyleMetadata.MaxHashtags == 0 && in.StyleMetadata.PreferredLanguage == "" {
+	if !in.StyleMetadata.HasLegacyFields() && !in.StyleMetadata.HasBrandDimensions() {
 		return errors.New("style_metadata is required")
+	}
+	return nil
+}
+
+func (in KnowledgeSource) Validate() error {
+	if strings.TrimSpace(in.TeamID) == "" {
+		return errors.New("team_id is required")
+	}
+	if strings.TrimSpace(in.Name) == "" {
+		return errors.New("name is required")
+	}
+	switch in.Type {
+	case KnowledgeSourceText, KnowledgeSourceURL, KnowledgeSourceFile:
+	default:
+		return errors.New("invalid knowledge source type")
+	}
+	if strings.TrimSpace(in.Content) == "" && in.Type != KnowledgeSourceURL {
+		return errors.New("content is required")
+	}
+	if in.Type == KnowledgeSourceURL && strings.TrimSpace(in.SourceURL) == "" {
+		return errors.New("source_url is required for url knowledge sources")
 	}
 	return nil
 }

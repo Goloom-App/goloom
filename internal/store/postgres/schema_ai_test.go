@@ -24,6 +24,7 @@ func TestSchemaAITables(t *testing.T) {
 		"team_profiles",
 		"campaign_formats",
 		"style_examples",
+		"knowledge_sources",
 		"ai_jobs",
 		"ai_service_configs",
 		"rss_feed_configs",

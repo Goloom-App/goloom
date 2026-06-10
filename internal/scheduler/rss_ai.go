@@ -41,10 +41,9 @@ func (s *Service) submitRSSAIEnhancement(
 		"rss_article_title":    strings.TrimSpace(item.Title),
 		"rss_article_content":  strings.TrimSpace(item.Content),
 		"rss_article_link":     strings.TrimSpace(item.Link),
-		"prompt_hint":          strings.TrimSpace(feed.PromptHint),
-		"title_hint":           strings.TrimSpace(feed.TitleHint),
-		"tonality":             strings.TrimSpace(feed.Tonality),
-		"target_account_ids":   feed.TargetAccountIDs,
+		"prompt_hint":        strings.TrimSpace(feed.PromptHint),
+		"title_hint":         strings.TrimSpace(feed.TitleHint),
+		"target_account_ids": feed.TargetAccountIDs,
 		"schedule":             false,
 		"rss_automation": map[string]any{
 			"feed_id":          feed.ID,

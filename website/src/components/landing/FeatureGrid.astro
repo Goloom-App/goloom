@@ -1,0 +1,70 @@
+---
+const features = [
+	{
+		icon: '📦',
+		title: 'Single binary',
+		text: 'One executable ships the API, scheduler, and web UI — no microservice maze.',
+	},
+	{
+		icon: '🗄️',
+		title: 'SQLite or PostgreSQL',
+		text: 'SQLite for low-ops setups; swap to Postgres when you need external DB ops.',
+	},
+	{
+		icon: '👥',
+		title: 'Team workspaces',
+		text: 'Organize accounts and content by team with role-based access control.',
+	},
+	{
+		icon: '📅',
+		title: 'Scheduling & calendar',
+		text: 'Plan posts on a visual calendar with timezone-aware scheduling.',
+	},
+	{
+		icon: '📊',
+		title: 'Analytics',
+		text: 'Track engagement and performance across connected accounts.',
+	},
+	{
+		icon: '🤖',
+		title: 'API-first & AI agents',
+		text: 'Automate drafts, campaigns, and workflows via REST — built for agents.',
+	},
+	{
+		icon: '🌐',
+		title: 'Fediverse providers',
+		text: 'Publish to Mastodon, Friendica, Bluesky, and more from one place.',
+	},
+	{
+		icon: '✅',
+		title: 'Review queue & automation',
+		text: 'Approve drafts before they go live, or let automation handle the pipeline.',
+	},
+];
+---
+
+<section class="landing-section">
+	<div class="landing-container">
+		<div class="landing-section__header">
+			<p class="landing-section__eyebrow">Features</p>
+			<h2 class="landing-section__title">Everything you need to plan social</h2>
+			<p class="landing-section__subtitle">
+				From draft to published post — with the control and transparency
+				self-hosters expect.
+			</p>
+		</div>
+		<div class="feature-grid">
+			{
+				features.map((feature) => (
+					<article class="feature-card glass-panel">
+						<div class="feature-card__icon" aria-hidden="true">
+							{feature.icon}
+						</div>
+						<h3 class="feature-card__title">{feature.title}</h3>
+						<p class="feature-card__text">{feature.text}</p>
+					</article>
+				))
+			}
+		</div>
+	</div>
+</section>

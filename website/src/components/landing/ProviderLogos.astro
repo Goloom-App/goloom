@@ -1,0 +1,32 @@
+---
+const providers = [
+	{ name: 'Mastodon', icon: '/icons/platforms/mastodon.svg' },
+	{ name: 'Friendica', icon: '/icons/platforms/friendica.svg' },
+	{ name: 'Bluesky', icon: '/icons/platforms/bluesky.svg' },
+];
+---
+
+<section class="landing-section">
+	<div class="landing-container">
+		<div class="landing-section__header">
+			<p class="landing-section__eyebrow">Integrations</p>
+			<h2 class="landing-section__title">Supported platforms</h2>
+			<p class="landing-section__subtitle">
+				Connect accounts across the fediverse and beyond — with more providers
+				on the roadmap.
+			</p>
+		</div>
+		<div class="provider-grid">
+			{
+				providers.map((provider) => (
+					<div class="provider-item">
+						<div class="provider-item__icon">
+							<img src={provider.icon} alt="" width="40" height="40" />
+						</div>
+						<span class="provider-item__name">{provider.name}</span>
+					</div>
+				))
+			}
+		</div>
+	</div>
+</section>

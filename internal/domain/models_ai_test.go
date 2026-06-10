@@ -106,6 +106,7 @@ func TestAIJobTypeConstants(t *testing.T) {
 		AIJobTypeVoiceEngine:       "voice_engine",
 		AIJobTypeCampaignAutopilot: "campaign_autopilot",
 		AIJobTypeProactiveTrigger:  "proactive_trigger",
+		AIJobTypeVibePreview:       "vibe_preview",
 	}
 
 	for got, want := range tests {

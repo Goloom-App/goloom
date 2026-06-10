@@ -260,6 +260,105 @@ func (s *Store) DeleteStyleExample(ctx context.Context, teamID string, id string
 	return nil
 }
 
+func (s *Store) CreateKnowledgeSource(ctx context.Context, teamID string, input domain.KnowledgeSource) (domain.KnowledgeSource, error) {
+	const query = `
+		INSERT INTO knowledge_sources (team_id, source_type, name, content, source_url, media_id)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))
+		RETURNING id, team_id, source_type, name, content, coalesce(source_url, ''), coalesce(media_id::text, ''), created_at, updated_at
+	`
+	ks, err := scanKnowledgeSource(s.pool.QueryRow(ctx, query,
+		teamID, string(input.Type), input.Name, input.Content, input.SourceURL, input.MediaID,
+	))
+	if err != nil {
+		return domain.KnowledgeSource{}, fmt.Errorf("CreateKnowledgeSource: %w", err)
+	}
+	return ks, nil
+}
+
+func (s *Store) ListKnowledgeSources(ctx context.Context, teamID string) ([]domain.KnowledgeSource, error) {
+	const query = `
+		SELECT id, team_id, source_type, name, content, coalesce(source_url, ''), coalesce(media_id::text, ''), created_at, updated_at
+		FROM knowledge_sources
+		WHERE team_id = $1
+		ORDER BY created_at ASC
+	`
+	rows, err := s.pool.Query(ctx, query, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("ListKnowledgeSources: %w", err)
+	}
+	defer rows.Close()
+
+	var sources []domain.KnowledgeSource
+	for rows.Next() {
+		ks, err := scanKnowledgeSource(rows)
+		if err != nil {
+			return nil, fmt.Errorf("ListKnowledgeSources: scan: %w", err)
+		}
+		sources = append(sources, ks)
+	}
+	return sources, rows.Err()
+}
+
+func (s *Store) GetKnowledgeSourceByID(ctx context.Context, teamID string, id string) (domain.KnowledgeSource, error) {
+	const query = `
+		SELECT id, team_id, source_type, name, content, coalesce(source_url, ''), coalesce(media_id::text, ''), created_at, updated_at
+		FROM knowledge_sources
+		WHERE team_id = $1 AND id = $2
+	`
+	ks, err := scanKnowledgeSource(s.pool.QueryRow(ctx, query, teamID, id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.KnowledgeSource{}, fmt.Errorf("knowledge source not found: %w", pgx.ErrNoRows)
+		}
+		return domain.KnowledgeSource{}, fmt.Errorf("GetKnowledgeSourceByID: %w", err)
+	}
+	return ks, nil
+}
+
+func (s *Store) UpdateKnowledgeSource(ctx context.Context, teamID string, id string, input domain.KnowledgeSource) (domain.KnowledgeSource, error) {
+	const query = `
+		UPDATE knowledge_sources
+		SET source_type = $3, name = $4, content = $5, source_url = $6, media_id = NULLIF($7, ''), updated_at = now()
+		WHERE team_id = $1 AND id = $2
+		RETURNING id, team_id, source_type, name, content, coalesce(source_url, ''), coalesce(media_id::text, ''), created_at, updated_at
+	`
+	ks, err := scanKnowledgeSource(s.pool.QueryRow(ctx, query,
+		teamID, id, string(input.Type), input.Name, input.Content, input.SourceURL, input.MediaID,
+	))
+	if err != nil {
+		return domain.KnowledgeSource{}, fmt.Errorf("UpdateKnowledgeSource: %w", err)
+	}
+	return ks, nil
+}
+
+func (s *Store) DeleteKnowledgeSource(ctx context.Context, teamID string, id string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM knowledge_sources WHERE team_id = $1 AND id = $2`, teamID, id)
+	if err != nil {
+		return fmt.Errorf("DeleteKnowledgeSource: %w", err)
+	}
+	return nil
+}
+
+func scanKnowledgeSource(row interface{ Scan(dest ...any) error }) (domain.KnowledgeSource, error) {
+	var ks domain.KnowledgeSource
+	var sourceType string
+	if err := row.Scan(
+		&ks.ID,
+		&ks.TeamID,
+		&sourceType,
+		&ks.Name,
+		&ks.Content,
+		&ks.SourceURL,
+		&ks.MediaID,
+		&ks.CreatedAt,
+		&ks.UpdatedAt,
+	); err != nil {
+		return domain.KnowledgeSource{}, err
+	}
+	ks.Type = domain.KnowledgeSourceType(sourceType)
+	return ks, nil
+}
+
 func scanStyleExample(row interface{ Scan(dest ...any) error }) (domain.StyleExample, error) {
 	var ex domain.StyleExample
 	if err := row.Scan(
@@ -717,6 +816,11 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list style examples: %w", err)
 	}
 
+	knowledgeSources, err := s.ListKnowledgeSources(ctx, teamID)
+	if err != nil {
+		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list knowledge sources: %w", err)
+	}
+
 	const recentPostsQuery = `
 		SELECT p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
@@ -784,16 +888,20 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 	if examples == nil {
 		examples = []domain.StyleExample{}
 	}
+	if knowledgeSources == nil {
+		knowledgeSources = []domain.KnowledgeSource{}
+	}
 
 	return domain.AIContext{
-		Team:            team,
-		Profile:         profilePtr,
-		CampaignFormats: formats,
-		StyleExamples:   examples,
-		RecentPosts:     recentPosts,
-		Accounts:        accountSummaries,
-		UpcomingPosts:   upcomingPosts,
-		EngagementHours: engagementHours,
+		Team:             team,
+		Profile:          profilePtr,
+		CampaignFormats:  formats,
+		StyleExamples:    examples,
+		KnowledgeSources: knowledgeSources,
+		RecentPosts:      recentPosts,
+		Accounts:         accountSummaries,
+		UpcomingPosts:    upcomingPosts,
+		EngagementHours:  engagementHours,
 	}, nil
 }
 

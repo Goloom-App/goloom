@@ -134,7 +134,6 @@ func (s *Service) submitRecurringAIJob(ctx context.Context, in recurringAIJobInp
 		"source_content":     in.expandedContent,
 		"prompt_hint":        strings.TrimSpace(in.tmpl.PromptHint),
 		"title_hint":         strings.TrimSpace(in.tmpl.TitleHint),
-		"tonality":           strings.TrimSpace(in.tmpl.Tonality),
 		"target_account_ids": in.targetAccounts,
 		"schedule":           false,
 		"recurring_post_kind": in.postKind,
