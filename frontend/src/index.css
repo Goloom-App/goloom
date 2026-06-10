@@ -1705,6 +1705,7 @@ select {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  width: 100%;
 }
 
 .recurring-template-card__header {
@@ -5097,6 +5098,36 @@ select {
   font-size: 0.78rem;
   color: var(--text-dim);
   line-height: 1.4;
+}
+
+/* Compact variant for inline use (e.g. in card headers) */
+.brand-toggle--compact {
+  padding: 0;
+  background: none;
+  border: none;
+  gap: var(--space-2);
+}
+
+.brand-toggle--compact:hover {
+  border-color: transparent;
+}
+
+.brand-toggle--compact .brand-toggle__switch {
+  width: 32px;
+  height: 18px;
+}
+
+.brand-toggle--compact .brand-toggle__switch::after {
+  width: 14px;
+  height: 14px;
+}
+
+.brand-toggle--compact input[type="checkbox"]:checked + .brand-toggle__switch::after {
+  transform: translateX(14px);
+}
+
+.brand-toggle--compact .brand-toggle__copy {
+  display: none;
 }
 
 /* --- Option pills (mood adjustments, segmented control) -------------- */

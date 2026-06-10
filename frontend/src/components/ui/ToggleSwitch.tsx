@@ -5,11 +5,13 @@ export interface ToggleSwitchProps {
   description?: string
   testId?: string
   disabled?: boolean
+  compact?: boolean
 }
 
 /**
  * Boolean control with a real switch + descriptive title/copy.
  * Use instead of <input type="checkbox"> next to a label.
+ * Set `compact` for inline use (e.g. in card headers) - hides text, reduces size.
  */
 export function ToggleSwitch({
   checked,
@@ -18,9 +20,10 @@ export function ToggleSwitch({
   description,
   testId,
   disabled,
+  compact,
 }: ToggleSwitchProps) {
   return (
-    <label className="brand-toggle" data-testid={testId} aria-disabled={disabled}>
+    <label className={`brand-toggle${compact ? ' brand-toggle--compact' : ''}`} data-testid={testId} aria-disabled={disabled} title={title}>
       <input
         type="checkbox"
         checked={checked}
@@ -28,10 +31,12 @@ export function ToggleSwitch({
         onChange={(e) => onChange(e.target.checked)}
       />
       <span className="brand-toggle__switch" aria-hidden="true" />
-      <span className="brand-toggle__copy">
-        <span className="brand-toggle__title">{title}</span>
-        {description ? <span className="brand-toggle__desc">{description}</span> : null}
-      </span>
+      {!compact && (
+        <span className="brand-toggle__copy">
+          <span className="brand-toggle__title">{title}</span>
+          {description ? <span className="brand-toggle__desc">{description}</span> : null}
+        </span>
+      )}
     </label>
   )
 }

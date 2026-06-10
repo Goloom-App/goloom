@@ -343,12 +343,12 @@ export function RecurringPostsView({
     <div className="recurring-posts-view">
       <div className="glass-panel">
         <div className="flex-row--between">
-          <div>
-            <h2 className="section-card__title flex-row--center gap-2">
-              <CalendarClock size={20} />
-              {t('recurring.title')}
-            </h2>
-            <p className="hint">{t('recurring.hint')}</p>
+          <div className="flex-row--center gap-3">
+            <span className="brand-card__icon"><CalendarClock size={18} /></span>
+            <div>
+              <h2 className="brand-card__title">{t('recurring.title')}</h2>
+              <p className="brand-card__subtitle">{t('recurring.hint')}</p>
+            </div>
           </div>
           {canEdit ? (
             <button type="button" className="btn btn--secondary btn--sm" onClick={openEditor}>
@@ -367,14 +367,6 @@ export function RecurringPostsView({
                   <span className="badge">{item.title || t('recurring.untitled')}</span>
                   {item.announcement_enabled ? <span className="badge badge--info">{t('recurring.announcementBadge')}</span> : null}
                   {item.ai_enhance_enabled ? <span className="badge badge--info">{t('recurring.aiEnabledBadge')}</span> : null}
-                  {canEdit ? (
-                    <ToggleSwitch
-                      checked={item.enabled}
-                      onChange={() => void toggleEnabled(item.id, item.enabled)}
-                      title={item.enabled ? t('analytics.enabled') : t('analytics.paused')}
-                      disabled={!canEdit}
-                    />
-                  ) : null}
                 </div>
                 {canEdit ? (
                   <div className="flex-row--center gap-1">
@@ -389,6 +381,12 @@ export function RecurringPostsView({
                       </DropdownMenu.Trigger>
                       <DropdownMenu.Portal>
                         <DropdownMenu.Content className="radix-dropdown-content" align="end">
+                          <DropdownMenu.Item
+                            className="radix-dropdown-item"
+                            onClick={() => void toggleEnabled(item.id, item.enabled)}
+                          >
+                            {item.enabled ? t('recurring.pause') : t('recurring.resume')}
+                          </DropdownMenu.Item>
                           <DropdownMenu.Item
                             className="radix-dropdown-item"
                             onClick={() => void skipNext(item.id, item.next_materialize_at)}
@@ -411,6 +409,13 @@ export function RecurringPostsView({
                         </DropdownMenu.Content>
                       </DropdownMenu.Portal>
                     </DropdownMenu.Root>
+                    <ToggleSwitch
+                      checked={item.enabled}
+                      onChange={() => void toggleEnabled(item.id, item.enabled)}
+                      title={item.enabled ? t('analytics.enabled') : t('analytics.paused')}
+                      disabled={!canEdit}
+                      compact
+                    />
                   </div>
                 ) : null}
               </div>
