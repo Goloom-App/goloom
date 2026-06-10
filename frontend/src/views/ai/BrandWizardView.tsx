@@ -1,5 +1,29 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, ChevronRight, Loader2, Play, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import {
+  Bot,
+  CalendarClock,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Edit,
+  FileText,
+  Globe,
+  Languages,
+  Loader2,
+  MessageCircle,
+  Minus,
+  Play,
+  Plus,
+  Save,
+  Send,
+  Sparkles,
+  Target,
+  Trash2,
+  Wand2,
+  X,
+  Zap,
+} from 'lucide-react'
 
 import {
   useTeamProfile,
@@ -37,11 +61,194 @@ interface BrandWizardViewProps {
   }) => void
 }
 
-const STEPS: { id: WizardStep; label: string }[] = [
-  { id: 1, label: 'Setup' },
-  { id: 2, label: 'Aufgabe' },
-  { id: 3, label: 'Editor' },
+const STEPS: { id: WizardStep; title: string; caption: string }[] = [
+  { id: 1, title: 'Setup', caption: 'Brand-Profil' },
+  { id: 2, title: 'Aufgabe', caption: 'Anlass & Format' },
+  { id: 3, title: 'Editor', caption: 'Feinschliff' },
 ]
+
+const MOOD_OPTIONS: { id: AIMoodAdjustment; label: string }[] = [
+  { id: 'more_expertise', label: 'Mehr Fachwissen' },
+  { id: 'shorter_punchier', label: 'Kürzer & knackiger' },
+  { id: 'remove_marketing_speak', label: 'Marketing-Sprache entfernen' },
+]
+
+const OUTPUT_FORMAT_OPTIONS: { id: AIOutputFormat; label: string }[] = [
+  { id: 'post', label: 'Post' },
+  { id: 'teaser', label: 'Teaser' },
+  { id: 'poll', label: 'Umfrage' },
+  { id: 'thread', label: 'Thread' },
+]
+
+const OCCASION_TYPES: { id: 'text' | 'url' | 'rss'; label: string }[] = [
+  { id: 'text', label: 'Freitext' },
+  { id: 'url', label: 'URL' },
+  { id: 'rss', label: 'RSS-Feed' },
+]
+
+interface SectionCardProps {
+  icon: ReactNode
+  title: string
+  subtitle?: string
+  children: ReactNode
+  hero?: boolean
+  headerExtra?: ReactNode
+  testId?: string
+}
+
+function SectionCard({ icon, title, subtitle, children, hero, headerExtra, testId }: SectionCardProps) {
+  return (
+    <section className={`brand-card${hero ? ' brand-card--hero' : ''}`} data-testid={testId}>
+      <header className="brand-card__header">
+        <span className="brand-card__icon">{icon}</span>
+        <div className="brand-card__heading">
+          <h2 className="brand-card__title">{title}</h2>
+          {subtitle ? <p className="brand-card__subtitle">{subtitle}</p> : null}
+        </div>
+        {headerExtra ? <div>{headerExtra}</div> : null}
+      </header>
+      <div className="brand-card__body">{children}</div>
+    </section>
+  )
+}
+
+interface TagInputProps {
+  values: string[]
+  onChange: (next: string[]) => void
+  placeholder: string
+  testId?: string
+}
+
+function TagInput({ values, onChange, placeholder, testId }: TagInputProps) {
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const trimmed = draft.trim()
+    if (!trimmed) return
+    if (values.includes(trimmed)) {
+      setDraft('')
+      return
+    }
+    onChange([...values, trimmed])
+    setDraft('')
+  }
+  return (
+    <div className="brand-tag-input">
+      {values.length > 0 && (
+        <div className="brand-tag-input__chips">
+          {values.map((value, idx) => (
+            <span key={`${value}-${idx}`} className="brand-tag-input__chip">
+              <span>{value}</span>
+              <button
+                type="button"
+                className="brand-tag-input__chip-remove"
+                aria-label={`${value} entfernen`}
+                onClick={() => onChange(values.filter((_, i) => i !== idx))}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="brand-tag-input__row">
+        <input
+          data-testid={testId}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+        />
+        <button type="button" className="btn btn--secondary btn--sm" onClick={add} disabled={!draft.trim()}>
+          <Plus size={14} /> Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface ToggleSwitchProps {
+  checked: boolean
+  onChange: (next: boolean) => void
+  title: string
+  description?: string
+  testId?: string
+}
+
+function ToggleSwitch({ checked, onChange, title, description, testId }: ToggleSwitchProps) {
+  return (
+    <label className="brand-toggle" data-testid={testId}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="brand-toggle__switch" aria-hidden="true" />
+      <span className="brand-toggle__copy">
+        <span className="brand-toggle__title">{title}</span>
+        {description ? <span className="brand-toggle__desc">{description}</span> : null}
+      </span>
+    </label>
+  )
+}
+
+interface OptionPillProps {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+  testId?: string
+}
+
+function OptionPill({ active, onClick, children, testId }: OptionPillProps) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      className={`brand-option-pill${active ? ' brand-option-pill--active' : ''}`}
+      onClick={onClick}
+    >
+      <span className="brand-option-pill__check">{active ? <Check size={14} /> : <Plus size={14} />}</span>
+      {children}
+    </button>
+  )
+}
+
+interface SegmentedProps<T extends string> {
+  value: T
+  options: { id: T; label: string }[]
+  onChange: (next: T) => void
+  testIdPrefix?: string
+}
+
+function Segmented<T extends string>({ value, options, onChange, testIdPrefix }: SegmentedProps<T>) {
+  return (
+    <div className="brand-segmented" role="tablist">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="tab"
+          aria-selected={value === option.id}
+          data-testid={testIdPrefix ? `${testIdPrefix}-${option.id}` : undefined}
+          className={`brand-segmented__item${value === option.id ? ' brand-segmented__item--active' : ''}`}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function knowledgeIcon(type: 'text' | 'url' | 'file') {
+  if (type === 'url') return <Globe size={16} />
+  if (type === 'file') return <FileText size={16} />
+  return <FileText size={16} />
+}
 
 export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizardViewProps) {
   const { data: profile, isLoading } = useTeamProfile(team.id)
@@ -66,15 +273,12 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
   const [mainValue, setMainValue] = useState('')
   const [targetAudience, setTargetAudience] = useState('')
 
-  // Language DNA — all free text
+  // Language DNA
   const [sentenceStyle, setSentenceStyle] = useState('')
   const [humorStyle, setHumorStyle] = useState('')
   const [preferredWords, setPreferredWords] = useState<string[]>([])
-  const [newPreferredWord, setNewPreferredWord] = useState('')
   const [signaturePhrases, setSignaturePhrases] = useState<string[]>([])
-  const [newSignaturePhrase, setNewSignaturePhrase] = useState('')
   const [bannedWords, setBannedWords] = useState<string[]>([])
-  const [newBannedWord, setNewBannedWord] = useState('')
   const [antiAiOverride, setAntiAiOverride] = useState(false)
 
   // Reach
@@ -84,11 +288,6 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
   const [preferredLanguage, setPreferredLanguage] = useState('de')
   const [maxHashtags, setMaxHashtags] = useState(3)
   const [autoPublishEnabled, setAutoPublishEnabled] = useState(false)
-
-  // Profile assistant
-  const [assistantBrief, setAssistantBrief] = useState('')
-  const [assistantJobId, setAssistantJobId] = useState<string | null>(null)
-  const [assistantOpen, setAssistantOpen] = useState(false)
 
   // Knowledge base form
   const [kbName, setKbName] = useState('')
@@ -112,6 +311,11 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
   const [showPromptPreview, setShowPromptPreview] = useState(false)
   const [promptText, setPromptText] = useState('')
   const [savingDraftId, setSavingDraftId] = useState<string | null>(null)
+
+  // Profile assistant
+  const [assistantBrief, setAssistantBrief] = useState('')
+  const [assistantJobId, setAssistantJobId] = useState<string | null>(null)
+  const [assistantOpen, setAssistantOpen] = useState(false)
 
   useEffect(() => {
     if (!profile) return
@@ -139,7 +343,11 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
     if (activeJobId) {
       return jobs?.find((j) => j.id === activeJobId)
     }
-    return jobs?.find((j) => j.type === 'voice_engine' && (j.status === 'completed' || j.status === 'processing' || j.status === 'pending'))
+    return jobs?.find(
+      (j) =>
+        j.type === 'voice_engine' &&
+        (j.status === 'completed' || j.status === 'processing' || j.status === 'pending'),
+    )
   }, [jobs, activeJobId])
 
   const latestVoiceResult = useMemo(
@@ -167,7 +375,6 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
     }
   }, [jobs, activeJobId])
 
-  // Apply profile_assistant proposal to the form when its job completes.
   useEffect(() => {
     if (!assistantJobId || !jobs) return
     const job = jobs.find((j) => j.id === assistantJobId)
@@ -286,7 +493,7 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
         }
         setStatusMessage('Profil gespeichert — Vibe-Vorschau wird erstellt…')
       } catch {
-        // Vibe preview is optional when the AI service is not configured.
+        // Vibe preview is optional if the AI service isn't configured.
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen')
@@ -321,12 +528,8 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
       mood_adjustments: moodAdjustments,
       platform: accounts.find((a) => selectedAccounts.includes(a.id))?.provider ?? 'mastodon',
     }
-    if (occasionType === 'url') {
-      params.source_url = occasion.trim()
-    }
-    if (occasionType === 'rss') {
-      params.rss_feed_url = occasion.trim()
-    }
+    if (occasionType === 'url') params.source_url = occasion.trim()
+    if (occasionType === 'rss') params.rss_feed_url = occasion.trim()
     if (refine && latestVoiceResult?.result?.content) {
       params.refine_content = true
       params.source_content = String(latestVoiceResult.result.content)
@@ -353,9 +556,7 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
         type: 'voice_engine',
         params: buildGenerationParams(false),
       })
-      if (response.jobId) {
-        setActiveJobId(response.jobId)
-      }
+      if (response.jobId) setActiveJobId(response.jobId)
       setStep(3)
       setStatusMessage('Generierung gestartet')
     } catch (err) {
@@ -371,9 +572,7 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
         type: 'voice_engine',
         params: buildGenerationParams(true),
       })
-      if (response.jobId) {
-        setActiveJobId(response.jobId)
-      }
+      if (response.jobId) setActiveJobId(response.jobId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Anpassung fehlgeschlagen')
     }
@@ -446,50 +645,79 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
   const displayJob = voiceJob?.status === 'completed' ? voiceJob : latestVoiceResult
 
   return (
-    <div className="stack" data-testid="brand-wizard-view">
-      <div className="flex-row--center gap-2 flex-wrap" style={{ marginBottom: '1rem' }}>
-        {STEPS.map((s, idx) => (
-          <div key={s.id} className="flex-row--center gap-2">
-            <button
-              type="button"
-              className={`btn btn--sm ${step === s.id ? 'btn--primary' : 'btn--secondary'}`}
-              onClick={() => setStep(s.id)}
-            >
-              {s.id}. {s.label}
-            </button>
-            {idx < STEPS.length - 1 ? <ChevronRight size={14} className="hint" /> : null}
-          </div>
-        ))}
-      </div>
+    <div className="brand-wizard" data-testid="brand-wizard-view">
+      {/* Stepper */}
+      <nav className="brand-stepper" aria-label="Wizard-Schritte">
+        {STEPS.map((s, idx) => {
+          const state = step === s.id ? 'active' : step > s.id ? 'done' : 'todo'
+          return (
+            <Fragment key={s.id}>
+              <button
+                type="button"
+                className={`brand-stepper__item${state === 'active' ? ' brand-stepper__item--active' : ''}${state === 'done' ? ' brand-stepper__item--done' : ''}`}
+                onClick={() => setStep(s.id)}
+                aria-current={state === 'active'}
+              >
+                <span className="brand-stepper__num">
+                  {state === 'done' ? <Check size={14} /> : s.id}
+                </span>
+                <span className="brand-stepper__label">
+                  <span className="brand-stepper__title">{s.title}</span>
+                  <span className="brand-stepper__caption">{s.caption}</span>
+                </span>
+              </button>
+              {idx < STEPS.length - 1 ? <span className="brand-stepper__divider" /> : null}
+            </Fragment>
+          )
+        })}
+      </nav>
 
       {(error || statusMessage) && (
-        <div className="status-banner-panel" style={{ padding: '1rem' }}>
-          {statusMessage && <span className="status-banner__success" data-testid="brand-status-success">{statusMessage}</span>}
-          {error && <span className="status-banner__error" data-testid="brand-status-error">{error}</span>}
+        <div className="status-banner-panel" style={{ padding: '0.75rem 1rem' }}>
+          {statusMessage && (
+            <span className="status-banner__success" data-testid="brand-status-success">
+              {statusMessage}
+            </span>
+          )}
+          {error && (
+            <span className="status-banner__error" data-testid="brand-status-error">
+              {error}
+            </span>
+          )}
         </div>
       )}
 
+      {/* ============================================================ */}
+      {/* STEP 1 — SETUP                                                */}
+      {/* ============================================================ */}
       {step === 1 && (
-        <div className="stack stack--lg">
-          <div className="glass-panel stack" data-testid="brand-assistant-panel">
-            <div className="flex-row--between" style={{ alignItems: 'center' }}>
-              <h2 className="section-card__title" style={{ margin: 0 }}>
-                <Sparkles size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.4rem' }} />
-                KI-Assistent
-              </h2>
+        <>
+          {/* AI Assistant — hero card */}
+          <SectionCard
+            hero
+            icon={<Wand2 size={18} />}
+            title="KI-Assistent"
+            subtitle="Beschreibe in 2–4 Sätzen, wer du bist und für wen du postest. Die KI füllt das Profil mit einem konkreten Vorschlag aus — alles bleibt editierbar."
+            testId="brand-assistant-panel"
+            headerExtra={
               <button
                 type="button"
                 className="btn btn--secondary btn--sm"
                 data-testid="brand-assistant-toggle"
                 onClick={() => setAssistantOpen((v) => !v)}
               >
-                {assistantOpen ? 'Schließen' : 'Profil von KI erstellen lassen'}
+                {assistantOpen ? (
+                  <>
+                    <Minus size={14} /> Schließen
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} /> Vorschlag generieren
+                  </>
+                )}
               </button>
-            </div>
-            <p className="hint" style={{ margin: 0 }}>
-              Beschreibe in 2–4 Sätzen, wer du bist und für wen du postest. Die KI füllt das Profil mit
-              einem konkreten Vorschlag aus — du kannst alles nachträglich anpassen.
-            </p>
+            }
+          >
             {assistantOpen && (
               <>
                 <textarea
@@ -497,9 +725,9 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
                   rows={4}
                   value={assistantBrief}
                   onChange={(e) => setAssistantBrief(e.target.value)}
-                  placeholder={'z. B. „Wir sind ein Selfhosting-Podcast für Anfänger, sprechen über Heimserver, Home-Assistant und Datenschutz. Zielgruppe: Tech-Nerds, leicht zynisch.“'}
+                  placeholder='z. B. „Wir sind ein Selfhosting-Podcast für Anfänger, sprechen über Heimserver, Home-Assistant und Datenschutz. Zielgruppe: Tech-Nerds, leicht zynisch."'
                 />
-                <div className="flex-row--center gap-2">
+                <div>
                   <button
                     type="button"
                     className="btn btn--primary"
@@ -513,27 +741,42 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
                       </>
                     ) : (
                       <>
-                        <Sparkles size={14} /> Vorschlag generieren
+                        <Sparkles size={14} /> Profil vorschlagen
                       </>
                     )}
                   </button>
                 </div>
               </>
             )}
-          </div>
+          </SectionCard>
 
-          <div className="glass-panel stack">
-            <h2 className="section-card__title">Identität — Wer bist du?</h2>
-            <label className="field">
-              <span>Archetyp</span>
-              <input
-                data-testid="brand-archetype"
-                value={archetype}
-                onChange={(e) => setArchetype(e.target.value)}
-                placeholder="z. B. Tech-Podcast, Zahnarztpraxis, Solo-Privat, Werbeagentur"
-              />
-              <p className="hint" style={{ fontSize: '0.8rem' }}>Kurzes Label, das deinen Account einordnet.</p>
-            </label>
+          {/* Identity */}
+          <SectionCard
+            icon={<Bot size={18} />}
+            title="Identität"
+            subtitle="Wer steht hinter dem Account? Persona und Archetyp prägen den Vibe stärker als jede Tonalitätsangabe."
+          >
+            <div className="brand-card__grid">
+              <label className="field">
+                <span>Archetyp</span>
+                <input
+                  data-testid="brand-archetype"
+                  value={archetype}
+                  onChange={(e) => setArchetype(e.target.value)}
+                  placeholder="z. B. Tech-Podcast, Zahnarztpraxis, Werbeagentur"
+                />
+                <p className="brand-field__hint">Kurzes Label, das deinen Account einordnet.</p>
+              </label>
+              <label className="field">
+                <span>Branche / Kontext</span>
+                <input
+                  data-testid="brand-industry"
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                  placeholder="z. B. Open-Source Hosting, Zahnmedizin, B2B-Marketing"
+                />
+              </label>
+            </div>
             <label className="field">
               <span>Voice-Persona</span>
               <textarea
@@ -541,220 +784,214 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
                 rows={2}
                 value={persona}
                 onChange={(e) => setPersona(e.target.value)}
-                placeholder={'z. B. „Maximilian, 38, IT-Nerd mit Selfhosting-Spleen, redet wie mit Kollegen am Stehtisch.“'}
+                placeholder='z. B. „Maximilian, 38, IT-Nerd mit Selfhosting-Spleen, redet wie mit Kollegen am Stehtisch."'
               />
-              <p className="hint" style={{ fontSize: '0.8rem' }}>
-                Wer schreibt? Beschreibe die Person hinter dem Account — das prägt den Vibe stärker als jede Tonalitätsangabe.
-              </p>
+              <p className="brand-field__hint">Wer schreibt? Die Person hinter dem Account.</p>
             </label>
-            <label className="field">
-              <span>Branche / Kontext</span>
-              <input data-testid="brand-industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="z. B. Open-Source Hosting, Zahnmedizin, B2B-Marketing" />
-            </label>
-            <label className="field">
-              <span>Haupt-Mehrwert</span>
-              <input data-testid="brand-main-value" value={mainValue} onChange={(e) => setMainValue(e.target.value)} placeholder="Was bietest du einzigartig? Konkret, kein Marketing." />
-            </label>
-            <label className="field">
-              <span>Zielgruppe</span>
-              <input data-testid="brand-audience" value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder='z. B. „Patienten mit Zahnarzt-Angst“ oder „Hobby-Sysadmins über 30“' />
-            </label>
-          </div>
-
-          <div className="glass-panel stack">
-            <h2 className="section-card__title">Sprach-DNA — Wie redest du?</h2>
-            <label className="field">
-              <span>Satzbau</span>
-              <textarea
-                data-testid="brand-sentence-style"
-                rows={2}
-                value={sentenceStyle}
-                onChange={(e) => setSentenceStyle(e.target.value)}
-                placeholder={'z. B. „Kurze Sätze, gerne Halbsätze. Kein Verb-am-Ende-Drama.“'}
-              />
-            </label>
-            <label className="field">
-              <span>Humor / Ton</span>
-              <textarea
-                data-testid="brand-humor"
-                rows={2}
-                value={humorStyle}
-                onChange={(e) => setHumorStyle(e.target.value)}
-                placeholder={'z. B. „Trocken mit IT-Insider-Witzen“ oder „Warm und beruhigend für Angstpatienten“'}
-              />
-            </label>
-            <div className="field">
-              <span>Bevorzugte Wörter / Fachbegriffe</span>
-              <div className="flex-row--wrap gap-2 mb-2">
-                {preferredWords.map((word, idx) => (
-                  <div key={idx} className="badge flex-row--center gap-1">
-                    <span>{word}</span>
-                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => setPreferredWords(preferredWords.filter((_, i) => i !== idx))}>
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex-row--center gap-2">
-                <input value={newPreferredWord} onChange={(e) => setNewPreferredWord(e.target.value)} placeholder="Wort hinzufügen" onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newPreferredWord.trim()) {
-                    e.preventDefault()
-                    setPreferredWords([...preferredWords, newPreferredWord.trim()])
-                    setNewPreferredWord('')
-                  }
-                }} />
-                <button type="button" className="btn btn--secondary" onClick={() => {
-                  if (newPreferredWord.trim()) {
-                    setPreferredWords([...preferredWords, newPreferredWord.trim()])
-                    setNewPreferredWord('')
-                  }
-                }}>Add</button>
-              </div>
-            </div>
-            <div className="field">
-              <span>Signature-Phrasen</span>
-              <div className="flex-row--wrap gap-2 mb-2">
-                {signaturePhrases.map((phrase, idx) => (
-                  <div key={idx} className="badge flex-row--center gap-1">
-                    <span>{phrase}</span>
-                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => setSignaturePhrases(signaturePhrases.filter((_, i) => i !== idx))}>
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex-row--center gap-2">
+            <div className="brand-card__grid">
+              <label className="field">
+                <span>Haupt-Mehrwert</span>
                 <input
-                  data-testid="brand-signature-phrase"
-                  value={newSignaturePhrase}
-                  onChange={(e) => setNewSignaturePhrase(e.target.value)}
-                  placeholder={'z. B. „läuft auf meinem Pi“'}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newSignaturePhrase.trim()) {
-                      e.preventDefault()
-                      setSignaturePhrases([...signaturePhrases, newSignaturePhrase.trim()])
-                      setNewSignaturePhrase('')
-                    }
-                  }}
+                  data-testid="brand-main-value"
+                  value={mainValue}
+                  onChange={(e) => setMainValue(e.target.value)}
+                  placeholder="Was bietest du einzigartig? Konkret, kein Marketing."
                 />
-                <button type="button" className="btn btn--secondary" onClick={() => {
-                  if (newSignaturePhrase.trim()) {
-                    setSignaturePhrases([...signaturePhrases, newSignaturePhrase.trim()])
-                    setNewSignaturePhrase('')
-                  }
-                }}>Add</button>
-              </div>
-              <p className="hint" style={{ fontSize: '0.8rem' }}>Wiederkehrende Wendungen, die deinen Account erkennbar machen. Werden nur eingesetzt, wenn sie wirklich passen.</p>
-            </div>
-            <div className="field">
-              <span>Verbotene Wörter (zusätzlich zu den Standard-KI-Phrasen)</span>
-              <div className="flex-row--wrap gap-2 mb-2">
-                {bannedWords.map((word, idx) => (
-                  <div key={idx} className="badge flex-row--center gap-1">
-                    <span>{word}</span>
-                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => setBannedWords(bannedWords.filter((_, i) => i !== idx))}>
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex-row--center gap-2">
+              </label>
+              <label className="field">
+                <span>Zielgruppe</span>
                 <input
-                  data-testid="brand-banned-word"
-                  value={newBannedWord}
-                  onChange={(e) => setNewBannedWord(e.target.value)}
-                  placeholder="zusätzliche Wörter, die nie auftauchen sollen"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newBannedWord.trim()) {
-                      e.preventDefault()
-                      setBannedWords([...bannedWords, newBannedWord.trim()])
-                      setNewBannedWord('')
-                    }
-                  }}
+                  data-testid="brand-audience"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  placeholder='z. B. „Patienten mit Zahnarzt-Angst" oder „Hobby-Sysadmins über 30"'
                 />
-                <button type="button" className="btn btn--secondary" onClick={() => {
-                  if (newBannedWord.trim()) {
-                    setBannedWords([...bannedWords, newBannedWord.trim()])
-                    setNewBannedWord('')
-                  }
-                }}>Add</button>
-              </div>
-              <p className="hint" style={{ fontSize: '0.8rem' }}>
-                Goloom blockt automatisch typische KI-Phrasen („tauche ein“, „spannend“, „game-changer“ …). Hier kannst du eigene ergänzen.
-              </p>
-              <label className="flex-row--center gap-2" style={{ flexDirection: 'row', alignItems: 'center', marginTop: '0.5rem' }}>
-                <input
-                  type="checkbox"
-                  data-testid="brand-anti-ai-override"
-                  checked={antiAiOverride}
-                  onChange={(e) => setAntiAiOverride(e.target.checked)}
-                />
-                <span style={{ fontSize: '0.85rem' }}>Standard-KI-Phrasen-Block deaktivieren (nur eigene Wörter verwenden)</span>
               </label>
             </div>
-            <label className="field">
-              <span>Sprache</span>
-              <select value={preferredLanguage} onChange={(e) => setPreferredLanguage(e.target.value)}>
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-              </select>
-            </label>
-          </div>
+          </SectionCard>
 
-          <div className="glass-panel stack">
-            <h2 className="section-card__title">Reach-Strategie</h2>
-            <label className="field">
-              <span>Hook-Stil</span>
-              <textarea
-                data-testid="brand-hook"
-                rows={2}
-                value={hookStyle}
-                onChange={(e) => setHookStyle(e.target.value)}
-                placeholder={'z. B. „Mit einer konkreten Beobachtung einsteigen, nie mit Floskeln.“'}
-              />
-            </label>
-            <label className="field">
-              <span>CTA-Fokus</span>
-              <textarea
-                data-testid="brand-cta"
-                rows={2}
-                value={ctaFocus}
-                onChange={(e) => setCtaFocus(e.target.value)}
-                placeholder={'z. B. „Zum Kommentar einladen, kein Verkaufslink.“ oder „Direkt zur Terminbuchung.“'}
-              />
-            </label>
-            <label className="field">
-              <span>Max. Hashtags</span>
-              <input type="number" min={0} max={30} value={maxHashtags} onChange={(e) => setMaxHashtags(parseInt(e.target.value, 10) || 0)} />
-            </label>
-          </div>
+          {/* Language DNA */}
+          <SectionCard
+            icon={<MessageCircle size={18} />}
+            title="Sprach-DNA"
+            subtitle="Wie redest du? Freitext — keine starren Kategorien. Beschreibe so präzise wie möglich."
+          >
+            <div className="brand-card__grid">
+              <label className="field">
+                <span>Satzbau</span>
+                <textarea
+                  data-testid="brand-sentence-style"
+                  rows={2}
+                  value={sentenceStyle}
+                  onChange={(e) => setSentenceStyle(e.target.value)}
+                  placeholder='z. B. „Kurze Sätze, gerne Halbsätze. Kein Verb-am-Ende-Drama."'
+                />
+              </label>
+              <label className="field">
+                <span>Humor / Ton</span>
+                <textarea
+                  data-testid="brand-humor"
+                  rows={2}
+                  value={humorStyle}
+                  onChange={(e) => setHumorStyle(e.target.value)}
+                  placeholder='z. B. „Trocken mit IT-Insider-Witzen" oder „Warm und beruhigend"'
+                />
+              </label>
+            </div>
 
-          <div className="glass-panel stack" data-testid="brand-knowledge-section">
-            <h2 className="section-card__title">Knowledge-Base — Das Gold</h2>
-            <p className="hint">Nur Fakten aus diesen Quellen. Die KI darf nichts erfinden, was hier nicht steht.</p>
-            <div className="stack stack--sm">
-              {(knowledgeSources ?? []).map((source) => (
-                <div key={source.id} className="glass-panel glass-panel--compact flex-row--between" style={{ alignItems: 'center' }}>
-                  <div>
-                    <strong>{source.name}</strong>
-                    <p className="hint" style={{ margin: 0, fontSize: '0.8rem' }}>{source.type} · {source.content.slice(0, 80)}{source.content.length > 80 ? '…' : ''}</p>
+            <div className="field">
+              <span>Bevorzugte Wörter / Fachbegriffe</span>
+              <TagInput
+                values={preferredWords}
+                onChange={setPreferredWords}
+                placeholder="z. B. Heimserver, Pi, Docker"
+                testId="brand-preferred-word"
+              />
+            </div>
+
+            <div className="field">
+              <span>Signature-Phrasen</span>
+              <TagInput
+                values={signaturePhrases}
+                onChange={setSignaturePhrases}
+                placeholder='z. B. „läuft auf meinem Pi"'
+                testId="brand-signature-phrase"
+              />
+              <p className="brand-field__hint">
+                Wiederkehrende Wendungen, die deinen Account erkennbar machen. Werden nur eingesetzt, wenn sie passen.
+              </p>
+            </div>
+
+            <div className="field">
+              <span>Zusätzlich verbotene Wörter</span>
+              <TagInput
+                values={bannedWords}
+                onChange={setBannedWords}
+                placeholder="z. B. branchenspezifische Hype-Wörter"
+                testId="brand-banned-word"
+              />
+              <p className="brand-field__hint">
+                Goloom blockt bereits typische KI-Phrasen („tauche ein", „spannend", „game-changer" …). Hier ergänzt du eigene.
+              </p>
+            </div>
+
+            <ToggleSwitch
+              checked={antiAiOverride}
+              onChange={setAntiAiOverride}
+              testId="brand-anti-ai-override"
+              title="Standard-KI-Phrasen-Block deaktivieren"
+              description="Nicht empfohlen. Die KI-Sprach-Defaults verhindern typische LLM-Klischees. Nur deaktivieren, wenn du sehr genau weißt, was du tust."
+            />
+          </SectionCard>
+
+          {/* Reach strategy */}
+          <SectionCard
+            icon={<Target size={18} />}
+            title="Reach-Strategie"
+            subtitle="Wie öffnest du Posts und wozu rufst du auf? Frei beschreiben."
+          >
+            <div className="brand-card__grid">
+              <label className="field">
+                <span>Hook-Stil</span>
+                <textarea
+                  data-testid="brand-hook"
+                  rows={2}
+                  value={hookStyle}
+                  onChange={(e) => setHookStyle(e.target.value)}
+                  placeholder='z. B. „Mit einer konkreten Beobachtung einsteigen, nie Floskeln."'
+                />
+              </label>
+              <label className="field">
+                <span>CTA-Fokus</span>
+                <textarea
+                  data-testid="brand-cta"
+                  rows={2}
+                  value={ctaFocus}
+                  onChange={(e) => setCtaFocus(e.target.value)}
+                  placeholder='z. B. „Zum Kommentar einladen, kein Verkaufslink."'
+                />
+              </label>
+            </div>
+            <div className="brand-card__grid">
+              <label className="field">
+                <span>Sprache</span>
+                <select value={preferredLanguage} onChange={(e) => setPreferredLanguage(e.target.value)}>
+                  <option value="de">Deutsch</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Max. Hashtags</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={maxHashtags}
+                  onChange={(e) => setMaxHashtags(parseInt(e.target.value, 10) || 0)}
+                />
+              </label>
+            </div>
+            <ToggleSwitch
+              checked={autoPublishEnabled}
+              onChange={setAutoPublishEnabled}
+              title="Auto-Publish"
+              description="Generierte Posts werden direkt veröffentlicht statt im Review-Queue zu landen."
+            />
+          </SectionCard>
+
+          {/* Knowledge base */}
+          <SectionCard
+            icon={<FileText size={18} />}
+            title="Knowledge-Base"
+            subtitle="Exklusive Faktenquelle. Die KI darf nichts erfinden, was hier nicht steht."
+            testId="brand-knowledge-section"
+          >
+            {(knowledgeSources ?? []).length > 0 ? (
+              <div className="brand-knowledge-list">
+                {(knowledgeSources ?? []).map((source) => (
+                  <div key={source.id} className="brand-knowledge-item">
+                    <span className="brand-knowledge-item__icon">{knowledgeIcon(source.type)}</span>
+                    <div className="brand-knowledge-item__body">
+                      <span className="brand-knowledge-item__name">{source.name}</span>
+                      <span className="brand-knowledge-item__meta">
+                        {source.type} · {source.content.slice(0, 100)}
+                        {source.content.length > 100 ? '…' : ''}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--icon-sm"
+                      aria-label={`${source.name} entfernen`}
+                      onClick={() => void deleteKnowledge.mutateAsync({ teamId: team.id, sourceId: source.id })}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
-                  <button type="button" className="btn btn--ghost btn--xs" onClick={() => void deleteKnowledge.mutateAsync({ teamId: team.id, sourceId: source.id })}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
+                ))}
+              </div>
+            ) : (
+              <div className="brand-knowledge-empty">Noch keine Quellen — füge Texte oder URLs hinzu.</div>
+            )}
+
+            <div className="field">
+              <span>Typ</span>
+              <Segmented
+                value={kbType}
+                options={[
+                  { id: 'text', label: 'Text / Transkript' },
+                  { id: 'url', label: 'Website-URL' },
+                ]}
+                onChange={(v) => setKbType(v)}
+                testIdPrefix="brand-kb-type"
+              />
             </div>
             <label className="field">
-              <span>Typ</span>
-              <select value={kbType} onChange={(e) => setKbType(e.target.value as 'text' | 'url')}>
-                <option value="text">Text / Transkript</option>
-                <option value="url">Website-URL</option>
-              </select>
-            </label>
-            <label className="field">
               <span>Name</span>
-              <input value={kbName} onChange={(e) => setKbName(e.target.value)} placeholder="z. B. Produkt-FAQ" />
+              <input
+                value={kbName}
+                onChange={(e) => setKbName(e.target.value)}
+                placeholder="z. B. Produkt-FAQ"
+              />
             </label>
             {kbType === 'url' ? (
               <label className="field">
@@ -764,156 +1001,288 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
             ) : (
               <label className="field">
                 <span>Inhalt</span>
-                <textarea rows={4} value={kbContent} onChange={(e) => setKbContent(e.target.value)} placeholder="Fakten, Zitate, Produktinfos…" />
+                <textarea
+                  rows={4}
+                  value={kbContent}
+                  onChange={(e) => setKbContent(e.target.value)}
+                  placeholder="Fakten, Zitate, Produktinfos…"
+                />
               </label>
             )}
-            <button type="button" className="btn btn--secondary" onClick={() => void handleAddKnowledge()} disabled={createKnowledge.isPending}>
-              Wissensquelle hinzufügen
-            </button>
-          </div>
+            <div>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => void handleAddKnowledge()}
+                disabled={createKnowledge.isPending || !kbName.trim()}
+              >
+                <Plus size={14} /> Wissensquelle hinzufügen
+              </button>
+            </div>
+          </SectionCard>
 
-          <div className="flex-row--center gap-2 flex-wrap">
-            <button type="button" className="btn btn--primary" data-testid="brand-save-setup" onClick={() => void handleSaveSetup()} disabled={upsertProfile.isPending}>
-              {upsertProfile.isPending ? 'Speichern…' : 'Profil speichern & Vibe-Vorschau'}
-            </button>
-            <button type="button" className="btn btn--secondary" onClick={() => setStep(2)}>
-              Weiter zur Aufgabe <ChevronRight size={14} />
-            </button>
-          </div>
-
+          {/* Vibe preview */}
           {vibeSummary && (
-            <div className="glass-panel stack" data-testid="brand-vibe-preview">
-              <h3 className="subsection-title"><Sparkles size={16} style={{ display: 'inline', verticalAlign: 'middle' }} /> Vibe-Vorschau</h3>
-              <p style={{ margin: 0 }}>{vibeSummary}</p>
-              {vibeSuggestion ? <p className="hint" style={{ margin: 0 }}>{vibeSuggestion}</p> : null}
+            <div className="brand-vibe" data-testid="brand-vibe-preview">
+              <Sparkles size={20} className="brand-vibe__icon" />
+              <div className="brand-vibe__text">
+                {vibeSummary}
+                {vibeSuggestion ? <div className="brand-vibe__suggestion">{vibeSuggestion}</div> : null}
+              </div>
             </div>
           )}
-        </div>
+
+          {/* Action bar */}
+          <div className="brand-actionbar">
+            <div className="brand-actionbar__group" />
+            <div className="brand-actionbar__group">
+              <button
+                type="button"
+                className="btn btn--secondary"
+                data-testid="brand-save-setup"
+                onClick={() => void handleSaveSetup()}
+                disabled={upsertProfile.isPending}
+              >
+                {upsertProfile.isPending ? (
+                  <>
+                    <Loader2 size={14} className="spin" /> Speichern…
+                  </>
+                ) : (
+                  <>
+                    <Save size={14} /> Profil speichern
+                  </>
+                )}
+              </button>
+              <button type="button" className="btn btn--primary" onClick={() => setStep(2)}>
+                Weiter <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
+      {/* ============================================================ */}
+      {/* STEP 2 — TASK                                                 */}
+      {/* ============================================================ */}
       {step === 2 && (
-        <div className="glass-panel stack">
-          <h2 className="section-card__title">Was ist der Anlass?</h2>
-          <label className="field">
-            <span>Quelle</span>
-            <select value={occasionType} onChange={(e) => setOccasionType(e.target.value as typeof occasionType)}>
-              <option value="text">Freitext / Notiz</option>
-              <option value="url">URL</option>
-              <option value="rss">RSS-Feed</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Anlass</span>
-            <textarea data-testid="brand-occasion" rows={5} value={occasion} onChange={(e) => setOccasion(e.target.value)} placeholder="URL, Feed-Link oder Beschreibung des Anlasses…" />
-          </label>
-          <label className="field">
-            <span>Format</span>
-            <select data-testid="brand-output-format" value={outputFormat} onChange={(e) => setOutputFormat(e.target.value as AIOutputFormat)}>
-              <option value="post">Post</option>
-              <option value="teaser">Teaser</option>
-              <option value="poll">Umfrage</option>
-              <option value="thread">Thread</option>
-            </select>
-          </label>
-          <div className="field">
-            <span>Ziel-Konten</span>
-            <DestinationPicker accounts={accounts} selectedIds={selectedAccounts} onToggle={toggleAccount} testIdPrefix="brand-dest" />
-          </div>
-          <div className="flex-row--center gap-2">
-            <button type="button" className="btn btn--secondary" onClick={() => setStep(1)}>Zurück</button>
-            <button type="button" className="btn btn--primary" data-testid="brand-generate" onClick={() => void handleGenerate()} disabled={triggerJob.isPending}>
-              {triggerJob.isPending ? <><Loader2 size={16} className="spin" /> Generiere…</> : <><Play size={16} /> Generieren</>}
+        <>
+          <SectionCard
+            icon={<Zap size={18} />}
+            title="Was ist der Anlass?"
+            subtitle="Quelle, Format und Ziel-Konten festlegen — das Brand-Profil aus Schritt 1 liefert den Vibe."
+          >
+            <div className="field">
+              <span>Quelle</span>
+              <Segmented
+                value={occasionType}
+                options={OCCASION_TYPES}
+                onChange={(v) => setOccasionType(v)}
+                testIdPrefix="brand-occasion-type"
+              />
+            </div>
+            <label className="field">
+              <span>{occasionType === 'text' ? 'Beschreibung des Anlasses' : occasionType === 'url' ? 'URL' : 'RSS-Feed-Link'}</span>
+              <textarea
+                data-testid="brand-occasion"
+                rows={4}
+                value={occasion}
+                onChange={(e) => setOccasion(e.target.value)}
+                placeholder={
+                  occasionType === 'text'
+                    ? 'Worum geht es? Was ist neu, was willst du teilen?'
+                    : occasionType === 'url'
+                      ? 'https://…'
+                      : 'https://example.com/feed.xml'
+                }
+              />
+            </label>
+            <div className="field">
+              <span>Format</span>
+              <Segmented
+                value={outputFormat}
+                options={OUTPUT_FORMAT_OPTIONS}
+                onChange={(v) => setOutputFormat(v)}
+                testIdPrefix="brand-output-format"
+              />
+            </div>
+            <div className="field">
+              <span>Ziel-Konten</span>
+              <DestinationPicker
+                accounts={accounts}
+                selectedIds={selectedAccounts}
+                onToggle={toggleAccount}
+                testIdPrefix="brand-dest"
+              />
+            </div>
+          </SectionCard>
+
+          <div className="brand-actionbar">
+            <button type="button" className="btn btn--secondary" onClick={() => setStep(1)}>
+              <ChevronLeft size={14} /> Zurück
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              data-testid="brand-generate"
+              onClick={() => void handleGenerate()}
+              disabled={triggerJob.isPending}
+            >
+              {triggerJob.isPending ? (
+                <>
+                  <Loader2 size={14} className="spin" /> Generiere…
+                </>
+              ) : (
+                <>
+                  <Play size={14} /> Generieren
+                </>
+              )}
             </button>
           </div>
-        </div>
+        </>
       )}
 
+      {/* ============================================================ */}
+      {/* STEP 3 — EDITOR                                               */}
+      {/* ============================================================ */}
       {step === 3 && (
-        <div className="stack">
+        <>
           {activeJobs.length > 0 && (
-            <div className="glass-panel flex-row--center gap-2">
-              <Loader2 size={16} className="spin" />
-              <span>Generierung läuft…</span>
-              {activeJobs.map((job) => (
-                <button key={job.id} type="button" className="btn btn--secondary btn--sm" onClick={() => void cancelJob.mutateAsync({ teamId: team.id, jobId: job.id })}>
-                  Abbrechen
-                </button>
-              ))}
-            </div>
+            <SectionCard icon={<Loader2 size={18} className="spin" />} title="Generierung läuft …" subtitle="Du kannst den Job jederzeit abbrechen.">
+              <div className="brand-actionbar__group">
+                {activeJobs.map((job) => (
+                  <button
+                    key={job.id}
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => void cancelJob.mutateAsync({ teamId: team.id, jobId: job.id })}
+                  >
+                    <X size={14} /> Abbrechen
+                  </button>
+                ))}
+              </div>
+            </SectionCard>
           )}
 
           {displayJob && typeof displayJob.result?.content === 'string' && (
-            <div className="glass-panel stack" data-testid="brand-editor">
-              <h2 className="section-card__title">Generierter Post</h2>
-              <div style={{ background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
-                {String(displayJob.result.content)}
-              </div>
+            <SectionCard
+              icon={<Sparkles size={18} />}
+              title="Generierter Post"
+              subtitle="Feinschliff über die Stimmungs-Regler — keine neue Eingabe nötig."
+              testId="brand-editor"
+            >
+              <div className="brand-generated-post">{String(displayJob.result.content)}</div>
 
-              <div className="stack stack--sm">
-                <p className="hint" style={{ margin: 0 }}>Stimmungs-Regler</p>
-                <label className="field flex-row--center gap-2" style={{ flexDirection: 'row' }}>
-                  <input type="checkbox" checked={moodAdjustments.includes('more_expertise')} onChange={() => toggleMood('more_expertise')} />
-                  <span>Mehr Fokus auf Fachwissen</span>
-                </label>
-                <label className="field flex-row--center gap-2" style={{ flexDirection: 'row' }}>
-                  <input type="checkbox" checked={moodAdjustments.includes('shorter_punchier')} onChange={() => toggleMood('shorter_punchier')} />
-                  <span>Kürzer / knackiger</span>
-                </label>
-                <label className="field flex-row--center gap-2" style={{ flexDirection: 'row' }}>
-                  <input type="checkbox" checked={moodAdjustments.includes('remove_marketing_speak')} onChange={() => toggleMood('remove_marketing_speak')} />
-                  <span>Marketing-Sprache entfernen</span>
-                </label>
-              </div>
-
-              <div className="flex-row--center gap-2 flex-wrap">
-                <button type="button" className="btn btn--secondary" onClick={() => void handleRefine()} disabled={triggerJob.isPending || moodAdjustments.length === 0}>
-                  Anwenden & neu generieren
-                </button>
-                <button type="button" className="btn btn--ghost" data-testid="brand-prompt-preview" onClick={() => void handleLoadPromptPreview()} disabled={promptPreview.isPending}>
-                  {promptPreview.isPending ? 'Lade Prompt…' : 'Prompt-Vorschau'}
-                </button>
-                {displayJob.status === 'completed' && !profile?.autoPublishEnabled && (
-                  <button type="button" className="btn btn--primary btn--sm" onClick={() => void saveGeneratedPost(displayJob)} disabled={savingDraftId === displayJob.id}>
-                    {savingDraftId === displayJob.id ? <Loader2 size={14} className="spin" /> : <Save size={14} />}
-                    Entwurf speichern
-                  </button>
-                )}
-                {onEditInComposer && displayJob.status === 'completed' && (
-                  <button
-                    type="button"
-                    className="btn btn--secondary btn--sm"
-                    onClick={() =>
-                      onEditInComposer({
-                        title: typeof displayJob.result?.title === 'string' ? displayJob.result.title : undefined,
-                        content: String(displayJob.result?.content ?? ''),
-                        targetAccountIds: selectedAccounts,
-                      })
-                    }
-                  >
-                    Im Composer bearbeiten
-                  </button>
-                )}
-                <button type="button" className="btn btn--secondary" onClick={() => setStep(2)}>
-                  <CalendarClock size={14} /> Neue Aufgabe
-                </button>
+              <div className="field">
+                <span>Stimmungs-Regler</span>
+                <div className="brand-option-grid">
+                  {MOOD_OPTIONS.map((option) => (
+                    <OptionPill
+                      key={option.id}
+                      active={moodAdjustments.includes(option.id)}
+                      onClick={() => toggleMood(option.id)}
+                      testId={`brand-mood-${option.id}`}
+                    >
+                      {option.label}
+                    </OptionPill>
+                  ))}
+                </div>
+                <p className="brand-field__hint">Wähle aus, was angepasst werden soll, und klicke „Neu generieren".</p>
               </div>
 
               {showPromptPreview && promptText && (
-                <details open className="glass-panel glass-panel--compact">
-                  <summary className="subsection-title" style={{ cursor: 'pointer' }}>Haupt-Prompt</summary>
-                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.75rem', maxHeight: '24rem', overflow: 'auto' }}>{promptText}</pre>
+                <details open className="brand-prompt-preview" data-testid="brand-prompt-preview-panel">
+                  <summary>
+                    <FileText size={14} /> Haupt-Prompt
+                  </summary>
+                  <pre>{promptText}</pre>
                 </details>
               )}
-            </div>
+
+              <div className="brand-actionbar">
+                <div className="brand-actionbar__group">
+                  <button type="button" className="btn btn--ghost" onClick={() => setStep(2)}>
+                    <CalendarClock size={14} /> Neue Aufgabe
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    data-testid="brand-prompt-preview"
+                    onClick={() => void handleLoadPromptPreview()}
+                    disabled={promptPreview.isPending}
+                  >
+                    {promptPreview.isPending ? (
+                      <>
+                        <Loader2 size={14} className="spin" /> Lade…
+                      </>
+                    ) : (
+                      <>
+                        <FileText size={14} /> Prompt-Vorschau
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="brand-actionbar__group">
+                  <button
+                    type="button"
+                    className="btn btn--secondary"
+                    onClick={() => void handleRefine()}
+                    disabled={triggerJob.isPending || moodAdjustments.length === 0}
+                  >
+                    <Sparkles size={14} /> Neu generieren
+                  </button>
+                  {onEditInComposer && displayJob.status === 'completed' && (
+                    <button
+                      type="button"
+                      className="btn btn--secondary"
+                      onClick={() =>
+                        onEditInComposer({
+                          title: typeof displayJob.result?.title === 'string' ? displayJob.result.title : undefined,
+                          content: String(displayJob.result?.content ?? ''),
+                          targetAccountIds: selectedAccounts,
+                        })
+                      }
+                    >
+                      <Edit size={14} /> Im Composer öffnen
+                    </button>
+                  )}
+                  {displayJob.status === 'completed' && !profile?.autoPublishEnabled && (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => void saveGeneratedPost(displayJob)}
+                      disabled={savingDraftId === displayJob.id}
+                    >
+                      {savingDraftId === displayJob.id ? (
+                        <>
+                          <Loader2 size={14} className="spin" /> Speichern…
+                        </>
+                      ) : (
+                        <>
+                          <Send size={14} /> Als Entwurf speichern
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
           )}
 
           {!displayJob && activeJobs.length === 0 && (
-            <div className="glass-panel">
-              <p className="hint">Noch kein generierter Post. Starte in Schritt 2 eine Generierung.</p>
-              <button type="button" className="btn btn--secondary" onClick={() => setStep(2)}>Zur Aufgabe</button>
-            </div>
+            <SectionCard
+              icon={<Languages size={18} />}
+              title="Noch kein Post generiert"
+              subtitle="Starte in Schritt 2 eine Generierung — das Ergebnis erscheint hier."
+            >
+              <div>
+                <button type="button" className="btn btn--primary" onClick={() => setStep(2)}>
+                  <ChevronLeft size={14} /> Zur Aufgabe
+                </button>
+              </div>
+            </SectionCard>
           )}
-        </div>
+        </>
       )}
     </div>
   )
