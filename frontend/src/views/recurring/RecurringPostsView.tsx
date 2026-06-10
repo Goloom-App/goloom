@@ -1,7 +1,7 @@
 import { format, parseISO } from 'date-fns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { CalendarClock, Plus, X } from 'lucide-react'
+import { CalendarClock, Clock, Pencil, Plus, Target, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { createApiClient } from '../../api'
@@ -362,51 +362,71 @@ export function RecurringPostsView({
           {items.map((item) => (
             <li key={item.id} className="glass-panel recurring-template-card">
               <div className="recurring-template-card__header">
-                <strong>{item.title || t('recurring.untitled')}</strong>
-                <span className="hint">
+                <div className="flex-row--center gap-2">
+                  <strong className="recurring-template-card__title">{item.title || t('recurring.untitled')}</strong>
                   {item.announcement_enabled ? <span className="badge badge--info">{t('recurring.announcementBadge')}</span> : null}
                   {item.ai_enhance_enabled ? <span className="badge badge--info">{t('recurring.aiEnabledBadge')}</span> : null}
-                  {item.enabled ? t('analytics.enabled') : t('analytics.paused')}
-                </span>
+                </div>
+                {canEdit ? (
+                  <div className="flex-row--center gap-1">
+                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => openEditorForEdit(item)} aria-label={t('recurring.editTemplate')}>
+                      <Pencil size={16} />
+                    </button>
+                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => void removeTemplate(item.id)} aria-label={t('common.delete')}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ) : null}
               </div>
-              <p className="hint">{formatTemplateSchedule(item)}</p>
-              {item.materialize_horizon_days ? (
-                <p className="hint">{t('recurring.materializeHorizonActive', { days: item.materialize_horizon_days })}</p>
-              ) : null}
-              <p className="hint">
-                {t('recurring.next')}{' '}
-                {item.next_materialize_at ? format(parseISO(item.next_materialize_at), 'PPpp') : t('common.emDash')} · {t('common.counter')}:{' '}
-                {item.counter_next}
-              </p>
-              <p className="hint">
-                {t('recurring.targets')}{' '}
-                {item.target_account_ids.map((id) => accountById[id]?.username ?? id.slice(0, 8)).join(', ')}
-              </p>
+
+              <div className="recurring-template-card__meta">
+                <div className="recurring-template-card__meta-row">
+                  <CalendarClock size={14} />
+                  <span>{formatTemplateSchedule(item)}</span>
+                </div>
+                <div className="recurring-template-card__meta-row">
+                  <Clock size={14} />
+                  <span>
+                    {t('recurring.next')}{' '}
+                    {item.next_materialize_at ? format(parseISO(item.next_materialize_at), 'PPpp') : t('common.emDash')}
+                    {' · '}{t('common.counter')}: {item.counter_next}
+                  </span>
+                </div>
+                <div className="recurring-template-card__meta-row">
+                  <Target size={14} />
+                  <span>
+                    {item.target_account_ids.map((id) => accountById[id]?.username ?? id.slice(0, 8)).join(', ')}
+                  </span>
+                </div>
+                {item.materialize_horizon_days ? (
+                  <div className="recurring-template-card__meta-row">
+                    <span className="hint">{t('recurring.materializeHorizonActive', { days: item.materialize_horizon_days })}</span>
+                  </div>
+                ) : null}
+              </div>
+
               {canEdit ? (
-                <div className="inline-cluster mt-1" style={{ flexWrap: 'wrap' }}>
-                  <button type="button" className="button button--secondary" onClick={() => openEditorForEdit(item)}>
+                <div className="recurring-template-card__actions">
+                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => openEditorForEdit(item)}>
                     {t('recurring.editTemplate')}
                   </button>
-                  <button type="button" className="button button--secondary" onClick={() => void toggleEnabled(item.id, item.enabled)}>
+                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => void toggleEnabled(item.id, item.enabled)}>
                     {item.enabled ? t('recurring.pause') : t('recurring.resume')}
                   </button>
-                  <button type="button" className="button button--secondary" onClick={() => void skipNext(item.id, item.next_materialize_at)}>
+                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => void skipNext(item.id, item.next_materialize_at)}>
                     {t('recurring.skipNext')}
                   </button>
-                  <button type="button" className="button button--secondary" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
+                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
                     {t('recurring.shiftNext')}
                   </button>
                   {shiftInputs[item.id] !== undefined ? (
                     <span className="inline-cluster">
                       <input type="datetime-local" value={shiftInputs[item.id]} onChange={(e) => setShiftInputs((cur) => ({ ...cur, [item.id]: e.target.value }))} />
-                      <button type="button" className="button button--primary" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
+                      <button type="button" className="btn btn--primary btn--sm" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
                         {t('common.apply')}
                       </button>
                     </span>
                   ) : null}
-                  <button type="button" className="button button--secondary" onClick={() => void removeTemplate(item.id)}>
-                    {t('common.delete')}
-                  </button>
                 </div>
               ) : null}
             </li>
