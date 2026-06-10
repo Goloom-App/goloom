@@ -435,6 +435,7 @@
       "title": "Recurring posts",
       "hint": "Templates expand into scheduled posts using {year}, {month}, {day}, {counter}. Use weekly or monthly recurrence JSON (monthly_anchor_offset supports “days before” anchors).",
       "newTemplate": "New template",
+      "addTemplate": "Add template",
       "noTemplates": "No templates yet.",
       "untitled": "(untitled)",
       "next": "Next:",

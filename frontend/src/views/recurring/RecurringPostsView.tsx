@@ -1,7 +1,7 @@
 import { format, parseISO } from 'date-fns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X } from 'lucide-react'
+import { CalendarClock, Plus, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { createApiClient } from '../../api'
@@ -341,14 +341,18 @@ export function RecurringPostsView({
   return (
     <div className="recurring-posts-view">
       <div className="glass-panel">
-        <div className="flex-row--wrap" style={{ justifyContent: 'space-between' }}>
+        <div className="flex-row--between">
           <div>
-            <h2 className="section-card__title">{t('recurring.title')}</h2>
+            <h2 className="section-card__title flex-row--center gap-2">
+              <CalendarClock size={20} />
+              {t('recurring.title')}
+            </h2>
             <p className="hint">{t('recurring.hint')}</p>
           </div>
           {canEdit ? (
-            <button type="button" className="button button--primary" onClick={openEditor}>
-              {t('recurring.newTemplate')}
+            <button type="button" className="btn btn--secondary btn--sm" onClick={openEditor}>
+              <Plus size={16} />
+              <span>{t('recurring.addTemplate', 'Add template')}</span>
             </button>
           ) : null}
         </div>

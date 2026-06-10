@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Clock, Inbox, Pencil, Send, Trash2 } from 'lucide-react'
 
 import { DestinationStack } from '../../components/post/DestinationAvatar'
+import { SectionCard } from '../../components/ui'
 import { sharedAccountLabels } from '../../schedule'
 import { useReviewQueue } from '../../hooks/useReviewQueue'
 import type { AccountRecord, ReviewQueueItem, TeamRecord } from '../../types'
@@ -57,16 +58,13 @@ export function ReviewQueueView({
   }
 
   return (
-    <div className="glass-panel stack stack--lg" data-testid="review-queue">
-      <div>
-        <h2 className="section-card__title flex-row--center gap-2">
-          <Inbox size={20} />
-          {t('review.title')}
-        </h2>
-        <p className="hint">{t('review.hint')}</p>
-      </div>
-
-      {error ? <p className="status-banner__error">{error}</p> : null}
+    <div className="brand-wizard stack stack--lg" data-testid="review-queue">
+      <SectionCard
+        icon={<Inbox size={18} />}
+        title={t('review.title')}
+        subtitle={t('review.hint')}
+      >
+        {error ? <p className="status-banner__error">{error}</p> : null}
 
       {!items?.length ? (
         <p className="hint" data-testid="review-queue-empty">
@@ -167,6 +165,7 @@ export function ReviewQueueView({
           ))}
         </div>
       )}
+      </SectionCard>
     </div>
   )
 }

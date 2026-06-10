@@ -10,8 +10,9 @@ import { accountContentOverrideForSave, isAccountOverCharLimit } from './compone
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
 import { AppShell } from './components/Shell/AppShell'
-import { Sun, Moon, Edit, Trash2, X } from 'lucide-react'
+import { Sun, Moon, Edit, Trash2, X, Settings, Users, Bot, Activity } from 'lucide-react'
 import { Icon } from './icons'
+import { SectionCard, ToggleSwitch } from './components/ui'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
 import { DashboardView } from './views/dashboard/DashboardView'
@@ -1964,28 +1965,35 @@ function App() {
         )}
 
         {section === 'teams' && selectedTeam && (
-          <div className="glass-panel stack stack--lg">
-            <div>
-              <h2 className="mb-2">{t('teams.settingsTitle')}</h2>
-              <p className="hint">{t('teams.settingsHint', { teamName: selectedTeam.name })}</p>
-            </div>
+          <div className="brand-wizard stack stack--lg">
+            <SectionCard
+              icon={<Settings size={18} />}
+              title={t('teams.settingsTitle')}
+              subtitle={t('teams.settingsHint', { teamName: selectedTeam.name })}
+            >
+              {selectedTeam.isPersonal ? (
+                <>
+                  <p className="hint">{t('teams.personalNoMembers')}</p>
+                  <p className="hint">{t('teams.personalWorkspaceHint')}</p>
+                </>
+              ) : myRoleInSelectedTeam !== 'owner' ? (
+                <p className="hint">{t('teams.personalWorkspaceHint')}</p>
+              ) : null}
+            </SectionCard>
 
             {selectedTeam.isPersonal ? (
               <>
-                <p className="hint">{t('teams.personalNoMembers')}</p>
-                <p className="hint">{t('teams.personalWorkspaceHint')}</p>
-                <section className="stack">
-                  <h3 className="subsection-title">{t('teams.aiAgentTitle')}</h3>
-                  <p className="hint">{t('teams.aiAgentHint')}</p>
-                  <label className="field toggle-row">
-                    <span>{t('teams.aiFeaturesEnabled')}</span>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={teamAiEnabled}
-                      onChange={(event) => setTeamAiEnabled(event.target.checked)}
-                    />
-                  </label>
+                <SectionCard
+                  icon={<Bot size={18} />}
+                  title={t('teams.aiAgentTitle')}
+                  subtitle={t('teams.aiAgentHint')}
+                >
+                  <ToggleSwitch
+                    checked={teamAiEnabled}
+                    onChange={setTeamAiEnabled}
+                    title={t('teams.aiFeaturesEnabled')}
+                    testId="team-ai-toggle"
+                  />
                   {teamAiEnabled ? (
                     <div className="stack stack--sm mt-1">
                       <h4 className="subsection-title">{t('teams.aiServiceUrlTitle')}</h4>
@@ -2018,36 +2026,38 @@ function App() {
                       {t('teams.saveChanges')}
                     </button>
                   </div>
-                </section>
+                </SectionCard>
 
-                <section className="stack">
-                  <h3 className="subsection-title">{t('teams.externalPostMonitorTitle')}</h3>
-                  <p className="hint">{t('teams.externalPostMonitorHint')}</p>
-                  <label className="field toggle-row">
-                    <span>{t('teams.externalPostMonitorLabel')}</span>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={externalPostMonitorEnabled}
-                      onChange={(event) => void handleToggleExternalPostMonitor(event.target.checked)}
-                    />
-                  </label>
+                <SectionCard
+                  icon={<Activity size={18} />}
+                  title={t('teams.externalPostMonitorTitle')}
+                  subtitle={t('teams.externalPostMonitorHint')}
+                >
+                  <ToggleSwitch
+                    checked={externalPostMonitorEnabled}
+                    onChange={(next) => void handleToggleExternalPostMonitor(next)}
+                    title={t('teams.externalPostMonitorLabel')}
+                    testId="team-external-monitor-toggle"
+                  />
                   {externalPostMonitorEnabled && (
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      style={{ marginTop: 8 }}
-                      onClick={() => setImportOldPostsOpen(true)}
-                    >
-                      {t('teams.importOldPostsButton', 'Import old posts')}
-                    </button>
+                    <div>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setImportOldPostsOpen(true)}
+                      >
+                        {t('teams.importOldPostsButton', 'Import old posts')}
+                      </button>
+                    </div>
                   )}
-                </section>
+                </SectionCard>
               </>
             ) : myRoleInSelectedTeam === 'owner' ? (
               <>
-                <section className="stack">
-                  <h3 className="subsection-title">{t('common.general')}</h3>
+                <SectionCard
+                  icon={<Settings size={18} />}
+                  title={t('common.general')}
+                >
                   <label className="field">
                     <span>{t('teams.teamName')}</span>
                     <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
@@ -2071,51 +2081,50 @@ function App() {
                       {t('teams.saveChanges')}
                     </button>
                   </div>
-                </section>
+                </SectionCard>
 
-                <section className="stack">
-                  <h3 className="subsection-title">{t('teams.externalPostMonitorTitle')}</h3>
-                  <p className="hint">{t('teams.externalPostMonitorHint')}</p>
-                  <label className="field toggle-row">
-                    <span>{t('teams.externalPostMonitorLabel')}</span>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={externalPostMonitorEnabled}
-                      onChange={(event) => void handleToggleExternalPostMonitor(event.target.checked)}
-                    />
-                  </label>
+                <SectionCard
+                  icon={<Activity size={18} />}
+                  title={t('teams.externalPostMonitorTitle')}
+                  subtitle={t('teams.externalPostMonitorHint')}
+                >
+                  <ToggleSwitch
+                    checked={externalPostMonitorEnabled}
+                    onChange={(next) => void handleToggleExternalPostMonitor(next)}
+                    title={t('teams.externalPostMonitorLabel')}
+                    testId="team-external-monitor-toggle"
+                  />
                   {externalPostMonitorEnabled && (
-                    <button
-                      type="button"
-                      className="btn btn--sm"
-                      style={{ marginTop: 8 }}
-                      onClick={() => setImportOldPostsOpen(true)}
-                    >
-                      {t('teams.importOldPostsButton', 'Import old posts')}
-                    </button>
+                    <div>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() => setImportOldPostsOpen(true)}
+                      >
+                        {t('teams.importOldPostsButton', 'Import old posts')}
+                      </button>
+                    </div>
                   )}
-                </section>
+                </SectionCard>
 
-                <section className="stack">
-                  <h3 className="subsection-title">AI Agent</h3>
-                  <p className="hint">Enable AI-powered content generation for this team.</p>
-                  <label className="field toggle-row">
-                    <span>AI features enabled</span>
-                    <input
-                      type="checkbox"
-                      className="toggle"
-                      checked={teamAiEnabled}
-                      onChange={(event) => setTeamAiEnabled(event.target.checked)}
-                    />
-                  </label>
+                <SectionCard
+                  icon={<Bot size={18} />}
+                  title={t('teams.aiAgentTitle')}
+                  subtitle={t('teams.aiAgentHint')}
+                >
+                  <ToggleSwitch
+                    checked={teamAiEnabled}
+                    onChange={setTeamAiEnabled}
+                    title={t('teams.aiFeaturesEnabled')}
+                    testId="team-ai-toggle"
+                  />
 
                   {teamAiEnabled && (
                     <div className="stack stack--sm mt-1">
-                      <h4 className="subsection-title">AI Service URL</h4>
-                      <p className="hint">URL of the AI processing service (e.g., http://ai-service:8000).</p>
+                      <h4 className="subsection-title">{t('teams.aiServiceUrlTitle')}</h4>
+                      <p className="hint">{t('teams.aiServiceUrlHint')}</p>
                       <label className="field">
-                        <span>Service URL</span>
+                        <span>{t('teams.aiServiceUrlLabel')}</span>
                         <input
                           value={teamAiServiceUrl}
                           onChange={(event) => setTeamAiServiceUrl(event.target.value)}
@@ -2123,7 +2132,7 @@ function App() {
                         />
                       </label>
                       <label className="field">
-                        <span>Description</span>
+                        <span>{t('common.description')}</span>
                         <input
                           value={teamAiServiceDesc}
                           onChange={(event) => setTeamAiServiceDesc(event.target.value)}
@@ -2182,10 +2191,12 @@ function App() {
                       </div>
                     </div>
                   )}
-                </section>
+                </SectionCard>
 
-                <section className="stack">
-                  <h3 className="subsection-title">{t('common.members')}</h3>
+                <SectionCard
+                  icon={<Users size={18} />}
+                  title={t('common.members')}
+                >
                   <div className="stack stack--sm">
                     {selectedTeam.members.map((m) => (
                       <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between">
@@ -2224,10 +2235,12 @@ function App() {
                       </div>
                     ))}
                   </div>
-                </section>
+                </SectionCard>
 
-                <section className="stack">
-                  <h3 className="subsection-title">{t('teams.addMember')}</h3>
+                <SectionCard
+                  icon={<Users size={18} />}
+                  title={t('teams.addMember')}
+                >
                   <div className="inline-cluster flex-wrap">
                     <select className="grow" value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
                       <option value="">{t('teams.selectUser')}</option>
@@ -2245,16 +2258,21 @@ function App() {
                       {t('teams.addToTeam')}
                     </button>
                   </div>
-                </section>
+                </SectionCard>
               </>
             ) : (
-              <div className="stack stack--sm">
-                {selectedTeam.members.map((m) => (
-                  <div key={m.userId} className="member-list-item">
-                    {directoryUserLabel(m.userId)} ({m.role})
-                  </div>
-                ))}
-              </div>
+              <SectionCard
+                icon={<Users size={18} />}
+                title={t('common.members')}
+              >
+                <div className="stack stack--sm">
+                  {selectedTeam.members.map((m) => (
+                    <div key={m.userId} className="member-list-item">
+                      {directoryUserLabel(m.userId)} ({m.role})
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
             )}
           </div>
         )}

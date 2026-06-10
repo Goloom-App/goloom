@@ -435,6 +435,7 @@
       "title": "Wiederkehrende Beiträge",
       "hint": "Vorlagen erzeugen geplante Beiträge mit {year}, {month}, {day}, {counter}. Nutzen Sie wöchentliches oder monatliches Wiederholungs-JSON (monthly_anchor_offset unterstützt „Tage vorher“-Anker).",
       "newTemplate": "Neue Vorlage",
+      "addTemplate": "Vorlage hinzufügen",
       "noTemplates": "Noch keine Vorlagen.",
       "untitled": "(ohne Titel)",
       "next": "Nächster:",
