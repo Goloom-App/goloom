@@ -1739,11 +1739,10 @@ select {
   flex-shrink: 0;
 }
 
-.recurring-template-card__actions {
+.recurring-template-card__shift {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
   padding-top: var(--space-2);
   border-top: 1px solid var(--border);
 }

@@ -1,7 +1,8 @@
 import { format, parseISO } from 'date-fns'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { CalendarClock, Clock, Pencil, Plus, Target, Trash2, X } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { CalendarClock, Clock, MoreVertical, Pencil, Plus, Target, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { createApiClient } from '../../api'
@@ -360,21 +361,56 @@ export function RecurringPostsView({
         {!loading && items.length === 0 ? <p className="hint">{t('recurring.noTemplates')}</p> : null}
         <ul className="recurring-template-list">
           {items.map((item) => (
-            <li key={item.id} className="glass-panel recurring-template-card">
+            <li key={item.id} className="glass-panel glass-panel--compact recurring-template-card">
               <div className="recurring-template-card__header">
                 <div className="flex-row--center gap-2">
-                  <strong className="recurring-template-card__title">{item.title || t('recurring.untitled')}</strong>
+                  <span className="badge">{item.title || t('recurring.untitled')}</span>
                   {item.announcement_enabled ? <span className="badge badge--info">{t('recurring.announcementBadge')}</span> : null}
                   {item.ai_enhance_enabled ? <span className="badge badge--info">{t('recurring.aiEnabledBadge')}</span> : null}
+                  {canEdit ? (
+                    <ToggleSwitch
+                      checked={item.enabled}
+                      onChange={() => void toggleEnabled(item.id, item.enabled)}
+                      title={item.enabled ? t('analytics.enabled') : t('analytics.paused')}
+                      disabled={!canEdit}
+                    />
+                  ) : null}
                 </div>
                 {canEdit ? (
                   <div className="flex-row--center gap-1">
                     <button type="button" className="btn btn--ghost btn--xs" onClick={() => openEditorForEdit(item)} aria-label={t('recurring.editTemplate')}>
                       <Pencil size={16} />
                     </button>
-                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => void removeTemplate(item.id)} aria-label={t('common.delete')}>
-                      <Trash2 size={16} />
-                    </button>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button type="button" className="btn btn--ghost btn--xs" aria-label={t('common.options', 'Options')}>
+                          <MoreVertical size={16} />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content className="radix-dropdown-content" align="end">
+                          <DropdownMenu.Item
+                            className="radix-dropdown-item"
+                            onClick={() => void skipNext(item.id, item.next_materialize_at)}
+                          >
+                            {t('recurring.skipNext')}
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            className="radix-dropdown-item"
+                            onClick={() => void shiftNext(item.id, item.next_materialize_at)}
+                          >
+                            {t('recurring.shiftNext')}
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Separator className="divider" />
+                          <DropdownMenu.Item
+                            className="radix-dropdown-item"
+                            onClick={() => void removeTemplate(item.id)}
+                          >
+                            <Trash2 size={14} /> {t('common.delete')}
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
                   </div>
                 ) : null}
               </div>
@@ -405,28 +441,12 @@ export function RecurringPostsView({
                 ) : null}
               </div>
 
-              {canEdit ? (
-                <div className="recurring-template-card__actions">
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => openEditorForEdit(item)}>
-                    {t('recurring.editTemplate')}
+              {shiftInputs[item.id] !== undefined ? (
+                <div className="recurring-template-card__shift">
+                  <input type="datetime-local" value={shiftInputs[item.id]} onChange={(e) => setShiftInputs((cur) => ({ ...cur, [item.id]: e.target.value }))} />
+                  <button type="button" className="btn btn--primary btn--sm" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
+                    {t('common.apply')}
                   </button>
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => void toggleEnabled(item.id, item.enabled)}>
-                    {item.enabled ? t('recurring.pause') : t('recurring.resume')}
-                  </button>
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => void skipNext(item.id, item.next_materialize_at)}>
-                    {t('recurring.skipNext')}
-                  </button>
-                  <button type="button" className="btn btn--secondary btn--sm" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
-                    {t('recurring.shiftNext')}
-                  </button>
-                  {shiftInputs[item.id] !== undefined ? (
-                    <span className="inline-cluster">
-                      <input type="datetime-local" value={shiftInputs[item.id]} onChange={(e) => setShiftInputs((cur) => ({ ...cur, [item.id]: e.target.value }))} />
-                      <button type="button" className="btn btn--primary btn--sm" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
-                        {t('common.apply')}
-                      </button>
-                    </span>
-                  ) : null}
                 </div>
               ) : null}
             </li>

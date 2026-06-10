@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, Plus, Trash2, Rss, Clock, Pencil } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { X, Plus, Trash2, Rss, Clock, Pencil, MoreVertical, Target } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 
@@ -397,8 +398,8 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
           <p className="hint">{t('rss.empty')}</p>
         ) : (
           rssFeeds?.map((feed) => (
-            <div key={feed.id} className="glass-panel glass-panel--compact">
-              <div className="flex-row--between mb-2">
+            <div key={feed.id} className="glass-panel glass-panel--compact recurring-template-card">
+              <div className="recurring-template-card__header">
                 <div className="flex-row--center gap-2">
                   <span className="badge">{feed.name}</span>
                   {canEdit ? (
@@ -417,36 +418,54 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                       className="btn btn--ghost btn--xs"
                       onClick={() => openEditFeedDialog(feed)}
                       disabled={updateFeed.isPending}
+                      aria-label={t('rss.editFeed')}
                     >
                       <Pencil size={16} />
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--xs"
-                      onClick={() => handleDeleteFeed(feed.id)}
-                      disabled={deleteFeed.isPending}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <DropdownMenu.Root>
+                      <DropdownMenu.Trigger asChild>
+                        <button type="button" className="btn btn--ghost btn--xs" aria-label={t('common.options', 'Options')}>
+                          <MoreVertical size={16} />
+                        </button>
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Portal>
+                        <DropdownMenu.Content className="radix-dropdown-content" align="end">
+                          <DropdownMenu.Item
+                            className="radix-dropdown-item"
+                            onClick={() => handleDeleteFeed(feed.id)}
+                            disabled={deleteFeed.isPending}
+                          >
+                            <Trash2 size={14} /> {t('common.delete')}
+                          </DropdownMenu.Item>
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Portal>
+                    </DropdownMenu.Root>
                   </div>
                 ) : null}
               </div>
-              <p className="hint" style={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>
-                {feed.feedUrl}
-              </p>
-              <p className="hint" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                {outputModeLabel[feed.outputMode]} · {feed.targetAccountIds.length} {t('rss.accounts')}
-                {feed.aiEnhanceEnabled ? ` · ${t('rss.aiEnhanceEnabled')}` : ''}
-                {feed.initialSyncMode === 'publish_latest' ? ` · ${t('rss.firstCheckLatest')}` : ''}
-              </p>
-              <div className="flex-row--center gap-1 mt-2 hint" style={{ fontSize: '0.75rem' }}>
-                <Clock size={12} />
-                <span>
-                  {t('rss.lastFetched')}:{' '}
-                  {feed.lastFetchedAt
-                    ? formatDistanceToNow(new Date(feed.lastFetchedAt), { addSuffix: true })
-                    : t('rss.neverFetched')}
-                </span>
+
+              <div className="recurring-template-card__meta">
+                <div className="recurring-template-card__meta-row" style={{ wordBreak: 'break-all' }}>
+                  <Rss size={14} />
+                  <span>{feed.feedUrl}</span>
+                </div>
+                <div className="recurring-template-card__meta-row">
+                  <Target size={14} />
+                  <span>
+                    {outputModeLabel[feed.outputMode]} · {feed.targetAccountIds.length} {t('rss.accounts')}
+                    {feed.aiEnhanceEnabled ? ` · ${t('rss.aiEnhanceEnabled')}` : ''}
+                    {feed.initialSyncMode === 'publish_latest' ? ` · ${t('rss.firstCheckLatest')}` : ''}
+                  </span>
+                </div>
+                <div className="recurring-template-card__meta-row">
+                  <Clock size={14} />
+                  <span>
+                    {t('rss.lastFetched')}:{' '}
+                    {feed.lastFetchedAt
+                      ? formatDistanceToNow(new Date(feed.lastFetchedAt), { addSuffix: true })
+                      : t('rss.neverFetched')}
+                  </span>
+                </div>
               </div>
             </div>
           ))
