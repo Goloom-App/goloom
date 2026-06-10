@@ -5242,6 +5242,11 @@ select {
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
+.brand-actionbar--static {
+  position: static;
+  box-shadow: var(--shadow-sm);
+}
+
 .brand-actionbar__group {
   display: flex;
   gap: var(--space-2);

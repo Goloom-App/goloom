@@ -9,6 +9,7 @@ import {
   useDeleteCampaignFormat,
 } from '../../hooks/useAI'
 import type { TeamRecord, CampaignFormat } from '../../types'
+import { Segmented, TagInput, ToggleSwitch } from '../../components/ui'
 import {
   defaultCampaignStructure,
   recordFromStructure,
@@ -43,11 +44,9 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
   const [name, setName] = useState('')
   const [weekday, setWeekday] = useState<string>('null')
   const [structureFields, setStructureFields] = useState<CampaignStructureFields>(defaultCampaignStructure())
-  const [newSection, setNewSection] = useState('')
   const [advancedMode, setAdvancedMode] = useState(false)
   const [structureJson, setStructureJson] = useState('{}')
   const [hashtags, setHashtags] = useState<string[]>([])
-  const [newHashtag, setNewHashtag] = useState('')
   const [isActive, setIsActive] = useState(true)
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -68,9 +67,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     setStructureFields(defaultCampaignStructure())
     setStructureJson('{}')
     setAdvancedMode(false)
-    setNewSection('')
     setHashtags([])
-    setNewHashtag('')
     setIsActive(true)
     setError(null)
   }
@@ -89,7 +86,6 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     setAdvancedMode(parsed.hasAdvancedKeys)
     setStructureJson(JSON.stringify(format.structure, null, 2))
     setHashtags(format.requiredHashtags || [])
-    setNewHashtag('')
     setIsActive(format.isActive)
     setError(null)
     setIsDialogOpen(true)
@@ -235,16 +231,12 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
               </div>
               
               <div className="flex-row--center gap-3">
-                <div className="flex-row--center gap-2" style={{ marginRight: '1rem' }}>
-                  <input
-                    type="checkbox"
-                    checked={format.isActive}
-                    onChange={(e) => handleToggleActive(format, e.target.checked)}
-                    disabled={updateFormat.isPending}
-                  />
-                  <span className="hint" style={{ fontSize: '0.8rem' }}>Active</span>
-                </div>
-                
+                <ToggleSwitch
+                  checked={format.isActive}
+                  onChange={(next) => void handleToggleActive(format, next)}
+                  title={format.isActive ? 'Aktiv' : 'Inaktiv'}
+                  disabled={updateFormat.isPending}
+                />
                 <button
                   type="button"
                   className="btn btn--ghost btn--icon-sm"
@@ -304,62 +296,25 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
 
               <div className="field">
                 <span>Required Hashtags</span>
-                <div className="flex-row--wrap gap-2 mb-2">
-                  {hashtags.map((tag, idx) => (
-                    <div key={idx} className="badge flex-row--center gap-1">
-                      <span>#{tag}</span>
-                      <button
-                        type="button"
-                        className="btn btn--ghost btn--xs"
-                        onClick={() => setHashtags(hashtags.filter((_, i) => i !== idx))}
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex-row--center gap-2">
-                  <input
-                    value={newHashtag}
-                    onChange={(e) => setNewHashtag(e.target.value.replace(/^#/, ''))}
-                    placeholder="Add hashtag (without #)"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newHashtag.trim()) {
-                        e.preventDefault()
-                        if (!hashtags.includes(newHashtag.trim())) {
-                          setHashtags([...hashtags, newHashtag.trim()])
-                        }
-                        setNewHashtag('')
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn--secondary"
-                    onClick={() => {
-                      if (newHashtag.trim() && !hashtags.includes(newHashtag.trim())) {
-                        setHashtags([...hashtags, newHashtag.trim()])
-                        setNewHashtag('')
-                      }
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
+                <TagInput
+                  values={hashtags}
+                  onChange={setHashtags}
+                  placeholder="Add hashtag (without #)"
+                />
               </div>
 
               <div className="field stack stack--sm">
                 <div className="flex-row--between" style={{ alignItems: 'center' }}>
                   <span>Content blueprint</span>
-                  <label className="flex-row--center gap-2" style={{ fontSize: '0.85rem' }}>
-                    <input
-                      type="checkbox"
-                      data-testid="campaign-dialog-advanced"
-                      checked={advancedMode}
-                      onChange={(e) => setAdvancedMode(e.target.checked)}
-                    />
-                    <span>Advanced JSON</span>
-                  </label>
+                  <Segmented
+                    value={advancedMode ? 'advanced' : 'simple'}
+                    options={[
+                      { id: 'simple', label: 'Simple' },
+                      { id: 'advanced', label: 'Advanced JSON' },
+                    ]}
+                    onChange={(v) => setAdvancedMode(v === 'advanced')}
+                    testIdPrefix="campaign-dialog-mode"
+                  />
                 </div>
 
                 {!advancedMode ? (
@@ -384,56 +339,11 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
                     </label>
                     <div className="field">
                       <span>Sections</span>
-                      <div className="flex-row--wrap gap-2 mb-2">
-                        {structureFields.sections.map((section, idx) => (
-                          <div key={idx} className="badge flex-row--center gap-1">
-                            <span>{section}</span>
-                            <button
-                              type="button"
-                              className="btn btn--ghost btn--xs"
-                              onClick={() =>
-                                setStructureFields((prev) => ({
-                                  ...prev,
-                                  sections: prev.sections.filter((_, i) => i !== idx),
-                                }))
-                              }
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex-row--center gap-2">
-                        <input
-                          value={newSection}
-                          onChange={(e) => setNewSection(e.target.value)}
-                          placeholder="Add section, e.g. hook, CTA, takeaway"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newSection.trim()) {
-                              e.preventDefault()
-                              setStructureFields((prev) => ({
-                                ...prev,
-                                sections: [...prev.sections, newSection.trim()],
-                              }))
-                              setNewSection('')
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn--secondary"
-                          onClick={() => {
-                            if (!newSection.trim()) return
-                            setStructureFields((prev) => ({
-                              ...prev,
-                              sections: [...prev.sections, newSection.trim()],
-                            }))
-                            setNewSection('')
-                          }}
-                        >
-                          Add
-                        </button>
-                      </div>
+                      <TagInput
+                        values={structureFields.sections}
+                        onChange={(next) => setStructureFields((prev) => ({ ...prev, sections: next }))}
+                        placeholder="Add section, e.g. hook, CTA, takeaway"
+                      />
                     </div>
                     <label className="field">
                       <span>Extra instructions</span>
@@ -463,14 +373,12 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
                 )}
               </div>
 
-              <div className="flex-row--center gap-2 mt-2">
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                />
-                <span>Active</span>
-              </div>
+              <ToggleSwitch
+                checked={isActive}
+                onChange={setIsActive}
+                title="Aktiv"
+                description="Inaktive Formate erscheinen nicht im Generate-Picker."
+              />
 
               <div className="flex-row--end gap-2 mt-4">
                 <Dialog.Close asChild>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { setAppLanguage, supportedLanguages, type SupportedLanguage } from '../../i18n'
 import { SettingsCard } from '../../components/settings/SettingsCard'
+import { OptionPill } from '../../components/ui'
 import type { BackendAPIToken } from '../../api'
 import { apiTokenDisplayName, isApiTokenExpired } from './apiTokens'
 import type { SettingsState } from '../../types'
@@ -141,27 +142,28 @@ export function SettingsView({
             {tr('settings.createToken')}
           </button>
         </div>
-        <div className="flex-row--wrap mt-1">
-          <span className="field-label">Scopes (optional):</span>
-          {AI_SCOPES.map((scope) => {
-            const checked = newApiTokenScopes.includes(scope)
-            return (
-              <label key={scope} className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => {
+        <div className="field">
+          <span>Scopes (optional)</span>
+          <div className="brand-option-grid">
+            {AI_SCOPES.map((scope) => {
+              const checked = newApiTokenScopes.includes(scope)
+              return (
+                <OptionPill
+                  key={scope}
+                  active={checked}
+                  onClick={() =>
                     setNewApiTokenScopes(
                       checked
                         ? newApiTokenScopes.filter((s) => s !== scope)
                         : [...newApiTokenScopes, scope],
                     )
-                  }}
-                />
-                <span>{scopeLabel(scope)}</span>
-              </label>
-            )
-          })}
+                  }
+                >
+                  {scopeLabel(scope)}
+                </OptionPill>
+              )
+            })}
+          </div>
         </div>
         {apiTokensLoading ? <p className="hint">{tr('common.loadingTokens')}</p> : null}
         <table className="data-table">

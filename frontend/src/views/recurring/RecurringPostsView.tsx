@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
+import { Segmented, ToggleSwitch } from '../../components/ui'
 import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord, AutomationOutputMode } from '../../types'
 import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
@@ -479,52 +480,44 @@ export function RecurringPostsView({
                   </p>
                 </label>
 
-                <label className="field">
+                <div className="field">
                   <span>{t('rss.outputMode')}</span>
-                  <select value={outputMode} onChange={(e) => setOutputMode(e.target.value as AutomationOutputMode)}>
-                    <option value="draft">{outputModeLabel.draft}</option>
-                    <option value="scheduled">{outputModeLabel.scheduled}</option>
-                    <option value="publish_now">{outputModeLabel.publish_now}</option>
-                  </select>
-                </label>
+                  <Segmented<AutomationOutputMode>
+                    value={outputMode}
+                    options={[
+                      { id: 'draft', label: outputModeLabel.draft },
+                      { id: 'scheduled', label: outputModeLabel.scheduled },
+                      { id: 'publish_now', label: outputModeLabel.publish_now },
+                    ]}
+                    onChange={(v) => setOutputMode(v)}
+                    testIdPrefix="recurring-output-mode"
+                  />
+                </div>
                 {team?.isAiEnabled ? (
                   <>
-                    <label className="field field--checkbox">
-                      <input
-                        type="checkbox"
-                        checked={aiEnhanceEnabled}
-                        onChange={(e) => setAiEnhanceEnabled(e.target.checked)}
-                        data-testid="recurring-ai-enhance"
-                      />
-                      <span>{t('rss.aiEnhanceEnabled')}</span>
-                    </label>
+                    <ToggleSwitch
+                      checked={aiEnhanceEnabled}
+                      onChange={setAiEnhanceEnabled}
+                      title={t('rss.aiEnhanceEnabled')}
+                      description="Die KI schreibt den Template-Text vor dem Veröffentlichen mit dem Markenstil neu."
+                      testId="recurring-ai-enhance"
+                    />
                     {aiEnhanceEnabled ? (
                       <>
                         {announcementEnabled ? (
-                          <fieldset className="recurrence-form__kind-group">
-                            <legend className="recurrence-form__legend">{t('recurring.aiScope')}</legend>
-                            <label className="field field--checkbox">
-                              <input
-                                type="radio"
-                                name="recurring-ai-scope"
-                                checked={!aiEnhanceAnnouncement}
-                                onChange={() => setAiEnhanceAnnouncement(false)}
-                                data-testid="recurring-ai-scope-main"
-                              />
-                              <span>{t('recurring.aiScopeMainOnly')}</span>
-                            </label>
-                            <label className="field field--checkbox">
-                              <input
-                                type="radio"
-                                name="recurring-ai-scope"
-                                checked={aiEnhanceAnnouncement}
-                                onChange={() => setAiEnhanceAnnouncement(true)}
-                                data-testid="recurring-ai-scope-both"
-                              />
-                              <span>{t('recurring.aiScopeMainAndAnnouncement')}</span>
-                            </label>
+                          <div className="field">
+                            <span>{t('recurring.aiScope')}</span>
+                            <Segmented<'main' | 'both'>
+                              value={aiEnhanceAnnouncement ? 'both' : 'main'}
+                              options={[
+                                { id: 'main', label: t('recurring.aiScopeMainOnly') },
+                                { id: 'both', label: t('recurring.aiScopeMainAndAnnouncement') },
+                              ]}
+                              onChange={(v) => setAiEnhanceAnnouncement(v === 'both')}
+                              testIdPrefix="recurring-ai-scope"
+                            />
                             <p className="hint">{t('recurring.aiScopeHint')}</p>
-                          </fieldset>
+                          </div>
                         ) : null}
                         <label className="field">
                           <span>{t('rss.aiPrompt')}</span>
@@ -546,15 +539,12 @@ export function RecurringPostsView({
 
                 <fieldset className="recurrence-form__announcement-config">
                   <legend className="recurrence-form__legend">{t('recurring.announcement')}</legend>
-                  <label className="field field--checkbox">
-                    <input
-                      type="checkbox"
-                      checked={announcementEnabled}
-                      onChange={(e) => setAnnouncementEnabled(e.target.checked)}
-                      data-testid="recurring-announcement-enabled"
-                    />
-                    <span>{t('recurring.announcementEnabled')}</span>
-                  </label>
+                  <ToggleSwitch
+                    checked={announcementEnabled}
+                    onChange={setAnnouncementEnabled}
+                    title={t('recurring.announcementEnabled')}
+                    testId="recurring-announcement-enabled"
+                  />
                   {announcementEnabled ? (
                     <>
                       <p className="hint">{t('recurring.announcementHint')}</p>
@@ -603,14 +593,11 @@ export function RecurringPostsView({
                         counterStart={announcementCounterStart}
                         mainEvent={firstOccurrence ?? undefined}
                       />
-                      <label className="field field--checkbox">
-                        <input
-                          type="checkbox"
-                          checked={announcementDifferentTargets}
-                          onChange={(e) => setAnnouncementDifferentTargets(e.target.checked)}
-                        />
-                        <span>{t('recurring.announcementDifferentTargets')}</span>
-                      </label>
+                      <ToggleSwitch
+                        checked={announcementDifferentTargets}
+                        onChange={setAnnouncementDifferentTargets}
+                        title={t('recurring.announcementDifferentTargets')}
+                      />
                       {announcementDifferentTargets ? (
                         <div className="field">
                           <span>{t('recurring.announcementTargets')}</span>

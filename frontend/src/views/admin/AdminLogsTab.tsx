@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Icon } from '../../icons'
+import { OptionPill } from '../../components/ui'
 import type { BackendLogEntry } from '../../api'
 
 type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
@@ -134,14 +135,12 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
             aria-label={t('admin.logSearchPlaceholder')}
           />
 
-          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(e) => { setShowArchived(e.target.checked); setOffset(0) }}
-            />
+          <OptionPill
+            active={showArchived}
+            onClick={() => { setShowArchived(!showArchived); setOffset(0) }}
+          >
             {t('admin.logShowArchived')}
-          </label>
+          </OptionPill>
 
           <button type="button" className="button button--sm" onClick={() => void handlePrune()}>
             <Icon name="archive" className="inline-icon" />

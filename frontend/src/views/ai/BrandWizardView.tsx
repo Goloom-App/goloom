@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
 import {
   Bot,
   CalendarClock,
@@ -24,6 +23,8 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+
+import { ActionBar, OptionPill, SectionCard, Segmented, TagInput, ToggleSwitch } from '../../components/ui'
 
 import {
   useTeamProfile,
@@ -85,164 +86,6 @@ const OCCASION_TYPES: { id: 'text' | 'url' | 'rss'; label: string }[] = [
   { id: 'url', label: 'URL' },
   { id: 'rss', label: 'RSS-Feed' },
 ]
-
-interface SectionCardProps {
-  icon: ReactNode
-  title: string
-  subtitle?: string
-  children: ReactNode
-  hero?: boolean
-  headerExtra?: ReactNode
-  testId?: string
-}
-
-function SectionCard({ icon, title, subtitle, children, hero, headerExtra, testId }: SectionCardProps) {
-  return (
-    <section className={`brand-card${hero ? ' brand-card--hero' : ''}`} data-testid={testId}>
-      <header className="brand-card__header">
-        <span className="brand-card__icon">{icon}</span>
-        <div className="brand-card__heading">
-          <h2 className="brand-card__title">{title}</h2>
-          {subtitle ? <p className="brand-card__subtitle">{subtitle}</p> : null}
-        </div>
-        {headerExtra ? <div>{headerExtra}</div> : null}
-      </header>
-      <div className="brand-card__body">{children}</div>
-    </section>
-  )
-}
-
-interface TagInputProps {
-  values: string[]
-  onChange: (next: string[]) => void
-  placeholder: string
-  testId?: string
-}
-
-function TagInput({ values, onChange, placeholder, testId }: TagInputProps) {
-  const [draft, setDraft] = useState('')
-  const add = () => {
-    const trimmed = draft.trim()
-    if (!trimmed) return
-    if (values.includes(trimmed)) {
-      setDraft('')
-      return
-    }
-    onChange([...values, trimmed])
-    setDraft('')
-  }
-  return (
-    <div className="brand-tag-input">
-      {values.length > 0 && (
-        <div className="brand-tag-input__chips">
-          {values.map((value, idx) => (
-            <span key={`${value}-${idx}`} className="brand-tag-input__chip">
-              <span>{value}</span>
-              <button
-                type="button"
-                className="brand-tag-input__chip-remove"
-                aria-label={`${value} entfernen`}
-                onClick={() => onChange(values.filter((_, i) => i !== idx))}
-              >
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="brand-tag-input__row">
-        <input
-          data-testid={testId}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={placeholder}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              add()
-            }
-          }}
-        />
-        <button type="button" className="btn btn--secondary btn--sm" onClick={add} disabled={!draft.trim()}>
-          <Plus size={14} /> Add
-        </button>
-      </div>
-    </div>
-  )
-}
-
-interface ToggleSwitchProps {
-  checked: boolean
-  onChange: (next: boolean) => void
-  title: string
-  description?: string
-  testId?: string
-}
-
-function ToggleSwitch({ checked, onChange, title, description, testId }: ToggleSwitchProps) {
-  return (
-    <label className="brand-toggle" data-testid={testId}>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="brand-toggle__switch" aria-hidden="true" />
-      <span className="brand-toggle__copy">
-        <span className="brand-toggle__title">{title}</span>
-        {description ? <span className="brand-toggle__desc">{description}</span> : null}
-      </span>
-    </label>
-  )
-}
-
-interface OptionPillProps {
-  active: boolean
-  onClick: () => void
-  children: ReactNode
-  testId?: string
-}
-
-function OptionPill({ active, onClick, children, testId }: OptionPillProps) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      className={`brand-option-pill${active ? ' brand-option-pill--active' : ''}`}
-      onClick={onClick}
-    >
-      <span className="brand-option-pill__check">{active ? <Check size={14} /> : <Plus size={14} />}</span>
-      {children}
-    </button>
-  )
-}
-
-interface SegmentedProps<T extends string> {
-  value: T
-  options: { id: T; label: string }[]
-  onChange: (next: T) => void
-  testIdPrefix?: string
-}
-
-function Segmented<T extends string>({ value, options, onChange, testIdPrefix }: SegmentedProps<T>) {
-  return (
-    <div className="brand-segmented" role="tablist">
-      {options.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          role="tab"
-          aria-selected={value === option.id}
-          data-testid={testIdPrefix ? `${testIdPrefix}-${option.id}` : undefined}
-          className={`brand-segmented__item${value === option.id ? ' brand-segmented__item--active' : ''}`}
-          onClick={() => onChange(option.id)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function knowledgeIcon(type: 'text' | 'url' | 'file') {
   if (type === 'url') return <Globe size={16} />
@@ -1032,32 +875,32 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
             </div>
           )}
 
-          {/* Action bar */}
-          <div className="brand-actionbar">
-            <div className="brand-actionbar__group" />
-            <div className="brand-actionbar__group">
-              <button
-                type="button"
-                className="btn btn--secondary"
-                data-testid="brand-save-setup"
-                onClick={() => void handleSaveSetup()}
-                disabled={upsertProfile.isPending}
-              >
-                {upsertProfile.isPending ? (
-                  <>
-                    <Loader2 size={14} className="spin" /> Speichern…
-                  </>
-                ) : (
-                  <>
-                    <Save size={14} /> Profil speichern
-                  </>
-                )}
-              </button>
-              <button type="button" className="btn btn--primary" onClick={() => setStep(2)}>
-                Weiter <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
+          <ActionBar
+            right={
+              <>
+                <button
+                  type="button"
+                  className="btn btn--secondary"
+                  data-testid="brand-save-setup"
+                  onClick={() => void handleSaveSetup()}
+                  disabled={upsertProfile.isPending}
+                >
+                  {upsertProfile.isPending ? (
+                    <>
+                      <Loader2 size={14} className="spin" /> Speichern…
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} /> Profil speichern
+                    </>
+                  )}
+                </button>
+                <button type="button" className="btn btn--primary" onClick={() => setStep(2)}>
+                  Weiter <ChevronRight size={14} />
+                </button>
+              </>
+            }
+          />
         </>
       )}
 
@@ -1116,28 +959,32 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
             </div>
           </SectionCard>
 
-          <div className="brand-actionbar">
-            <button type="button" className="btn btn--secondary" onClick={() => setStep(1)}>
-              <ChevronLeft size={14} /> Zurück
-            </button>
-            <button
-              type="button"
-              className="btn btn--primary"
-              data-testid="brand-generate"
-              onClick={() => void handleGenerate()}
-              disabled={triggerJob.isPending}
-            >
-              {triggerJob.isPending ? (
-                <>
-                  <Loader2 size={14} className="spin" /> Generiere…
-                </>
-              ) : (
-                <>
-                  <Play size={14} /> Generieren
-                </>
-              )}
-            </button>
-          </div>
+          <ActionBar
+            left={
+              <button type="button" className="btn btn--secondary" onClick={() => setStep(1)}>
+                <ChevronLeft size={14} /> Zurück
+              </button>
+            }
+            right={
+              <button
+                type="button"
+                className="btn btn--primary"
+                data-testid="brand-generate"
+                onClick={() => void handleGenerate()}
+                disabled={triggerJob.isPending}
+              >
+                {triggerJob.isPending ? (
+                  <>
+                    <Loader2 size={14} className="spin" /> Generiere…
+                  </>
+                ) : (
+                  <>
+                    <Play size={14} /> Generieren
+                  </>
+                )}
+              </button>
+            }
+          />
         </>
       )}
 
@@ -1198,74 +1045,78 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
                 </details>
               )}
 
-              <div className="brand-actionbar">
-                <div className="brand-actionbar__group">
-                  <button type="button" className="btn btn--ghost" onClick={() => setStep(2)}>
-                    <CalendarClock size={14} /> Neue Aufgabe
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    data-testid="brand-prompt-preview"
-                    onClick={() => void handleLoadPromptPreview()}
-                    disabled={promptPreview.isPending}
-                  >
-                    {promptPreview.isPending ? (
-                      <>
-                        <Loader2 size={14} className="spin" /> Lade…
-                      </>
-                    ) : (
-                      <>
-                        <FileText size={14} /> Prompt-Vorschau
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="brand-actionbar__group">
-                  <button
-                    type="button"
-                    className="btn btn--secondary"
-                    onClick={() => void handleRefine()}
-                    disabled={triggerJob.isPending || moodAdjustments.length === 0}
-                  >
-                    <Sparkles size={14} /> Neu generieren
-                  </button>
-                  {onEditInComposer && displayJob.status === 'completed' && (
-                    <button
-                      type="button"
-                      className="btn btn--secondary"
-                      onClick={() =>
-                        onEditInComposer({
-                          title: typeof displayJob.result?.title === 'string' ? displayJob.result.title : undefined,
-                          content: String(displayJob.result?.content ?? ''),
-                          targetAccountIds: selectedAccounts,
-                        })
-                      }
-                    >
-                      <Edit size={14} /> Im Composer öffnen
+              <ActionBar
+                left={
+                  <>
+                    <button type="button" className="btn btn--ghost" onClick={() => setStep(2)}>
+                      <CalendarClock size={14} /> Neue Aufgabe
                     </button>
-                  )}
-                  {displayJob.status === 'completed' && !profile?.autoPublishEnabled && (
                     <button
                       type="button"
-                      className="btn btn--primary"
-                      onClick={() => void saveGeneratedPost(displayJob)}
-                      disabled={savingDraftId === displayJob.id}
+                      className="btn btn--ghost"
+                      data-testid="brand-prompt-preview"
+                      onClick={() => void handleLoadPromptPreview()}
+                      disabled={promptPreview.isPending}
                     >
-                      {savingDraftId === displayJob.id ? (
+                      {promptPreview.isPending ? (
                         <>
-                          <Loader2 size={14} className="spin" /> Speichern…
+                          <Loader2 size={14} className="spin" /> Lade…
                         </>
                       ) : (
                         <>
-                          <Send size={14} /> Als Entwurf speichern
+                          <FileText size={14} /> Prompt-Vorschau
                         </>
                       )}
                     </button>
-                  )}
-                </div>
-              </div>
+                  </>
+                }
+                right={
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn--secondary"
+                      onClick={() => void handleRefine()}
+                      disabled={triggerJob.isPending || moodAdjustments.length === 0}
+                    >
+                      <Sparkles size={14} /> Neu generieren
+                    </button>
+                    {onEditInComposer && displayJob.status === 'completed' && (
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        onClick={() =>
+                          onEditInComposer({
+                            title:
+                              typeof displayJob.result?.title === 'string' ? displayJob.result.title : undefined,
+                            content: String(displayJob.result?.content ?? ''),
+                            targetAccountIds: selectedAccounts,
+                          })
+                        }
+                      >
+                        <Edit size={14} /> Im Composer öffnen
+                      </button>
+                    )}
+                    {displayJob.status === 'completed' && !profile?.autoPublishEnabled && (
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        onClick={() => void saveGeneratedPost(displayJob)}
+                        disabled={savingDraftId === displayJob.id}
+                      >
+                        {savingDraftId === displayJob.id ? (
+                          <>
+                            <Loader2 size={14} className="spin" /> Speichern…
+                          </>
+                        ) : (
+                          <>
+                            <Send size={14} /> Als Entwurf speichern
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
+                }
+              />
             </SectionCard>
           )}
 
