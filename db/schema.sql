@@ -287,6 +287,25 @@ create index if not exists idx_post_templates_due on post_templates (enabled, ne
 alter table post_templates add column if not exists announces_template_id uuid references post_templates(id) on delete set null;
 alter table post_templates add column if not exists announcement_days_before integer;
 
+alter table post_templates add column if not exists announcement_enabled boolean not null default false;
+alter table post_templates add column if not exists announcement_title text not null default '';
+alter table post_templates add column if not exists announcement_content text not null default '';
+alter table post_templates add column if not exists announcement_counter_next integer not null default 1;
+alter table post_templates add column if not exists announcement_target_account_ids text not null default '[]';
+
+update post_templates as parent
+set announcement_enabled = true,
+    announcement_title = child.title,
+    announcement_content = child.content,
+    announcement_days_before = coalesce(child.announcement_days_before, 2),
+    announcement_counter_next = child.counter_next,
+    announcement_target_account_ids = child.target_account_ids,
+    updated_at = now()
+from post_templates as child
+where child.announces_template_id = parent.id;
+
+delete from post_templates where announces_template_id is not null;
+
 create table if not exists post_template_skips (
     template_id uuid not null references post_templates(id) on delete cascade,
     occurrence_at timestamptz not null,

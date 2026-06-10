@@ -45,8 +45,7 @@ type mockStore struct {
 	listDuePostTemplates    []domain.PostTemplate
 	listDuePostTemplatesErr error
 
-	listAnnouncingTemplates    []domain.PostTemplate
-	listAnnouncingTemplatesErr error
+	advanceAnnouncementCounterCalls []advanceAnnouncementCall
 
 	createScheduledPostCalls []domain.CreatePostInput
 	createScheduledPostErr   error
@@ -65,6 +64,11 @@ type advanceTemplateCall struct {
 	templateID      string
 	nextMaterialize *time.Time
 	counterNext     int
+}
+
+type advanceAnnouncementCall struct {
+	templateID  string
+	counterNext int
 }
 
 type markTargetCall struct {
@@ -626,10 +630,14 @@ func (m *mockStore) GetTeamEngagementHourHistogram(ctx context.Context, teamID s
 	return nil, nil
 }
 
-func (m *mockStore) ListAnnouncingTemplates(ctx context.Context, parentTemplateID string) ([]domain.PostTemplate, error) {
+func (m *mockStore) AdvancePostTemplateAnnouncementCounter(ctx context.Context, templateID string, counterNext int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.listAnnouncingTemplates, m.listAnnouncingTemplatesErr
+	m.advanceAnnouncementCounterCalls = append(m.advanceAnnouncementCounterCalls, advanceAnnouncementCall{
+		templateID:  templateID,
+		counterNext: counterNext,
+	})
+	return nil
 }
 
 func (m *mockStore) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
@@ -1158,35 +1166,25 @@ func TestService_materializePostTemplates_shift(t *testing.T) {
 func TestService_materializePostTemplates_announcement(t *testing.T) {
 	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
 	parent := domain.PostTemplate{
-		ID:                "parent1",
-		TeamID:            "team1",
-		AuthorUserID:      "user1",
-		Title:             "main event",
-		Content:           "main post {counter}",
-		RecurrenceJSON:    `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
-		TargetAccountIDs:  []string{"acc1"},
-		Enabled:           true,
-		NextMaterializeAt: &now,
-		CounterNext:       7,
-	}
-	annDays := 2
-	ann := domain.PostTemplate{
-		ID:                     "ann1",
+		ID:                     "parent1",
 		TeamID:                 "team1",
 		AuthorUserID:           "user1",
-		Title:                  "announcement",
-		Content:                "coming on {main_month}/{main_day} ({main_weekday_name})",
-		RecurrenceJSON:         `{}`,
+		Title:                  "main event",
+		Content:                "main post {counter}",
+		RecurrenceJSON:         `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
 		TargetAccountIDs:       []string{"acc1"},
 		Enabled:                true,
-		CounterNext:            1,
-		AnnouncesTemplateID:    strPtr("parent1"),
-		AnnouncementDaysBefore: &annDays,
+		NextMaterializeAt:      &now,
+		CounterNext:            7,
+		AnnouncementEnabled:    true,
+		AnnouncementTitle:      "announcement",
+		AnnouncementContent:    "coming on {main_month}/{main_day} ({main_weekday_name})",
+		AnnouncementDaysBefore: 2,
+		AnnouncementCounterNext: 1,
 	}
 
 	st := &mockStore{
-		listDuePostTemplates:    []domain.PostTemplate{parent},
-		listAnnouncingTemplates: []domain.PostTemplate{ann},
+		listDuePostTemplates: []domain.PostTemplate{parent},
 	}
 	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, nil)
 	err := svc.materializePostTemplates(context.Background())
@@ -1224,9 +1222,14 @@ func TestService_materializePostTemplates_announcement(t *testing.T) {
 	if annCall.Content != wantContent {
 		t.Fatalf("announcement content: want %q, got %q", wantContent, annCall.Content)
 	}
-	// Both templates should have their counter advanced
-	if len(st.advancePostTemplateCalls) != 2 {
-		t.Fatalf("expected 2 advancePostTemplate calls, got %d", len(st.advancePostTemplateCalls))
+	if len(st.advancePostTemplateCalls) != 1 {
+		t.Fatalf("expected 1 advancePostTemplate call, got %d", len(st.advancePostTemplateCalls))
+	}
+	if len(st.advanceAnnouncementCounterCalls) != 1 {
+		t.Fatalf("expected 1 advanceAnnouncementCounter call, got %d", len(st.advanceAnnouncementCounterCalls))
+	}
+	if st.advanceAnnouncementCounterCalls[0].counterNext != 2 {
+		t.Fatalf("announcement counter: want 2, got %d", st.advanceAnnouncementCounterCalls[0].counterNext)
 	}
 }
 

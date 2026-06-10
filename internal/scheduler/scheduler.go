@@ -627,56 +627,52 @@ func (s *Service) materializePostTemplates(ctx context.Context) error {
 			}
 		}
 		// Materialize announcement templates that target this parent.
-		if err := s.materializeAnnouncements(ctx, &tmpl, createAt); err != nil {
+		if err := s.materializeAnnouncement(ctx, &tmpl, createAt); err != nil {
 			s.logger.Error("announcement materialize failed", "template_id", tmpl.ID, "error", err)
 		}
 	}
 	return nil
 }
 
-func (s *Service) materializeAnnouncements(ctx context.Context, parent *domain.PostTemplate, mainEventAt time.Time) error {
-	announcing, err := s.store.ListAnnouncingTemplates(ctx, parent.ID)
-	if err != nil {
+func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.PostTemplate, mainEventAt time.Time) error {
+	if !tmpl.AnnouncementEnabled || strings.TrimSpace(tmpl.AnnouncementContent) == "" {
+		return nil
+	}
+	daysBefore := tmpl.AnnouncementDaysBefore
+	if daysBefore <= 0 {
+		daysBefore = 2
+	}
+	announceAt := mainEventAt.Add(-time.Duration(daysBefore) * 24 * time.Hour)
+	counterVal := tmpl.AnnouncementCounterNext
+	if counterVal < 1 {
+		counterVal = 1
+	}
+	content := domain.ExpandDynamicVariables(tmpl.AnnouncementContent, announceAt, &counterVal, &mainEventAt)
+	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.AnnouncementTitle, announceAt, counterVal, &mainEventAt)
+	targets := tmpl.AnnouncementTargetAccountIDs
+	if len(targets) == 0 {
+		targets = tmpl.TargetAccountIDs
+	}
+	authorID := tmpl.AuthorUserID
+	tplID := tmpl.ID
+	input := domain.CreatePostInput{
+		Title:                 expandedTitle,
+		Content:               content,
+		ScheduledAt:           announceAt,
+		TargetAccounts:        targets,
+		Visibility:            tmpl.Visibility,
+		MediaIDs:              tmpl.MediaIDs,
+		MediaExcludeByAccount: tmpl.MediaExcludeByAccount,
+		Draft:                 false,
+		AuthorUserID:          &authorID,
+		PostTemplateID:        &tplID,
+		TemplateCounter:       &counterVal,
+	}
+	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
+	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
 		return err
 	}
-	for _, a := range announcing {
-		if a.AnnouncementDaysBefore == nil {
-			continue
-		}
-		announceAt := mainEventAt.Add(-time.Duration(*a.AnnouncementDaysBefore) * 24 * time.Hour)
-		// Create a separate announcement post from the announcement template's content.
-		// The counter for the announcement uses its own counter.
-		authorID := a.AuthorUserID
-		tplID := a.ID
-		counterVal := a.CounterNext
-		// For announcement posts, counter is incremented on every materialization.
-		content := domain.ExpandDynamicVariables(a.Content, announceAt, &counterVal, &mainEventAt)
-		expandedTitle := domain.ExpandPostTemplateTitle(a.Title, announceAt, counterVal, &mainEventAt)
-		input := domain.CreatePostInput{
-			Title:                 expandedTitle,
-			Content:               content,
-			ScheduledAt:           announceAt,
-			TargetAccounts:        a.TargetAccountIDs,
-			Visibility:            a.Visibility,
-			MediaIDs:              a.MediaIDs,
-			MediaExcludeByAccount: a.MediaExcludeByAccount,
-			Draft:                 false,
-			AuthorUserID:          &authorID,
-			PostTemplateID:        &tplID,
-			TemplateCounter:       &counterVal,
-		}
-		principal := domain.AuthenticatedPrincipal{User: domain.User{ID: a.AuthorUserID}}
-		if _, err := s.store.CreateScheduledPost(ctx, a.TeamID, principal, input); err != nil {
-			s.logger.Error("materialize announcement post failed", "announce_template_id", a.ID, "error", err)
-			continue
-		}
-		// Advance the announcement template's counter (no next_materialize_at — it's driven by parent).
-		if err := s.store.AdvancePostTemplateSchedule(ctx, a.ID, nil, a.CounterNext+1); err != nil {
-			s.logger.Error("advance announcement counter failed", "announce_template_id", a.ID, "error", err)
-			continue
-		}
-	}
-	return nil
+	return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
 }
 
 func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTemplate, occ time.Time) *time.Time {

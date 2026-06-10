@@ -516,12 +516,16 @@ type PostTemplate struct {
 	PromptHint             string              `json:"prompt_hint"`
 	TitleHint              string              `json:"title_hint"`
 	Tonality               string              `json:"tonality"`
-	NextMaterializeAt      *time.Time          `json:"next_materialize_at,omitempty"`
-	CounterNext            int                 `json:"counter_next"`
-	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
-	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
-	CreatedAt              time.Time           `json:"created_at"`
-	UpdatedAt              time.Time           `json:"updated_at"`
+	NextMaterializeAt            *time.Time          `json:"next_materialize_at,omitempty"`
+	CounterNext                  int                 `json:"counter_next"`
+	AnnouncementEnabled          bool                `json:"announcement_enabled"`
+	AnnouncementTitle            string              `json:"announcement_title,omitempty"`
+	AnnouncementContent          string              `json:"announcement_content,omitempty"`
+	AnnouncementDaysBefore       int                 `json:"announcement_days_before,omitempty"`
+	AnnouncementCounterNext      int                 `json:"announcement_counter_next,omitempty"`
+	AnnouncementTargetAccountIDs []string            `json:"announcement_target_account_ids,omitempty"`
+	CreatedAt                    time.Time           `json:"created_at"`
+	UpdatedAt                    time.Time           `json:"updated_at"`
 }
 
 type CreatePostTemplateInput struct {
@@ -537,10 +541,15 @@ type CreatePostTemplateInput struct {
 	OutputMode             AutomationOutputMode `json:"output_mode,omitempty"`
 	PromptHint             string              `json:"prompt_hint,omitempty"`
 	TitleHint              string              `json:"title_hint,omitempty"`
-	Tonality               string              `json:"tonality,omitempty"`
-	AnnouncesTemplateID    *string             `json:"announces_template_id,omitempty"`
-	AnnouncementDaysBefore *int                `json:"announcement_days_before,omitempty"`
-	CounterNext            *int                `json:"counter_next,omitempty"`
+	Tonality                     string              `json:"tonality,omitempty"`
+	AnnouncesTemplateID          *string             `json:"announces_template_id,omitempty"` // deprecated: ignored on write
+	AnnouncementEnabled          *bool               `json:"announcement_enabled,omitempty"`
+	AnnouncementTitle            string              `json:"announcement_title,omitempty"`
+	AnnouncementContent          string              `json:"announcement_content,omitempty"`
+	AnnouncementDaysBefore       *int                `json:"announcement_days_before,omitempty"`
+	AnnouncementCounterNext      *int                `json:"announcement_counter_next,omitempty"`
+	AnnouncementTargetAccountIDs []string            `json:"announcement_target_account_ids,omitempty"`
+	CounterNext                  *int                `json:"counter_next,omitempty"`
 }
 
 type UpdatePostTemplateInput struct {
@@ -556,10 +565,14 @@ type UpdatePostTemplateInput struct {
 	OutputMode             *AutomationOutputMode `json:"output_mode,omitempty"`
 	PromptHint             *string              `json:"prompt_hint,omitempty"`
 	TitleHint              *string              `json:"title_hint,omitempty"`
-	Tonality               *string              `json:"tonality,omitempty"`
-	AnnouncesTemplateID    *string              `json:"announces_template_id,omitempty"`
-	AnnouncementDaysBefore *int                 `json:"announcement_days_before,omitempty"`
-	CounterNext            *int                 `json:"counter_next,omitempty"`
+	Tonality                     *string              `json:"tonality,omitempty"`
+	AnnouncementEnabled          *bool                `json:"announcement_enabled,omitempty"`
+	AnnouncementTitle            *string              `json:"announcement_title,omitempty"`
+	AnnouncementContent          *string              `json:"announcement_content,omitempty"`
+	AnnouncementDaysBefore       *int                 `json:"announcement_days_before,omitempty"`
+	AnnouncementCounterNext      *int                 `json:"announcement_counter_next,omitempty"`
+	AnnouncementTargetAccountIDs *[]string            `json:"announcement_target_account_ids,omitempty"`
+	CounterNext                  *int                 `json:"counter_next,omitempty"`
 }
 
 // ResolveAutomationPostTitle prefers an AI-generated title when present.

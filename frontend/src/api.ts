@@ -61,8 +61,12 @@ export interface BackendPostTemplate {
   tonality?: string
   next_materialize_at?: string
   counter_next: number
-  announces_template_id?: string
+  announcement_enabled?: boolean
+  announcement_title?: string
+  announcement_content?: string
   announcement_days_before?: number
+  announcement_counter_next?: number
+  announcement_target_account_ids?: string[]
   created_at: string
   updated_at: string
 }
@@ -893,8 +897,12 @@ export function createApiClient(options: ApiClientOptions) {
         prompt_hint?: string
         title_hint?: string
         tonality?: string
-        announces_template_id?: string
+        announcement_enabled?: boolean
+        announcement_title?: string
+        announcement_content?: string
         announcement_days_before?: number
+        announcement_counter_next?: number
+        announcement_target_account_ids?: string[]
         counter_next?: number
       },
     ) {

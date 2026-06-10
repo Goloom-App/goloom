@@ -33,6 +33,11 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table scheduled_post_targets add column metrics_last_sync_at text`,
 		`alter table post_templates add column announces_template_id text references post_templates(id) on delete set null`,
 		`alter table post_templates add column announcement_days_before integer`,
+		`alter table post_templates add column announcement_enabled integer not null default 0`,
+		`alter table post_templates add column announcement_title text not null default ''`,
+		`alter table post_templates add column announcement_content text not null default ''`,
+		`alter table post_templates add column announcement_counter_next integer not null default 1`,
+		`alter table post_templates add column announcement_target_account_ids text not null default '[]'`,
 		`alter table post_templates add column ai_enhance_enabled integer not null default 0`,
 		`alter table post_templates add column output_mode text not null default 'scheduled'`,
 		`alter table post_templates add column prompt_hint text not null default ''`,
@@ -132,6 +137,64 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	}
 	if err := migrateSQLiteScheduledPostsAutomationSource(ctx, db); err != nil {
 		return err
+	}
+	if err := migrateSQLiteEmbeddedAnnouncements(ctx, db); err != nil {
+		return err
+	}
+	return nil
+}
+
+func migrateSQLiteEmbeddedAnnouncements(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `
+		select id, announces_template_id, title, content, announcement_days_before, counter_next, target_account_ids
+		from post_templates
+		where announces_template_id is not null and trim(announces_template_id) <> ''`)
+	if err != nil {
+		return fmt.Errorf("sqlite migrate embedded announcements: %w", err)
+	}
+	defer rows.Close()
+	type childRow struct {
+		id, parentID, title, content, targets string
+		daysBefore, counterNext                int
+	}
+	var children []childRow
+	for rows.Next() {
+		var c childRow
+		var days sql.NullInt64
+		if err := rows.Scan(&c.id, &c.parentID, &c.title, &c.content, &days, &c.counterNext, &c.targets); err != nil {
+			return err
+		}
+		if days.Valid {
+			c.daysBefore = int(days.Int64)
+		} else {
+			c.daysBefore = 2
+		}
+		if c.counterNext < 1 {
+			c.counterNext = 1
+		}
+		children = append(children, c)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, c := range children {
+		if _, err := db.ExecContext(ctx, `
+			update post_templates
+			set announcement_enabled = 1,
+			    announcement_title = ?,
+			    announcement_content = ?,
+			    announcement_days_before = ?,
+			    announcement_counter_next = ?,
+			    announcement_target_account_ids = ?,
+			    updated_at = ?
+			where id = ?`,
+			c.title, c.content, c.daysBefore, c.counterNext, c.targets, nowString(), c.parentID,
+		); err != nil {
+			return fmt.Errorf("sqlite migrate embedded announcements parent %s: %w", c.parentID, err)
+		}
+		if _, err := db.ExecContext(ctx, `delete from post_templates where id = ?`, c.id); err != nil {
+			return fmt.Errorf("sqlite migrate embedded announcements delete child %s: %w", c.id, err)
+		}
 	}
 	return nil
 }

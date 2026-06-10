@@ -338,7 +338,12 @@ create table if not exists post_templates (
     next_materialize_at text,
     counter_next integer not null default 1,
     announces_template_id text references post_templates(id) on delete set null,
-    announcement_days_before integer,
+    announcement_enabled integer not null default 0,
+    announcement_title text not null default '',
+    announcement_content text not null default '',
+    announcement_days_before integer not null default 0,
+    announcement_counter_next integer not null default 1,
+    announcement_target_account_ids text not null default '[]',
     created_at text not null,
     updated_at text not null
 );
