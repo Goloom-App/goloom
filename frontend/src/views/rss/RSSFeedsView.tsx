@@ -194,12 +194,12 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
   return (
     <div className="glass-panel stack stack--lg">
       <div className="flex-row--between">
-        <div className="flex-row--center gap-3">
-          <span className="brand-card__icon"><Rss size={18} /></span>
-          <div>
-            <h2 className="brand-card__title">{t('rss.title')}</h2>
-            <p className="brand-card__subtitle">{t('rss.hint')}</p>
-          </div>
+        <div>
+          <h2 className="section-card__title flex-row--center gap-2">
+            <Rss size={20} />
+            {t('rss.title')}
+          </h2>
+          <p className="hint">{t('rss.hint')}</p>
         </div>
         {canEdit ? (
           <Dialog.Root

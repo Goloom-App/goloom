@@ -343,12 +343,12 @@ export function RecurringPostsView({
     <div className="recurring-posts-view">
       <div className="glass-panel">
         <div className="flex-row--between">
-          <div className="flex-row--center gap-3">
-            <span className="brand-card__icon"><CalendarClock size={18} /></span>
-            <div>
-              <h2 className="brand-card__title">{t('recurring.title')}</h2>
-              <p className="brand-card__subtitle">{t('recurring.hint')}</p>
-            </div>
+          <div>
+            <h2 className="section-card__title flex-row--center gap-2">
+              <CalendarClock size={20} />
+              {t('recurring.title')}
+            </h2>
+            <p className="hint">{t('recurring.hint')}</p>
           </div>
           {canEdit ? (
             <button type="button" className="btn btn--secondary btn--sm" onClick={openEditor}>
@@ -359,9 +359,9 @@ export function RecurringPostsView({
         </div>
         {loading ? <p className="hint">{t('common.loading')}</p> : null}
         {!loading && items.length === 0 ? <p className="hint">{t('recurring.noTemplates')}</p> : null}
-        <ul className="recurring-template-list">
+        <div className="stack stack--sm">
           {items.map((item) => (
-            <li key={item.id} className="glass-panel glass-panel--compact recurring-template-card">
+            <div key={item.id} className="glass-panel glass-panel--compact recurring-template-card">
               <div className="recurring-template-card__header">
                 <div className="flex-row--center gap-2">
                   <span className="badge">{item.title || t('recurring.untitled')}</span>
@@ -454,9 +454,9 @@ export function RecurringPostsView({
                   </button>
                 </div>
               ) : null}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
 
       {editorOpen ? (
