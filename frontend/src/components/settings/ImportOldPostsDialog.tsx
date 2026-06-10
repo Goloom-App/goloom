@@ -60,118 +60,122 @@ export function ImportOldPostsDialog({ open, onOpenChange, accounts, onImport }:
     <Dialog.Root open={open} onOpenChange={handleClose}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog" style={{ maxWidth: 520 }}>
-          <Dialog.Title className="dialog-title">{t('teams.importOldPostsTitle', 'Import old posts')}</Dialog.Title>
-          <Dialog.Description className="dialog-description" style={{ marginBottom: 16 }}>
-            {t(
-              'teams.importOldPostsHint',
-              'Import posts from connected social accounts into goloom. They will be included in future AI profile analysis.',
-            )}
-          </Dialog.Description>
+        <Dialog.Content className="dialog-content" style={{ maxWidth: 520 }}>
+          <div className="drawer-header">
+            <Dialog.Title className="drawer-title">
+              {t('teams.importOldPostsTitle', 'Import old posts')}
+            </Dialog.Title>
+            <Dialog.Close asChild>
+              <button type="button" className="btn btn--ghost btn--icon-sm">
+                <X size={20} />
+              </button>
+            </Dialog.Close>
+          </div>
+          <div className="drawer-body stack">
+            <p className="hint">
+              {t(
+                'teams.importOldPostsHint',
+                'Import posts from connected social accounts into goloom. They will be included in future AI profile analysis.',
+              )}
+            </p>
 
-          {result !== null ? (
-            <div className="stack stack--sm">
-              <p style={{ color: 'var(--color-success, #16a34a)' }}>
-                {t('teams.importOldPostsResult', '{{count}} posts imported.', { count: result })}
-              </p>
-              <div>
-                <button type="button" className="btn btn--primary" onClick={handleClose}>
-                  {t('common.done', 'Done')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="stack stack--sm">
-              <div>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <button type="button" className="btn btn--sm" onClick={selectAll}>
-                    {t('teams.importOldPostsSelectAll', 'Select all')}
+            {result !== null ? (
+              <div className="stack stack--sm">
+                <p style={{ color: 'var(--color-success, #16a34a)' }}>
+                  {t('teams.importOldPostsResult', '{{count}} posts imported.', { count: result })}
+                </p>
+                <div>
+                  <button type="button" className="btn btn--primary" onClick={handleClose}>
+                    {t('common.done', 'Done')}
                   </button>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {accounts.map((account) => (
-                    <label
-                      key={account.id}
-                      className="toggle-row"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 10px',
-                        borderRadius: 6,
-                        border: selectedAccountIds.includes(account.id)
-                          ? '1px solid var(--color-primary, #3b82f6)'
-                          : '1px solid var(--color-border, #e5e7eb)',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedAccountIds.includes(account.id)}
-                        onChange={() => toggleAccount(account.id)}
-                      />
-                      <span>{account.name}</span>
-                      <span style={{ opacity: 0.5, fontSize: 11 }}>({account.provider})</span>
+              </div>
+            ) : (
+              <div className="stack stack--sm">
+                <div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <button type="button" className="btn btn--sm" onClick={selectAll}>
+                      {t('teams.importOldPostsSelectAll', 'Select all')}
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {accounts.map((account) => (
+                      <label
+                        key={account.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          border: selectedAccountIds.includes(account.id)
+                            ? '1px solid var(--color-primary, #3b82f6)'
+                            : '1px solid var(--color-border, #e5e7eb)',
+                          cursor: 'pointer',
+                          fontSize: 13,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedAccountIds.includes(account.id)}
+                          onChange={() => toggleAccount(account.id)}
+                        />
+                        <span>{account.name}</span>
+                        <span style={{ opacity: 0.5, fontSize: 11 }}>({account.provider})</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                      <input type="radio" name="import-mode" checked={mode === 'count'} onChange={() => setMode('count')} />
+                      {t('teams.importOldPostsByCount', 'By count')}
                     </label>
-                  ))}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                      <input type="radio" name="import-mode" checked={mode === 'date'} onChange={() => setMode('date')} />
+                      {t('teams.importOldPostsByDate', 'By date')}
+                    </label>
+                  </div>
+
+                  {mode === 'count' ? (
+                    <label className="field">
+                      <span>{t('teams.importOldPostsCount', 'Number of posts')}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={500}
+                        value={postCount}
+                        onChange={(e) => setPostCount(Number(e.target.value))}
+                      />
+                    </label>
+                  ) : (
+                    <label className="field">
+                      <span>{t('teams.importOldPostsUntilDate', 'Import until (inclusive)')}</span>
+                      <input type="date" value={untilDate} onChange={(e) => setUntilDate(e.target.value)} />
+                    </label>
+                  )}
+                </div>
+
+                {error && <p style={{ color: 'var(--color-danger, #dc2626)', fontSize: 13 }}>{error}</p>}
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={() => void handleImport()}
+                    disabled={loading || selectedAccountIds.length === 0}
+                  >
+                    {loading ? t('teams.importOldPostsImporting', 'Importing...') : t('teams.importOldPostsStart', 'Import')}
+                  </button>
+                  <button type="button" className="btn" onClick={handleClose}>
+                    {t('common.cancel', 'Cancel')}
+                  </button>
                 </div>
               </div>
-
-              <div style={{ marginTop: 8 }}>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
-                    <input type="radio" name="import-mode" checked={mode === 'count'} onChange={() => setMode('count')} />
-                    {t('teams.importOldPostsByCount', 'By count')}
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
-                    <input type="radio" name="import-mode" checked={mode === 'date'} onChange={() => setMode('date')} />
-                    {t('teams.importOldPostsByDate', 'By date')}
-                  </label>
-                </div>
-
-                {mode === 'count' ? (
-                  <label className="field">
-                    <span>{t('teams.importOldPostsCount', 'Number of posts')}</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={500}
-                      value={postCount}
-                      onChange={(e) => setPostCount(Number(e.target.value))}
-                    />
-                  </label>
-                ) : (
-                  <label className="field">
-                    <span>{t('teams.importOldPostsUntilDate', 'Import until (inclusive)')}</span>
-                    <input type="date" value={untilDate} onChange={(e) => setUntilDate(e.target.value)} />
-                  </label>
-                )}
-              </div>
-
-              {error && <p style={{ color: 'var(--color-danger, #dc2626)', fontSize: 13 }}>{error}</p>}
-
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => void handleImport()}
-                  disabled={loading || selectedAccountIds.length === 0}
-                >
-                  {loading ? t('teams.importOldPostsImporting', 'Importing...') : t('teams.importOldPostsStart', 'Import')}
-                </button>
-                <button type="button" className="btn" onClick={handleClose}>
-                  {t('common.cancel', 'Cancel')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          <Dialog.Close asChild>
-            <button className="dialog-close" aria-label={t('common.close', 'Close')}>
-              <X size={16} />
-            </button>
-          </Dialog.Close>
+            )}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
