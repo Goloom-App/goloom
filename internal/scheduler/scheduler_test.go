@@ -641,9 +641,29 @@ func (m *mockStore) AdvancePostTemplateAnnouncementCounter(ctx context.Context, 
 }
 
 func (m *mockStore) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
+	return m.ListEnabledPostTemplates(ctx, limit)
+}
+
+func (m *mockStore) ListEnabledPostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.listDuePostTemplates, m.listDuePostTemplatesErr
+}
+
+func (m *mockStore) IsPostTemplateAnnouncementSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStore) AddPostTemplateAnnouncementSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error {
+	return nil
+}
+
+func (m *mockStore) HasPostTemplateRoleMaterialized(ctx context.Context, templateID string, occurrenceAt time.Time, role string) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStore) GetScheduledPostTemplateLink(ctx context.Context, teamID, postID string) (string, *time.Time, string, error) {
+	return "", nil, "", nil
 }
 
 func (m *mockStore) ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error) {

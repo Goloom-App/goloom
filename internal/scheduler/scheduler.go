@@ -12,7 +12,6 @@ import (
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
-	"git.f4mily.net/goloom/internal/scheduling"
 	"git.f4mily.net/goloom/internal/socialtokens"
 	"git.f4mily.net/goloom/internal/store"
 )
@@ -576,66 +575,22 @@ func (s *Service) tryLock(ctx context.Context, lockID string, duration time.Dura
 	return locked
 }
 
-func (s *Service) materializePostTemplates(ctx context.Context) error {
-	templates, err := s.store.ListDuePostTemplates(ctx, 100)
+func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.PostTemplate, mainEventAt time.Time) error {
+	if !tmpl.AnnouncementEnabled || strings.TrimSpace(tmpl.AnnouncementContent) == "" {
+		return nil
+	}
+	annSkipped, err := s.store.IsPostTemplateAnnouncementSkipped(ctx, tmpl.ID, mainEventAt)
 	if err != nil {
 		return err
 	}
-	for _, tmpl := range templates {
-		occ := tmpl.NextMaterializeAt
-		if occ == nil {
-			continue
-		}
-		rule, err := scheduling.ParseRecurrenceJSON(tmpl.RecurrenceJSON)
-		if err != nil {
-			s.logger.Warn("invalid template recurrence_json", "template_id", tmpl.ID, "error", err)
-			continue
-		}
-		skipped, err := s.store.IsPostTemplateOccurrenceSkipped(ctx, tmpl.ID, *occ)
-		if err != nil {
-			return err
-		}
-		nextOcc, err := scheduling.NextOccurrence(rule, *occ)
-		if err != nil {
-			s.logger.Warn("template next occurrence failed", "template_id", tmpl.ID, "error", err)
-			continue
-		}
-		var createAt time.Time
-		if skipped {
-			scheduledAt := s.maybeShiftOccurrence(ctx, &tmpl, *occ)
-			if scheduledAt != nil {
-				if err := s.createScheduledPostFromTemplate(ctx, &tmpl, *scheduledAt); err != nil {
-					continue
-				}
-				createAt = *scheduledAt
-				if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, tmpl.CounterNext+1); err != nil {
-					return err
-				}
-			} else {
-				if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, tmpl.CounterNext); err != nil {
-					return err
-				}
-				continue
-			}
-		} else {
-			if err := s.createScheduledPostFromTemplate(ctx, &tmpl, *occ); err != nil {
-				continue
-			}
-			createAt = *occ
-			if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, tmpl.CounterNext+1); err != nil {
-				return err
-			}
-		}
-		// Materialize announcement templates that target this parent.
-		if err := s.materializeAnnouncement(ctx, &tmpl, createAt); err != nil {
-			s.logger.Error("announcement materialize failed", "template_id", tmpl.ID, "error", err)
-		}
+	if annSkipped {
+		return nil
 	}
-	return nil
-}
-
-func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.PostTemplate, mainEventAt time.Time) error {
-	if !tmpl.AnnouncementEnabled || strings.TrimSpace(tmpl.AnnouncementContent) == "" {
+	exists, err := s.store.HasPostTemplateRoleMaterialized(ctx, tmpl.ID, mainEventAt, domain.TemplatePostRoleAnnouncement)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return nil
 	}
 	daysBefore := tmpl.AnnouncementDaysBefore
@@ -676,6 +631,8 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 		AuthorUserID:          &authorID,
 		PostTemplateID:        &tplID,
 		TemplateCounter:       &counterVal,
+		TemplateOccurrenceAt:    &mainEventAt,
+		TemplatePostRole:      domain.TemplatePostRoleAnnouncement,
 		Source:                domain.PostSourceAutomation,
 	}
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
@@ -694,7 +651,7 @@ func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTem
 	return shiftTo
 }
 
-func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time) error {
+func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time, occurrenceAt time.Time, role string) error {
 	counterVal := tmpl.CounterNext
 	expandedContent := domain.ExpandDynamicVariables(tmpl.Content, scheduledAt, &counterVal, nil)
 	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.Title, scheduledAt, counterVal, nil)
@@ -718,7 +675,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 	}
 
 	if s.shouldEnhanceRecurringWithAI(ctx, *tmpl) {
-		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, expandedTitle, at, draft, &scheduledAt); err != nil {
+		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, expandedTitle, at, draft, occurrenceAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: ai unavailable, using template", "template_id", tmpl.ID, "error", err)
 		} else {
 			return nil
@@ -727,6 +684,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 
 	authorID := tmpl.AuthorUserID
 	tplID := tmpl.ID
+	occAt := occurrenceAt.UTC()
 	input := domain.CreatePostInput{
 		Title:                 expandedTitle,
 		Content:               tmpl.Content,
@@ -739,6 +697,8 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 		AuthorUserID:          &authorID,
 		PostTemplateID:        &tplID,
 		TemplateCounter:       &counterVal,
+		TemplateOccurrenceAt:  &occAt,
+		TemplatePostRole:      role,
 		Source:                domain.PostSourceAutomation,
 	}
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}

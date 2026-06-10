@@ -16,6 +16,11 @@ var ErrProviderInstanceNotFound = errors.New("provider instance not found")
 // BootstrapAdminSubject is the fixed users.subject for the bootstrap / API-token administrator.
 const BootstrapAdminSubject = "local-admin"
 
+const (
+	TemplatePostRoleMain         = "main"
+	TemplatePostRoleAnnouncement = "announcement"
+)
+
 type TeamRole string
 
 const (
@@ -495,6 +500,8 @@ type ScheduledPost struct {
 	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
 	PostTemplateID        *string             `json:"post_template_id,omitempty"`
 	TemplateCounter       *int                `json:"template_counter,omitempty"`
+	TemplateOccurrenceAt  *time.Time          `json:"template_occurrence_at,omitempty"`
+	TemplatePostRole      string              `json:"template_post_role,omitempty"`
 	RSSFeedID             *string             `json:"rss_feed_id,omitempty"`
 }
 
@@ -517,6 +524,7 @@ type PostTemplate struct {
 	PromptHint             string              `json:"prompt_hint"`
 	TitleHint              string              `json:"title_hint"`
 	Tonality               string              `json:"tonality"`
+	MaterializeHorizonDays int                 `json:"materialize_horizon_days,omitempty"`
 	NextMaterializeAt            *time.Time          `json:"next_materialize_at,omitempty"`
 	CounterNext                  int                 `json:"counter_next"`
 	AnnouncementEnabled          bool                `json:"announcement_enabled"`
@@ -544,6 +552,7 @@ type CreatePostTemplateInput struct {
 	PromptHint             string              `json:"prompt_hint,omitempty"`
 	TitleHint              string              `json:"title_hint,omitempty"`
 	Tonality                     string              `json:"tonality,omitempty"`
+	MaterializeHorizonDays       *int                `json:"materialize_horizon_days,omitempty"`
 	AnnouncesTemplateID          *string             `json:"announces_template_id,omitempty"` // deprecated: ignored on write
 	AnnouncementEnabled          *bool               `json:"announcement_enabled,omitempty"`
 	AnnouncementTitle            string              `json:"announcement_title,omitempty"`
@@ -569,6 +578,7 @@ type UpdatePostTemplateInput struct {
 	PromptHint             *string              `json:"prompt_hint,omitempty"`
 	TitleHint              *string              `json:"title_hint,omitempty"`
 	Tonality                     *string              `json:"tonality,omitempty"`
+	MaterializeHorizonDays       *int                 `json:"materialize_horizon_days,omitempty"`
 	AnnouncementEnabled          *bool                `json:"announcement_enabled,omitempty"`
 	AnnouncementTitle            *string              `json:"announcement_title,omitempty"`
 	AnnouncementContent          *string              `json:"announcement_content,omitempty"`
@@ -867,6 +877,8 @@ type CreatePostInput struct {
 	AuthorUserID    *string    `json:"-"`
 	PostTemplateID  *string    `json:"-"`
 	TemplateCounter *int       `json:"-"`
+	TemplateOccurrenceAt *time.Time `json:"-"`
+	TemplatePostRole     string     `json:"-"`
 	Source          PostSource `json:"-"`
 	RSSFeedID       *string    `json:"-"`
 }

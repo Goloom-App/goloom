@@ -60,6 +60,7 @@ export interface BackendPostTemplate {
   prompt_hint?: string
   title_hint?: string
   tonality?: string
+  materialize_horizon_days?: number
   next_materialize_at?: string
   counter_next: number
   announcement_enabled?: boolean
@@ -905,6 +906,7 @@ export function createApiClient(options: ApiClientOptions) {
         announcement_days_before?: number
         announcement_counter_next?: number
         announcement_target_account_ids?: string[]
+        materialize_horizon_days?: number
         counter_next?: number
       },
     ) {

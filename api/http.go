@@ -879,11 +879,25 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
+	a.skipRecurringOccurrenceForDeletedPost(r, post.TeamID, r.PathValue("postID"))
 	if err := a.store.DeleteScheduledPost(r.Context(), post.TeamID, r.PathValue("postID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) skipRecurringOccurrenceForDeletedPost(r *http.Request, teamID, postID string) {
+	tplID, occAt, role, err := a.store.GetScheduledPostTemplateLink(r.Context(), teamID, postID)
+	if err != nil || tplID == "" || occAt == nil {
+		return
+	}
+	switch role {
+	case domain.TemplatePostRoleAnnouncement:
+		_ = a.store.AddPostTemplateAnnouncementSkip(r.Context(), teamID, tplID, *occAt)
+	default:
+		_ = a.store.AddPostTemplateSkip(r.Context(), teamID, tplID, *occAt)
+	}
 }
 
 func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {

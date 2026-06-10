@@ -389,6 +389,7 @@ alter table post_templates add column if not exists output_mode text not null de
 alter table post_templates add column if not exists prompt_hint text not null default '';
 alter table post_templates add column if not exists tonality text not null default '';
 alter table post_templates add column if not exists title_hint text not null default '';
+alter table post_templates add column if not exists materialize_horizon_days integer not null default 0;
 
 alter table post_templates add column if not exists announcement_enabled boolean not null default false;
 alter table post_templates add column if not exists announcement_title text not null default '';
@@ -418,6 +419,10 @@ create table if not exists post_template_skips (
 
 alter table scheduled_posts add column if not exists post_template_id uuid references post_templates(id) on delete set null;
 alter table scheduled_posts add column if not exists template_counter integer;
+alter table scheduled_posts add column if not exists template_occurrence_at timestamptz;
+alter table scheduled_posts add column if not exists template_post_role text not null default '';
+
+alter table post_template_skips add column if not exists skip_scope text not null default 'occurrence';
 
 create table if not exists log_entries (
     id uuid primary key default gen_random_uuid(),

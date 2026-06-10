@@ -16,22 +16,25 @@ import (
 const postTemplateSelectSQL = `
 	select id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
 	       media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, ai_enhance_announcement, output_mode, prompt_hint, title_hint, tonality,
-	       next_materialize_at, counter_next,
+	       materialize_horizon_days, next_materialize_at, counter_next,
 	       announcement_enabled, announcement_title, announcement_content, announcement_days_before,
 	       announcement_counter_next, announcement_target_account_ids, created_at, updated_at
 	from post_templates`
 
 func (s *Store) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
+	return s.ListEnabledPostTemplates(ctx, limit)
+}
+
+func (s *Store) ListEnabledPostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	rows, err := s.db.QueryContext(ctx, postTemplateSelectSQL+`
 		where enabled = 1
 		  and next_materialize_at is not null
-		  and next_materialize_at <= ?
 		order by next_materialize_at asc
 		limit ?`,
-		nowString(), limit,
+		limit,
 	)
 	if err != nil {
 		return nil, err
@@ -122,6 +125,16 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	promptHint := strings.TrimSpace(input.PromptHint)
 	titleHint := strings.TrimSpace(input.TitleHint)
 	tonality := strings.TrimSpace(input.Tonality)
+	horizonDays := 0
+	if input.MaterializeHorizonDays != nil {
+		horizonDays = *input.MaterializeHorizonDays
+		if horizonDays < 0 {
+			horizonDays = 0
+		}
+		if horizonDays > 366 {
+			horizonDays = 366
+		}
+	}
 	counterNext := 1
 	if input.CounterNext != nil && *input.CounterNext >= 1 {
 		counterNext = *input.CounterNext
@@ -152,14 +165,14 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 		insert into post_templates (
 			id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
 			media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, ai_enhance_announcement, output_mode, prompt_hint, title_hint, tonality,
-			next_materialize_at, counter_next,
+			materialize_horizon_days, next_materialize_at, counter_next,
 			announcement_enabled, announcement_title, announcement_content, announcement_days_before,
 			announcement_counter_next, announcement_target_account_ids, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, teamID, principal.User.ID, strings.TrimSpace(input.Title), strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.RecurrenceJSON), visibility, mediaJSON, excludeJSON, targetJSON, enabled,
-		aiEnhance, aiEnhanceAnn, outputMode, promptHint, titleHint, tonality,
+		aiEnhance, aiEnhanceAnn, outputMode, promptHint, titleHint, tonality, horizonDays,
 		nextStr, counterNext,
 		annEnabled, annTitle, annContent, annDays, annCounter, annTargetsJSON, now, now,
 	)
@@ -284,6 +297,16 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 	if input.Tonality != nil {
 		tonality = strings.TrimSpace(*input.Tonality)
 	}
+	horizonDays := existing.MaterializeHorizonDays
+	if input.MaterializeHorizonDays != nil {
+		horizonDays = *input.MaterializeHorizonDays
+		if horizonDays < 0 {
+			horizonDays = 0
+		}
+		if horizonDays > 366 {
+			horizonDays = 366
+		}
+	}
 	counterNext := existing.CounterNext
 	if input.CounterNext != nil && *input.CounterNext >= 1 {
 		counterNext = *input.CounterNext
@@ -327,12 +350,12 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 		set title = ?, content = ?, recurrence_json = ?, visibility = ?, media_ids = ?,
 		    media_exclude_by_account = ?, target_account_ids = ?, enabled = ?,
 		    ai_enhance_enabled = ?, ai_enhance_announcement = ?, output_mode = ?, prompt_hint = ?, title_hint = ?, tonality = ?,
-		    next_materialize_at = ?, counter_next = ?,
+		    materialize_horizon_days = ?, next_materialize_at = ?, counter_next = ?,
 		    announcement_enabled = ?, announcement_title = ?, announcement_content = ?, announcement_days_before = ?,
 		    announcement_counter_next = ?, announcement_target_account_ids = ?, updated_at = ?
 		where team_id = ? and id = ?`,
 		title, content, recJSON, visibility, mediaJSON, excludeJSON, targetJSON, en,
-		aiEnhance, aiEnhanceAnn, string(outputMode), promptHint, titleHint, tonality, nextStr, counterNext,
+		aiEnhance, aiEnhanceAnn, string(outputMode), promptHint, titleHint, tonality, horizonDays, nextStr, counterNext,
 		annEnInt, annTitle, annContent, annDays, annCounter, annTargetsJSON, nowString(), teamID, templateID,
 	)
 	if err != nil {
@@ -359,7 +382,19 @@ func (s *Store) DeletePostTemplate(ctx context.Context, teamID, templateID strin
 func (s *Store) IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx, `
-		select count(*) from post_template_skips where template_id = ? and occurrence_at = ?`,
+		select count(*) from post_template_skips
+		where template_id = ? and occurrence_at = ?
+		  and (skip_scope = 'occurrence' or skip_scope = '' or skip_scope is null)`,
+		templateID, formatTime(occurrenceAt),
+	).Scan(&n)
+	return n > 0, err
+}
+
+func (s *Store) IsPostTemplateAnnouncementSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		select count(*) from post_template_skips
+		where template_id = ? and occurrence_at = ? and skip_scope = 'announcement'`,
 		templateID, formatTime(occurrenceAt),
 	).Scan(&n)
 	return n > 0, err
@@ -367,8 +402,8 @@ func (s *Store) IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID 
 
 func (s *Store) AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error {
 	res, err := s.db.ExecContext(ctx, `
-		insert into post_template_skips (template_id, occurrence_at)
-		select id, ? from post_templates where team_id = ? and id = ?`,
+		insert into post_template_skips (template_id, occurrence_at, skip_scope)
+		select id, ?, 'occurrence' from post_templates where team_id = ? and id = ?`,
 		formatTime(occurrenceAt), teamID, templateID,
 	)
 	if err != nil {
@@ -382,6 +417,43 @@ func (s *Store) AddPostTemplateSkip(ctx context.Context, teamID, templateID stri
 		return errors.New("template not found")
 	}
 	return nil
+}
+
+func (s *Store) AddPostTemplateAnnouncementSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error {
+	res, err := s.db.ExecContext(ctx, `
+		insert into post_template_skips (template_id, occurrence_at, skip_scope)
+		select id, ?, 'announcement' from post_templates where team_id = ? and id = ?
+		on conflict(template_id, occurrence_at) do update set skip_scope = 'announcement'`,
+		formatTime(occurrenceAt), teamID, templateID,
+	)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return errors.New("template not found")
+	}
+	return nil
+}
+
+func (s *Store) HasPostTemplateRoleMaterialized(ctx context.Context, templateID string, occurrenceAt time.Time, role string) (bool, error) {
+	role = strings.TrimSpace(role)
+	if role == "" {
+		return false, errors.New("role is required")
+	}
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		select count(*) from scheduled_posts
+		where post_template_id = ?
+		  and template_occurrence_at = ?
+		  and template_post_role = ?
+		  and status != ?`,
+		templateID, formatTime(occurrenceAt), role, domain.PostStatusCancelled,
+	).Scan(&n)
+	return n > 0, err
 }
 
 func (s *Store) ShiftPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt, shiftTo time.Time) error {
@@ -480,6 +552,7 @@ func scanPostTemplate(row interface {
 		&t.PromptHint,
 		&t.TitleHint,
 		&t.Tonality,
+		&t.MaterializeHorizonDays,
 		&next,
 		&t.CounterNext,
 		&annEnabledInt,

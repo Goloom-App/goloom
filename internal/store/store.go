@@ -94,13 +94,17 @@ type Store interface {
 	// Admin: list AI-enabled teams
 	ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error)
 	ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error)
+	ListEnabledPostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error)
 	ListPostTemplates(ctx context.Context, teamID string) ([]domain.PostTemplate, error)
 	GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error)
 	CreatePostTemplate(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostTemplateInput) (domain.PostTemplate, error)
 	UpdatePostTemplate(ctx context.Context, teamID, templateID string, input domain.UpdatePostTemplateInput) (domain.PostTemplate, error)
 	DeletePostTemplate(ctx context.Context, teamID, templateID string) error
 	IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error)
+	IsPostTemplateAnnouncementSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error)
 	AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error
+	AddPostTemplateAnnouncementSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error
+	HasPostTemplateRoleMaterialized(ctx context.Context, templateID string, occurrenceAt time.Time, role string) (bool, error)
 	ShiftPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt, shiftTo time.Time) error
 	GetPostTemplateShiftTo(ctx context.Context, templateID string, occurrenceAt time.Time) (*time.Time, error)
 	AdvancePostTemplateSchedule(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext int) error
@@ -132,6 +136,7 @@ type Store interface {
 	PatchScheduledPost(ctx context.Context, teamID, postID string, patch domain.UpdatePostPatch) (domain.ScheduledPost, error)
 	CancelScheduledPost(ctx context.Context, teamID, postID string) error
 	DeleteScheduledPost(ctx context.Context, teamID, postID string) error
+	GetScheduledPostTemplateLink(ctx context.Context, teamID, postID string) (templateID string, occurrenceAt *time.Time, role string, err error)
 	ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error)
 	MarkPostProcessing(ctx context.Context, postID string) error
 	MarkPostResult(ctx context.Context, postID string, attemptCount int, status domain.PostStatus, lastError string, nextAttempt *time.Time) error

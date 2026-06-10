@@ -56,6 +56,10 @@ func (a *API) createRecurringAutomationPost(
 
 	tplID := meta.TemplateID
 	counterVal := meta.TemplateCounter
+	role := domain.TemplatePostRoleMain
+	if meta.PostKind == domain.TemplatePostRoleAnnouncement {
+		role = domain.TemplatePostRoleAnnouncement
+	}
 	principal := domain.AuthenticatedPrincipal{
 		User: domain.User{ID: job.AuthorUserID},
 		Kind: "api_token",
@@ -71,6 +75,8 @@ func (a *API) createRecurringAutomationPost(
 		Source:                 domain.PostSourceAutomation,
 		PostTemplateID:         &tplID,
 		TemplateCounter:        &counterVal,
+		TemplateOccurrenceAt:   meta.TemplateOccurrenceAt,
+		TemplatePostRole:       role,
 		UseVersions:            len(normalizedOverrides) > 0,
 	})
 	if err != nil {

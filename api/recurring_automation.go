@@ -9,14 +9,15 @@ import (
 )
 
 type recurringAutomationMeta struct {
-	TemplateID      string
-	PostKind        string
-	OutputMode      domain.AutomationOutputMode
-	ScheduledAt     time.Time
-	Draft           bool
-	PostTitle       string
-	FallbackContent string
-	TemplateCounter int
+	TemplateID           string
+	PostKind             string
+	OutputMode           domain.AutomationOutputMode
+	ScheduledAt          time.Time
+	TemplateOccurrenceAt *time.Time
+	Draft                bool
+	PostTitle            string
+	FallbackContent      string
+	TemplateCounter      int
 }
 
 func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationMeta {
@@ -26,14 +27,15 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 	var envelope struct {
 		Params struct {
 			RecurringAutomation *struct {
-				TemplateID      string `json:"template_id"`
-				PostKind        string `json:"post_kind"`
-				OutputMode      string `json:"output_mode"`
-				ScheduledAt     string `json:"scheduled_at"`
-				Draft           bool   `json:"draft"`
-				PostTitle       string `json:"post_title"`
-				FallbackContent string `json:"fallback_content"`
-				TemplateCounter int    `json:"template_counter"`
+				TemplateID           string `json:"template_id"`
+				PostKind             string `json:"post_kind"`
+				OutputMode           string `json:"output_mode"`
+				ScheduledAt          string `json:"scheduled_at"`
+				TemplateOccurrenceAt string `json:"template_occurrence_at"`
+				Draft                bool   `json:"draft"`
+				PostTitle            string `json:"post_title"`
+				FallbackContent      string `json:"fallback_content"`
+				TemplateCounter      int    `json:"template_counter"`
 			} `json:"recurring_automation"`
 		} `json:"params"`
 	}
@@ -58,15 +60,23 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 	if postKind == "" {
 		postKind = "main"
 	}
+	var occurrenceAt *time.Time
+	if raw.TemplateOccurrenceAt != "" {
+		if parsed, err := time.Parse(time.RFC3339, raw.TemplateOccurrenceAt); err == nil {
+			u := parsed.UTC()
+			occurrenceAt = &u
+		}
+	}
 	return &recurringAutomationMeta{
-		TemplateID:      raw.TemplateID,
-		PostKind:        postKind,
-		OutputMode:      domain.NormalizeAutomationOutputMode(raw.OutputMode),
-		ScheduledAt:     scheduledAt,
-		Draft:           raw.Draft,
-		PostTitle:       strings.TrimSpace(raw.PostTitle),
-		FallbackContent: strings.TrimSpace(raw.FallbackContent),
-		TemplateCounter: counter,
+		TemplateID:           raw.TemplateID,
+		PostKind:             postKind,
+		OutputMode:           domain.NormalizeAutomationOutputMode(raw.OutputMode),
+		ScheduledAt:          scheduledAt,
+		TemplateOccurrenceAt: occurrenceAt,
+		Draft:                raw.Draft,
+		PostTitle:            strings.TrimSpace(raw.PostTitle),
+		FallbackContent:      strings.TrimSpace(raw.FallbackContent),
+		TemplateCounter:      counter,
 	}
 }
 

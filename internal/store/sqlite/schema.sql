@@ -336,6 +336,7 @@ create table if not exists post_templates (
     prompt_hint text not null default '',
     title_hint text not null default '',
     tonality text not null default '',
+    materialize_horizon_days integer not null default 0,
     next_materialize_at text,
     counter_next integer not null default 1,
     announces_template_id text references post_templates(id) on delete set null,

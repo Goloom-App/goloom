@@ -67,12 +67,9 @@ func (s *Service) submitRecurringAIEnhancement(
 	expandedTitle string,
 	scheduledAt time.Time,
 	draft bool,
-	mainEventAt *time.Time,
+	occurrenceAt time.Time,
 ) error {
-	annRefContent, annRefTitle := "", ""
-	if mainEventAt != nil {
-		annRefContent, annRefTitle = expandedAnnouncementReference(tmpl, *mainEventAt)
-	}
+	annRefContent, annRefTitle := expandedAnnouncementReference(tmpl, occurrenceAt)
 	return s.submitRecurringAIJob(ctx, recurringAIJobInput{
 		tmpl:            tmpl,
 		postKind:        recurringPostKindMain,
@@ -82,9 +79,10 @@ func (s *Service) submitRecurringAIEnhancement(
 		draft:           draft,
 		targetAccounts:  tmpl.TargetAccountIDs,
 		templateCounter: tmpl.CounterNext,
+		occurrenceAt:    occurrenceAt,
 		annRefContent:   annRefContent,
 		annRefTitle:     annRefTitle,
-		mainEventAt:     mainEventAt,
+		mainEventAt:     &occurrenceAt,
 	})
 }
 
@@ -109,6 +107,7 @@ func (s *Service) submitRecurringAnnouncementAIEnhancement(
 		draft:           false,
 		targetAccounts:  targets,
 		templateCounter: tmpl.AnnouncementCounterNext,
+		occurrenceAt:    mainEventAt,
 		mainEventAt:     &mainEventAt,
 	})
 }
@@ -124,6 +123,7 @@ type recurringAIJobInput struct {
 	templateCounter int
 	annRefContent   string
 	annRefTitle     string
+	occurrenceAt    time.Time
 	mainEventAt     *time.Time
 }
 
@@ -149,14 +149,15 @@ func (s *Service) submitRecurringAIJob(ctx context.Context, in recurringAIJobInp
 		params["main_event_at"] = in.mainEventAt.UTC().Format(time.RFC3339)
 	}
 	params["recurring_automation"] = map[string]any{
-		"template_id":      in.tmpl.ID,
-		"post_kind":        in.postKind,
-		"output_mode":      string(outputMode),
-		"scheduled_at":     in.scheduledAt.UTC().Format(time.RFC3339),
-		"draft":            in.draft,
-		"post_title":       in.expandedTitle,
-		"fallback_content": in.expandedContent,
-		"template_counter": in.templateCounter,
+		"template_id":            in.tmpl.ID,
+		"post_kind":              in.postKind,
+		"output_mode":            string(outputMode),
+		"scheduled_at":           in.scheduledAt.UTC().Format(time.RFC3339),
+		"template_occurrence_at": in.occurrenceAt.UTC().Format(time.RFC3339),
+		"draft":                  in.draft,
+		"post_title":             in.expandedTitle,
+		"fallback_content":       in.expandedContent,
+		"template_counter":       in.templateCounter,
 	}
 	paramsRaw, err := json.Marshal(params)
 	if err != nil {

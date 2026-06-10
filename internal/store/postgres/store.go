@@ -873,8 +873,8 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	}
 
 	const insertPost = `
-		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, source, visibility, media_ids, media_exclude_by_account, post_template_id, template_counter, rss_feed_id)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, source, visibility, media_ids, media_exclude_by_account, post_template_id, template_counter, template_occurrence_at, template_post_role, rss_feed_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		returning id, team_id, author_user_id, title, content, scheduled_at, status,
 		          attempt_count, coalesce(last_error, ''), visibility, media_ids, media_exclude_by_account, created_at, updated_at, post_template_id, template_counter
 	`
@@ -885,11 +885,16 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	}
 	var templateID any
 	var templateCounter any
+	var templateOccurrence any
+	templateRole := strings.TrimSpace(input.TemplatePostRole)
 	if input.PostTemplateID != nil && strings.TrimSpace(*input.PostTemplateID) != "" {
 		templateID = strings.TrimSpace(*input.PostTemplateID)
 	}
 	if input.TemplateCounter != nil {
 		templateCounter = *input.TemplateCounter
+	}
+	if input.TemplateOccurrenceAt != nil && !input.TemplateOccurrenceAt.IsZero() {
+		templateOccurrence = input.TemplateOccurrenceAt.UTC()
 	}
 	source := input.Source
 	if strings.TrimSpace(string(source)) == "" {
@@ -911,7 +916,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	} else if input.Draft {
 		st = domain.PostStatusDraft
 	}
-	err = tx.QueryRow(ctx, insertPost, teamID, authorID, input.Title, input.Content, input.ScheduledAt, st, source, visibility, mediaJSON, excludeJSON, templateID, templateCounter, rssFeedID).Scan(
+	err = tx.QueryRow(ctx, insertPost, teamID, authorID, input.Title, input.Content, input.ScheduledAt, st, source, visibility, mediaJSON, excludeJSON, templateID, templateCounter, templateOccurrence, templateRole, rssFeedID).Scan(
 		&post.ID,
 		&post.TeamID,
 		&post.AuthorUserID,
@@ -1117,6 +1122,33 @@ func (s *Store) CancelScheduledPost(ctx context.Context, teamID, postID string) 
 func (s *Store) DeleteScheduledPost(ctx context.Context, teamID, postID string) error {
 	_, err := s.pool.Exec(ctx, `delete from scheduled_posts where id = $1 and team_id = $2`, postID, teamID)
 	return err
+}
+
+func (s *Store) GetScheduledPostTemplateLink(ctx context.Context, teamID, postID string) (string, *time.Time, string, error) {
+	var tplID sql.NullString
+	var occ sql.NullTime
+	var role sql.NullString
+	err := s.pool.QueryRow(ctx, `
+		select post_template_id::text, template_occurrence_at, template_post_role
+		from scheduled_posts
+		where id = $1 and team_id = $2`,
+		postID, teamID,
+	).Scan(&tplID, &occ, &role)
+	if err == sql.ErrNoRows {
+		return "", nil, "", errors.New("post not found")
+	}
+	if err != nil {
+		return "", nil, "", err
+	}
+	if !tplID.Valid || strings.TrimSpace(tplID.String) == "" {
+		return "", nil, "", nil
+	}
+	var occAt *time.Time
+	if occ.Valid {
+		u := occ.Time.UTC()
+		occAt = &u
+	}
+	return tplID.String, occAt, strings.TrimSpace(role.String), nil
 }
 
 func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error) {

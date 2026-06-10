@@ -730,11 +730,16 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	}
 	var templateID any
 	var templateCounter any
+	var templateOccurrence any
+	templateRole := strings.TrimSpace(input.TemplatePostRole)
 	if input.PostTemplateID != nil && strings.TrimSpace(*input.PostTemplateID) != "" {
 		templateID = strings.TrimSpace(*input.PostTemplateID)
 	}
 	if input.TemplateCounter != nil {
 		templateCounter = *input.TemplateCounter
+	}
+	if input.TemplateOccurrenceAt != nil && !input.TemplateOccurrenceAt.IsZero() {
+		templateOccurrence = formatTime(input.TemplateOccurrenceAt.UTC())
 	}
 	source := input.Source
 	if strings.TrimSpace(string(source)) == "" {
@@ -749,11 +754,11 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		insert into scheduled_posts (
 			id, team_id, author_user_id, title, content, scheduled_at, status, source,
 			attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-			post_template_id, template_counter, rss_feed_id, created_at, updated_at
+			post_template_id, template_counter, template_occurrence_at, template_post_role, rss_feed_id, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		postID, teamID, authorID, input.Title, input.Content, formatTime(input.ScheduledAt), st, source,
-		visibility, mediaJSON, excludeJSON, templateID, templateCounter, rssFeedID, now, now,
+		visibility, mediaJSON, excludeJSON, templateID, templateCounter, templateOccurrence, templateRole, rssFeedID, now, now,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
@@ -930,6 +935,37 @@ func (s *Store) CancelScheduledPost(ctx context.Context, teamID, postID string) 
 func (s *Store) DeleteScheduledPost(ctx context.Context, teamID, postID string) error {
 	_, err := s.db.ExecContext(ctx, `delete from scheduled_posts where id = ? and team_id = ?`, postID, teamID)
 	return err
+}
+
+func (s *Store) GetScheduledPostTemplateLink(ctx context.Context, teamID, postID string) (string, *time.Time, string, error) {
+	var tplID sql.NullString
+	var occStr sql.NullString
+	var role sql.NullString
+	err := s.db.QueryRowContext(ctx, `
+		select post_template_id, template_occurrence_at, template_post_role
+		from scheduled_posts
+		where id = ? and team_id = ?`,
+		postID, teamID,
+	).Scan(&tplID, &occStr, &role)
+	if err == sql.ErrNoRows {
+		return "", nil, "", errors.New("post not found")
+	}
+	if err != nil {
+		return "", nil, "", err
+	}
+	if !tplID.Valid || strings.TrimSpace(tplID.String) == "" {
+		return "", nil, "", nil
+	}
+	var occ *time.Time
+	if occStr.Valid && strings.TrimSpace(occStr.String) != "" {
+		parsed, err := parseTime(occStr.String)
+		if err != nil {
+			return "", nil, "", err
+		}
+		u := parsed.UTC()
+		occ = &u
+	}
+	return tplID.String, occ, strings.TrimSpace(role.String), nil
 }
 
 func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.ScheduledPost, error) {

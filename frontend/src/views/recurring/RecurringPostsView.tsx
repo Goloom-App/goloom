@@ -89,6 +89,7 @@ export function RecurringPostsView({
   const [announcementCounterStart, setAnnouncementCounterStart] = useState(1)
   const [announcementDifferentTargets, setAnnouncementDifferentTargets] = useState(false)
   const [announcementTargetIds, setAnnouncementTargetIds] = useState<string[]>([])
+  const [materializeHorizonDays, setMaterializeHorizonDays] = useState(0)
   const [aiEnhanceEnabled, setAiEnhanceEnabled] = useState(false)
   const [aiEnhanceAnnouncement, setAiEnhanceAnnouncement] = useState(false)
   const [outputMode, setOutputMode] = useState<AutomationOutputMode>('scheduled')
@@ -154,6 +155,7 @@ export function RecurringPostsView({
     setAnnouncementCounterStart(1)
     setAnnouncementDifferentTargets(false)
     setAnnouncementTargetIds([])
+    setMaterializeHorizonDays(0)
     setAiEnhanceEnabled(false)
     setAiEnhanceAnnouncement(false)
     setOutputMode('scheduled')
@@ -187,6 +189,7 @@ export function RecurringPostsView({
     const annTargets = item.announcement_target_account_ids ?? []
     setAnnouncementDifferentTargets(annTargets.length > 0)
     setAnnouncementTargetIds(annTargets)
+    setMaterializeHorizonDays(item.materialize_horizon_days ?? 0)
     setAiEnhanceEnabled(Boolean(item.ai_enhance_enabled))
     setAiEnhanceAnnouncement(Boolean(item.ai_enhance_announcement))
     setOutputMode(item.output_mode ?? 'scheduled')
@@ -203,6 +206,7 @@ export function RecurringPostsView({
       recurrence_json: recurrenceStateToJSON(recState),
       target_account_ids: targetIds,
       counter_next: Math.max(1, counterStart),
+      materialize_horizon_days: Math.max(0, materializeHorizonDays),
     }
     payload.output_mode = outputMode
     if (team?.isAiEnabled) {
@@ -362,6 +366,9 @@ export function RecurringPostsView({
                 </span>
               </div>
               <p className="hint">{formatTemplateSchedule(item)}</p>
+              {item.materialize_horizon_days ? (
+                <p className="hint">{t('recurring.materializeHorizonActive', { days: item.materialize_horizon_days })}</p>
+              ) : null}
               <p className="hint">
                 {t('recurring.next')}{' '}
                 {item.next_materialize_at ? format(parseISO(item.next_materialize_at), 'PPpp') : t('common.emDash')} · {t('common.counter')}:{' '}
@@ -454,6 +461,24 @@ export function RecurringPostsView({
                   previewDate={firstOccurrence}
                   counterStart={counterStart}
                 />
+
+                <label className="field">
+                  <span>{t('recurring.materializeHorizon')}</span>
+                  <select
+                    value={materializeHorizonDays}
+                    onChange={(e) => setMaterializeHorizonDays(parseInt(e.target.value, 10) || 0)}
+                    data-testid="recurring-materialize-horizon"
+                  >
+                    <option value={0}>{t('recurring.materializeHorizonOff')}</option>
+                    <option value={7}>{t('recurring.materializeHorizonWeek', { count: 1 })}</option>
+                    <option value={14}>{t('recurring.materializeHorizonWeeks', { count: 2 })}</option>
+                    <option value={21}>{t('recurring.materializeHorizonWeeks', { count: 3 })}</option>
+                    <option value={28}>{t('recurring.materializeHorizonWeeks', { count: 4 })}</option>
+                  </select>
+                  <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                    {t('recurring.materializeHorizonHint')}
+                  </p>
+                </label>
 
                 <label className="field">
                   <span>{t('rss.outputMode')}</span>
