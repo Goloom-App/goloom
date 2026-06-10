@@ -124,10 +124,13 @@ export function RecurringPostsView({
     try {
       const res = await api.listPostTemplates(teamId)
       setItems(res.items ?? [])
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : t('status.templateLoadFailed')
+      onStatus(translateApiError(raw, t))
     } finally {
       setLoading(false)
     }
-  }, [api, teamId])
+  }, [api, teamId, onStatus, t])
 
   useEffect(() => {
     void refresh()

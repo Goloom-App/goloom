@@ -287,6 +287,14 @@ create index if not exists idx_post_templates_due on post_templates (enabled, ne
 alter table post_templates add column if not exists announces_template_id uuid references post_templates(id) on delete set null;
 alter table post_templates add column if not exists announcement_days_before integer;
 
+alter table post_templates add column if not exists ai_enhance_enabled boolean not null default false;
+alter table post_templates add column if not exists ai_enhance_announcement boolean not null default false;
+alter table post_templates add column if not exists output_mode text not null default 'scheduled';
+alter table post_templates add column if not exists prompt_hint text not null default '';
+alter table post_templates add column if not exists tonality text not null default '';
+alter table post_templates add column if not exists title_hint text not null default '';
+alter table post_templates add column if not exists materialize_horizon_days integer not null default 0;
+
 alter table post_templates add column if not exists announcement_enabled boolean not null default false;
 alter table post_templates add column if not exists announcement_title text not null default '';
 alter table post_templates add column if not exists announcement_content text not null default '';
@@ -304,6 +312,13 @@ set announcement_enabled = true,
 from post_templates as child
 where child.announces_template_id = parent.id;
 
+update post_templates as child
+set announces_template_id = null, updated_at = now()
+where child.announces_template_id is not null
+  and not exists (
+    select 1 from post_templates as parent where parent.id = child.announces_template_id
+  );
+
 delete from post_templates where announces_template_id is not null;
 
 create table if not exists post_template_skips (
@@ -315,6 +330,10 @@ create table if not exists post_template_skips (
 
 alter table scheduled_posts add column if not exists post_template_id uuid references post_templates(id) on delete set null;
 alter table scheduled_posts add column if not exists template_counter integer;
+alter table scheduled_posts add column if not exists template_occurrence_at timestamptz;
+alter table scheduled_posts add column if not exists template_post_role text not null default '';
+
+alter table post_template_skips add column if not exists skip_scope text not null default 'occurrence';
 
 create table if not exists log_entries (
     id uuid primary key default gen_random_uuid(),

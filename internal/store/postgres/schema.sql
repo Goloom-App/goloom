@@ -408,6 +408,13 @@ set announcement_enabled = true,
 from post_templates as child
 where child.announces_template_id = parent.id;
 
+update post_templates as child
+set announces_template_id = null, updated_at = now()
+where child.announces_template_id is not null
+  and not exists (
+    select 1 from post_templates as parent where parent.id = child.announces_template_id
+  );
+
 delete from post_templates where announces_template_id is not null;
 
 create table if not exists post_template_skips (

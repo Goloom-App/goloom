@@ -285,6 +285,7 @@
       "templateCreated": "Template created",
       "templateUpdated": "Template updated",
       "templateCreateFailed": "Failed to create template",
+      "templateLoadFailed": "Failed to load recurring templates",
       "templateUpdateFailed": "Update failed",
       "templateDeleteFailed": "Delete failed",
       "occurrenceSkipped": "Occurrence skipped",

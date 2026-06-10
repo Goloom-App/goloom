@@ -285,6 +285,7 @@
       "templateCreated": "Vorlage erstellt",
       "templateUpdated": "Vorlage aktualisiert",
       "templateCreateFailed": "Vorlage konnte nicht erstellt werden",
+      "templateLoadFailed": "Wiederkehrende Vorlagen konnten nicht geladen werden",
       "templateUpdateFailed": "Aktualisierung fehlgeschlagen",
       "templateDeleteFailed": "Löschen fehlgeschlagen",
       "occurrenceSkipped": "Termin übersprungen",

@@ -183,7 +183,7 @@ func migrateSQLiteEmbeddedAnnouncements(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	for _, c := range children {
-		if _, err := db.ExecContext(ctx, `
+		res, err := db.ExecContext(ctx, `
 			update post_templates
 			set announcement_enabled = 1,
 			    announcement_title = ?,
@@ -194,11 +194,28 @@ func migrateSQLiteEmbeddedAnnouncements(ctx context.Context, db *sql.DB) error {
 			    updated_at = ?
 			where id = ?`,
 			c.title, c.content, c.daysBefore, c.counterNext, c.targets, nowString(), c.parentID,
-		); err != nil {
+		)
+		if err != nil {
 			return fmt.Errorf("sqlite migrate embedded announcements parent %s: %w", c.parentID, err)
 		}
-		if _, err := db.ExecContext(ctx, `delete from post_templates where id = ?`, c.id); err != nil {
-			return fmt.Errorf("sqlite migrate embedded announcements delete child %s: %w", c.id, err)
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			if _, err := db.ExecContext(ctx, `delete from post_templates where id = ?`, c.id); err != nil {
+				return fmt.Errorf("sqlite migrate embedded announcements delete child %s: %w", c.id, err)
+			}
+			continue
+		}
+		// Orphan announcement child (missing parent): keep content as a standalone template.
+		if _, err := db.ExecContext(ctx, `
+			update post_templates
+			set announces_template_id = null, updated_at = ?
+			where id = ?`,
+			nowString(), c.id,
+		); err != nil {
+			return fmt.Errorf("sqlite migrate embedded announcements promote orphan %s: %w", c.id, err)
 		}
 	}
 	return nil
