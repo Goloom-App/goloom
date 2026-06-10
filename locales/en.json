@@ -537,6 +537,7 @@
       "actionFailed": "Review action failed."
     },
     "automation": {
+      "title": "Automation",
       "hint": "Time-based recurring posts and RSS feed rules in one place. Optional AI enhancement uses the same voice engine as the composer.",
       "tabs": "Automation types",
       "tabRecurring": "Time-based",

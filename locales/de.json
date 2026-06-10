@@ -537,6 +537,7 @@
       "actionFailed": "Review-Aktion fehlgeschlagen."
     },
     "automation": {
+      "title": "Automation",
       "hint": "Zeitbasierte wiederkehrende Beiträge und RSS-Feeds an einem Ort. Optionale KI-Nachbearbeitung nutzt dieselbe Voice Engine wie der Composer.",
       "tabs": "Automation-Typen",
       "tabRecurring": "Zeitbasiert",
