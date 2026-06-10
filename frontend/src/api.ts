@@ -55,6 +55,7 @@ export interface BackendPostTemplate {
   target_account_ids: string[]
   enabled: boolean
   ai_enhance_enabled?: boolean
+  ai_enhance_announcement?: boolean
   output_mode?: 'draft' | 'scheduled' | 'publish_now'
   prompt_hint?: string
   title_hint?: string
@@ -893,6 +894,7 @@ export function createApiClient(options: ApiClientOptions) {
         target_account_ids: string[]
         enabled?: boolean
         ai_enhance_enabled?: boolean
+        ai_enhance_announcement?: boolean
         output_mode?: 'draft' | 'scheduled' | 'publish_now'
         prompt_hint?: string
         title_hint?: string

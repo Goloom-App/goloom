@@ -49,7 +49,7 @@ func (a *API) createRecurringAutomationPost(
 		scheduledAt = res.SuggestedScheduledAt.UTC()
 	}
 	draft := recurringAutomationDraftFromMeta(meta)
-	if meta.OutputMode == domain.AutomationOutputPublishNow {
+	if meta.PostKind != "announcement" && meta.OutputMode == domain.AutomationOutputPublishNow {
 		draft = false
 		scheduledAt = time.Now().UTC()
 	}

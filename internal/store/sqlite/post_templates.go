@@ -15,7 +15,7 @@ import (
 
 const postTemplateSelectSQL = `
 	select id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-	       media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, output_mode, prompt_hint, title_hint, tonality,
+	       media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, ai_enhance_announcement, output_mode, prompt_hint, title_hint, tonality,
 	       next_materialize_at, counter_next,
 	       announcement_enabled, announcement_title, announcement_content, announcement_days_before,
 	       announcement_counter_next, announcement_target_account_ids, created_at, updated_at
@@ -110,6 +110,10 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	if input.AiEnhanceEnabled != nil && *input.AiEnhanceEnabled {
 		aiEnhance = 1
 	}
+	aiEnhanceAnn := 0
+	if input.AiEnhanceAnnouncement != nil && *input.AiEnhanceAnnouncement {
+		aiEnhanceAnn = 1
+	}
 	outputModeRaw := string(input.OutputMode)
 	if outputModeRaw == "" {
 		outputModeRaw = string(domain.AutomationOutputScheduled)
@@ -147,15 +151,15 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	_, err = s.db.ExecContext(ctx, `
 		insert into post_templates (
 			id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-			media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, output_mode, prompt_hint, title_hint, tonality,
+			media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, ai_enhance_announcement, output_mode, prompt_hint, title_hint, tonality,
 			next_materialize_at, counter_next,
 			announcement_enabled, announcement_title, announcement_content, announcement_days_before,
 			announcement_counter_next, announcement_target_account_ids, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, teamID, principal.User.ID, strings.TrimSpace(input.Title), strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.RecurrenceJSON), visibility, mediaJSON, excludeJSON, targetJSON, enabled,
-		aiEnhance, outputMode, promptHint, titleHint, tonality,
+		aiEnhance, aiEnhanceAnn, outputMode, promptHint, titleHint, tonality,
 		nextStr, counterNext,
 		annEnabled, annTitle, annContent, annDays, annCounter, annTargetsJSON, now, now,
 	)
@@ -254,6 +258,16 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 			aiEnhance = 1
 		}
 	}
+	aiEnhanceAnn := 0
+	if existing.AiEnhanceAnnouncement {
+		aiEnhanceAnn = 1
+	}
+	if input.AiEnhanceAnnouncement != nil {
+		aiEnhanceAnn = 0
+		if *input.AiEnhanceAnnouncement {
+			aiEnhanceAnn = 1
+		}
+	}
 	outputMode := existing.OutputMode
 	if input.OutputMode != nil {
 		outputMode = domain.NormalizeAutomationOutputMode(string(*input.OutputMode))
@@ -312,13 +326,13 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 		update post_templates
 		set title = ?, content = ?, recurrence_json = ?, visibility = ?, media_ids = ?,
 		    media_exclude_by_account = ?, target_account_ids = ?, enabled = ?,
-		    ai_enhance_enabled = ?, output_mode = ?, prompt_hint = ?, title_hint = ?, tonality = ?,
+		    ai_enhance_enabled = ?, ai_enhance_announcement = ?, output_mode = ?, prompt_hint = ?, title_hint = ?, tonality = ?,
 		    next_materialize_at = ?, counter_next = ?,
 		    announcement_enabled = ?, announcement_title = ?, announcement_content = ?, announcement_days_before = ?,
 		    announcement_counter_next = ?, announcement_target_account_ids = ?, updated_at = ?
 		where team_id = ? and id = ?`,
 		title, content, recJSON, visibility, mediaJSON, excludeJSON, targetJSON, en,
-		aiEnhance, string(outputMode), promptHint, titleHint, tonality, nextStr, counterNext,
+		aiEnhance, aiEnhanceAnn, string(outputMode), promptHint, titleHint, tonality, nextStr, counterNext,
 		annEnInt, annTitle, annContent, annDays, annCounter, annTargetsJSON, nowString(), teamID, templateID,
 	)
 	if err != nil {
@@ -444,6 +458,7 @@ func scanPostTemplate(row interface {
 	var next sql.NullString
 	var enabledInt int
 	var aiEnhanceInt int
+	var aiEnhanceAnnInt int
 	var annEnabledInt int
 	var outputMode string
 	var createdAt, updatedAt string
@@ -460,6 +475,7 @@ func scanPostTemplate(row interface {
 		&targetRaw,
 		&enabledInt,
 		&aiEnhanceInt,
+		&aiEnhanceAnnInt,
 		&outputMode,
 		&t.PromptHint,
 		&t.TitleHint,
@@ -480,6 +496,7 @@ func scanPostTemplate(row interface {
 	}
 	t.Enabled = enabledInt != 0
 	t.AiEnhanceEnabled = aiEnhanceInt != 0
+	t.AiEnhanceAnnouncement = aiEnhanceAnnInt != 0
 	t.AnnouncementEnabled = annEnabledInt != 0
 	t.OutputMode = domain.NormalizeAutomationOutputMode(outputMode)
 	if next.Valid && strings.TrimSpace(next.String) != "" {

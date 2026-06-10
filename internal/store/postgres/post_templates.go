@@ -14,7 +14,7 @@ import (
 
 const postTemplateSelectSQL = `
 	select id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-	       media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, output_mode, prompt_hint, title_hint, tonality,
+	       media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, ai_enhance_announcement, output_mode, prompt_hint, title_hint, tonality,
 	       next_materialize_at, counter_next,
 	       announcement_enabled, announcement_title, announcement_content, announcement_days_before,
 	       announcement_counter_next, announcement_target_account_ids, created_at, updated_at
@@ -108,6 +108,10 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	if input.AiEnhanceEnabled != nil {
 		aiEnhance = *input.AiEnhanceEnabled
 	}
+	aiEnhanceAnn := false
+	if input.AiEnhanceAnnouncement != nil {
+		aiEnhanceAnn = *input.AiEnhanceAnnouncement
+	}
 	outputModeRaw := string(input.OutputMode)
 	if outputModeRaw == "" {
 		outputModeRaw = string(domain.AutomationOutputScheduled)
@@ -144,16 +148,16 @@ func (s *Store) CreatePostTemplate(ctx context.Context, teamID string, principal
 	row := s.pool.QueryRow(ctx, `
 		insert into post_templates (
 			id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-			media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, output_mode, prompt_hint, title_hint, tonality,
+			media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, ai_enhance_announcement, output_mode, prompt_hint, title_hint, tonality,
 			next_materialize_at, counter_next,
 			announcement_enabled, announcement_title, announcement_content, announcement_days_before,
 			announcement_counter_next, announcement_target_account_ids
 		)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 		returning `+postTemplateReturningColumns(),
 		id, teamID, principal.User.ID, strings.TrimSpace(input.Title), strings.TrimSpace(input.Content),
 		strings.TrimSpace(input.RecurrenceJSON), visibility, mediaJSON, excludeJSON, targetJSON, enabled,
-		aiEnhance, outputMode, promptHint, titleHint, tonality, next, counterNext,
+		aiEnhance, aiEnhanceAnn, outputMode, promptHint, titleHint, tonality, next, counterNext,
 		annEnabled, annTitle, annContent, annDays, annCounter, annTargetsJSON,
 	)
 	return scanPostTemplate(row)
@@ -238,6 +242,10 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 	if input.AiEnhanceEnabled != nil {
 		aiEnhance = *input.AiEnhanceEnabled
 	}
+	aiEnhanceAnn := existing.AiEnhanceAnnouncement
+	if input.AiEnhanceAnnouncement != nil {
+		aiEnhanceAnn = *input.AiEnhanceAnnouncement
+	}
 	outputMode := existing.OutputMode
 	if input.OutputMode != nil {
 		outputMode = domain.NormalizeAutomationOutputMode(string(*input.OutputMode))
@@ -292,14 +300,14 @@ func (s *Store) UpdatePostTemplate(ctx context.Context, teamID, templateID strin
 		update post_templates
 		set title = $3, content = $4, recurrence_json = $5, visibility = $6, media_ids = $7,
 		    media_exclude_by_account = $8, target_account_ids = $9, enabled = $10,
-		    ai_enhance_enabled = $11, output_mode = $12, prompt_hint = $13, title_hint = $14, tonality = $15,
-		    next_materialize_at = $16, counter_next = $17,
-		    announcement_enabled = $18, announcement_title = $19, announcement_content = $20, announcement_days_before = $21,
-		    announcement_counter_next = $22, announcement_target_account_ids = $23, updated_at = now()
+		    ai_enhance_enabled = $11, ai_enhance_announcement = $12, output_mode = $13, prompt_hint = $14, title_hint = $15, tonality = $16,
+		    next_materialize_at = $17, counter_next = $18,
+		    announcement_enabled = $19, announcement_title = $20, announcement_content = $21, announcement_days_before = $22,
+		    announcement_counter_next = $23, announcement_target_account_ids = $24, updated_at = now()
 		where team_id = $1 and id = $2
 		returning `+postTemplateReturningColumns(),
 		teamID, templateID, title, content, recJSON, visibility, mediaJSON, excludeJSON, targetJSON, enabled,
-		aiEnhance, string(outputMode), promptHint, titleHint, tonality, nextAny, counterNext,
+		aiEnhance, aiEnhanceAnn, string(outputMode), promptHint, titleHint, tonality, nextAny, counterNext,
 		annEnabled, annTitle, annContent, annDays, annCounter, annTargetsJSON,
 	)
 	return scanPostTemplate(row)
@@ -400,7 +408,7 @@ func (s *Store) AdvancePostTemplateAnnouncementCounter(ctx context.Context, temp
 
 func postTemplateReturningColumns() string {
 	return `id, team_id, author_user_id, title, content, recurrence_json, visibility, media_ids,
-	          media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, output_mode, prompt_hint, title_hint, tonality,
+	          media_exclude_by_account, target_account_ids, enabled, ai_enhance_enabled, ai_enhance_announcement, output_mode, prompt_hint, title_hint, tonality,
 	          next_materialize_at, counter_next,
 	          announcement_enabled, announcement_title, announcement_content, announcement_days_before,
 	          announcement_counter_next, announcement_target_account_ids, created_at, updated_at`
@@ -426,6 +434,7 @@ func scanPostTemplate(row interface {
 		&targetRaw,
 		&t.Enabled,
 		&t.AiEnhanceEnabled,
+		&t.AiEnhanceAnnouncement,
 		&outputMode,
 		&t.PromptHint,
 		&t.TitleHint,

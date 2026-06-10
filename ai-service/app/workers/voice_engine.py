@@ -222,14 +222,18 @@ class VoiceEngineWorker:
             )
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'unchanged'}."
         article_section = self._rss_article_section(params)
+        announcement_section = self._announcement_reference_section(params)
+        post_kind_section = self._recurring_post_kind_section(params)
         title_hint = self._title_json_instruction(params, include_title)
         return (
             f"{base_prompt}\n\n"
             "Refine an existing draft for multi-account publishing.\n"
+            f"{post_kind_section}"
             f"Primary account: {primary.get('username') or primary_account_id} (id={primary_account_id}, "
             f"limit {primary_limit} characters).\n"
             f"Template starting point (adapt using the source article facts):\n---\n{source_content}\n---\n"
-            f"{article_section}\n"
+            f"{article_section}"
+            f"{announcement_section}"
             f"Refinement goal: {refinement_hint}\n"
             f"- \"content\": refined primary text for account id {primary_account_id}; "
             f"MUST NOT exceed {primary_limit} characters (hard limit)\n"
@@ -241,6 +245,37 @@ class VoiceEngineWorker:
             f"Return JSON only with keys {self._title_json_keys(include_title)}content, account_content_override, hashtags, platform_metadata.\n"
             f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
         )
+
+    @staticmethod
+    def _recurring_post_kind_section(params: dict[str, Any]) -> str:
+        kind = str(params.get("recurring_post_kind") or "").strip().lower()
+        if kind == "announcement":
+            return (
+                "This is a recurring-template ANNOUNCEMENT post (teaser before the main event). "
+                "Keep it shorter, build anticipation, and align tone with the paired main post.\n"
+            )
+        if kind == "main":
+            return (
+                "This is the MAIN recurring post. If an announcement reference is provided below, "
+                "stay consistent with its wording, promises, and tone while expanding into the full post.\n"
+            )
+        return ""
+
+    @staticmethod
+    def _announcement_reference_section(params: dict[str, Any]) -> str:
+        content = str(params.get("announcement_reference_content") or "").strip()
+        title = str(params.get("announcement_reference_title") or "").strip()
+        main_event = str(params.get("main_event_at") or "").strip()
+        if not content and not title:
+            return ""
+        lines = ["Paired announcement reference (keep the main post aligned with this teaser):"]
+        if main_event:
+            lines.append(f"Main event schedule (UTC): {main_event}")
+        if title:
+            lines.append(f"Announcement title: {title}")
+        if content:
+            lines.append(f"Announcement text:\n---\n{content}\n---")
+        return "\n".join(lines) + "\n"
 
     @staticmethod
     def _rss_article_section(params: dict[str, Any]) -> str:

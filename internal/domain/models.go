@@ -512,6 +512,7 @@ type PostTemplate struct {
 	TargetAccountIDs       []string            `json:"target_account_ids"`
 	Enabled                bool                `json:"enabled"`
 	AiEnhanceEnabled       bool                `json:"ai_enhance_enabled"`
+	AiEnhanceAnnouncement  bool                `json:"ai_enhance_announcement,omitempty"`
 	OutputMode             AutomationOutputMode `json:"output_mode"`
 	PromptHint             string              `json:"prompt_hint"`
 	TitleHint              string              `json:"title_hint"`
@@ -538,6 +539,7 @@ type CreatePostTemplateInput struct {
 	TargetAccountIDs       []string            `json:"target_account_ids"`
 	Enabled                *bool               `json:"enabled,omitempty"`
 	AiEnhanceEnabled       *bool               `json:"ai_enhance_enabled,omitempty"`
+	AiEnhanceAnnouncement  *bool               `json:"ai_enhance_announcement,omitempty"`
 	OutputMode             AutomationOutputMode `json:"output_mode,omitempty"`
 	PromptHint             string              `json:"prompt_hint,omitempty"`
 	TitleHint              string              `json:"title_hint,omitempty"`
@@ -562,6 +564,7 @@ type UpdatePostTemplateInput struct {
 	TargetAccountIDs       *[]string            `json:"target_account_ids,omitempty"`
 	Enabled                *bool                `json:"enabled,omitempty"`
 	AiEnhanceEnabled       *bool                `json:"ai_enhance_enabled,omitempty"`
+	AiEnhanceAnnouncement  *bool                `json:"ai_enhance_announcement,omitempty"`
 	OutputMode             *AutomationOutputMode `json:"output_mode,omitempty"`
 	PromptHint             *string              `json:"prompt_hint,omitempty"`
 	TitleHint              *string              `json:"title_hint,omitempty"`

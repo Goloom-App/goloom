@@ -138,6 +138,46 @@ async def test_process_refine_mode_skips_minimum_length():
 
 
 @pytest.mark.asyncio
+async def test_process_refine_mode_includes_announcement_reference_for_main_post():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    refined = "Full episode post aligned with the teaser."
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "content": refined,
+                "account_content_override": {},
+                "hashtags": [],
+                "platform_metadata": {},
+            }
+        ),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    await worker.process(
+        {
+            **sample_job(
+                refine_content=True,
+                source_content="Episode #{counter} drops soon.",
+                recurring_post_kind="main",
+                announcement_reference_title="Reminder",
+                announcement_reference_content="Coming Friday on {main_weekday_name}.",
+                main_event_at="2026-06-13T10:00:00Z",
+            ),
+            "context": sample_context(),
+        }
+    )
+
+    prompt = adapter.generate.await_args_list[0].args[0]
+    assert "Paired announcement reference" in prompt
+    assert "Coming Friday" in prompt
+    assert "MAIN recurring post" in prompt
+
+
+@pytest.mark.asyncio
 async def test_process_refine_mode_coerces_invalid_account_content_override():
     adapter = AsyncMock()
     adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")

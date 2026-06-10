@@ -82,6 +82,8 @@ func (a *API) handleAICallback(w http.ResponseWriter, r *http.Request) {
 	} else if input.Status == domain.AIJobStatusFailed {
 		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
 			a.finishRSSAutomationFallback(r, job, meta)
+		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			a.finishRecurringAutomationFallback(r, job, meta)
 		}
 	}
 

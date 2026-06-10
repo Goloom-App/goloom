@@ -90,6 +90,7 @@ export function RecurringPostsView({
   const [announcementDifferentTargets, setAnnouncementDifferentTargets] = useState(false)
   const [announcementTargetIds, setAnnouncementTargetIds] = useState<string[]>([])
   const [aiEnhanceEnabled, setAiEnhanceEnabled] = useState(false)
+  const [aiEnhanceAnnouncement, setAiEnhanceAnnouncement] = useState(false)
   const [outputMode, setOutputMode] = useState<AutomationOutputMode>('scheduled')
   const [promptHint, setPromptHint] = useState('')
   const [titleHint, setTitleHint] = useState('')
@@ -154,6 +155,7 @@ export function RecurringPostsView({
     setAnnouncementDifferentTargets(false)
     setAnnouncementTargetIds([])
     setAiEnhanceEnabled(false)
+    setAiEnhanceAnnouncement(false)
     setOutputMode('scheduled')
     setPromptHint('')
     setTitleHint('')
@@ -186,6 +188,7 @@ export function RecurringPostsView({
     setAnnouncementDifferentTargets(annTargets.length > 0)
     setAnnouncementTargetIds(annTargets)
     setAiEnhanceEnabled(Boolean(item.ai_enhance_enabled))
+    setAiEnhanceAnnouncement(Boolean(item.ai_enhance_announcement))
     setOutputMode(item.output_mode ?? 'scheduled')
     setPromptHint(item.prompt_hint ?? '')
     setTitleHint(item.title_hint ?? '')
@@ -204,6 +207,7 @@ export function RecurringPostsView({
     payload.output_mode = outputMode
     if (team?.isAiEnabled) {
       payload.ai_enhance_enabled = aiEnhanceEnabled
+      payload.ai_enhance_announcement = aiEnhanceEnabled && announcementEnabled && aiEnhanceAnnouncement
       payload.prompt_hint = promptHint.trim()
       payload.title_hint = titleHint.trim()
       payload.tonality = tonality.trim()
@@ -472,6 +476,32 @@ export function RecurringPostsView({
                     </label>
                     {aiEnhanceEnabled ? (
                       <>
+                        {announcementEnabled ? (
+                          <fieldset className="recurrence-form__kind-group">
+                            <legend className="recurrence-form__legend">{t('recurring.aiScope')}</legend>
+                            <label className="field field--checkbox">
+                              <input
+                                type="radio"
+                                name="recurring-ai-scope"
+                                checked={!aiEnhanceAnnouncement}
+                                onChange={() => setAiEnhanceAnnouncement(false)}
+                                data-testid="recurring-ai-scope-main"
+                              />
+                              <span>{t('recurring.aiScopeMainOnly')}</span>
+                            </label>
+                            <label className="field field--checkbox">
+                              <input
+                                type="radio"
+                                name="recurring-ai-scope"
+                                checked={aiEnhanceAnnouncement}
+                                onChange={() => setAiEnhanceAnnouncement(true)}
+                                data-testid="recurring-ai-scope-both"
+                              />
+                              <span>{t('recurring.aiScopeMainAndAnnouncement')}</span>
+                            </label>
+                            <p className="hint">{t('recurring.aiScopeHint')}</p>
+                          </fieldset>
+                        ) : null}
                         <label className="field">
                           <span>{t('rss.aiPrompt')}</span>
                           <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('rss.aiPromptPlaceholder')} />

@@ -384,6 +384,7 @@ alter table post_templates add column if not exists announces_template_id uuid r
 alter table post_templates add column if not exists announcement_days_before integer;
 
 alter table post_templates add column if not exists ai_enhance_enabled boolean not null default false;
+alter table post_templates add column if not exists ai_enhance_announcement boolean not null default false;
 alter table post_templates add column if not exists output_mode text not null default 'scheduled';
 alter table post_templates add column if not exists prompt_hint text not null default '';
 alter table post_templates add column if not exists tonality text not null default '';

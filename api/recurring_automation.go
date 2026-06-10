@@ -10,6 +10,7 @@ import (
 
 type recurringAutomationMeta struct {
 	TemplateID      string
+	PostKind        string
 	OutputMode      domain.AutomationOutputMode
 	ScheduledAt     time.Time
 	Draft           bool
@@ -26,6 +27,7 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 		Params struct {
 			RecurringAutomation *struct {
 				TemplateID      string `json:"template_id"`
+				PostKind        string `json:"post_kind"`
 				OutputMode      string `json:"output_mode"`
 				ScheduledAt     string `json:"scheduled_at"`
 				Draft           bool   `json:"draft"`
@@ -52,8 +54,13 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 	if counter <= 0 {
 		counter = 1
 	}
+	postKind := strings.TrimSpace(raw.PostKind)
+	if postKind == "" {
+		postKind = "main"
+	}
 	return &recurringAutomationMeta{
 		TemplateID:      raw.TemplateID,
+		PostKind:        postKind,
 		OutputMode:      domain.NormalizeAutomationOutputMode(raw.OutputMode),
 		ScheduledAt:     scheduledAt,
 		Draft:           raw.Draft,
@@ -66,6 +73,9 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 func recurringAutomationDraftFromMeta(meta *recurringAutomationMeta) bool {
 	if meta == nil {
 		return true
+	}
+	if meta.PostKind == "announcement" {
+		return false
 	}
 	if meta.OutputMode == domain.AutomationOutputDraft {
 		return true

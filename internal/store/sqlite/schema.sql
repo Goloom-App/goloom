@@ -331,6 +331,7 @@ create table if not exists post_templates (
     target_account_ids text not null default '[]',
     enabled integer not null default 1,
     ai_enhance_enabled integer not null default 0,
+    ai_enhance_announcement integer not null default 0,
     output_mode text not null default 'scheduled',
     prompt_hint text not null default '',
     title_hint text not null default '',

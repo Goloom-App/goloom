@@ -39,6 +39,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table post_templates add column announcement_counter_next integer not null default 1`,
 		`alter table post_templates add column announcement_target_account_ids text not null default '[]'`,
 		`alter table post_templates add column ai_enhance_enabled integer not null default 0`,
+		`alter table post_templates add column ai_enhance_announcement integer not null default 0`,
 		`alter table post_templates add column output_mode text not null default 'scheduled'`,
 		`alter table post_templates add column prompt_hint text not null default ''`,
 		`alter table post_templates add column tonality text not null default ''`,

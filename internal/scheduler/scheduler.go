@@ -653,6 +653,15 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 	if len(targets) == 0 {
 		targets = tmpl.TargetAccountIDs
 	}
+
+	if s.shouldEnhanceRecurringAnnouncementWithAI(ctx, *tmpl) {
+		if err := s.submitRecurringAnnouncementAIEnhancement(ctx, *tmpl, content, expandedTitle, announceAt, mainEventAt); err != nil {
+			s.logger.WarnContext(ctx, "recurring materialize: announcement ai unavailable, using template", "template_id", tmpl.ID, "error", err)
+		} else {
+			return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
+		}
+	}
+
 	authorID := tmpl.AuthorUserID
 	tplID := tmpl.ID
 	input := domain.CreatePostInput{
@@ -667,6 +676,7 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 		AuthorUserID:          &authorID,
 		PostTemplateID:        &tplID,
 		TemplateCounter:       &counterVal,
+		Source:                domain.PostSourceAutomation,
 	}
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
 	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
@@ -708,7 +718,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 	}
 
 	if s.shouldEnhanceRecurringWithAI(ctx, *tmpl) {
-		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, expandedTitle, at, draft); err != nil {
+		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, expandedTitle, at, draft, &scheduledAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: ai unavailable, using template", "template_id", tmpl.ID, "error", err)
 		} else {
 			return nil
