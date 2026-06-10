@@ -10,9 +10,11 @@ def render_system_prompt(
     formatting_rules: list[str],
     banned_words: list[str],
     preferred_words: list[str],
+    signature_phrases: list[str],
     identity_lines: list[str],
     language_dna_lines: list[str],
     reach_strategy_lines: list[str],
+    anti_ai_rules: list[str],
     knowledge_sources: list[str],
     campaign_formats: list[str],
     style_examples: list[str],
@@ -31,15 +33,20 @@ Language DNA:
 Reach strategy:
 {format_list(reach_strategy_lines)}
 
+Sound human, not AI:
+{format_list(anti_ai_rules)}
+
 Writing rules:
 - Preferred language: {preferred_language}
 - Team hashtag ceiling: {max_hashtags}
 - Formatting rules:
 {format_list(formatting_rules)}
-- Banned words (never use):
+- Banned words and phrases (never use, including casing variants):
 {format_list(banned_words)}
-- Preferred words (use when natural):
+- Preferred words (use when natural, never force):
 {format_list(preferred_words)}
+- Signature phrases (weave in occasionally if a perfect fit):
+{format_list(signature_phrases)}
 
 Knowledge base (exclusive factual source — CRITICAL):
 {format_list(knowledge_sources)}
@@ -105,6 +112,58 @@ Profile:
 
 Respond with ONLY valid JSON (no markdown):
 {{"summary": "Ich klinge jetzt wie ...", "suggestion": "Optional one-line tweak suggestion or empty string"}}"""
+
+
+def render_profile_assistant_prompt(*, brief: str, examples: list[str], language: str = "de") -> str:
+    examples_block = ""
+    if examples:
+        examples_block = "\nExisting reference posts or quotes (mirror their voice):\n" + format_list(examples) + "\n"
+
+    return f"""You design social-media brand profiles for the Goloom scheduler.
+Your output is consumed directly by a prompt builder, so be specific and concrete.
+
+A user described their account or project. Propose a complete profile that
+sounds genuinely human — never like generic AI marketing copy.
+
+Profile language preference: {language}
+User brief:
+\"\"\"
+{brief.strip()}
+\"\"\"
+{examples_block}
+Rules:
+- Match the brief's domain precisely (a dentist sounds nothing like a tech podcast).
+- Persona must read like a real person, not a corporate role.
+- archetype is a 2-5 word label (e.g. "Tech Podcast", "Solo Indie Dev", "Zahnarztpraxis", "Boutique Werbeagentur").
+- preferred_words and signature_phrases must be domain-specific, not generic.
+- banned_words: list 3-8 hype words this account should never say.
+- formatting_rules: 3-6 short, opinionated rules.
+- main_value: one concrete sentence; no buzzwords.
+
+Respond with ONLY valid JSON (no markdown, no code fences) matching this exact schema:
+{{
+  "identity": {{
+    "archetype": "...",
+    "persona": "...",
+    "industry": "...",
+    "main_value": "...",
+    "target_audience": "..."
+  }},
+  "language_dna": {{
+    "sentence_style": "...",
+    "humor_style": "...",
+    "preferred_words": ["..."],
+    "signature_phrases": ["..."]
+  }},
+  "reach_strategy": {{
+    "hook_style": "...",
+    "cta_focus": "..."
+  }},
+  "banned_words": ["..."],
+  "formatting_rules": ["..."],
+  "preferred_language": "{language}",
+  "max_hashtags": 3
+}}"""
 
 
 def render_analysis_prompt(

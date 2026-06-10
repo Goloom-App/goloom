@@ -11,16 +11,31 @@ When disabled, AI menu items are hidden for that workspace.
 
 The **AI Studio** wizard (`KI Studio` in the UI) is where you configure the team brand profile once. It replaces the old separate “Voice profile” and “Generate post” screens.
 
-The profile is stored in `TeamProfile.style_metadata` and split into four dimensions:
+The profile is stored in `TeamProfile.style_metadata` and split into four open-ended dimensions. All fields are free text so the profile works for any niche — a tech podcast sounds nothing like a dentist or a creative agency:
 
-| Dimension | Purpose | Examples |
-|-----------|---------|----------|
-| **Identity** | Who you are | Industry, core value proposition, target audience |
-| **Language DNA** | How you speak | Sentence style, humor, preferred/banned words |
-| **Reach strategy** | How you grow reach | Hook style (question, thesis, problem-solution), CTA focus |
-| **Knowledge base** | Exclusive facts | Text snippets, fetched URLs — the model must not invent facts outside these sources |
+| Dimension | Free-text fields |
+|-----------|------------------|
+| **Identity** | Archetype (`Tech Podcast`, `Zahnarztpraxis`, `Solo Indie Dev`, `Boutique Werbeagentur`…), voice persona (the real person behind the account), industry, main value, target audience |
+| **Language DNA** | Sentence style, humor, preferred words, signature phrases, additional banned words |
+| **Reach strategy** | Hook style, CTA focus |
+| **Knowledge base** | Text snippets, fetched URLs — the model must not invent facts outside these sources |
 
 Additional writing rules (formatting rules, max hashtags, preferred language) complement the brand dimensions in prompts.
+
+### Anti-AI-speak defaults
+
+Every prompt automatically merges a curated **anti-AI-speak** layer so generated posts do not read like generic LLM output:
+
+- **Banned by default**: tells like `tauche ein`, `spannend`, `revolutionär`, `in einer welt, in der`, `game-changer`, `let's dive in`, `delve into`, `seamless`, `cutting-edge`, `it's not just X, it's Y` and more.
+- **Style rules**: no rhetorical scene-setters, no three-part lists, no decorative em-dashes, no closing summary, sentence fragments are encouraged, etc.
+
+Teams that want full control can tick **„Standard-KI-Phrasen-Block deaktivieren“** in AI Studio — the override is stored as `language_dna.anti_ai_override` and only the team's own banned words apply.
+
+### AI-assisted profile creation
+
+Step 1 of the wizard exposes a **„Profil von KI erstellen lassen“** assistant. The user writes a 2–4 sentence brief (who they are, who they post for) and the AI proposes a complete profile (archetype, persona, language DNA, reach strategy, banned/preferred words, signature phrases). The proposal is pre-filled into the form and remains fully editable before saving.
+
+Implementation: the new `profile_assistant` AI job type — same trigger / SSE pipeline as every other AI job.
 
 ### Architecture overview
 
@@ -28,8 +43,9 @@ Additional writing rules (formatting rules, max hashtags, preferred language) co
 flowchart TB
   subgraph storage [Team brand storage]
     TP[TeamProfile.style_metadata]
-    TP --> Brand[Brand dims: identity, language_dna, reach_strategy]
+    TP --> Brand[Brand dims: identity, persona, language_dna, reach_strategy]
     TP --> Rules[Writing rules: language, hashtags, formatting]
+    AAI[Anti-AI defaults: banned phrases + style rules]
     KS[KnowledgeSources]
     CF[CampaignFormats]
     SE[StyleExamples]
@@ -77,6 +93,7 @@ flowchart TB
   CA --> PB
   Brand --> PB
   Rules --> PB
+  AAI --> PB
   KS --> PB
 ```
 
@@ -84,7 +101,7 @@ flowchart TB
 
 ## AI Studio (3-step wizard)
 
-1. **Setup** — Configure the four brand dimensions and knowledge sources. After saving, an optional **vibe preview** summarizes how the voice sounds.
+1. **Setup** — Optionally start with the **AI assistant** (write a short brief, get a full profile draft). Then fine-tune the four brand dimensions and knowledge sources. After saving, an optional **vibe preview** summarizes how the voice sounds.
 2. **Task** — Enter the occasion (text, URL, or RSS link), pick output format (post, teaser, poll, thread), and select target accounts.
 3. **Editor** — Review generated text, apply mood sliders (more expertise, shorter, remove marketing speak), preview the assembled prompt, and save as draft or open in the composer.
 

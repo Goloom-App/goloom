@@ -37,25 +37,35 @@ export interface ExternalPostMonitorSettings {
 
 export type AccountAuthType = 'oauth_token' | 'app_password'
 
-export type AIJobType = 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview'
+export type AIJobType =
+  | 'voice_engine'
+  | 'campaign_autopilot'
+  | 'proactive_trigger'
+  | 'profile_analysis'
+  | 'vibe_preview'
+  | 'profile_assistant'
 
 export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
 export interface BrandIdentity {
+  archetype?: string
+  persona?: string
   industry: string
   mainValue: string
   targetAudience: string
 }
 
 export interface BrandLanguageDNA {
-  sentenceStyle: 'short_punchy' | 'calm_explanatory' | ''
+  sentenceStyle: string
   preferredWords: string[]
-  humorStyle: 'dry_sarcastic' | 'friendly_empathetic' | 'neutral' | ''
+  signaturePhrases?: string[]
+  humorStyle: string
+  antiAiOverride?: boolean
 }
 
 export interface BrandReachStrategy {
-  hookStyle: 'ask_question' | 'controversial_thesis' | 'solve_problem' | ''
-  ctaFocus: 'community_discussion' | 'direct_booking' | ''
+  hookStyle: string
+  ctaFocus: string
 }
 
 export interface StyleMetadata {

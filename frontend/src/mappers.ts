@@ -362,6 +362,8 @@ function mapStyleMetadata(raw: BackendStyleMetadata): StyleMetadata {
     preferredLanguage: raw.preferred_language,
     identity: raw.identity
       ? {
+          archetype: raw.identity.archetype ?? '',
+          persona: raw.identity.persona ?? '',
           industry: raw.identity.industry ?? '',
           mainValue: raw.identity.main_value ?? '',
           targetAudience: raw.identity.target_audience ?? '',
@@ -369,15 +371,17 @@ function mapStyleMetadata(raw: BackendStyleMetadata): StyleMetadata {
       : undefined,
     languageDna: raw.language_dna
       ? {
-          sentenceStyle: (raw.language_dna.sentence_style || '') as NonNullable<StyleMetadata['languageDna']>['sentenceStyle'],
+          sentenceStyle: raw.language_dna.sentence_style ?? '',
           preferredWords: raw.language_dna.preferred_words ?? [],
-          humorStyle: (raw.language_dna.humor_style || '') as NonNullable<StyleMetadata['languageDna']>['humorStyle'],
+          signaturePhrases: raw.language_dna.signature_phrases ?? [],
+          humorStyle: raw.language_dna.humor_style ?? '',
+          antiAiOverride: Boolean(raw.language_dna.anti_ai_override),
         }
       : undefined,
     reachStrategy: raw.reach_strategy
       ? {
-          hookStyle: (raw.reach_strategy.hook_style || '') as NonNullable<StyleMetadata['reachStrategy']>['hookStyle'],
-          ctaFocus: (raw.reach_strategy.cta_focus || '') as NonNullable<StyleMetadata['reachStrategy']>['ctaFocus'],
+          hookStyle: raw.reach_strategy.hook_style ?? '',
+          ctaFocus: raw.reach_strategy.cta_focus ?? '',
         }
       : undefined,
   }

@@ -60,25 +60,35 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
   // Identity
+  const [archetype, setArchetype] = useState('')
+  const [persona, setPersona] = useState('')
   const [industry, setIndustry] = useState('')
   const [mainValue, setMainValue] = useState('')
   const [targetAudience, setTargetAudience] = useState('')
 
-  // Language DNA
-  const [sentenceStyle, setSentenceStyle] = useState<'short_punchy' | 'calm_explanatory' | ''>('')
-  const [humorStyle, setHumorStyle] = useState<'dry_sarcastic' | 'friendly_empathetic' | 'neutral' | ''>('')
+  // Language DNA — all free text
+  const [sentenceStyle, setSentenceStyle] = useState('')
+  const [humorStyle, setHumorStyle] = useState('')
   const [preferredWords, setPreferredWords] = useState<string[]>([])
   const [newPreferredWord, setNewPreferredWord] = useState('')
+  const [signaturePhrases, setSignaturePhrases] = useState<string[]>([])
+  const [newSignaturePhrase, setNewSignaturePhrase] = useState('')
   const [bannedWords, setBannedWords] = useState<string[]>([])
   const [newBannedWord, setNewBannedWord] = useState('')
+  const [antiAiOverride, setAntiAiOverride] = useState(false)
 
   // Reach
-  const [hookStyle, setHookStyle] = useState<'ask_question' | 'controversial_thesis' | 'solve_problem' | ''>('')
-  const [ctaFocus, setCtaFocus] = useState<'community_discussion' | 'direct_booking' | ''>('')
+  const [hookStyle, setHookStyle] = useState('')
+  const [ctaFocus, setCtaFocus] = useState('')
 
   const [preferredLanguage, setPreferredLanguage] = useState('de')
   const [maxHashtags, setMaxHashtags] = useState(3)
   const [autoPublishEnabled, setAutoPublishEnabled] = useState(false)
+
+  // Profile assistant
+  const [assistantBrief, setAssistantBrief] = useState('')
+  const [assistantJobId, setAssistantJobId] = useState<string | null>(null)
+  const [assistantOpen, setAssistantOpen] = useState(false)
 
   // Knowledge base form
   const [kbName, setKbName] = useState('')
@@ -106,12 +116,16 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
   useEffect(() => {
     if (!profile) return
     const meta = profile.styleMetadata
+    setArchetype(meta.identity?.archetype ?? '')
+    setPersona(meta.identity?.persona ?? '')
     setIndustry(meta.identity?.industry ?? '')
     setMainValue(meta.identity?.mainValue ?? '')
     setTargetAudience(meta.identity?.targetAudience ?? '')
     setSentenceStyle(meta.languageDna?.sentenceStyle ?? '')
     setHumorStyle(meta.languageDna?.humorStyle ?? '')
     setPreferredWords(meta.languageDna?.preferredWords ?? [])
+    setSignaturePhrases(meta.languageDna?.signaturePhrases ?? [])
+    setAntiAiOverride(Boolean(meta.languageDna?.antiAiOverride))
     setBannedWords(meta.bannedWords ?? [])
     setHookStyle(meta.reachStrategy?.hookStyle ?? '')
     setCtaFocus(meta.reachStrategy?.ctaFocus ?? '')
@@ -153,6 +167,41 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
     }
   }, [jobs, activeJobId])
 
+  // Apply profile_assistant proposal to the form when its job completes.
+  useEffect(() => {
+    if (!assistantJobId || !jobs) return
+    const job = jobs.find((j) => j.id === assistantJobId)
+    if (!job || job.status === 'pending' || job.status === 'processing') return
+    if (job.status === 'failed') {
+      setError(job.errorMessage || 'KI-Assistent ist fehlgeschlagen')
+      setAssistantJobId(null)
+      return
+    }
+    const proposed = job.result?.proposed_profile as Record<string, unknown> | undefined
+    if (proposed && typeof proposed === 'object') {
+      const identity = (proposed.identity as Record<string, string> | undefined) ?? {}
+      const dna = (proposed.language_dna as Record<string, unknown> | undefined) ?? {}
+      const reach = (proposed.reach_strategy as Record<string, string> | undefined) ?? {}
+      if (identity.archetype) setArchetype(String(identity.archetype))
+      if (identity.persona) setPersona(String(identity.persona))
+      if (identity.industry) setIndustry(String(identity.industry))
+      if (identity.main_value) setMainValue(String(identity.main_value))
+      if (identity.target_audience) setTargetAudience(String(identity.target_audience))
+      if (dna.sentence_style) setSentenceStyle(String(dna.sentence_style))
+      if (dna.humor_style) setHumorStyle(String(dna.humor_style))
+      if (Array.isArray(dna.preferred_words)) setPreferredWords(dna.preferred_words.map(String))
+      if (Array.isArray(dna.signature_phrases)) setSignaturePhrases(dna.signature_phrases.map(String))
+      if (Array.isArray(proposed.banned_words)) setBannedWords((proposed.banned_words as unknown[]).map(String))
+      if (reach.hook_style) setHookStyle(String(reach.hook_style))
+      if (reach.cta_focus) setCtaFocus(String(reach.cta_focus))
+      if (typeof proposed.max_hashtags === 'number') setMaxHashtags(proposed.max_hashtags)
+      if (typeof proposed.preferred_language === 'string') setPreferredLanguage(proposed.preferred_language)
+      setStatusMessage('Profilvorschlag eingefügt — bitte prüfen und speichern')
+      setAssistantOpen(false)
+    }
+    setAssistantJobId(null)
+  }, [jobs, assistantJobId])
+
   if (!team.isAiEnabled) {
     return (
       <div className="empty-state">
@@ -171,6 +220,8 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
     max_hashtags: maxHashtags,
     preferred_language: preferredLanguage,
     identity: {
+      archetype,
+      persona,
       industry,
       main_value: mainValue,
       target_audience: targetAudience,
@@ -178,13 +229,39 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
     language_dna: {
       sentence_style: sentenceStyle,
       preferred_words: preferredWords,
+      signature_phrases: signaturePhrases,
       humor_style: humorStyle,
+      anti_ai_override: antiAiOverride,
     },
     reach_strategy: {
       hook_style: hookStyle,
       cta_focus: ctaFocus,
     },
   })
+
+  const handleAssistantSubmit = async () => {
+    if (!assistantBrief.trim()) {
+      setError('Bitte beschreibe dich oder dein Projekt')
+      return
+    }
+    setError(null)
+    setStatusMessage('KI-Assistent denkt nach …')
+    try {
+      const response = await triggerJob.mutateAsync({
+        teamId: team.id,
+        type: 'profile_assistant',
+        params: {
+          brief: assistantBrief.trim(),
+          language: preferredLanguage,
+        },
+      })
+      if (response.jobId) {
+        setAssistantJobId(response.jobId)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'KI-Assistent fehlgeschlagen')
+    }
+  }
 
   const handleSaveSetup = async () => {
     setError(null)
@@ -394,19 +471,93 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
 
       {step === 1 && (
         <div className="stack stack--lg">
+          <div className="glass-panel stack" data-testid="brand-assistant-panel">
+            <div className="flex-row--between" style={{ alignItems: 'center' }}>
+              <h2 className="section-card__title" style={{ margin: 0 }}>
+                <Sparkles size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.4rem' }} />
+                KI-Assistent
+              </h2>
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                data-testid="brand-assistant-toggle"
+                onClick={() => setAssistantOpen((v) => !v)}
+              >
+                {assistantOpen ? 'Schließen' : 'Profil von KI erstellen lassen'}
+              </button>
+            </div>
+            <p className="hint" style={{ margin: 0 }}>
+              Beschreibe in 2–4 Sätzen, wer du bist und für wen du postest. Die KI füllt das Profil mit
+              einem konkreten Vorschlag aus — du kannst alles nachträglich anpassen.
+            </p>
+            {assistantOpen && (
+              <>
+                <textarea
+                  data-testid="brand-assistant-brief"
+                  rows={4}
+                  value={assistantBrief}
+                  onChange={(e) => setAssistantBrief(e.target.value)}
+                  placeholder={'z. B. „Wir sind ein Selfhosting-Podcast für Anfänger, sprechen über Heimserver, Home-Assistant und Datenschutz. Zielgruppe: Tech-Nerds, leicht zynisch.“'}
+                />
+                <div className="flex-row--center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    data-testid="brand-assistant-submit"
+                    onClick={() => void handleAssistantSubmit()}
+                    disabled={triggerJob.isPending || Boolean(assistantJobId)}
+                  >
+                    {assistantJobId ? (
+                      <>
+                        <Loader2 size={14} className="spin" /> KI denkt nach…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} /> Vorschlag generieren
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="glass-panel stack">
             <h2 className="section-card__title">Identität — Wer bist du?</h2>
             <label className="field">
-              <span>Branche</span>
-              <input data-testid="brand-industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="z. B. Open-Source Hosting" />
+              <span>Archetyp</span>
+              <input
+                data-testid="brand-archetype"
+                value={archetype}
+                onChange={(e) => setArchetype(e.target.value)}
+                placeholder="z. B. Tech-Podcast, Zahnarztpraxis, Solo-Privat, Werbeagentur"
+              />
+              <p className="hint" style={{ fontSize: '0.8rem' }}>Kurzes Label, das deinen Account einordnet.</p>
+            </label>
+            <label className="field">
+              <span>Voice-Persona</span>
+              <textarea
+                data-testid="brand-persona"
+                rows={2}
+                value={persona}
+                onChange={(e) => setPersona(e.target.value)}
+                placeholder={'z. B. „Maximilian, 38, IT-Nerd mit Selfhosting-Spleen, redet wie mit Kollegen am Stehtisch.“'}
+              />
+              <p className="hint" style={{ fontSize: '0.8rem' }}>
+                Wer schreibt? Beschreibe die Person hinter dem Account — das prägt den Vibe stärker als jede Tonalitätsangabe.
+              </p>
+            </label>
+            <label className="field">
+              <span>Branche / Kontext</span>
+              <input data-testid="brand-industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="z. B. Open-Source Hosting, Zahnmedizin, B2B-Marketing" />
             </label>
             <label className="field">
               <span>Haupt-Mehrwert</span>
-              <input data-testid="brand-main-value" value={mainValue} onChange={(e) => setMainValue(e.target.value)} placeholder="Was bietest du einzigartig?" />
+              <input data-testid="brand-main-value" value={mainValue} onChange={(e) => setMainValue(e.target.value)} placeholder="Was bietest du einzigartig? Konkret, kein Marketing." />
             </label>
             <label className="field">
               <span>Zielgruppe</span>
-              <input data-testid="brand-audience" value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder="z. B. Technik-affine Community" />
+              <input data-testid="brand-audience" value={targetAudience} onChange={(e) => setTargetAudience(e.target.value)} placeholder='z. B. „Patienten mit Zahnarzt-Angst“ oder „Hobby-Sysadmins über 30“' />
             </label>
           </div>
 
@@ -414,23 +565,26 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
             <h2 className="section-card__title">Sprach-DNA — Wie redest du?</h2>
             <label className="field">
               <span>Satzbau</span>
-              <select data-testid="brand-sentence-style" value={sentenceStyle} onChange={(e) => setSentenceStyle(e.target.value as typeof sentenceStyle)}>
-                <option value="">— wählen —</option>
-                <option value="short_punchy">Kurz / abgehackt</option>
-                <option value="calm_explanatory">Ruhig / erklärend</option>
-              </select>
+              <textarea
+                data-testid="brand-sentence-style"
+                rows={2}
+                value={sentenceStyle}
+                onChange={(e) => setSentenceStyle(e.target.value)}
+                placeholder={'z. B. „Kurze Sätze, gerne Halbsätze. Kein Verb-am-Ende-Drama.“'}
+              />
             </label>
             <label className="field">
-              <span>Humor-Faktor</span>
-              <select data-testid="brand-humor" value={humorStyle} onChange={(e) => setHumorStyle(e.target.value as typeof humorStyle)}>
-                <option value="">— wählen —</option>
-                <option value="dry_sarcastic">Trocken / sarkastisch</option>
-                <option value="friendly_empathetic">Freundlich / empathisch</option>
-                <option value="neutral">Neutral</option>
-              </select>
+              <span>Humor / Ton</span>
+              <textarea
+                data-testid="brand-humor"
+                rows={2}
+                value={humorStyle}
+                onChange={(e) => setHumorStyle(e.target.value)}
+                placeholder={'z. B. „Trocken mit IT-Insider-Witzen“ oder „Warm und beruhigend für Angstpatienten“'}
+              />
             </label>
             <div className="field">
-              <span>Bevorzugte Wörter</span>
+              <span>Bevorzugte Wörter / Fachbegriffe</span>
               <div className="flex-row--wrap gap-2 mb-2">
                 {preferredWords.map((word, idx) => (
                   <div key={idx} className="badge flex-row--center gap-1">
@@ -458,7 +612,42 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
               </div>
             </div>
             <div className="field">
-              <span>Verbotene Wörter</span>
+              <span>Signature-Phrasen</span>
+              <div className="flex-row--wrap gap-2 mb-2">
+                {signaturePhrases.map((phrase, idx) => (
+                  <div key={idx} className="badge flex-row--center gap-1">
+                    <span>{phrase}</span>
+                    <button type="button" className="btn btn--ghost btn--xs" onClick={() => setSignaturePhrases(signaturePhrases.filter((_, i) => i !== idx))}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex-row--center gap-2">
+                <input
+                  data-testid="brand-signature-phrase"
+                  value={newSignaturePhrase}
+                  onChange={(e) => setNewSignaturePhrase(e.target.value)}
+                  placeholder={'z. B. „läuft auf meinem Pi“'}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newSignaturePhrase.trim()) {
+                      e.preventDefault()
+                      setSignaturePhrases([...signaturePhrases, newSignaturePhrase.trim()])
+                      setNewSignaturePhrase('')
+                    }
+                  }}
+                />
+                <button type="button" className="btn btn--secondary" onClick={() => {
+                  if (newSignaturePhrase.trim()) {
+                    setSignaturePhrases([...signaturePhrases, newSignaturePhrase.trim()])
+                    setNewSignaturePhrase('')
+                  }
+                }}>Add</button>
+              </div>
+              <p className="hint" style={{ fontSize: '0.8rem' }}>Wiederkehrende Wendungen, die deinen Account erkennbar machen. Werden nur eingesetzt, wenn sie wirklich passen.</p>
+            </div>
+            <div className="field">
+              <span>Verbotene Wörter (zusätzlich zu den Standard-KI-Phrasen)</span>
               <div className="flex-row--wrap gap-2 mb-2">
                 {bannedWords.map((word, idx) => (
                   <div key={idx} className="badge flex-row--center gap-1">
@@ -470,13 +659,19 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
                 ))}
               </div>
               <div className="flex-row--center gap-2">
-                <input value={newBannedWord} onChange={(e) => setNewBannedWord(e.target.value)} placeholder="z. B. spannend, revolutionär" onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newBannedWord.trim()) {
-                    e.preventDefault()
-                    setBannedWords([...bannedWords, newBannedWord.trim()])
-                    setNewBannedWord('')
-                  }
-                }} />
+                <input
+                  data-testid="brand-banned-word"
+                  value={newBannedWord}
+                  onChange={(e) => setNewBannedWord(e.target.value)}
+                  placeholder="zusätzliche Wörter, die nie auftauchen sollen"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newBannedWord.trim()) {
+                      e.preventDefault()
+                      setBannedWords([...bannedWords, newBannedWord.trim()])
+                      setNewBannedWord('')
+                    }
+                  }}
+                />
                 <button type="button" className="btn btn--secondary" onClick={() => {
                   if (newBannedWord.trim()) {
                     setBannedWords([...bannedWords, newBannedWord.trim()])
@@ -484,6 +679,18 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
                   }
                 }}>Add</button>
               </div>
+              <p className="hint" style={{ fontSize: '0.8rem' }}>
+                Goloom blockt automatisch typische KI-Phrasen („tauche ein“, „spannend“, „game-changer“ …). Hier kannst du eigene ergänzen.
+              </p>
+              <label className="flex-row--center gap-2" style={{ flexDirection: 'row', alignItems: 'center', marginTop: '0.5rem' }}>
+                <input
+                  type="checkbox"
+                  data-testid="brand-anti-ai-override"
+                  checked={antiAiOverride}
+                  onChange={(e) => setAntiAiOverride(e.target.checked)}
+                />
+                <span style={{ fontSize: '0.85rem' }}>Standard-KI-Phrasen-Block deaktivieren (nur eigene Wörter verwenden)</span>
+              </label>
             </div>
             <label className="field">
               <span>Sprache</span>
@@ -498,20 +705,23 @@ export function BrandWizardView({ team, accounts, onEditInComposer }: BrandWizar
             <h2 className="section-card__title">Reach-Strategie</h2>
             <label className="field">
               <span>Hook-Stil</span>
-              <select data-testid="brand-hook" value={hookStyle} onChange={(e) => setHookStyle(e.target.value as typeof hookStyle)}>
-                <option value="">— wählen —</option>
-                <option value="ask_question">Die Frage stellen</option>
-                <option value="controversial_thesis">Kontroverse These</option>
-                <option value="solve_problem">Problem direkt lösen</option>
-              </select>
+              <textarea
+                data-testid="brand-hook"
+                rows={2}
+                value={hookStyle}
+                onChange={(e) => setHookStyle(e.target.value)}
+                placeholder={'z. B. „Mit einer konkreten Beobachtung einsteigen, nie mit Floskeln.“'}
+              />
             </label>
             <label className="field">
               <span>CTA-Fokus</span>
-              <select data-testid="brand-cta" value={ctaFocus} onChange={(e) => setCtaFocus(e.target.value as typeof ctaFocus)}>
-                <option value="">— wählen —</option>
-                <option value="community_discussion">Community-Diskussion</option>
-                <option value="direct_booking">Direkte Terminbuchung / Link</option>
-              </select>
+              <textarea
+                data-testid="brand-cta"
+                rows={2}
+                value={ctaFocus}
+                onChange={(e) => setCtaFocus(e.target.value)}
+                placeholder={'z. B. „Zum Kommentar einladen, kein Verkaufslink.“ oder „Direkt zur Terminbuchung.“'}
+              />
             </label>
             <label className="field">
               <span>Max. Hashtags</span>

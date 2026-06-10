@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from .anti_ai import ANTI_AI_STYLE_RULES, merged_banned_words
 from .templates import (
     format_value,
     render_few_shot_prompt,
     render_generation_prompt,
+    render_profile_assistant_prompt,
     render_system_prompt,
     render_vibe_preview_prompt,
 )
@@ -26,28 +28,6 @@ class PromptBuilder:
         "default": "Use hashtags sparingly and only when they are clearly relevant.",
     }
 
-    SENTENCE_STYLE_LABELS = {
-        "short_punchy": "Short, punchy sentences. Minimal filler.",
-        "calm_explanatory": "Calm, explanatory sentences. Take time to unpack ideas.",
-    }
-
-    HUMOR_STYLE_LABELS = {
-        "dry_sarcastic": "Dry, sarcastic humor. No cheerleading.",
-        "friendly_empathetic": "Friendly, empathetic tone. Warm but not cheesy.",
-        "neutral": "Neutral tone without strong humor.",
-    }
-
-    HOOK_STYLE_LABELS = {
-        "ask_question": "Open with a direct question to spark replies.",
-        "controversial_thesis": "Open with a bold or slightly provocative thesis.",
-        "solve_problem": "Open by naming the problem and offering a concrete fix.",
-    }
-
-    CTA_FOCUS_LABELS = {
-        "community_discussion": "CTA: invite comments, replies, or community discussion.",
-        "direct_booking": "CTA: drive a clear next step (booking, signup, link click).",
-    }
-
     OUTPUT_FORMAT_HINTS = {
         "post": "Standard single post.",
         "teaser": "Short teaser that builds curiosity for linked content.",
@@ -58,7 +38,7 @@ class PromptBuilder:
     MOOD_ADJUSTMENT_HINTS = {
         "more_expertise": "Emphasize domain expertise and concrete facts from the knowledge base.",
         "shorter_punchier": "Cut length aggressively. Every word must earn its place.",
-        "remove_marketing_speak": "Replace hype adjectives with hard facts. Ban words like 'spannend', 'revolutionär', 'tauche ein'.",
+        "remove_marketing_speak": "Replace hype adjectives with hard facts. Strip every buzzword.",
     }
 
     def build_system_prompt(self, context: dict) -> str:
@@ -81,8 +61,15 @@ class PromptBuilder:
             for item in self._get_nested(context, ("knowledge_sources",), ("knowledgeSources",), default=[])
         ]
 
-        banned_words = self._merged_banned_words(style_metadata)
-        preferred_words = self._preferred_words(style_metadata)
+        dna = self._nested_mapping(style_metadata, "language_dna", "languageDna")
+        anti_ai_override = bool(dna.get("anti_ai_override") or dna.get("antiAiOverride") or False)
+
+        banned_words = merged_banned_words(
+            self._string_list(style_metadata.get("banned_words")),
+            override=anti_ai_override,
+        )
+        preferred_words = self._string_list(dna.get("preferred_words") or dna.get("preferredWords"))
+        signature_phrases = self._string_list(dna.get("signature_phrases") or dna.get("signaturePhrases"))
 
         return render_system_prompt(
             team_name=str(team_name),
@@ -91,9 +78,11 @@ class PromptBuilder:
             formatting_rules=self._string_list(style_metadata.get("formatting_rules")),
             banned_words=banned_words,
             preferred_words=preferred_words,
+            signature_phrases=signature_phrases,
             identity_lines=self._identity_lines(style_metadata),
             language_dna_lines=self._language_dna_lines(style_metadata),
             reach_strategy_lines=self._reach_strategy_lines(style_metadata),
+            anti_ai_rules=[] if anti_ai_override else list(ANTI_AI_STYLE_RULES),
             knowledge_sources=knowledge_sources,
             campaign_formats=campaign_formats,
             style_examples=style_examples,
@@ -132,6 +121,14 @@ class PromptBuilder:
             profile_summary="\n".join(f"- {line}" for line in summary_parts if line),
         )
 
+    def build_profile_assistant_prompt(self, params: dict) -> str:
+        brief = str(params.get("brief") or params.get("description") or "").strip()
+        if not brief:
+            raise ValueError("profile_assistant requires a non-empty brief")
+        examples = self._string_list(params.get("examples") or params.get("reference_posts"))
+        language = str(params.get("language") or "de").strip() or "de"
+        return render_profile_assistant_prompt(brief=brief, examples=examples, language=language)
+
     def inject_few_shot(self, prompt: str, examples: list) -> str:
         if not examples:
             return prompt
@@ -168,6 +165,10 @@ class PromptBuilder:
     def _identity_lines(self, style_metadata: dict[str, Any]) -> list[str]:
         identity = self._nested_mapping(style_metadata, "identity")
         lines: list[str] = []
+        if archetype := str(identity.get("archetype") or "").strip():
+            lines.append(f"Archetype: {archetype}")
+        if persona := str(identity.get("persona") or "").strip():
+            lines.append(f"Voice persona: {persona}")
         if industry := str(identity.get("industry") or "").strip():
             lines.append(f"Industry: {industry}")
         if main_value := str(identity.get("main_value") or identity.get("mainValue") or "").strip():
@@ -181,13 +182,10 @@ class PromptBuilder:
         lines: list[str] = []
         sentence_style = str(dna.get("sentence_style") or dna.get("sentenceStyle") or "").strip()
         if sentence_style:
-            lines.append(self.SENTENCE_STYLE_LABELS.get(sentence_style, f"Sentence style: {sentence_style}"))
+            lines.append(f"Sentence style: {sentence_style}")
         humor = str(dna.get("humor_style") or dna.get("humorStyle") or "").strip()
         if humor:
-            lines.append(self.HUMOR_STYLE_LABELS.get(humor, f"Humor: {humor}"))
-        preferred = self._string_list(dna.get("preferred_words") or dna.get("preferredWords"))
-        if preferred:
-            lines.append(f"Always weave in when natural: {', '.join(preferred)}")
+            lines.append(f"Humor: {humor}")
         return lines
 
     def _reach_strategy_lines(self, style_metadata: dict[str, Any]) -> list[str]:
@@ -195,22 +193,11 @@ class PromptBuilder:
         lines: list[str] = []
         hook = str(reach.get("hook_style") or reach.get("hookStyle") or "").strip()
         if hook:
-            lines.append(self.HOOK_STYLE_LABELS.get(hook, f"Hook style: {hook}"))
+            lines.append(f"Hook style: {hook}")
         cta = str(reach.get("cta_focus") or reach.get("ctaFocus") or "").strip()
         if cta:
-            lines.append(self.CTA_FOCUS_LABELS.get(cta, f"CTA focus: {cta}"))
+            lines.append(f"CTA focus: {cta}")
         return lines
-
-    def _merged_banned_words(self, style_metadata: dict[str, Any]) -> list[str]:
-        words = set(self._string_list(style_metadata.get("banned_words")))
-        dna = self._nested_mapping(style_metadata, "language_dna", "languageDna")
-        for word in self._string_list(dna.get("banned_words") or dna.get("bannedWords")):
-            words.add(word)
-        return sorted(words)
-
-    def _preferred_words(self, style_metadata: dict[str, Any]) -> list[str]:
-        dna = self._nested_mapping(style_metadata, "language_dna", "languageDna")
-        return self._string_list(dna.get("preferred_words") or dna.get("preferredWords"))
 
     def _format_knowledge_source(self, item: Any) -> str:
         if not isinstance(item, Mapping):
