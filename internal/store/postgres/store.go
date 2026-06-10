@@ -231,7 +231,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
 	}
 	defer rows.Close()
 
-	var users []domain.User
+	users := make([]domain.User, 0, 8)
 	for rows.Next() {
 		var user domain.User
 		if err := rows.Scan(
@@ -286,7 +286,7 @@ func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin boo
 	}
 	defer rows.Close()
 
-	var teams []domain.Team
+	teams := make([]domain.Team, 0, 4)
 	for rows.Next() {
 		team, err := scanTeamRow(rows)
 		if err != nil {
@@ -426,7 +426,7 @@ func (s *Store) ListTeamMembers(ctx context.Context, teamID string) ([]domain.Te
 	}
 	defer rows.Close()
 
-	var memberships []domain.TeamMembership
+	memberships := make([]domain.TeamMembership, 0, 4)
 	for rows.Next() {
 		var membership domain.TeamMembership
 		if err := rows.Scan(
@@ -487,7 +487,7 @@ func (s *Store) ListProviderInstances(ctx context.Context, providerName string) 
 	}
 	defer rows.Close()
 
-	var items []domain.ProviderInstance
+	items := make([]domain.ProviderInstance, 0, 4)
 	for rows.Next() {
 		instance, err := scanProviderInstance(rows)
 		if err != nil {
@@ -643,7 +643,7 @@ func (s *Store) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.S
 	}
 	defer rows.Close()
 
-	var accounts []domain.SocialAccount
+	accounts := make([]domain.SocialAccount, 0, 4)
 	for rows.Next() {
 		var account domain.SocialAccount
 		var accessExpires sql.NullTime
@@ -823,7 +823,7 @@ func (s *Store) GetAccountsByIDs(ctx context.Context, teamID string, ids []strin
 	}
 	defer rows.Close()
 
-	var accounts []domain.SocialAccount
+	accounts := make([]domain.SocialAccount, 0, len(ids))
 	for rows.Next() {
 		var account domain.SocialAccount
 		var accessExpires sql.NullTime
@@ -996,6 +996,36 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 		order by p.scheduled_at asc
 	`
 	return s.listPosts(ctx, query, teamID)
+}
+
+func (s *Store) ListTeamPostsPage(ctx context.Context, teamID string, limit, offset int) ([]domain.ScheduledPost, int64, error) {
+	var total int64
+	err := s.pool.QueryRow(ctx, `
+		select count(*) from scheduled_posts where team_id = $1`,
+		teamID,
+	).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	const query = `
+		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
+		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
+		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
+		       p.post_template_id::text, p.template_counter,
+		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
+		from scheduled_posts p
+		left join scheduled_post_targets t on t.post_id = p.id
+		where p.team_id = $1
+		group by p.id
+		order by p.scheduled_at asc
+		limit $2 offset $3
+	`
+	posts, err := s.listPosts(ctx, query, teamID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	return posts, total, nil
 }
 
 func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error) {
@@ -1232,7 +1262,7 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 	}
 	defer rows.Close()
 
-	var accounts []domain.SocialAccount
+	accounts := make([]domain.SocialAccount, 0, 4)
 	for rows.Next() {
 		var account domain.SocialAccount
 		var accessExpires sql.NullTime
@@ -1348,7 +1378,7 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 	}
 	defer rows.Close()
 
-	var posts []domain.ScheduledPost
+	posts := make([]domain.ScheduledPost, 0, 16)
 	for rows.Next() {
 		var post domain.ScheduledPost
 		var mediaRaw, mediaExcludeRaw string

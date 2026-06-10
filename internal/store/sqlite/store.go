@@ -812,6 +812,40 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 	return posts, nil
 }
 
+func (s *Store) ListTeamPostsPage(ctx context.Context, teamID string, limit, offset int) ([]domain.ScheduledPost, int64, error) {
+	var total int64
+	err := s.db.QueryRowContext(ctx, `
+		select count(*) from scheduled_posts where team_id = ?`,
+		teamID,
+	).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
+		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
+		       post_template_id, template_counter, created_at, updated_at
+		from scheduled_posts
+		where team_id = ?
+		order by scheduled_at asc
+		limit ? offset ?`,
+		teamID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	posts, err := collectPosts(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := s.attachTargetAccounts(ctx, posts); err != nil {
+		return nil, 0, err
+	}
+	return posts, total, nil
+}
+
 func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error) {
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
@@ -1438,7 +1472,7 @@ func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 }
 
 func collectUsers(rows *sql.Rows) ([]domain.User, error) {
-	var items []domain.User
+	items := make([]domain.User, 0, 8)
 	for rows.Next() {
 		item, err := scanUser(rows)
 		if err != nil {
@@ -1450,7 +1484,7 @@ func collectUsers(rows *sql.Rows) ([]domain.User, error) {
 }
 
 func collectTeams(rows *sql.Rows) ([]domain.Team, error) {
-	var items []domain.Team
+	items := make([]domain.Team, 0, 4)
 	for rows.Next() {
 		item, err := scanTeam(rows)
 		if err != nil {
@@ -1462,7 +1496,7 @@ func collectTeams(rows *sql.Rows) ([]domain.Team, error) {
 }
 
 func collectMemberships(rows *sql.Rows) ([]domain.TeamMembership, error) {
-	var items []domain.TeamMembership
+	items := make([]domain.TeamMembership, 0, 4)
 	for rows.Next() {
 		item, err := scanMembership(rows)
 		if err != nil {
@@ -1474,7 +1508,7 @@ func collectMemberships(rows *sql.Rows) ([]domain.TeamMembership, error) {
 }
 
 func collectAccounts(rows *sql.Rows) ([]domain.SocialAccount, error) {
-	var items []domain.SocialAccount
+	items := make([]domain.SocialAccount, 0, 4)
 	for rows.Next() {
 		item, err := scanAccount(rows)
 		if err != nil {
@@ -1486,7 +1520,7 @@ func collectAccounts(rows *sql.Rows) ([]domain.SocialAccount, error) {
 }
 
 func collectProviderInstances(rows *sql.Rows) ([]domain.ProviderInstance, error) {
-	var items []domain.ProviderInstance
+	items := make([]domain.ProviderInstance, 0, 4)
 	for rows.Next() {
 		item, err := scanProviderInstance(rows)
 		if err != nil {
@@ -1498,7 +1532,7 @@ func collectProviderInstances(rows *sql.Rows) ([]domain.ProviderInstance, error)
 }
 
 func collectPosts(rows *sql.Rows) ([]domain.ScheduledPost, error) {
-	var items []domain.ScheduledPost
+	items := make([]domain.ScheduledPost, 0, 16)
 	for rows.Next() {
 		item, err := scanPost(rows)
 		if err != nil {

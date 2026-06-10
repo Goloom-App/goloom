@@ -138,6 +138,7 @@ type Store interface {
 	AcceptTeamInvitation(ctx context.Context, userID, email, rawToken string) (domain.TeamMembership, error)
 	CreateScheduledPost(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostInput) (domain.ScheduledPost, error)
 	ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error)
+	ListTeamPostsPage(ctx context.Context, teamID string, limit, offset int) ([]domain.ScheduledPost, int64, error)
 	GetScheduledPost(ctx context.Context, teamID, postID string) (domain.ScheduledPost, error)
 	GetScheduledPostByID(ctx context.Context, postID string) (domain.ScheduledPost, error)
 	PatchScheduledPost(ctx context.Context, teamID, postID string, patch domain.UpdatePostPatch) (domain.ScheduledPost, error)

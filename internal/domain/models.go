@@ -457,8 +457,8 @@ type AIContext struct {
 	EngagementHours  []EngagementHourBucket `json:"engagement_hours,omitempty"`
 }
 
-const AIContextRecentPostsLimit = 100
-const AIContextUpcomingPostsLimit = 200
+const AIContextRecentPostsLimit = 50
+const AIContextUpcomingPostsLimit = 50
 
 // MaxCharsForProvider returns the default character limit for a provider, honoring per-account overrides.
 func MaxCharsForProvider(provider string, override *int) int {

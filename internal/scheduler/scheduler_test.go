@@ -690,6 +690,10 @@ func (m *mockStore) ListPostTemplates(ctx context.Context, teamID string) ([]dom
 	return nil, nil
 }
 
+func (m *mockStore) ListTeamPostsPage(ctx context.Context, teamID string, limit, offset int) ([]domain.ScheduledPost, int64, error) {
+	return nil, 0, nil
+}
+
 func (m *mockStore) GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error) {
 	return domain.PostTemplate{}, nil
 }
