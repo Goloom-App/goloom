@@ -1256,6 +1256,13 @@ export function createApiClient(options: ApiClientOptions) {
         body: JSON.stringify(payload),
       })
     },
+    importOldPosts(teamID: string, payload: { account_ids: string[]; limit: number; until_date?: string }) {
+      return request<{ imported: number }>(options, `/v1/teams/${teamID}/import-old-posts`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
     createAIDraft(teamID: string, payload: Record<string, unknown>) {
       return request<BackendPost>(options, `/v1/teams/${teamID}/posts/draft`, {
         method: 'POST',

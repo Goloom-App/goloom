@@ -96,11 +96,14 @@ func decodePublishMetadata(raw []byte) map[string]string {
 	return meta
 }
 
-func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error {
+func (s *Store) UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64, recordedAt string) error {
 	if len(metrics) == 0 {
 		return nil
 	}
-	utcDay := time.Now().UTC().Format("2006-01-02")
+	utcDay := strings.TrimSpace(recordedAt)
+	if utcDay == "" {
+		utcDay = time.Now().UTC().Format("2006-01-02")
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err

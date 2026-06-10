@@ -54,7 +54,7 @@ func TestGetTeamAnalyticsReport_deltaFromHistory(t *testing.T) {
 	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 10}); err != nil {
+	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 10}, ""); err != nil {
 		t.Fatal(err)
 	}
 	yesterday := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
@@ -103,7 +103,7 @@ func TestGetTeamMetricHistorySeries(t *testing.T) {
 		Content: "c", ScheduledAt: time.Now().UTC(), TargetAccounts: []string{acc.ID},
 	})
 	_ = s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil)
-	_ = s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 7})
+	_ = s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 7}, "")
 
 	series, err := s.GetTeamMetricHistorySeries(ctx, team.ID, "likes", 30)
 	if err != nil {
@@ -143,7 +143,7 @@ func TestListTeamPostAnalyticsRanking_includesPostsWithoutMetrics(t *testing.T) 
 	})
 	_ = s.MarkPostResult(ctx, withMetrics.ID, 1, domain.PostStatusPosted, "", nil)
 	_ = s.MarkPostResult(ctx, withoutMetrics.ID, 1, domain.PostStatusPosted, "", nil)
-	_ = s.UpsertPostMetrics(ctx, withMetrics.ID, acc.ID, map[string]int64{"likes": 5})
+	_ = s.UpsertPostMetrics(ctx, withMetrics.ID, acc.ID, map[string]int64{"likes": 5}, "")
 
 	rows, err := s.ListTeamPostAnalyticsRanking(ctx, team.ID, "score", 50, 0)
 	if err != nil {

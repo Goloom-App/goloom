@@ -136,7 +136,6 @@ func (s *Service) importExternalPostsForAccount(ctx context.Context, teamID, own
 	}
 
 	imported := 0
-	utcDay := time.Now().UTC().Format("2006-01-02")
 	for _, ap := range posts {
 		exists, err := s.store.AuthorPostAlreadyTracked(ctx, account.ID, ap.RemoteID, ap.URL, ap.Metadata)
 		if err != nil {
@@ -160,12 +159,13 @@ func (s *Service) importExternalPostsForAccount(ctx context.Context, teamID, own
 		}
 		imported++
 		if strings.TrimSpace(ap.URL) != "" || len(ap.Metadata) > 0 {
+			utcDay := created.ScheduledAt.UTC().Format("2006-01-02")
 			s.syncOnePostTargetMetrics(ctx, domain.PostedTargetForMetricSync{
 				PostID:          created.ID,
 				PublishedURL:    ap.URL,
 				PublishMetadata: ap.Metadata,
 				Account:         account,
-			}, utcDay)
+			}, utcDay, utcDay)
 		}
 	}
 	return imported, nil
@@ -182,4 +182,158 @@ func (s *Service) teamOwnerUserID(ctx context.Context, teamID string) (string, e
 		}
 	}
 	return "", fmt.Errorf("no owner found for team %s", teamID)
+}
+
+// ImportOldPostsInput carries parameters for manual old posts import.
+type ImportOldPostsInput struct {
+	AccountIDs []string `json:"account_ids"`
+	Limit      int      `json:"limit"`
+	UntilDate  string   `json:"until_date,omitempty"` // optional: "2024-01-01"
+}
+
+// ImportOldPostsResult carries the result of a manual old posts import.
+type ImportOldPostsResult struct {
+	Imported int `json:"imported"`
+}
+
+// ImportOldPosts manually imports old posts from specified accounts.
+func (s *Service) ImportOldPosts(ctx context.Context, teamID string, input ImportOldPostsInput) (ImportOldPostsResult, error) {
+	s.externalPostImportMu.Lock()
+	defer s.externalPostImportMu.Unlock()
+
+	ownerID, err := s.teamOwnerUserID(ctx, teamID)
+	if err != nil {
+		return ImportOldPostsResult{}, fmt.Errorf("no team owner: %w", err)
+	}
+
+	accounts, err := s.store.ListTeamAccounts(ctx, teamID)
+	if err != nil {
+		return ImportOldPostsResult{}, fmt.Errorf("list accounts: %w", err)
+	}
+
+	// Filter to requested accounts
+	accountMap := make(map[string]struct{}, len(input.AccountIDs))
+	for _, id := range input.AccountIDs {
+		accountMap[id] = struct{}{}
+	}
+	var filteredAccounts []domain.SocialAccount
+	for _, acc := range accounts {
+		if len(input.AccountIDs) == 0 {
+			// No filter: import from all accounts
+			filteredAccounts = append(filteredAccounts, acc)
+		} else if _, ok := accountMap[acc.ID]; ok {
+			filteredAccounts = append(filteredAccounts, acc)
+		}
+	}
+
+	// Parse until date
+	var since time.Time
+	if input.UntilDate != "" {
+		parsed, err := time.Parse("2006-01-02", input.UntilDate)
+		if err != nil {
+			return ImportOldPostsResult{}, fmt.Errorf("invalid until_date: %w", err)
+		}
+		since = parsed.UTC()
+	} else {
+		// Default: 1 year back
+		since = time.Now().UTC().AddDate(-1, 0, 0)
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	totalImported := 0
+	for _, account := range filteredAccounts {
+		n, err := s.importOldPostsForAccount(ctx, teamID, ownerID, account, since, limit)
+		if err != nil {
+			s.logger.WarnContext(ctx, "import old posts account failed",
+				"team_id", teamID, "account_id", account.ID, "provider", account.Provider, "error", err)
+			continue
+		}
+		totalImported += n
+	}
+
+	if totalImported > 0 {
+		s.logger.InfoContext(ctx, "import old posts completed", "team_id", teamID, "imported", totalImported)
+	}
+
+	return ImportOldPostsResult{Imported: totalImported}, nil
+}
+
+func (s *Service) importOldPostsForAccount(ctx context.Context, teamID, ownerID string, account domain.SocialAccount, since time.Time, limit int) (int, error) {
+	providerImpl, ok := s.providers.Get(account.Provider)
+	if !ok {
+		return 0, fmt.Errorf("unsupported provider %q", account.Provider)
+	}
+	feedFetcher, ok := providerImpl.(provider.AuthorFeedFetcher)
+	if !ok {
+		return 0, fmt.Errorf("provider %q does not support author feed", account.Provider)
+	}
+
+	acc, err := socialtokens.EnsureMastodonFresh(ctx, s.store, s.providers, account)
+	if err != nil {
+		return 0, err
+	}
+	account = acc
+
+	token, err := s.store.DecryptAccessToken(account)
+	if err != nil {
+		return 0, err
+	}
+	refreshToken, err := s.store.DecryptRefreshToken(account)
+	if err != nil {
+		return 0, err
+	}
+
+	if strings.TrimSpace(account.RemoteAccountID) == "" {
+		return 0, fmt.Errorf("account %s missing remote_account_id", account.ID)
+	}
+
+	posts, err := feedFetcher.ListAuthorPosts(ctx, account, provider.PublishAuth{
+		AccessToken:  token,
+		RefreshToken: refreshToken,
+	}, since, limit)
+	if err != nil {
+		return 0, err
+	}
+
+	imported := 0
+	for _, ap := range posts {
+		exists, err := s.store.AuthorPostAlreadyTracked(ctx, account.ID, ap.RemoteID, ap.URL, ap.Metadata)
+		if err != nil {
+			s.logger.WarnContext(ctx, "import old posts dedup check failed", "remote_id", ap.RemoteID, "error", err)
+			continue
+		}
+		if exists {
+			continue
+		}
+		created, err := s.store.CreateImportedPost(ctx, teamID, ownerID, domain.ImportedPostInput{
+			AccountID:       account.ID,
+			RemotePostID:    ap.RemoteID,
+			Content:         ap.Content,
+			PublishedAt:     ap.PublishedAt,
+			PublishedURL:    ap.URL,
+			PublishMetadata: ap.Metadata,
+		})
+		if err != nil {
+			s.logger.WarnContext(ctx, "import old posts create failed", "remote_id", ap.RemoteID, "error", err)
+			continue
+		}
+		imported++
+		if strings.TrimSpace(ap.URL) != "" || len(ap.Metadata) > 0 {
+			utcDay := created.ScheduledAt.UTC().Format("2006-01-02")
+			s.syncOnePostTargetMetrics(ctx, domain.PostedTargetForMetricSync{
+				PostID:          created.ID,
+				PublishedURL:    ap.URL,
+				PublishMetadata: ap.Metadata,
+				Account:         account,
+			}, utcDay, utcDay)
+		}
+	}
+	return imported, nil
 }

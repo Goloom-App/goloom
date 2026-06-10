@@ -70,7 +70,7 @@ func seedTeamWithPostedMetrics(t *testing.T, s *sqlitestore.Store) (bearer strin
 	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 5, "reposts": 2}); err != nil {
+	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 5, "reposts": 2}, ""); err != nil {
 		t.Fatal(err)
 	}
 	return plain, team.ID, post.ID

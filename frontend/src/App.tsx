@@ -24,6 +24,7 @@ import { AdminView } from './views/admin/AdminView'
 import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admin/adminTypes'
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { SettingsView } from './views/settings/SettingsView'
+import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
 import { TeamProfileView } from './views/ai/TeamProfileView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
 import { AIGenerateView } from './views/ai/AIGenerateView'
@@ -131,6 +132,7 @@ function App() {
   const [newApiTokenScopes, setNewApiTokenScopes] = useState<string[]>([])
   const [teamAiEnabled, setTeamAiEnabled] = useState(false)
   const [externalPostMonitorEnabled, setExternalPostMonitorEnabled] = useState(false)
+  const [importOldPostsOpen, setImportOldPostsOpen] = useState(false)
   const [teamTokenPlaintext, setTeamTokenPlaintext] = useState<string | null>(null)
   const [teamTokenName, setTeamTokenName] = useState('')
   const [teamAiServiceUrl, setTeamAiServiceUrl] = useState('')
@@ -982,6 +984,18 @@ function App() {
     await runAction(async () => {
       await api.upsertExternalPostMonitor(selectedTeam.id, { enabled })
     }, t('status.externalPostMonitorUpdated'))
+  }
+
+  async function handleImportOldPosts(accountIds: string[], limit: number, untilDate?: string): Promise<number> {
+    if (!api || !selectedTeam) {
+      throw new Error('No team selected')
+    }
+    const result = await api.importOldPosts(selectedTeam.id, {
+      account_ids: accountIds,
+      limit,
+      until_date: untilDate,
+    })
+    return result.imported
   }
 
   async function handleSavePersonalAiSettings() {
@@ -2018,6 +2032,16 @@ function App() {
                       onChange={(event) => void handleToggleExternalPostMonitor(event.target.checked)}
                     />
                   </label>
+                  {externalPostMonitorEnabled && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      style={{ marginTop: 8 }}
+                      onClick={() => setImportOldPostsOpen(true)}
+                    >
+                      {t('teams.importOldPostsButton', 'Import old posts')}
+                    </button>
+                  )}
                 </section>
               </>
             ) : myRoleInSelectedTeam === 'owner' ? (
@@ -2061,6 +2085,16 @@ function App() {
                       onChange={(event) => void handleToggleExternalPostMonitor(event.target.checked)}
                     />
                   </label>
+                  {externalPostMonitorEnabled && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      style={{ marginTop: 8 }}
+                      onClick={() => setImportOldPostsOpen(true)}
+                    >
+                      {t('teams.importOldPostsButton', 'Import old posts')}
+                    </button>
+                  )}
                 </section>
 
                 <section className="stack">
@@ -2310,6 +2344,15 @@ function App() {
           />
         )}
       </div>
+
+      {selectedTeam && (
+        <ImportOldPostsDialog
+          open={importOldPostsOpen}
+          onOpenChange={setImportOldPostsOpen}
+          accounts={teamAccounts}
+          onImport={handleImportOldPosts}
+        />
+      )}
 
     </AppShell>
   )

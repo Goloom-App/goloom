@@ -281,7 +281,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 				PublishedURL:    result.URL,
 				PublishMetadata: result.Metadata,
 				Account:         account,
-			}, utcDay)
+			}, utcDay, "")
 		}
 	}
 
@@ -444,12 +444,12 @@ func (s *Service) fetchMetricsJob(ctx context.Context) {
 	}
 	s.logger.InfoContext(ctx, "post metrics sync started", "target_count", len(rows))
 	for _, row := range rows {
-		s.syncOnePostTargetMetrics(ctx, row, utcDay)
+		s.syncOnePostTargetMetrics(ctx, row, utcDay, "")
 	}
 	s.logger.InfoContext(ctx, "post metrics sync completed", "target_count", len(rows))
 }
 
-func (s *Service) syncOnePostTargetMetrics(ctx context.Context, row domain.PostedTargetForMetricSync, utcDay string) {
+func (s *Service) syncOnePostTargetMetrics(ctx context.Context, row domain.PostedTargetForMetricSync, utcDay string, recordedAt string) {
 	pImpl, ok := s.providers.Get(row.Account.Provider)
 	if !ok {
 		return
@@ -493,7 +493,7 @@ func (s *Service) syncOnePostTargetMetrics(ctx context.Context, row domain.Poste
 	if len(m) == 0 {
 		return
 	}
-	if err := s.store.UpsertPostMetrics(ctx, row.PostID, account.ID, m); err != nil {
+	if err := s.store.UpsertPostMetrics(ctx, row.PostID, account.ID, m, recordedAt); err != nil {
 		s.logger.Warn("metric sync upsert failed", "post_id", row.PostID, "account_id", account.ID, "error", err)
 		return
 	}

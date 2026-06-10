@@ -467,7 +467,7 @@ func TestSQLite_AnalyticsAndPostVersions(t *testing.T) {
 	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 3, "reposts": 1}); err != nil {
+	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 3, "reposts": 1}, ""); err != nil {
 		t.Fatal(err)
 	}
 	sum, err := s.GetTeamAnalytics(ctx, team.ID, 5)

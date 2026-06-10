@@ -148,7 +148,7 @@ type Store interface {
 	DecryptProviderInstanceClientSecret(instance domain.ProviderInstance) (string, error)
 	LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error)
 	ListPostedTargetsForMetricSync(ctx context.Context, notBefore time.Time, utcDay string, limit int) ([]domain.PostedTargetForMetricSync, error)
-	UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error
+	UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64, recordedAt string) error
 	MarkScheduledPostTargetMetricsSynced(ctx context.Context, postID, accountID, utcDay string) error
 	ListOAuthAccountsWithAccessTokenExpiringBefore(ctx context.Context, before time.Time, limit int) ([]domain.AccountOAuthTokenExpiry, error)
 	ListAccountsForMetricsSync(ctx context.Context, limit int) ([]domain.SocialAccount, error)

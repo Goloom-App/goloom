@@ -464,7 +464,7 @@ func (m *mockStore) ListPostedTargetsForMetricSync(_ context.Context, _ time.Tim
 	return nil, nil
 }
 
-func (m *mockStore) UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64) error {
+func (m *mockStore) UpsertPostMetrics(ctx context.Context, postID, accountID string, metrics map[string]int64, recordedAt string) error {
 	return nil
 }
 
