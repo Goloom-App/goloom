@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { e2eBootstrapToken } from './constants'
 import { createAITeam } from './helpers'
 
-test.describe.serial('AI studio brand wizard', () => {
+test.describe.serial('AI profile and generator', () => {
   let teamId: string
   let bootstrapToken: string
   const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:18080'
@@ -21,11 +21,12 @@ test.describe.serial('AI studio brand wizard', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 30_000 })
     await page.goto(`/?team=${teamId}`)
     await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 15_000 })
-    await page.getByRole('button', { name: 'AI Studio' }).click()
-    await expect(page.getByTestId('brand-wizard-view')).toBeVisible({ timeout: 10_000 })
   })
 
-  test('renders setup step with brand dimension fields', async ({ page }) => {
+  test('AI Profile renders brand dimension fields', async ({ page }) => {
+    await page.getByRole('button', { name: 'AI Profile', exact: true }).click()
+    await expect(page.getByTestId('brand-profile-view')).toBeVisible({ timeout: 10_000 })
+
     await expect(page.getByTestId('brand-assistant-panel')).toBeVisible()
     await expect(page.getByTestId('brand-archetype')).toBeVisible()
     await expect(page.getByTestId('brand-persona')).toBeVisible()
@@ -39,9 +40,13 @@ test.describe.serial('AI studio brand wizard', () => {
     await expect(page.getByTestId('brand-anti-ai-override')).toBeVisible()
     await expect(page.getByTestId('brand-knowledge-section')).toBeVisible()
     await expect(page.getByTestId('brand-save-setup')).toBeVisible()
+    await expect(page.getByTestId('brand-show-prompt')).toBeVisible()
   })
 
-  test('can save brand profile setup with free-text dimensions', async ({ page }) => {
+  test('can save brand profile with free-text dimensions', async ({ page }) => {
+    await page.getByRole('button', { name: 'AI Profile', exact: true }).click()
+    await expect(page.getByTestId('brand-profile-view')).toBeVisible({ timeout: 10_000 })
+
     await page.getByTestId('brand-archetype').fill('Selfhosting Podcast')
     await page.getByTestId('brand-persona').fill('Maximilian, 38, redet wie mit Kollegen am Stehtisch.')
     await page.getByTestId('brand-industry').fill('Open Source Hosting')
@@ -57,7 +62,10 @@ test.describe.serial('AI studio brand wizard', () => {
     await expect(page.getByTestId('brand-status-success')).toContainText('Profil gespeichert')
   })
 
-  test('AI profile assistant panel toggles and validates input', async ({ page }) => {
+  test('AI profile assistant validates empty input', async ({ page }) => {
+    await page.getByRole('button', { name: 'AI Profile', exact: true }).click()
+    await expect(page.getByTestId('brand-profile-view')).toBeVisible({ timeout: 10_000 })
+
     await page.getByTestId('brand-assistant-toggle').click()
     await expect(page.getByTestId('brand-assistant-brief')).toBeVisible()
     await page.getByTestId('brand-assistant-submit').click()
@@ -66,6 +74,9 @@ test.describe.serial('AI studio brand wizard', () => {
   })
 
   test('can add a knowledge source', async ({ page }) => {
+    await page.getByRole('button', { name: 'AI Profile', exact: true }).click()
+    await expect(page.getByTestId('brand-profile-view')).toBeVisible({ timeout: 10_000 })
+
     await page.getByTestId('brand-knowledge-section').getByPlaceholder('z. B. Produkt-FAQ').fill('E2E Product FAQ')
     await page
       .getByTestId('brand-knowledge-section')
@@ -77,20 +88,21 @@ test.describe.serial('AI studio brand wizard', () => {
     await expect(page.getByText('E2E Product FAQ')).toBeVisible()
   })
 
-  test('task step validates occasion before generation', async ({ page }) => {
-    await page.getByRole('button', { name: /Aufgabe/ }).click()
-    await expect(page.getByTestId('brand-occasion')).toBeVisible()
-    await expect(page.getByTestId('brand-output-format-post')).toBeVisible()
-    await page.getByTestId('brand-generate').click()
+  test('AI Generator validates occasion before generation', async ({ page }) => {
+    await page.getByRole('button', { name: 'AI Generator', exact: true }).click()
+    await expect(page.getByTestId('ai-generator-view')).toBeVisible({ timeout: 10_000 })
 
-    await expect(page.getByTestId('brand-status-error')).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByTestId('brand-status-error')).toHaveText('Bitte einen Anlass angeben')
+    await expect(page.getByTestId('gen-occasion')).toBeVisible()
+    await expect(page.getByTestId('gen-output-format-post')).toBeVisible()
+    await page.getByTestId('gen-generate').click()
+
+    await expect(page.getByTestId('gen-status-error')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('gen-status-error')).toHaveText('Bitte einen Anlass angeben')
   })
 
-  test('editor step shows placeholder without generated content', async ({ page }) => {
-    await page.getByRole('button', { name: /Editor/ }).click()
+  test('AI Generator shows placeholder without generated content', async ({ page }) => {
+    await page.getByRole('button', { name: 'AI Generator', exact: true }).click()
+    await expect(page.getByTestId('ai-generator-view')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('Noch kein Post generiert')).toBeVisible()
-    await page.getByRole('button', { name: /Zur Aufgabe/ }).click()
-    await expect(page.getByTestId('brand-occasion')).toBeVisible()
   })
 })

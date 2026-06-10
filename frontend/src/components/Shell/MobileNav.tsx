@@ -208,14 +208,24 @@ export function MobileDrawer({
                 {teams.find(t => t.id === selectedTeamId)?.isAiEnabled && (
                   <>
                     <button
-                      className={`btn btn--ghost btn--justify-start ${currentSection === 'aiStudio' ? 'btn--active' : ''}`}
+                      className={`btn btn--ghost btn--justify-start ${currentSection === 'aiProfile' ? 'btn--active' : ''}`}
                       onClick={() => {
-                        setSection('aiStudio')
+                        setSection('aiProfile')
                         onOpenChange(false)
                       }}
                     >
                       <Bot size={18} />
-                      <span className="drawer-item-label">AI Studio</span>
+                      <span className="drawer-item-label">AI Profile</span>
+                    </button>
+                    <button
+                      className={`btn btn--ghost btn--justify-start ${currentSection === 'aiGenerator' ? 'btn--active' : ''}`}
+                      onClick={() => {
+                        setSection('aiGenerator')
+                        onOpenChange(false)
+                      }}
+                    >
+                      <Bot size={18} />
+                      <span className="drawer-item-label">AI Generator</span>
                     </button>
                     <button
                       className={`btn btn--ghost btn--justify-start ${currentSection === 'aiCampaigns' ? 'btn--active' : ''}`}

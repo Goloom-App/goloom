@@ -463,10 +463,17 @@ body,
   z-index: var(--z-base);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  background: var(--surface);
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
   animation: view-enter 350ms var(--ease-out);
+}
+
+@media (max-width: 1023px) {
+  .app-main {
+    padding: var(--space-4);
+  }
 }
 
 .app-shell--composer .app-main {
@@ -5287,4 +5294,315 @@ select {
   background: var(--surface-muted);
   padding: var(--space-3);
   border-radius: var(--radius-sm);
+}
+
+/* ==========================================================================
+   Application Sidebar (modern)
+   ========================================================================== */
+.app-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3);
+  background: var(--surface-raised);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+@media (max-width: 1023px) {
+  .app-sidebar { display: none; }
+}
+
+.app-sidebar__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.app-sidebar__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.app-sidebar__workspace-picker {
+  padding: 0 var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-sidebar__workspace-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+}
+
+.app-sidebar__workspace-row {
+  display: flex;
+}
+
+.app-sidebar__workspace-select {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.88rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.app-sidebar__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-2);
+  padding: 0.6rem 0.9rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+}
+
+.app-sidebar__cta:hover:not(:disabled) {
+  background: var(--accent-darker);
+}
+
+.app-sidebar__cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-sidebar__cta-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  flex: 1;
+  min-height: 0;
+}
+
+.app-sidebar__nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app-sidebar__nav-heading {
+  margin: 0;
+  padding: 0 var(--space-2);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.app-sidebar__nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-soft);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+}
+
+.app-sidebar__link:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.app-sidebar__link--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.app-sidebar__link--active:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.app-sidebar__link-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.app-sidebar__divider {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-2) var(--space-1);
+}
+
+.app-sidebar__footer {
+  margin-top: auto;
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.app-sidebar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.app-sidebar__signout {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.4rem 0.6rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+
+.app-sidebar__signout:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* ==========================================================================
+   Legacy .button -> .btn alias (so both class systems render identically)
+   ========================================================================== */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button--primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.button--primary:hover:not(:disabled) {
+  background: var(--accent-darker);
+  border-color: var(--accent-darker);
+}
+
+.button--secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.button--secondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.button--prominent {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.button--prominent:hover:not(:disabled) {
+  background: var(--accent-darker);
+}
+
+.button--sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+/* ==========================================================================
+   SectionCard tightening — fix icon/title alignment
+   ========================================================================== */
+.brand-card__header {
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.brand-card__heading {
+  gap: 4px;
+}
+
+.brand-card__icon {
+  width: 32px;
+  height: 32px;
+}
+
+.brand-card__title {
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.brand-card__subtitle {
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
