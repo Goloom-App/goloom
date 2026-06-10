@@ -9,6 +9,7 @@ from app.prompts import PromptBuilder
 from app.services import GoloomClient
 from app.workers.voice_engine import VoiceEngineWorker
 from app.workers.profile_analysis import ProfileAnalysisWorker
+from app.workers.profile_assistant import ProfileAssistantWorker
 from app.workers.vibe_preview import VibePreviewWorker
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class JobRouter:
             "voice_engine": voice_worker,
             "profile_analysis": ProfileAnalysisWorker(self.adapter, self.goloom_client, self.prompt_builder),
             "vibe_preview": VibePreviewWorker(self.adapter, self.goloom_client, self.prompt_builder),
+            "profile_assistant": ProfileAssistantWorker(self.adapter, self.goloom_client, self.prompt_builder),
         }
 
     async def route(self, job: dict) -> dict:

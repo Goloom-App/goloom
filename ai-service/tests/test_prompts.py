@@ -40,6 +40,42 @@ def test_build_system_prompt_injects_writing_rules_and_banned_words():
     assert "crypto" in prompt
 
 
+def test_build_system_prompt_merges_anti_ai_defaults():
+    builder = PromptBuilder()
+
+    prompt = builder.build_system_prompt(sample_context())
+
+    # Anti-AI section is present by default
+    assert "Sound human, not AI:" in prompt
+    # Some signature banned phrases are merged in
+    assert "tauche ein" in prompt
+    assert "game-changer" in prompt or "game changer" in prompt
+
+
+def test_anti_ai_override_drops_defaults():
+    builder = PromptBuilder()
+    ctx = sample_context()
+    ctx["profile"]["style_metadata"]["language_dna"] = {"anti_ai_override": True}
+
+    prompt = builder.build_system_prompt(ctx)
+
+    # Override removes the defaults entirely
+    assert "tauche ein" not in prompt
+    assert "Sound human, not AI:\n- None provided." in prompt
+
+
+def test_profile_assistant_prompt_includes_brief_and_schema():
+    builder = PromptBuilder()
+
+    prompt = builder.build_profile_assistant_prompt(
+        {"brief": "Wir sind ein Selfhosting-Podcast für Anfänger.", "language": "de"}
+    )
+
+    assert "Selfhosting-Podcast" in prompt
+    assert '"archetype"' in prompt
+    assert '"signature_phrases"' in prompt
+
+
 def test_apply_platform_constraints_returns_expected_limits():
     builder = PromptBuilder()
 

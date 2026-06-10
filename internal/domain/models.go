@@ -63,6 +63,7 @@ const (
 	AIJobTypeProactiveTrigger  AIJobType = "proactive_trigger"
 	AIJobTypeProfileAnalysis   AIJobType = "profile_analysis"
 	AIJobTypeVibePreview       AIJobType = "vibe_preview"
+	AIJobTypeProfileAssistant  AIJobType = "profile_assistant"
 )
 
 type AIJobStatus string
@@ -217,15 +218,19 @@ type Team struct {
 }
 
 type BrandIdentity struct {
+	Archetype      string `json:"archetype,omitempty"`
+	Persona        string `json:"persona,omitempty"`
 	Industry       string `json:"industry"`
 	MainValue      string `json:"main_value"`
 	TargetAudience string `json:"target_audience"`
 }
 
 type BrandLanguageDNA struct {
-	SentenceStyle  string   `json:"sentence_style"`
-	PreferredWords []string `json:"preferred_words"`
-	HumorStyle     string   `json:"humor_style"`
+	SentenceStyle     string   `json:"sentence_style"`
+	PreferredWords    []string `json:"preferred_words"`
+	SignaturePhrases  []string `json:"signature_phrases,omitempty"`
+	HumorStyle        string   `json:"humor_style"`
+	AntiAIOverride    bool     `json:"anti_ai_override,omitempty"`
 }
 
 type BrandReachStrategy struct {
@@ -955,7 +960,9 @@ func (m StyleMetadata) HasLegacyFields() bool {
 
 func (m StyleMetadata) HasBrandDimensions() bool {
 	if m.Identity != nil {
-		if strings.TrimSpace(m.Identity.Industry) != "" ||
+		if strings.TrimSpace(m.Identity.Archetype) != "" ||
+			strings.TrimSpace(m.Identity.Persona) != "" ||
+			strings.TrimSpace(m.Identity.Industry) != "" ||
 			strings.TrimSpace(m.Identity.MainValue) != "" ||
 			strings.TrimSpace(m.Identity.TargetAudience) != "" {
 			return true
@@ -964,6 +971,7 @@ func (m StyleMetadata) HasBrandDimensions() bool {
 	if m.LanguageDNA != nil {
 		if strings.TrimSpace(m.LanguageDNA.SentenceStyle) != "" ||
 			len(m.LanguageDNA.PreferredWords) > 0 ||
+			len(m.LanguageDNA.SignaturePhrases) > 0 ||
 			strings.TrimSpace(m.LanguageDNA.HumorStyle) != "" {
 			return true
 		}

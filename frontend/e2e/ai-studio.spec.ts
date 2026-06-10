@@ -26,6 +26,9 @@ test.describe.serial('AI studio brand wizard', () => {
   })
 
   test('renders setup step with brand dimension fields', async ({ page }) => {
+    await expect(page.getByTestId('brand-assistant-panel')).toBeVisible()
+    await expect(page.getByTestId('brand-archetype')).toBeVisible()
+    await expect(page.getByTestId('brand-persona')).toBeVisible()
     await expect(page.getByTestId('brand-industry')).toBeVisible()
     await expect(page.getByTestId('brand-main-value')).toBeVisible()
     await expect(page.getByTestId('brand-audience')).toBeVisible()
@@ -33,22 +36,33 @@ test.describe.serial('AI studio brand wizard', () => {
     await expect(page.getByTestId('brand-humor')).toBeVisible()
     await expect(page.getByTestId('brand-hook')).toBeVisible()
     await expect(page.getByTestId('brand-cta')).toBeVisible()
+    await expect(page.getByTestId('brand-anti-ai-override')).toBeVisible()
     await expect(page.getByTestId('brand-knowledge-section')).toBeVisible()
     await expect(page.getByTestId('brand-save-setup')).toBeVisible()
   })
 
-  test('can save brand profile setup', async ({ page }) => {
+  test('can save brand profile setup with free-text dimensions', async ({ page }) => {
+    await page.getByTestId('brand-archetype').fill('Selfhosting Podcast')
+    await page.getByTestId('brand-persona').fill('Maximilian, 38, redet wie mit Kollegen am Stehtisch.')
     await page.getByTestId('brand-industry').fill('Open Source Hosting')
-    await page.getByTestId('brand-main-value').fill('Reliable infrastructure without vendor lock-in')
-    await page.getByTestId('brand-audience').fill('Tech-savvy homelab community')
-    await page.getByTestId('brand-sentence-style').selectOption('short_punchy')
-    await page.getByTestId('brand-humor').selectOption('dry_sarcastic')
-    await page.getByTestId('brand-hook').selectOption('ask_question')
-    await page.getByTestId('brand-cta').selectOption('community_discussion')
+    await page.getByTestId('brand-main-value').fill('Heimserver ohne Vendor Lock-in')
+    await page.getByTestId('brand-audience').fill('Hobby-Sysadmins über 30')
+    await page.getByTestId('brand-sentence-style').fill('Kurze Sätze, gerne Halbsätze.')
+    await page.getByTestId('brand-humor').fill('Trocken mit IT-Insider-Witzen.')
+    await page.getByTestId('brand-hook').fill('Mit einer konkreten Beobachtung einsteigen.')
+    await page.getByTestId('brand-cta').fill('Zum Kommentar einladen.')
     await page.getByTestId('brand-save-setup').click()
 
     await expect(page.getByTestId('brand-status-success')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('brand-status-success')).toContainText('Profil gespeichert')
+  })
+
+  test('AI profile assistant panel toggles and validates input', async ({ page }) => {
+    await page.getByTestId('brand-assistant-toggle').click()
+    await expect(page.getByTestId('brand-assistant-brief')).toBeVisible()
+    await page.getByTestId('brand-assistant-submit').click()
+    await expect(page.getByTestId('brand-status-error')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByTestId('brand-status-error')).toContainText('Bitte beschreibe')
   })
 
   test('can add a knowledge source', async ({ page }) => {

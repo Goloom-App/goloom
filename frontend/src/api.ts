@@ -284,6 +284,8 @@ export interface BackendOAuthAuthorization {
 }
 
 export interface BackendBrandIdentity {
+  archetype?: string
+  persona?: string
   industry: string
   main_value: string
   target_audience: string
@@ -292,7 +294,9 @@ export interface BackendBrandIdentity {
 export interface BackendBrandLanguageDNA {
   sentence_style: string
   preferred_words: string[]
+  signature_phrases?: string[]
   humor_style: string
+  anti_ai_override?: boolean
 }
 
 export interface BackendBrandReachStrategy {
@@ -357,7 +361,7 @@ export interface BackendAIJob {
   id: string
   team_id: string
   author_user_id: string
-  type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview'
+  type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview' | 'profile_assistant'
   status: 'pending' | 'processing' | 'completed' | 'failed'
   payload: Record<string, unknown>
   result: Record<string, unknown> | null
@@ -1176,7 +1180,7 @@ export function createApiClient(options: ApiClientOptions) {
     },
     triggerAIJob(
       teamID: string,
-      type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview',
+      type: 'voice_engine' | 'campaign_autopilot' | 'proactive_trigger' | 'profile_analysis' | 'vibe_preview' | 'profile_assistant',
       params: Record<string, unknown>,
     ) {
       return request<BackendAITriggerResponse>(options, `/v1/teams/${teamID}/ai-trigger`, {
