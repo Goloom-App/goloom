@@ -50,6 +50,7 @@ export function ImportOldPostsDialog({ open, onOpenChange, accounts, onImport }:
   }
 
   function handleClose() {
+    if (loading) return // don't close while importing
     setSelectedAccountIds([])
     setResult(null)
     setError(null)
@@ -65,21 +66,24 @@ export function ImportOldPostsDialog({ open, onOpenChange, accounts, onImport }:
             <Dialog.Title className="drawer-title">
               {t('teams.importOldPostsTitle', 'Import old posts')}
             </Dialog.Title>
-            <Dialog.Close asChild>
-              <button type="button" className="btn btn--ghost btn--icon-sm">
-                <X size={20} />
-              </button>
-            </Dialog.Close>
+            {!loading && (
+              <Dialog.Close asChild>
+                <button type="button" className="btn btn--ghost btn--icon-sm">
+                  <X size={20} />
+                </button>
+              </Dialog.Close>
+            )}
           </div>
           <div className="drawer-body stack">
-            <p className="hint">
-              {t(
-                'teams.importOldPostsHint',
-                'Import posts from connected social accounts into goloom. They will be included in future AI profile analysis.',
-              )}
-            </p>
-
-            {result !== null ? (
+            {loading ? (
+              <div className="stack stack--sm" style={{ alignItems: 'center', padding: '24px 0' }}>
+                <div className="spinner" style={{ width: 32, height: 32 }} />
+                <p>{t('teams.importOldPostsImporting', 'Importing posts...')}</p>
+                <p className="hint" style={{ fontSize: 13 }}>
+                  {t('teams.importOldPostsImportingHint', 'This may take a while for large imports.')}
+                </p>
+              </div>
+            ) : result !== null ? (
               <div className="stack stack--sm">
                 <p style={{ color: 'var(--color-success, #16a34a)' }}>
                   {t('teams.importOldPostsResult', '{{count}} posts imported.', { count: result })}
@@ -91,89 +95,97 @@ export function ImportOldPostsDialog({ open, onOpenChange, accounts, onImport }:
                 </div>
               </div>
             ) : (
-              <div className="stack stack--sm">
-                <div>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <button type="button" className="btn btn--sm" onClick={selectAll}>
-                      {t('teams.importOldPostsSelectAll', 'Select all')}
+              <>
+                <p className="hint">
+                  {t(
+                    'teams.importOldPostsHint',
+                    'Import posts from connected social accounts into goloom. They will be included in future AI profile analysis.',
+                  )}
+                </p>
+                <div className="stack stack--sm">
+                  <div>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <button type="button" className="btn btn--sm" onClick={selectAll}>
+                        {t('teams.importOldPostsSelectAll', 'Select all')}
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {accounts.map((account) => (
+                        <label
+                          key={account.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            border: selectedAccountIds.includes(account.id)
+                              ? '1px solid var(--color-primary, #3b82f6)'
+                              : '1px solid var(--color-border, #e5e7eb)',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedAccountIds.includes(account.id)}
+                            onChange={() => toggleAccount(account.id)}
+                          />
+                          <span>{account.name}</span>
+                          <span style={{ opacity: 0.5, fontSize: 11 }}>({account.provider})</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                        <input type="radio" name="import-mode" checked={mode === 'count'} onChange={() => setMode('count')} />
+                        {t('teams.importOldPostsByCount', 'By count')}
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                        <input type="radio" name="import-mode" checked={mode === 'date'} onChange={() => setMode('date')} />
+                        {t('teams.importOldPostsByDate', 'By date')}
+                      </label>
+                    </div>
+
+                    {mode === 'count' ? (
+                      <label className="field">
+                        <span>{t('teams.importOldPostsCount', 'Number of posts')}</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={postCount}
+                          onChange={(e) => setPostCount(Number(e.target.value))}
+                        />
+                      </label>
+                    ) : (
+                      <label className="field">
+                        <span>{t('teams.importOldPostsUntilDate', 'Import until (inclusive)')}</span>
+                        <input type="date" value={untilDate} onChange={(e) => setUntilDate(e.target.value)} />
+                      </label>
+                    )}
+                  </div>
+
+                  {error && <p style={{ color: 'var(--color-danger, #dc2626)', fontSize: 13 }}>{error}</p>}
+
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => void handleImport()}
+                      disabled={selectedAccountIds.length === 0}
+                    >
+                      {t('teams.importOldPostsStart', 'Import')}
+                    </button>
+                    <button type="button" className="btn" onClick={handleClose}>
+                      {t('common.cancel', 'Cancel')}
                     </button>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {accounts.map((account) => (
-                      <label
-                        key={account.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '4px 10px',
-                          borderRadius: 6,
-                          border: selectedAccountIds.includes(account.id)
-                            ? '1px solid var(--color-primary, #3b82f6)'
-                            : '1px solid var(--color-border, #e5e7eb)',
-                          cursor: 'pointer',
-                          fontSize: 13,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedAccountIds.includes(account.id)}
-                          onChange={() => toggleAccount(account.id)}
-                        />
-                        <span>{account.name}</span>
-                        <span style={{ opacity: 0.5, fontSize: 11 }}>({account.provider})</span>
-                      </label>
-                    ))}
-                  </div>
                 </div>
-
-                <div style={{ marginTop: 8 }}>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
-                      <input type="radio" name="import-mode" checked={mode === 'count'} onChange={() => setMode('count')} />
-                      {t('teams.importOldPostsByCount', 'By count')}
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
-                      <input type="radio" name="import-mode" checked={mode === 'date'} onChange={() => setMode('date')} />
-                      {t('teams.importOldPostsByDate', 'By date')}
-                    </label>
-                  </div>
-
-                  {mode === 'count' ? (
-                    <label className="field">
-                      <span>{t('teams.importOldPostsCount', 'Number of posts')}</span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={500}
-                        value={postCount}
-                        onChange={(e) => setPostCount(Number(e.target.value))}
-                      />
-                    </label>
-                  ) : (
-                    <label className="field">
-                      <span>{t('teams.importOldPostsUntilDate', 'Import until (inclusive)')}</span>
-                      <input type="date" value={untilDate} onChange={(e) => setUntilDate(e.target.value)} />
-                    </label>
-                  )}
-                </div>
-
-                {error && <p style={{ color: 'var(--color-danger, #dc2626)', fontSize: 13 }}>{error}</p>}
-
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    onClick={() => void handleImport()}
-                    disabled={loading || selectedAccountIds.length === 0}
-                  >
-                    {loading ? t('teams.importOldPostsImporting', 'Importing...') : t('teams.importOldPostsStart', 'Import')}
-                  </button>
-                  <button type="button" className="btn" onClick={handleClose}>
-                    {t('common.cancel', 'Cancel')}
-                  </button>
-                </div>
-              </div>
+              </>
             )}
           </div>
         </Dialog.Content>

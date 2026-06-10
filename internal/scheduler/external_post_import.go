@@ -294,46 +294,82 @@ func (s *Service) importOldPostsForAccount(ctx context.Context, teamID, ownerID 
 		return 0, fmt.Errorf("account %s missing remote_account_id", account.ID)
 	}
 
-	posts, err := feedFetcher.ListAuthorPosts(ctx, account, provider.PublishAuth{
+	auth := provider.PublishAuth{
 		AccessToken:  token,
 		RefreshToken: refreshToken,
-	}, since, limit)
-	if err != nil {
-		return 0, err
 	}
 
-	imported := 0
-	for _, ap := range posts {
-		exists, err := s.store.AuthorPostAlreadyTracked(ctx, account.ID, ap.RemoteID, ap.URL, ap.Metadata)
+	// Paginate: provider returns max ~80-100 posts per request.
+	// Use oldest post's PublishedAt as since for next page.
+	const pageSize = 80
+	totalImported := 0
+	currentSince := since
+
+	for totalImported < limit {
+		fetchLimit := pageSize
+		remaining := limit - totalImported
+		if remaining < fetchLimit {
+			fetchLimit = remaining
+		}
+
+		posts, err := feedFetcher.ListAuthorPosts(ctx, account, auth, currentSince, fetchLimit)
 		if err != nil {
-			s.logger.WarnContext(ctx, "import old posts dedup check failed", "remote_id", ap.RemoteID, "error", err)
-			continue
+			if totalImported > 0 {
+				return totalImported, err
+			}
+			return 0, err
 		}
-		if exists {
-			continue
+		if len(posts) == 0 {
+			break
 		}
-		created, err := s.store.CreateImportedPost(ctx, teamID, ownerID, domain.ImportedPostInput{
-			AccountID:       account.ID,
-			RemotePostID:    ap.RemoteID,
-			Content:         ap.Content,
-			PublishedAt:     ap.PublishedAt,
-			PublishedURL:    ap.URL,
-			PublishMetadata: ap.Metadata,
-		})
-		if err != nil {
-			s.logger.WarnContext(ctx, "import old posts create failed", "remote_id", ap.RemoteID, "error", err)
-			continue
-		}
-		imported++
-		if strings.TrimSpace(ap.URL) != "" || len(ap.Metadata) > 0 {
-			utcDay := created.ScheduledAt.UTC().Format("2006-01-02")
-			s.syncOnePostTargetMetrics(ctx, domain.PostedTargetForMetricSync{
-				PostID:          created.ID,
+
+		batchImported := 0
+		var oldestPublishedAt time.Time
+		for _, ap := range posts {
+			if oldestPublishedAt.IsZero() || ap.PublishedAt.Before(oldestPublishedAt) {
+				oldestPublishedAt = ap.PublishedAt
+			}
+
+			exists, err := s.store.AuthorPostAlreadyTracked(ctx, account.ID, ap.RemoteID, ap.URL, ap.Metadata)
+			if err != nil {
+				s.logger.WarnContext(ctx, "import old posts dedup check failed", "remote_id", ap.RemoteID, "error", err)
+				continue
+			}
+			if exists {
+				continue
+			}
+			created, err := s.store.CreateImportedPost(ctx, teamID, ownerID, domain.ImportedPostInput{
+				AccountID:       account.ID,
+				RemotePostID:    ap.RemoteID,
+				Content:         ap.Content,
+				PublishedAt:     ap.PublishedAt,
 				PublishedURL:    ap.URL,
 				PublishMetadata: ap.Metadata,
-				Account:         account,
-			}, utcDay, utcDay)
+			})
+			if err != nil {
+				s.logger.WarnContext(ctx, "import old posts create failed", "remote_id", ap.RemoteID, "error", err)
+				continue
+			}
+			batchImported++
+			if strings.TrimSpace(ap.URL) != "" || len(ap.Metadata) > 0 {
+				utcDay := created.ScheduledAt.UTC().Format("2006-01-02")
+				s.syncOnePostTargetMetrics(ctx, domain.PostedTargetForMetricSync{
+					PostID:          created.ID,
+					PublishedURL:    ap.URL,
+					PublishMetadata: ap.Metadata,
+					Account:         account,
+				}, utcDay, utcDay)
+			}
 		}
+		totalImported += batchImported
+
+		// If we got fewer posts than requested or no new imports, we've reached the end
+		if len(posts) < fetchLimit || batchImported == 0 || oldestPublishedAt.IsZero() {
+			break
+		}
+		// Set since to one second before the oldest post to avoid duplicates
+		currentSince = oldestPublishedAt.Add(-1 * time.Second)
 	}
-	return imported, nil
+
+	return totalImported, nil
 }

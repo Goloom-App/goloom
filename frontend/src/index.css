@@ -1338,6 +1338,14 @@ code, .mono {
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--color-border, #e5e7eb);
+  border-top-color: var(--color-primary, #3b82f6);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
