@@ -15,7 +15,8 @@
       "reviewQueue": "Review",
       "reviewQueuePending": "{{count}} pending in review queue",
       "archive": "Archive",
-      "aiStudio": "AI Studio",
+      "aiProfile": "AI Profile",
+      "aiGenerator": "AI Generator",
       "aiCampaigns": "Campaign Formats",
       "aiProactive": "Proactive Triggers",
       "settings": "Settings",
@@ -37,7 +38,8 @@
       "composer": "Composer",
       "settings": "Settings",
       "admin": "Admin",
-      "aiStudio": "AI Studio",
+      "aiProfile": "AI Profile",
+      "aiGenerator": "AI Generator",
       "aiCampaigns": "Campaign Formats"
     },
     "eyebrow": {

@@ -13,7 +13,8 @@ export type AppSection =
   | 'composer'
   | 'settings'
   | 'admin'
-  | 'aiStudio'
+  | 'aiProfile'
+  | 'aiGenerator'
   | 'aiCampaigns'
 
 export type CalendarViewMode = 'month' | 'week' | 'day'

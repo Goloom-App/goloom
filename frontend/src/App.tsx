@@ -25,7 +25,8 @@ import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admi
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { SettingsView } from './views/settings/SettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
-import { BrandWizardView } from './views/ai/BrandWizardView'
+import { BrandProfileView } from './views/ai/BrandProfileView'
+import { AIGeneratorView } from './views/ai/AIGeneratorView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
 import { AutomationView } from './views/automation/AutomationView'
 import { ReviewQueueView } from './views/review/ReviewQueueView'
@@ -2300,8 +2301,12 @@ function App() {
           />
         )}
 
-        {section === 'aiStudio' && selectedTeam && (
-          <BrandWizardView
+        {section === 'aiProfile' && selectedTeam && (
+          <BrandProfileView team={selectedTeam} />
+        )}
+
+        {section === 'aiGenerator' && selectedTeam && (
+          <AIGeneratorView
             team={selectedTeam}
             accounts={teamAccounts}
             onEditInComposer={openComposerFromGeneratedContent}

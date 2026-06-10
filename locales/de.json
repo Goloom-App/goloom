@@ -15,7 +15,8 @@
       "reviewQueue": "Review",
       "reviewQueuePending": "{{count}} ausstehend in der Review-Warteschlange",
       "archive": "Archiv",
-      "aiStudio": "KI Studio",
+      "aiProfile": "KI-Profil",
+      "aiGenerator": "KI-Generator",
       "aiCampaigns": "Kampagnenformate",
       "aiProactive": "Proaktive Trigger",
       "settings": "Einstellungen",
@@ -37,7 +38,8 @@
       "composer": "Editor",
       "settings": "Einstellungen",
       "admin": "Administration",
-      "aiStudio": "KI Studio",
+      "aiProfile": "KI-Profil",
+      "aiGenerator": "KI-Generator",
       "aiCampaigns": "Kampagnenformate"
     },
     "eyebrow": {

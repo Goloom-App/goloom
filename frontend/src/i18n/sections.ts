@@ -17,7 +17,8 @@ const sectionKeys: Record<AppSection, string> = {
   composer: 'section.composer',
   settings: 'section.settings',
   admin: 'section.admin',
-  aiStudio: 'section.aiStudio',
+  aiProfile: 'section.aiProfile',
+  aiGenerator: 'section.aiGenerator',
   aiCampaigns: 'section.aiCampaigns',
 }
 
