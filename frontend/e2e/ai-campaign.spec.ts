@@ -50,7 +50,7 @@ test.describe.serial('AI campaign formats', () => {
     await expect(page.getByTestId('campaign-dialog')).toBeVisible()
 
     await page.getByTestId('campaign-dialog-name').fill('Bad Format')
-    await page.getByTestId('campaign-dialog-advanced').check()
+    await page.getByTestId('campaign-dialog-mode-advanced').click()
     await page.getByTestId('campaign-dialog-structure').fill('not valid json')
     await page.getByTestId('campaign-dialog-save').click()
 

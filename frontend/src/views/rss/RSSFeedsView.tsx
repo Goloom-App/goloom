@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
+import { Segmented, ToggleSwitch } from '../../components/ui'
 import { useCreateRSSFeed, useDeleteRSSFeed, useRSSFeeds, useUpdateRSSFeed } from '../../hooks/useAI'
 import type { AccountRecord, AutomationOutputMode, RSSFeedConfig, RSSInitialSyncMode, TeamRecord } from '../../types'
 
@@ -267,22 +268,19 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                       {t('rss.titleTemplateHint')}
                     </p>
                   </label>
-                  <label className="field">
+                  <div className="field">
                     <span>{t('rss.outputMode')}</span>
-                    <select
+                    <Segmented<AutomationOutputMode>
                       value={feedForm.outputMode}
-                      onChange={(e) =>
-                        setFeedForm((prev) => ({
-                          ...prev,
-                          outputMode: e.target.value as AutomationOutputMode,
-                        }))
-                      }
-                    >
-                      <option value="draft">{outputModeLabel.draft}</option>
-                      <option value="scheduled">{outputModeLabel.scheduled}</option>
-                      <option value="publish_now">{outputModeLabel.publish_now}</option>
-                    </select>
-                  </label>
+                      options={[
+                        { id: 'draft', label: outputModeLabel.draft },
+                        { id: 'scheduled', label: outputModeLabel.scheduled },
+                        { id: 'publish_now', label: outputModeLabel.publish_now },
+                      ]}
+                      onChange={(v) => setFeedForm((prev) => ({ ...prev, outputMode: v }))}
+                      testIdPrefix="rss-output-mode"
+                    />
+                  </div>
                   <label className="field">
                     <span>{t('rss.maxPostsPerDay')}</span>
                     <input
@@ -300,15 +298,15 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                   </label>
                   {team.isAiEnabled ? (
                     <>
-                      <label className="field flex-row--center gap-2" style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={feedForm.aiEnhanceEnabled}
-                          onChange={(e) => setFeedForm((prev) => ({ ...prev, aiEnhanceEnabled: e.target.checked }))}
-                          data-testid="rss-ai-enhance"
-                        />
-                        <span>{t('rss.aiEnhanceEnabled')}</span>
-                      </label>
+                      <ToggleSwitch
+                        checked={feedForm.aiEnhanceEnabled}
+                        onChange={(next) =>
+                          setFeedForm((prev) => ({ ...prev, aiEnhanceEnabled: next }))
+                        }
+                        title={t('rss.aiEnhanceEnabled')}
+                        description="Die KI schreibt jeden Feed-Eintrag im Markenstil neu. Brand-Profil aus dem KI Studio bestimmt den Vibe."
+                        testId="rss-ai-enhance"
+                      />
                       {feedForm.aiEnhanceEnabled ? (
                         <>
                           <label className="field">
@@ -350,29 +348,24 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                       testIdPrefix="rss-feed-dest"
                     />
                   </div>
-                  <label className="field">
+                  <div className="field">
                     <span>{t('rss.firstCheck')}</span>
-                    <select
+                    <Segmented<RSSInitialSyncMode>
                       value={feedForm.initialSyncMode}
-                      onChange={(e) =>
-                        setFeedForm((prev) => ({
-                          ...prev,
-                          initialSyncMode: e.target.value as RSSInitialSyncMode,
-                        }))
-                      }
-                    >
-                      <option value="baseline">{t('rss.firstCheckBaseline')}</option>
-                      <option value="publish_latest">{t('rss.firstCheckLatest')}</option>
-                    </select>
-                  </label>
-                  <label className="field flex-row--center gap-2" style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={feedForm.isActive}
-                      onChange={(e) => setFeedForm((prev) => ({ ...prev, isActive: e.target.checked }))}
+                      options={[
+                        { id: 'baseline', label: t('rss.firstCheckBaseline') },
+                        { id: 'publish_latest', label: t('rss.firstCheckLatest') },
+                      ]}
+                      onChange={(v) => setFeedForm((prev) => ({ ...prev, initialSyncMode: v }))}
+                      testIdPrefix="rss-first-check"
                     />
-                    <span>{t('rss.active')}</span>
-                  </label>
+                  </div>
+                  <ToggleSwitch
+                    checked={feedForm.isActive}
+                    onChange={(next) => setFeedForm((prev) => ({ ...prev, isActive: next }))}
+                    title={t('rss.active')}
+                    description="Inaktive Feeds werden nicht abgerufen."
+                  />
                   <div className="flex-row--end gap-2 mt-4">
                     <Dialog.Close asChild>
                       <button className="btn btn--ghost">{t('common.cancel')}</button>
@@ -409,15 +402,12 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                 <div className="flex-row--center gap-2">
                   <span className="badge">{feed.name}</span>
                   {canEdit ? (
-                    <label className="flex-row--center gap-1" style={{ fontSize: '0.8rem', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={feed.isActive}
-                        onChange={() => handleToggleFeed(feed.id, feed.isActive)}
-                        disabled={updateFeed.isPending}
-                      />
-                      <span>{t('rss.active')}</span>
-                    </label>
+                    <ToggleSwitch
+                      checked={feed.isActive}
+                      onChange={() => handleToggleFeed(feed.id, feed.isActive)}
+                      title={feed.isActive ? t('rss.active') : t('rss.inactive', { defaultValue: 'Inaktiv' })}
+                      disabled={updateFeed.isPending}
+                    />
                   ) : null}
                 </div>
                 {canEdit ? (
