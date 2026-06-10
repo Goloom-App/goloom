@@ -106,9 +106,31 @@ export function RecurringPostsView({
   }
 
   const firstOccurrence = useMemo(() => {
+    if (isAnnouncement) {
+      return null
+    }
     const occ = computeOccurrences(recState, 1)
     return occ.length > 0 ? occ[0] : null
-  }, [recState])
+  }, [isAnnouncement, recState])
+
+  const announcePreviewDate = useMemo(() => {
+    if (!isAnnouncement || !announceTemplateId) {
+      return null
+    }
+    const parent = items.find((item) => item.id === announceTemplateId)
+    if (!parent?.next_materialize_at) {
+      return null
+    }
+    const main = parseISO(parent.next_materialize_at)
+    const preview = new Date(main)
+    preview.setDate(preview.getDate() - announceDaysBefore)
+    return preview
+  }, [isAnnouncement, announceTemplateId, announceDaysBefore, items])
+
+  const parentTemplateOptions = useMemo(
+    () => items.filter((item) => item.enabled && item.next_materialize_at && !item.announces_template_id && item.id !== editingId),
+    [items, editingId],
+  )
 
   const accountById = useMemo(() => Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts])
 
@@ -187,9 +209,18 @@ export function RecurringPostsView({
       target_account_ids: targetIds,
       counter_next: Math.max(1, counterStart),
     }
-    if (isAnnouncement && announceTemplateId) {
+    if (isAnnouncement) {
       payload.announces_template_id = announceTemplateId
       payload.announcement_days_before = announceDaysBefore
+    } else if (editingId) {
+      payload.announces_template_id = ''
+      payload.output_mode = outputMode
+      if (team?.isAiEnabled) {
+        payload.ai_enhance_enabled = aiEnhanceEnabled
+        payload.prompt_hint = promptHint.trim()
+        payload.title_hint = titleHint.trim()
+        payload.tonality = tonality.trim()
+      }
     } else {
       payload.output_mode = outputMode
       if (team?.isAiEnabled) {
@@ -205,6 +236,10 @@ export function RecurringPostsView({
   async function handleSave() {
     if (!title.trim() || !content.trim() || targetIds.length === 0) {
       onStatus(t('recurring.requiredFields'))
+      return
+    }
+    if (isAnnouncement && !announceTemplateId) {
+      onStatus(t('recurring.announcementParentRequired'))
       return
     }
     onStatus(null)
@@ -228,6 +263,17 @@ export function RecurringPostsView({
       const raw = e instanceof Error ? e.message : editingId ? t('status.templateUpdateFailed') : t('status.templateCreateFailed')
       onStatus(translateApiError(raw, t))
     }
+  }
+
+  function formatTemplateSchedule(item: BackendPostTemplate): string {
+    if (item.announces_template_id) {
+      const parent = items.find((entry) => entry.id === item.announces_template_id)
+      return t('recurring.summaryAnnouncement', {
+        parent: parent?.title || t('recurring.untitled'),
+        days: item.announcement_days_before ?? 2,
+      })
+    }
+    return formatRecurrenceSummary(item.recurrence_json, t)
   }
 
   async function toggleEnabled(id: string, currentEnabled: boolean) {
@@ -316,7 +362,7 @@ export function RecurringPostsView({
                   {item.enabled ? t('analytics.enabled') : t('analytics.paused')}
                 </span>
               </div>
-              <p className="hint">{formatRecurrenceSummary(item.recurrence_json, t)}</p>
+              <p className="hint">{formatTemplateSchedule(item)}</p>
               <p className="hint">
                 {t('recurring.next')}{' '}
                 {item.next_materialize_at ? format(parseISO(item.next_materialize_at), 'PPpp') : t('common.emDash')} · {t('common.counter')}:{' '}
@@ -365,7 +411,13 @@ export function RecurringPostsView({
             <Dialog.Content className="dialog-content dialog-content--wide" data-testid="recurring-template-dialog">
               <div className="drawer-header">
                 <Dialog.Title className="drawer-title">
-                  {editingId ? t('recurring.editTitle') : t('recurring.editorTitle')}
+                  {editingId
+                    ? isAnnouncement
+                      ? t('recurring.editAnnouncementTitle')
+                      : t('recurring.editTitle')
+                    : isAnnouncement
+                      ? t('recurring.announcementEditorTitle')
+                      : t('recurring.editorTitle')}
                 </Dialog.Title>
                 <Dialog.Close asChild>
                   <button type="button" className="btn btn--ghost btn--icon-sm" aria-label={t('common.cancel')}>
@@ -374,6 +426,61 @@ export function RecurringPostsView({
                 </Dialog.Close>
               </div>
               <div className="drawer-body stack">
+                <fieldset className="recurrence-form__kind-group">
+                  <legend className="recurrence-form__legend">{t('recurring.templateType')}</legend>
+                  <button
+                    type="button"
+                    className={`recurrence-form__kind-pill${!isAnnouncement ? ' recurrence-form__kind-pill--active' : ''}`}
+                    onClick={() => setIsAnnouncement(false)}
+                    role="radio"
+                    aria-checked={!isAnnouncement}
+                    data-testid="recurring-template-type-recurring"
+                  >
+                    {t('recurring.templateTypeRecurring')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`recurrence-form__kind-pill${isAnnouncement ? ' recurrence-form__kind-pill--active' : ''}`}
+                    onClick={() => setIsAnnouncement(true)}
+                    role="radio"
+                    aria-checked={isAnnouncement}
+                    data-testid="recurring-template-type-announcement"
+                  >
+                    {t('recurring.templateTypeAnnouncement')}
+                  </button>
+                </fieldset>
+
+                {isAnnouncement ? (
+                  <div className="recurrence-form__announcement-config">
+                    <p className="hint">{t('recurring.announcementDrivenByParent')}</p>
+                    <label className="field">
+                      <span>{t('recurring.announcementFor')}</span>
+                      <select
+                        value={announceTemplateId}
+                        onChange={(e) => setAnnounceTemplateId(e.target.value)}
+                        data-testid="recurring-announcement-parent"
+                      >
+                        <option value="">—</option>
+                        {parentTemplateOptions.map((item) => (
+                          <option key={item.id} value={item.id}>{item.title || t('recurring.untitled')}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>{t('recurring.announcementDaysBefore')}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={announceDaysBefore}
+                        onChange={(e) => setAnnounceDaysBefore(parseInt(e.target.value, 10) || 2)}
+                        data-testid="recurring-announcement-days-before"
+                      />
+                    </label>
+                    <p className="hint">{t('recurring.announcementHint')}</p>
+                  </div>
+                ) : null}
+
                 <label className="field">
                   <span>{t('common.title')}</span>
                   <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t('recurring.titlePlaceholder')} />
@@ -387,59 +494,34 @@ export function RecurringPostsView({
                   <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} />
                 </label>
 
-                <RecurrenceForm state={recState} onChange={setRecState} />
-                <OccurrencePreview state={recState} />
+                {!isAnnouncement ? (
+                  <>
+                    <RecurrenceForm state={recState} onChange={setRecState} />
+                    <OccurrencePreview state={recState} />
 
-                <label className="field">
-                  <span>{t('recurring.counterStart')}</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={counterStart}
-                    onChange={(e) => setCounterStart(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    data-testid="recurring-counter-start"
-                  />
-                  <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                    {t('recurring.counterStartHint')}
-                  </p>
-                </label>
+                    <label className="field">
+                      <span>{t('recurring.counterStart')}</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={counterStart}
+                        onChange={(e) => setCounterStart(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        data-testid="recurring-counter-start"
+                      />
+                      <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                        {t('recurring.counterStartHint')}
+                      </p>
+                    </label>
+                  </>
+                ) : null}
 
-                <div className="field">
-                  <span>{t('common.targets')}</span>
-                  <DestinationPicker
-                    accounts={accounts}
-                    selectedIds={targetIds}
-                    onToggle={toggleTargetAccount}
-                    testIdPrefix="recurring-template-dest"
-                  />
-                </div>
-
-                <div className="recurrence-form__section">
-                  <label className="field field--checkbox">
-                    <input type="checkbox" checked={isAnnouncement} onChange={(e) => setIsAnnouncement(e.target.checked)} />
-                    <span>{t('recurring.announcement')}</span>
-                  </label>
-                  {isAnnouncement ? (
-                    <div className="recurrence-form__announcement-config">
-                      <label className="field">
-                        <span>{t('recurring.announcementFor')}</span>
-                        <select value={announceTemplateId} onChange={(e) => setAnnounceTemplateId(e.target.value)}>
-                          <option value="">—</option>
-                          {items.filter((i) => i.enabled && i.next_materialize_at).map((i) => (
-                            <option key={i.id} value={i.id}>{i.title || t('recurring.untitled')}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span>{t('recurring.announcementDaysBefore')}</span>
-                        <input type="number" min={1} max={30} value={announceDaysBefore} onChange={(e) => setAnnounceDaysBefore(parseInt(e.target.value, 10) || 2)} />
-                      </label>
-                      <p className="hint">{t('recurring.announcementHint')}</p>
-                    </div>
-                  ) : null}
-                </div>
-
-                <ContentPreview content={content} firstOccurrence={firstOccurrence} counterStart={counterStart} announceTemplate={isAnnouncement ? announceTemplateId : undefined} templates={items} />
+                <ContentPreview
+                  content={content}
+                  firstOccurrence={isAnnouncement ? announcePreviewDate : firstOccurrence}
+                  counterStart={counterStart}
+                  announceTemplate={isAnnouncement ? announceTemplateId : undefined}
+                  templates={items}
+                />
 
                 {!isAnnouncement ? (
                   <>
@@ -487,6 +569,16 @@ export function RecurringPostsView({
                     )}
                   </>
                 ) : null}
+
+                <div className="field">
+                  <span>{t('common.targets')}</span>
+                  <DestinationPicker
+                    accounts={accounts}
+                    selectedIds={targetIds}
+                    onToggle={toggleTargetAccount}
+                    testIdPrefix="recurring-template-dest"
+                  />
+                </div>
 
                 <div className="flex-row--end gap-2 mt-4">
                   <Dialog.Close asChild>

@@ -481,7 +481,15 @@
       "announcementFor": "Announcement for",
       "announcementDaysBefore": "Days before",
       "announcementHint": "This template announces another recurring post. It uses {main_day}, {main_month}, {main_weekday_name} for the main event date.",
-      "announcementBadge": "Announces"
+      "announcementBadge": "Announces",
+      "templateType": "Template type",
+      "templateTypeRecurring": "Recurring post",
+      "templateTypeAnnouncement": "Announcement",
+      "announcementDrivenByParent": "Announcements have no schedule of their own. They post a fixed number of days before the selected recurring template runs.",
+      "announcementParentRequired": "Select the recurring template this announcement is for.",
+      "announcementEditorTitle": "New announcement",
+      "editAnnouncementTitle": "Edit announcement",
+      "summaryAnnouncement": "Announces “{{parent}}” {{days}} day(s) before"
     },
     "review": {
       "title": "Review queue",

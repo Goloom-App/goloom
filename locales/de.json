@@ -481,7 +481,15 @@
       "announcementFor": "Ankündigung für",
       "announcementDaysBefore": "Tage vorher",
       "announcementHint": "Diese Vorlage kündigt einen anderen wiederkehrenden Beitrag an. Verwenden Sie {main_day}, {main_month}, {main_weekday_name} für das Hauptereignis-Datum.",
-      "announcementBadge": "Kündigt an"
+      "announcementBadge": "Kündigt an",
+      "templateType": "Vorlagentyp",
+      "templateTypeRecurring": "Wiederkehrender Beitrag",
+      "templateTypeAnnouncement": "Ankündigung",
+      "announcementDrivenByParent": "Ankündigungen haben keinen eigenen Zeitplan. Sie werden eine feste Anzahl Tage vor dem gewählten wiederkehrenden Beitrag veröffentlicht.",
+      "announcementParentRequired": "Bitte wählen Sie die wiederkehrende Vorlage, die angekündigt werden soll.",
+      "announcementEditorTitle": "Neue Ankündigung",
+      "editAnnouncementTitle": "Ankündigung bearbeiten",
+      "summaryAnnouncement": "Kündigt „{{parent}}“ {{days}} Tag(e) vorher an"
     },
     "review": {
       "title": "Review-Warteschlange",
