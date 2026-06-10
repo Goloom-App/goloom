@@ -78,9 +78,9 @@ test.describe.serial('AI studio brand wizard', () => {
   })
 
   test('task step validates occasion before generation', async ({ page }) => {
-    await page.getByRole('button', { name: '2. Aufgabe' }).click()
+    await page.getByRole('button', { name: /Aufgabe/ }).click()
     await expect(page.getByTestId('brand-occasion')).toBeVisible()
-    await expect(page.getByTestId('brand-output-format')).toBeVisible()
+    await expect(page.getByTestId('brand-output-format-post')).toBeVisible()
     await page.getByTestId('brand-generate').click()
 
     await expect(page.getByTestId('brand-status-error')).toBeVisible({ timeout: 10_000 })
@@ -88,9 +88,9 @@ test.describe.serial('AI studio brand wizard', () => {
   })
 
   test('editor step shows placeholder without generated content', async ({ page }) => {
-    await page.getByRole('button', { name: '3. Editor' }).click()
-    await expect(page.getByText('Noch kein generierter Post.')).toBeVisible()
-    await page.getByRole('button', { name: 'Zur Aufgabe' }).click()
+    await page.getByRole('button', { name: /Editor/ }).click()
+    await expect(page.getByText('Noch kein Post generiert')).toBeVisible()
+    await page.getByRole('button', { name: /Zur Aufgabe/ }).click()
     await expect(page.getByTestId('brand-occasion')).toBeVisible()
   })
 })
