@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/scheduler"
 )
 
 func (a *API) handleTeamEngagementHourHistogram(w http.ResponseWriter, r *http.Request) {
@@ -121,6 +123,17 @@ func (a *API) handleUpdatePostTemplate(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, tmpl)
 }
 
+func (a *API) handleListPostTemplateLinkedPosts(w http.ResponseWriter, r *http.Request) {
+	teamID := strings.TrimSpace(r.PathValue("teamID"))
+	templateID := strings.TrimSpace(r.PathValue("templateID"))
+	items, err := a.store.ListPostTemplateLinkedPosts(r.Context(), teamID, templateID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
+}
+
 func (a *API) handleDeletePostTemplate(w http.ResponseWriter, r *http.Request) {
 	teamID := strings.TrimSpace(r.PathValue("teamID"))
 	templateID := strings.TrimSpace(r.PathValue("templateID"))
@@ -160,4 +173,53 @@ func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Re
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type regenerateTemplateBody struct {
+	Mode         string    `json:"mode"`
+	OccurrenceAt time.Time `json:"occurrence_at,omitempty"`
+}
+
+func (a *API) handleRegeneratePostTemplate(w http.ResponseWriter, r *http.Request) {
+	teamID := strings.TrimSpace(r.PathValue("teamID"))
+	templateID := strings.TrimSpace(r.PathValue("templateID"))
+	if a.metricsSync == nil {
+		a.writeError(w, r, "template_regenerate_not_available", http.StatusServiceUnavailable)
+		return
+	}
+	var body regenerateTemplateBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+		return
+	}
+	mode := strings.TrimSpace(strings.ToLower(body.Mode))
+	var (
+		result domain.PostTemplateRegenerateResult
+		err    error
+	)
+	switch mode {
+	case "occurrence":
+		if body.OccurrenceAt.IsZero() {
+			a.writeError(w, r, "occurrence_at_required", http.StatusBadRequest)
+			return
+		}
+		result, err = a.metricsSync.RegeneratePostTemplateOccurrence(r.Context(), teamID, templateID, body.OccurrenceAt.UTC())
+	case "horizon":
+		result, err = a.metricsSync.RegeneratePostTemplateHorizon(r.Context(), teamID, templateID)
+	default:
+		a.writeError(w, r, "invalid_regenerate_mode", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		switch {
+		case errors.Is(err, scheduler.ErrRegenerateBlocked):
+			a.writeError(w, r, "regenerate_blocked_posted", http.StatusConflict)
+		case errors.Is(err, scheduler.ErrRegenerateNoPosts):
+			a.writeError(w, r, "regenerate_no_posts", http.StatusNotFound)
+		default:
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, result)
 }

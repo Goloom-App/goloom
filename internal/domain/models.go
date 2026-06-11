@@ -584,6 +584,21 @@ type PostTemplate struct {
 	UpdatedAt                    time.Time           `json:"updated_at"`
 }
 
+// PostTemplateLinkedPost is a scheduled post created from a recurring template.
+type PostTemplateLinkedPost struct {
+	ID                   string     `json:"id"`
+	Status               PostStatus `json:"status"`
+	TemplateOccurrenceAt time.Time  `json:"template_occurrence_at"`
+	TemplatePostRole     string     `json:"template_post_role"`
+	TemplateCounter      *int       `json:"template_counter,omitempty"`
+}
+
+// PostTemplateRegenerateResult summarizes a template regenerate run.
+type PostTemplateRegenerateResult struct {
+	DeletedPosts           int `json:"deleted_posts"`
+	RegeneratedOccurrences int `json:"regenerated_occurrences"`
+}
+
 type CreatePostTemplateInput struct {
 	Title                  string              `json:"title"`
 	Content                string              `json:"content"`

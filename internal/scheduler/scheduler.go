@@ -575,7 +575,7 @@ func (s *Service) tryLock(ctx context.Context, lockID string, duration time.Dura
 	return locked
 }
 
-func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.PostTemplate, mainEventAt time.Time) error {
+func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.PostTemplate, mainEventAt time.Time, advanceCounter bool) error {
 	if !tmpl.AnnouncementEnabled || strings.TrimSpace(tmpl.AnnouncementContent) == "" {
 		return nil
 	}
@@ -616,9 +616,10 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 	if s.shouldEnhanceRecurringAnnouncementWithAI(ctx, *tmpl) {
 		if err := s.submitRecurringAnnouncementAIEnhancement(ctx, *tmpl, content, expandedTitle, announceAt, mainEventAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: announcement ai unavailable, using template", "template_id", tmpl.ID, "error", err)
-		} else {
+		} else if advanceCounter {
 			return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
 		}
+		return nil
 	}
 
 	authorID := tmpl.AuthorUserID
@@ -643,7 +644,10 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
 		return err
 	}
-	return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
+	if advanceCounter {
+		return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
+	}
+	return nil
 }
 
 func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTemplate, occ time.Time) *time.Time {

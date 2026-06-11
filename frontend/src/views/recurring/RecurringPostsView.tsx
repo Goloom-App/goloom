@@ -89,6 +89,9 @@ export function RecurringPostsView({
   ))
   const [targetIds, setTargetIds] = useState<string[]>([])
   const [shiftInputs, setShiftInputs] = useState<Record<string, string>>({})
+  const [regeneratePanel, setRegeneratePanel] = useState<string | null>(null)
+  const [regenerateOccurrences, setRegenerateOccurrences] = useState<Record<string, string[]>>({})
+  const [regenerateSelected, setRegenerateSelected] = useState<Record<string, string>>({})
   const [announcementEnabled, setAnnouncementEnabled] = useState(false)
   const [announcementTitle, setAnnouncementTitle] = useState('')
   const [announcementContent, setAnnouncementContent] = useState('')
@@ -323,6 +326,67 @@ export function RecurringPostsView({
     }
   }
 
+  async function regenerateHorizon(id: string) {
+    if (!window.confirm(t('recurring.regenerateHorizonConfirm'))) {
+      return
+    }
+    try {
+      const result = await api.regeneratePostTemplate(teamId, id, { mode: 'horizon' })
+      setRegeneratePanel(null)
+      await refresh()
+      onStatus(t('status.regenerateSuccess', {
+        count: result.regenerated_occurrences,
+        deleted: result.deleted_posts,
+      }))
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : t('status.regenerateFailed')
+      onStatus(translateApiError(raw, t))
+    }
+  }
+
+  async function openRegenerateOccurrence(id: string) {
+    try {
+      const { items } = await api.listPostTemplateLinkedPosts(teamId, id)
+      const occs = [...new Set(
+        items
+          .filter((p) => p.status === 'pending' || p.status === 'draft' || p.status === 'failed')
+          .map((p) => p.template_occurrence_at),
+      )].sort()
+      if (occs.length === 0) {
+        onStatus(t('recurring.regenerateNoOccurrences'))
+        return
+      }
+      setRegenerateOccurrences((cur) => ({ ...cur, [id]: occs }))
+      setRegenerateSelected((cur) => ({ ...cur, [id]: occs[0] }))
+      setRegeneratePanel(id)
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : t('status.regenerateFailed')
+      onStatus(translateApiError(raw, t))
+    }
+  }
+
+  async function confirmRegenerateOccurrence(id: string) {
+    const occ = regenerateSelected[id]
+    if (!occ) {
+      return
+    }
+    if (!window.confirm(t('recurring.regenerateOccurrenceConfirm'))) {
+      return
+    }
+    try {
+      const result = await api.regeneratePostTemplate(teamId, id, { mode: 'occurrence', occurrence_at: occ })
+      setRegeneratePanel(null)
+      await refresh()
+      onStatus(t('status.regenerateSuccess', {
+        count: result.regenerated_occurrences,
+        deleted: result.deleted_posts,
+      }))
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : t('status.regenerateFailed')
+      onStatus(translateApiError(raw, t))
+    }
+  }
+
   async function shiftNext(id: string, nextIso?: string) {
     if (!nextIso) {
       onStatus(t('status.noOccurrenceToSkip'))
@@ -407,6 +471,19 @@ export function RecurringPostsView({
                           <DropdownMenu.Separator className="divider" />
                           <DropdownMenu.Item
                             className="radix-dropdown-item"
+                            onClick={() => void openRegenerateOccurrence(item.id)}
+                          >
+                            {t('recurring.regenerateOccurrence')}
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            className="radix-dropdown-item"
+                            onClick={() => void regenerateHorizon(item.id)}
+                          >
+                            {t('recurring.regenerateHorizon')}
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Separator className="divider" />
+                          <DropdownMenu.Item
+                            className="radix-dropdown-item"
                             onClick={() => void removeTemplate(item.id)}
                           >
                             <Trash2 size={14} /> {t('common.delete')}
@@ -457,6 +534,33 @@ export function RecurringPostsView({
                   <button type="button" className="btn btn--primary btn--sm" onClick={() => void shiftNext(item.id, item.next_materialize_at)}>
                     {t('common.apply')}
                   </button>
+                </div>
+              ) : null}
+              {regeneratePanel === item.id ? (
+                <div className="recurring-template-card__shift stack stack--xs">
+                  <p className="hint">{t('recurring.regenerateIrreversibleWarning')}</p>
+                  <label className="field">
+                    <span>{t('recurring.regenerateSelectOccurrence')}</span>
+                    <select
+                      value={regenerateSelected[item.id] ?? ''}
+                      onChange={(e) => setRegenerateSelected((cur) => ({ ...cur, [item.id]: e.target.value }))}
+                      data-testid={`recurring-regenerate-occurrence-${item.id}`}
+                    >
+                      {(regenerateOccurrences[item.id] ?? []).map((occ) => (
+                        <option key={occ} value={occ}>
+                          {format(parseISO(occ), 'PPpp')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex-row--center gap-2">
+                    <button type="button" className="btn btn--primary btn--sm" onClick={() => void confirmRegenerateOccurrence(item.id)}>
+                      {t('recurring.regenerateOccurrence')}
+                    </button>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRegeneratePanel(null)}>
+                      {t('common.cancel')}
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>

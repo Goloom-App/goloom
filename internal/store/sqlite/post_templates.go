@@ -522,6 +522,86 @@ func (s *Store) AdvancePostTemplateAnnouncementCounter(ctx context.Context, temp
 	return err
 }
 
+func (s *Store) ListPostTemplateLinkedPosts(ctx context.Context, teamID, templateID string) ([]domain.PostTemplateLinkedPost, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, status, template_occurrence_at, coalesce(template_post_role, ''), template_counter
+		from scheduled_posts
+		where team_id = ?
+		  and post_template_id = ?
+		  and template_occurrence_at is not null
+		  and template_occurrence_at != ''
+		  and status != ?
+		order by template_occurrence_at asc, template_post_role asc`,
+		teamID, templateID, domain.PostStatusCancelled,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.PostTemplateLinkedPost
+	for rows.Next() {
+		var item domain.PostTemplateLinkedPost
+		var status, occStr string
+		var counter sql.NullInt64
+		if err := rows.Scan(&item.ID, &status, &occStr, &item.TemplatePostRole, &counter); err != nil {
+			return nil, err
+		}
+		occ, err := parseTime(occStr)
+		if err != nil {
+			return nil, err
+		}
+		item.Status = domain.PostStatus(status)
+		item.TemplateOccurrenceAt = occ.UTC()
+		if counter.Valid {
+			v := int(counter.Int64)
+			item.TemplateCounter = &v
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) DeletePostTemplateLinkedPosts(ctx context.Context, teamID, templateID string, postIDs []string) (int, error) {
+	if len(postIDs) == 0 {
+		return 0, nil
+	}
+	deleted := 0
+	for _, postID := range postIDs {
+		res, err := s.db.ExecContext(ctx, `
+			delete from scheduled_posts
+			where team_id = ? and post_template_id = ? and id = ?`,
+			teamID, templateID, postID,
+		)
+		if err != nil {
+			return deleted, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return deleted, err
+		}
+		deleted += int(n)
+	}
+	return deleted, nil
+}
+
+func (s *Store) SetPostTemplateMaterializationState(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext, announcementCounterNext int) error {
+	var next any
+	if nextMaterialize != nil {
+		next = formatTime(nextMaterialize.UTC())
+	}
+	_, err := s.db.ExecContext(ctx, `
+		update post_templates
+		set next_materialize_at = ?,
+		    counter_next = ?,
+		    announcement_counter_next = ?,
+		    updated_at = ?
+		where id = ?`,
+		next, counterNext, announcementCounterNext, nowString(), templateID,
+	)
+	return err
+}
+
 func scanPostTemplate(row interface {
 	Scan(dest ...any) error
 }) (domain.PostTemplate, error) {

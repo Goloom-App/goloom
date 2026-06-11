@@ -73,6 +73,14 @@ export interface BackendPostTemplate {
   updated_at: string
 }
 
+export interface BackendPostTemplateLinkedPost {
+  id: string
+  status: BackendPost['status']
+  template_occurrence_at: string
+  template_post_role: string
+  template_counter?: number
+}
+
 export interface BackendMembership {
   user_id: string
   team_id: string
@@ -977,6 +985,24 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token),
         body: JSON.stringify(body),
       })
+    },
+    listPostTemplateLinkedPosts(teamID: string, templateID: string) {
+      return request<{ items: BackendPostTemplateLinkedPost[] }>(
+        options,
+        `/v1/teams/${teamID}/post-templates/${templateID}/linked-posts`,
+        { headers: buildHeaders(options.token, false) },
+      )
+    },
+    regeneratePostTemplate(teamID: string, templateID: string, body: { mode: 'occurrence' | 'horizon'; occurrence_at?: string }) {
+      return request<{ deleted_posts: number; regenerated_occurrences: number }>(
+        options,
+        `/v1/teams/${teamID}/post-templates/${templateID}/regenerate`,
+        {
+          method: 'POST',
+          headers: buildHeaders(options.token),
+          body: JSON.stringify(body),
+        },
+      )
     },
     listLogEntries(params?: { level?: string; search?: string; archived?: boolean; before?: string; after?: string; limit?: number; offset?: number }) {
       const search = new URLSearchParams()

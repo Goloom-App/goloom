@@ -58,6 +58,9 @@ type mockStore struct {
 	isPostTemplateOccurrenceSkippedFn func(templateID string, occurrenceAt time.Time) (bool, error)
 	getPostTemplateShiftToFn          func(templateID string, occurrenceAt time.Time) *time.Time
 	advancePostTemplateCalls          []advanceTemplateCall
+
+	getPostTemplateFn           func(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error)
+	listPostTemplateLinkedPosts []domain.PostTemplateLinkedPost
 }
 
 type advanceTemplateCall struct {
@@ -660,6 +663,23 @@ func (m *mockStore) AdvancePostTemplateAnnouncementCounter(ctx context.Context, 
 	return nil
 }
 
+func (m *mockStore) ListPostTemplateLinkedPosts(ctx context.Context, teamID, templateID string) ([]domain.PostTemplateLinkedPost, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.listPostTemplateLinkedPosts != nil {
+		return append([]domain.PostTemplateLinkedPost(nil), m.listPostTemplateLinkedPosts...), nil
+	}
+	return nil, nil
+}
+
+func (m *mockStore) DeletePostTemplateLinkedPosts(ctx context.Context, teamID, templateID string, postIDs []string) (int, error) {
+	return len(postIDs), nil
+}
+
+func (m *mockStore) SetPostTemplateMaterializationState(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext, announcementCounterNext int) error {
+	return nil
+}
+
 func (m *mockStore) ListDuePostTemplates(ctx context.Context, limit int) ([]domain.PostTemplate, error) {
 	return m.ListEnabledPostTemplates(ctx, limit)
 }
@@ -695,6 +715,12 @@ func (m *mockStore) ListTeamPostsPage(ctx context.Context, teamID string, limit,
 }
 
 func (m *mockStore) GetPostTemplate(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error) {
+	m.mu.Lock()
+	fn := m.getPostTemplateFn
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, teamID, templateID)
+	}
 	return domain.PostTemplate{}, nil
 }
 

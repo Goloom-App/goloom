@@ -293,6 +293,8 @@
       "templateUpdateFailed": "Aktualisierung fehlgeschlagen",
       "templateDeleteFailed": "Löschen fehlgeschlagen",
       "occurrenceSkipped": "Termin übersprungen",
+      "regenerateSuccess": "{{count}} Termin(e) neu generiert; {{deleted}} Beitrag/Beiträge ersetzt.",
+      "regenerateFailed": "Neu-Generieren fehlgeschlagen",
       "occurrenceShifted": "Termin verschoben",
       "skipFailed": "Überspringen fehlgeschlagen",
       "noOccurrenceToSkip": "Kein geplanter Termin zum Überspringen.",
@@ -490,6 +492,13 @@
       "noOccurrences": "Keine Termine für diesen Zeitplan gefunden.",
       "shiftTo": "Verschieben auf",
       "shiftNext": "Überspringen & verschieben",
+      "regenerateHorizon": "Horizont neu generieren",
+      "regenerateOccurrence": "Termin neu generieren",
+      "regenerateIrreversibleWarning": "Dies kann nicht rückgängig gemacht werden. Bestehende geplante oder Entwurfs-Beiträge im Umfang werden dauerhaft gelöscht und aus der aktuellen Vorlage neu erstellt.",
+      "regenerateHorizonConfirm": "Alle Beiträge innerhalb des Materialisierungs-Horizonts aus der aktuellen Vorlage neu generieren?\n\nDies kann nicht rückgängig gemacht werden.",
+      "regenerateOccurrenceConfirm": "Den ausgewählten Termin aus der aktuellen Vorlage neu generieren?\n\nDies kann nicht rückgängig gemacht werden.",
+      "regenerateNoOccurrences": "Keine neu generierbaren Termine für diese Vorlage gefunden.",
+      "regenerateSelectOccurrence": "Termin zum Neu-Generieren",
       "editTemplate": "Bearbeiten",
       "editTitle": "Wiederholungsvorlage bearbeiten",
       "counterStart": "Zähler-Start",
@@ -895,6 +904,10 @@
     "team_profile_not_found": "Teamprofil nicht gefunden",
     "campaign_format_not_found": "Kampagnenformat nicht gefunden",
     "style_example_limit_reached": "Limit für Stilbeispiele erreicht",
-    "ai_service_not_configured": "KI-Dienst ist nicht konfiguriert"
+    "ai_service_not_configured": "KI-Dienst ist nicht konfiguriert",
+    "regenerate_blocked_posted": "Neu-Generieren nicht möglich: Mindestens ein Beitrag im Umfang ist bereits veröffentlicht oder wird veröffentlicht",
+    "regenerate_no_posts": "Keine neu generierbaren Beiträge im Umfang gefunden",
+    "invalid_regenerate_mode": "mode muss occurrence oder horizon sein",
+    "template_regenerate_not_available": "Neu-Generieren für Vorlagen ist nicht verfügbar"
   }
 }

@@ -293,6 +293,8 @@
       "templateUpdateFailed": "Update failed",
       "templateDeleteFailed": "Delete failed",
       "occurrenceSkipped": "Occurrence skipped",
+      "regenerateSuccess": "Regenerated {{count}} occurrence(s); {{deleted}} post(s) replaced.",
+      "regenerateFailed": "Regenerate failed",
       "occurrenceShifted": "Occurrence shifted",
       "skipFailed": "Skip failed",
       "noOccurrenceToSkip": "No scheduled occurrence to skip.",
@@ -490,6 +492,13 @@
       "noOccurrences": "No occurrences found for this schedule.",
       "shiftTo": "Shift to",
       "shiftNext": "Skip & shift",
+      "regenerateHorizon": "Regenerate horizon",
+      "regenerateOccurrence": "Regenerate occurrence",
+      "regenerateIrreversibleWarning": "This cannot be undone. Existing scheduled or draft posts in scope will be permanently deleted and recreated from the current template.",
+      "regenerateHorizonConfirm": "Regenerate all posts within the materialize horizon from the current template?\n\nThis cannot be undone.",
+      "regenerateOccurrenceConfirm": "Regenerate the selected occurrence from the current template?\n\nThis cannot be undone.",
+      "regenerateNoOccurrences": "No regenerable occurrences found for this template.",
+      "regenerateSelectOccurrence": "Occurrence to regenerate",
       "editTemplate": "Edit",
       "editTitle": "Edit recurring template",
       "counterStart": "Counter start",
@@ -895,6 +904,10 @@
     "team_profile_not_found": "team profile not found",
     "campaign_format_not_found": "campaign format not found",
     "style_example_limit_reached": "style example limit reached",
-    "ai_service_not_configured": "AI service is not configured"
+    "ai_service_not_configured": "AI service is not configured",
+    "regenerate_blocked_posted": "Cannot regenerate: one or more posts in scope are already published or publishing",
+    "regenerate_no_posts": "No regenerable posts found in scope",
+    "invalid_regenerate_mode": "mode must be occurrence or horizon",
+    "template_regenerate_not_available": "template regenerate is not available"
   }
 }

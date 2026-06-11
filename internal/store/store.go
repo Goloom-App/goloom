@@ -116,6 +116,9 @@ type Store interface {
 	GetPostTemplateShiftTo(ctx context.Context, templateID string, occurrenceAt time.Time) (*time.Time, error)
 	AdvancePostTemplateSchedule(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext int) error
 	AdvancePostTemplateAnnouncementCounter(ctx context.Context, templateID string, counterNext int) error
+	ListPostTemplateLinkedPosts(ctx context.Context, teamID, templateID string) ([]domain.PostTemplateLinkedPost, error)
+	DeletePostTemplateLinkedPosts(ctx context.Context, teamID, templateID string, postIDs []string) (int, error)
+	SetPostTemplateMaterializationState(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext, announcementCounterNext int) error
 	ListTeamMembers(ctx context.Context, teamID string) ([]domain.TeamMembership, error)
 	AddTeamMember(ctx context.Context, teamID string, input domain.AddTeamMemberInput) (domain.TeamMembership, error)
 	RemoveTeamMember(ctx context.Context, teamID, userID string) error

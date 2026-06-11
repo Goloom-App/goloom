@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
+	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/scheduler"
 )
 
@@ -16,6 +17,8 @@ type metricsSyncRunner interface {
 	SyncExternalPostsNow(ctx context.Context)
 	SyncRSSFeedsNow(ctx context.Context)
 	ImportOldPosts(ctx context.Context, teamID string, input scheduler.ImportOldPostsInput) (scheduler.ImportOldPostsResult, error)
+	RegeneratePostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) (domain.PostTemplateRegenerateResult, error)
+	RegeneratePostTemplateHorizon(ctx context.Context, teamID, templateID string) (domain.PostTemplateRegenerateResult, error)
 }
 
 func (a *API) handleAdminSyncStatus(w http.ResponseWriter, r *http.Request) {

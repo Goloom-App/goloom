@@ -99,7 +99,7 @@ func (s *Service) materializeTemplateOccurrence(ctx context.Context, tmpl *domai
 	if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, tmpl.CounterNext+1); err != nil {
 		return false, err
 	}
-	if err := s.materializeAnnouncement(ctx, tmpl, createAt); err != nil {
+	if err := s.materializeAnnouncement(ctx, tmpl, createAt, true); err != nil {
 		s.logger.Error("announcement materialize failed", "template_id", tmpl.ID, "error", err)
 	}
 	return true, nil

@@ -544,3 +544,73 @@ func scanPostTemplate(row interface {
 	}
 	return t, nil
 }
+
+func (s *Store) ListPostTemplateLinkedPosts(ctx context.Context, teamID, templateID string) ([]domain.PostTemplateLinkedPost, error) {
+	rows, err := s.pool.Query(ctx, `
+		select id::text, status, template_occurrence_at, coalesce(template_post_role, ''), template_counter
+		from scheduled_posts
+		where team_id = $1
+		  and post_template_id = $2
+		  and template_occurrence_at is not null
+		  and status != $3
+		order by template_occurrence_at asc, template_post_role asc`,
+		teamID, templateID, domain.PostStatusCancelled,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []domain.PostTemplateLinkedPost
+	for rows.Next() {
+		var item domain.PostTemplateLinkedPost
+		var status string
+		var occ time.Time
+		var counter sql.NullInt32
+		if err := rows.Scan(&item.ID, &status, &occ, &item.TemplatePostRole, &counter); err != nil {
+			return nil, err
+		}
+		item.Status = domain.PostStatus(status)
+		item.TemplateOccurrenceAt = occ.UTC()
+		if counter.Valid {
+			v := int(counter.Int32)
+			item.TemplateCounter = &v
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) DeletePostTemplateLinkedPosts(ctx context.Context, teamID, templateID string, postIDs []string) (int, error) {
+	if len(postIDs) == 0 {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx, `
+		delete from scheduled_posts
+		where team_id = $1
+		  and post_template_id = $2
+		  and id = any($3)`,
+		teamID, templateID, postIDs,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+func (s *Store) SetPostTemplateMaterializationState(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext, announcementCounterNext int) error {
+	var next any
+	if nextMaterialize != nil {
+		next = nextMaterialize.UTC()
+	}
+	_, err := s.pool.Exec(ctx, `
+		update post_templates
+		set next_materialize_at = $2,
+		    counter_next = $3,
+		    announcement_counter_next = $4,
+		    updated_at = now()
+		where id = $1`,
+		templateID, next, counterNext, announcementCounterNext,
+	)
+	return err
+}
