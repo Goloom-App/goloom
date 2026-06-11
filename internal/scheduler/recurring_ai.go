@@ -134,7 +134,6 @@ type recurringAIJobInput struct {
 func (s *Service) submitRecurringAIJob(ctx context.Context, in recurringAIJobInput) error {
 	outputMode := domain.NormalizeAutomationOutputMode(string(in.tmpl.OutputMode))
 	params := map[string]any{
-		"refine_content":      true,
 		"source_content":      in.expandedContent,
 		"prompt_hint":         strings.TrimSpace(in.tmpl.PromptHint),
 		"title_hint":          strings.TrimSpace(in.tmpl.TitleHint),

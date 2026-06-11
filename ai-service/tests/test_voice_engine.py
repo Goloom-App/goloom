@@ -104,6 +104,36 @@ async def test_process_generates_multi_account_post():
     assert callback_args[1] == "completed"
 
 
+@pytest.mark.asyncio
+async def test_recurring_post_uses_generation_mode_not_refine():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(_generation_payload(content="Fresh announcement copy with enough length. " * 20)),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    await worker.process(
+        {
+            **sample_job(
+                recurring_post_kind="announcement",
+                source_content="Am Freitag 13.06. ist es wieder so weit: Binärgewitter Live!",
+                main_event_at="2026-06-13T20:00:00Z",
+            ),
+            "context": sample_context(),
+        }
+    )
+
+    prompt = adapter.generate.await_args_list[0].args[0]
+    assert "Refine an existing draft" not in prompt
+    assert "Multi-account output rules" in prompt
+    assert "Recurring post rules" in prompt
+    assert "fresh post" in prompt.lower()
+
+
 def test_merge_hashtags_into_content_appends_missing_tags_within_limit():
     parsed = VoiceEngineWorker._merge_hashtags_into_content(
         {"content": "New blog post is live.", "hashtags": ["#tech", "#update"]},

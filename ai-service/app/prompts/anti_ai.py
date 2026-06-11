@@ -15,6 +15,8 @@ QUALITY_VOICE_PRINCIPLES: tuple[str, ...] = (
 # Only the worst universal tells — merged only when the team has fewer than ``limit`` custom words.
 CORE_AVOID_WORDS: tuple[str, ...] = (
     "tauche ein",
+    "taucht ein",
+    "tauchen ein",
     "game-changer",
     "revolutionär",
 )

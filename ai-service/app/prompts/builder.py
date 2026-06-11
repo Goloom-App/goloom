@@ -45,6 +45,7 @@ class PromptBuilder:
 
     BRAND_STYLE_EXAMPLE_LIMIT = 3
     TASK_RECENT_POST_LIMIT = 3
+    RECURRING_RECENT_POST_LIMIT = 6
     FORMATTING_RULE_LIMIT = 4
     RECENT_POST_EXCERPT_CHARS = 140
 
@@ -99,12 +100,17 @@ class PromptBuilder:
             hashtag_rule=str(constraints["hashtag_rule"]),
             user_request=user_request,
             source_material=self._source_material(params, context),
-            recent_posts=self._recent_post_excerpts(context),
+            recent_posts=self._recent_post_excerpts(
+                context,
+                limit=self.RECURRING_RECENT_POST_LIMIT
+                if self._recurring_post_kind(params) in {"announcement", "main"}
+                else self.TASK_RECENT_POST_LIMIT,
+            ),
             campaign_hint=self._campaign_task_hint(context, params),
             output_format=output_format,
             mood_adjustments=mood_adjustments,
             parameter_notes=self._technical_notes(params),
-            output_constraints=self._output_constraints(context),
+            output_constraints=self._output_constraints(context, params),
             recurring_plan=self._recurring_publication_plan(params, context),
         )
 
@@ -151,9 +157,27 @@ class PromptBuilder:
             )
         return self.PLATFORM_HASHTAG_RULES.get(platform, self.PLATFORM_HASHTAG_RULES["default"])
 
-    def _output_constraints(self, context: dict) -> list[str]:
+    def _output_constraints(self, context: dict, params: dict | None = None) -> list[str]:
         constraints: list[str] = []
         style_metadata = self._style_metadata(context)
+        german = str(style_metadata.get("preferred_language") or "en").strip().lower().startswith("de")
+        if params and self._recurring_post_kind(params) in {"announcement", "main"}:
+            if german:
+                constraints.extend(
+                    [
+                        "Neuer Text — keine Sätze oder Einstiege aus der Vorlage oder den letzten Posts recyceln.",
+                        "Neugier statt Buzzword-Listen (nicht Web/Open Source/AI/3D-Druck etc. aneinanderreihen).",
+                        "Kein „tauche/taucht ein“ und keine generische Show-Beschreibung.",
+                    ]
+                )
+            else:
+                constraints.extend(
+                    [
+                        "Fresh wording — do not recycle template sentences or recent post openings.",
+                        "Build curiosity — no laundry lists of technologies or show topics.",
+                        'Avoid "tauche/taucht ein" and generic show descriptions.',
+                    ]
+                )
         for rule in self._string_list(style_metadata.get("formatting_rules")):
             if "emoji" in rule.casefold():
                 constraints.append(f"Respect this emoji rule: {rule}")
@@ -216,7 +240,8 @@ class PromptBuilder:
         ]
         return [item for item in examples if item][: self.BRAND_STYLE_EXAMPLE_LIMIT]
 
-    def _recent_post_excerpts(self, context: dict) -> list[str]:
+    def _recent_post_excerpts(self, context: dict, *, limit: int | None = None) -> list[str]:
+        cap = limit if limit is not None else self.TASK_RECENT_POST_LIMIT
         excerpts: list[str] = []
         for item in self._get_nested(context, ("recent_posts",), ("recentPosts",), default=[]):
             text = self._format_recent_post(item)
@@ -226,7 +251,7 @@ class PromptBuilder:
             if len(compact) > self.RECENT_POST_EXCERPT_CHARS:
                 compact = compact[: self.RECENT_POST_EXCERPT_CHARS].rstrip() + "…"
             excerpts.append(compact)
-            if len(excerpts) >= self.TASK_RECENT_POST_LIMIT:
+            if len(excerpts) >= cap:
                 break
         return excerpts
 
@@ -275,11 +300,11 @@ class PromptBuilder:
                     else "Role: ANNOUNCEMENT (published before the event)."
                 ),
                 (
-                    "Der gerenderte Template-Text unten ist die maßgebliche Quelle für Timing und Formulierung — "
-                    "dort steht bereits, welches Datum genannt wird (z. B. „Am Freitag …“ statt „heute“)."
+                    "Die Vorlage unten liefert nur Fakten und Zeitform (z. B. „Am Freitag …“ statt „heute“) — "
+                    "Formulierung und Aufbau sollen neu sein."
                     if german
-                    else "The rendered template below is the authoritative source for timing and wording — "
-                    "it already states the correct date framing (e.g. a weekday/date instead of “today”)."
+                    else "The template below supplies facts and timing only (e.g. a weekday/date vs. “today”) — "
+                    "wording and structure must be new."
                 ),
             ]
         else:
@@ -290,11 +315,11 @@ class PromptBuilder:
                     else "Role: MAIN EVENT (published on the event day)."
                 ),
                 (
-                    "Der gerenderte Template-Text unten ist die maßgebliche Quelle — "
-                    "wenn dort „heute“ steht, ist das korrekt für diesen Post."
+                    "Die Vorlage unten liefert Fakten und Zeitform (z. B. „heute Abend“) — "
+                    "der Post soll trotzdem frisch klingen, nicht wie Copy-Paste."
                     if german
-                    else "The rendered template below is the authoritative source — "
-                    'if it says “heute”/“today”, that is correct for this post.'
+                    else "The template below supplies facts and timing (e.g. “heute Abend”) — "
+                    "still write fresh copy, not a polished template."
                 ),
             ]
 
@@ -315,18 +340,18 @@ class PromptBuilder:
     def _recurring_template_source(self, source_content: str, context: dict) -> str:
         german = str(self._style_metadata(context).get("preferred_language") or "en").strip().lower().startswith("de")
         if german:
-            header = "Gerenderter Recurring-Template-Text (Variablen bereits ausgefüllt):"
+            header = "Recurring-Vorlage (Variablen ausgefüllt — nur Fakten übernehmen, keinen Wortlaut):"
             rules = (
-                "Behalte die zeitliche Aussage des Templates bei (Datum vs. „heute“/„heute Abend“). "
-                "Verbessere nur Sprache, Flow und Brand-Voice. "
-                "Links und Hashtags aus dem Template möglichst beibehalten."
+                "Übernimm: Zeitform (Datum oder „heute“), Folgennummer, Event-Name, Link, Hashtags.\n"
+                "Schreib einen neuen Post — keine Satzübernahme, anderer Einstieg als die Vorlage und die letzten Posts.\n"
+                "Weck Neugier mit einem konkreten Hook, statt Themen aneinanderzureihen."
             )
         else:
-            header = "Rendered recurring template (variables already expanded):"
+            header = "Recurring template (expanded — facts only, not wording):"
             rules = (
-                "Keep the template's temporal meaning (named date vs. “today”/“tonight”). "
-                "Only improve language, flow, and brand voice. "
-                "Preserve links and hashtags from the template when possible."
+                "Carry over: timing (date vs. today), episode number, event name, link, hashtags.\n"
+                "Write a new post — do not reuse template sentences; use a different opening than recent posts.\n"
+                "Hook with curiosity, not a stacked list of show topics."
             )
         return f"{header}\n---\n{source_content}\n---\n{rules}"
 
@@ -477,8 +502,9 @@ class PromptBuilder:
 
         if self._recurring_post_kind(params) in {"announcement", "main"}:
             base = (
-                "Polish the rendered recurring template below for publication. "
-                "The template already defines the correct timing — keep its date vs. today wording."
+                "Write a fresh recurring-template social post. "
+                "Extract facts and timing from the template below, but create new wording, "
+                "structure, and a curiosity-building hook — not a polished copy of the template."
             )
             if editorial:
                 return f"{base}\n\nEditorial direction: {editorial}"

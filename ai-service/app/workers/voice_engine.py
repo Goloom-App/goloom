@@ -150,9 +150,11 @@ class VoiceEngineWorker:
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'next available slot'}."
         title_hint = self._title_json_instruction(params, include_title)
         rss_rules = self._rss_generation_rules(params)
+        recurring_rules = self._recurring_generation_rules(params)
         return (
             f"{base_prompt}\n\n"
             f"{rss_rules}"
+            f"{recurring_rules}"
             "Multi-account output rules:\n"
             f"- Primary account: {primary.get('username') or primary_id} (id={primary_id}, {primary_platform}, "
             f"limit {primary_limit} characters).\n"
@@ -315,12 +317,36 @@ class VoiceEngineWorker:
         return title
 
     @staticmethod
+    def _recurring_kind(params: dict[str, Any]) -> str:
+        kind = str(params.get("recurring_post_kind") or "").strip().lower()
+        if kind:
+            return kind
+        auto = params.get("recurring_automation")
+        if isinstance(auto, dict):
+            return str(auto.get("post_kind") or "").strip().lower()
+        return ""
+
+    @staticmethod
     def _is_refine_mode(params: dict[str, Any]) -> bool:
+        if VoiceEngineWorker._recurring_kind(params) in {"announcement", "main"}:
+            return params.get("refine_content") is True or params.get("refine") is True
         if params.get("rss_automation") or str(params.get("rss_article_title") or "").strip():
             return params.get("refine_content") is True or params.get("refine") is True
         if params.get("refine_content") is True or params.get("refine") is True:
             return True
         return bool(str(params.get("source_content") or params.get("existing_content") or "").strip())
+
+    @staticmethod
+    def _recurring_generation_rules(params: dict[str, Any]) -> str:
+        kind = VoiceEngineWorker._recurring_kind(params)
+        if kind not in {"announcement", "main"}:
+            return ""
+        return (
+            "Recurring post rules:\n"
+            "- Write a fresh post — do not reuse template sentences or openings from recent posts.\n"
+            "- Keep timing facts from the template (named date vs. heute/today) and required links/numbers.\n"
+            "- Hook with curiosity or a concrete angle — no generic technology laundry lists.\n\n"
+        )
 
     @staticmethod
     def _rss_generation_rules(params: dict[str, Any]) -> str:
