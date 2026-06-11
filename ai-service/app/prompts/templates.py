@@ -30,7 +30,7 @@ def render_brand_voice_prompt(
         sections.extend(
             [
                 "",
-                "Style notes (soft guidelines — not a checklist):",
+                "Style notes (soft guidelines — not a checklist; examples show patterns, not phrases to copy verbatim):",
                 format_list(formatting_rules),
             ]
         )
@@ -66,7 +66,7 @@ def render_brand_voice_prompt(
         sections.extend(
             [
                 "",
-                "Brand knowledge base (static facts about us — not episode-specific content):",
+                "Brand knowledge base (static facts about us — not about the specific item you are posting):",
                 format_list(knowledge_sources),
             ]
         )
@@ -78,7 +78,7 @@ def render_brand_voice_prompt(
             format_style_examples(style_examples),
             "",
             f"Language: {preferred_language} | Hashtag budget: up to {max_hashtags}",
-            "Episode- or article-specific facts always come from the source material in the task message.",
+            "Facts about the specific item you are posting about always come from the source material in the task message.",
         ]
     )
 
@@ -97,6 +97,7 @@ def render_task_prompt(
     output_format: str = "",
     mood_adjustments: list[str] | None = None,
     technical_notes: list[str] | None = None,
+    output_constraints: list[str] | None = None,
 ) -> str:
     sections: list[str] = [
         "## Task",
@@ -137,12 +138,16 @@ def render_task_prompt(
     if technical_notes:
         sections.extend(["", "## Technical notes", format_list(technical_notes)])
 
+    if output_constraints:
+        sections.extend(["", "## Output constraints", format_list(output_constraints)])
+
     sections.extend(
         [
             mood_hint,
             "",
             "Respond with a JSON object using this exact structure (no markdown, no code fences):",
-            '{"content": "the post text", "hashtags": ["hashtag1", "hashtag2"], "platform_metadata": {"key": "value"}}',
+            '{"content": "the post text including hashtags at the end", "hashtags": ["hashtag1", "hashtag2"], "platform_metadata": {"key": "value"}}',
+            "Hashtags must appear in content, not only in the hashtags array.",
         ]
     )
 
@@ -167,6 +172,7 @@ def render_generation_prompt(
     campaign_hint: str = "",
     output_format: str = "",
     mood_adjustments: list[str] | None = None,
+    output_constraints: list[str] | None = None,
 ) -> str:
     """Build the per-request task prompt.
 
@@ -185,6 +191,7 @@ def render_generation_prompt(
         output_format=output_format,
         mood_adjustments=mood_adjustments,
         technical_notes=parameter_notes or [],
+        output_constraints=output_constraints or [],
     )
 
 

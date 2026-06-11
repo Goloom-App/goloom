@@ -84,7 +84,8 @@ class PromptBuilder:
         )
 
     def build_generation_prompt(self, context: dict, params: dict, platform: str) -> str:
-        constraints = self.apply_platform_constraints(platform)
+        max_hashtags = int(self._style_metadata(context).get("max_hashtags") or 0)
+        constraints = self.apply_platform_constraints(platform, max_hashtags=max_hashtags)
         user_request = self._resolve_user_request(params)
         output_format = self._output_format_hint(params)
         mood_adjustments = self._mood_adjustments(params)
@@ -101,6 +102,7 @@ class PromptBuilder:
             output_format=output_format,
             mood_adjustments=mood_adjustments,
             parameter_notes=self._technical_notes(params),
+            output_constraints=self._output_constraints(context),
         )
 
     def build_vibe_preview_prompt(self, context: dict) -> str:
@@ -126,16 +128,44 @@ class PromptBuilder:
         rendered_examples = [self._format_few_shot_example(index, example) for index, example in enumerate(examples, start=1)]
         return f"{prompt}\n\n{render_few_shot_prompt(rendered_examples)}"
 
-    def apply_platform_constraints(self, platform: str) -> dict:
+    def apply_platform_constraints(self, platform: str, *, max_hashtags: int = 0) -> dict:
         normalized = (platform or "").strip().lower()
         key = normalized or "default"
         char_limit = self.PLATFORM_LIMITS.get(normalized, 500)
-        hashtag_rule = self.PLATFORM_HASHTAG_RULES.get(normalized, self.PLATFORM_HASHTAG_RULES["default"])
+        hashtag_rule = self._hashtag_rule(normalized, max_hashtags)
         return {
             "platform": key,
             "char_limit": char_limit,
             "hashtag_rule": hashtag_rule,
         }
+
+    def _hashtag_rule(self, platform: str, max_hashtags: int) -> str:
+        if max_hashtags > 0:
+            minimum = min(3, max_hashtags) if max_hashtags >= 3 else max_hashtags
+            return (
+                f"Include {minimum} to {max_hashtags} relevant hashtags at the end of the post text "
+                "(also mirror them in the hashtags JSON field)."
+            )
+        return self.PLATFORM_HASHTAG_RULES.get(platform, self.PLATFORM_HASHTAG_RULES["default"])
+
+    def _output_constraints(self, context: dict) -> list[str]:
+        constraints: list[str] = []
+        style_metadata = self._style_metadata(context)
+        for rule in self._string_list(style_metadata.get("formatting_rules")):
+            if "emoji" in rule.casefold():
+                constraints.append(f"Respect this emoji rule: {rule}")
+
+        max_hashtags = int(style_metadata.get("max_hashtags") or 0)
+        if max_hashtags > 0:
+            constraints.append(
+                f"Hashtags are important for reach — use up to {max_hashtags} relevant tags derived from the source topics."
+            )
+
+        constraints.append(
+            "Style-note examples (e.g. sample sentence patterns) are not catchphrases — "
+            "do not paste them unless they genuinely fit this item."
+        )
+        return constraints
 
     def _brand_voice_summary(self, style_metadata: dict[str, Any]) -> str:
         identity = self._nested_mapping(style_metadata, "identity")
@@ -212,7 +242,7 @@ class PromptBuilder:
         rss_content = str(params.get("rss_article_content") or params.get("rss_article_summary") or "").strip()
         if rss_title or rss_link or rss_content:
             lines = [
-                "SHOW NOTES / ARTICLE (primary factual source — every specific claim must come from here):",
+                "RSS ITEM (primary factual source — every specific claim must come from here):",
             ]
             if rss_title:
                 lines.append(f"Title: {rss_title}")
@@ -221,9 +251,9 @@ class PromptBuilder:
             if rss_content:
                 lines.append(f"Text:\n---\n{rss_content}\n---")
             lines.append(
-                "The episode title, number, and link above are authoritative. "
-                "Pick 2-4 concrete topics from the show notes and work them in naturally. "
-                "Do not invent guests, episode numbers, links, or opinions."
+                "The title and link above are authoritative. "
+                "Pick 2-4 concrete points from the body text and work them in naturally. "
+                "Do not invent facts, change numbers/identifiers, or swap the item link for a feed URL."
             )
             sections.append("\n".join(lines))
 
@@ -336,11 +366,11 @@ class PromptBuilder:
 
         if self._has_rss_source(params):
             base = (
-                "Write a new social post promoting this podcast episode.\n"
-                "- Use the exact episode title and episode number from the source material.\n"
-                "- Use the episode page link from the source — never the RSS feed URL.\n"
-                "- Mention 2-3 concrete topics from the show notes; do not invent themes or bump the episode number.\n"
-                "- Do not force brand buzzwords (e.g. Open Source) unless they appear in the show notes."
+                "Write a new social post based on the RSS feed item below.\n"
+                "- Use the exact title from the source (keep any numbers or identifiers).\n"
+                "- Use the item link from the source — never the RSS subscription/feed URL.\n"
+                "- Mention 2-3 concrete details from the body text; do not invent themes or change identifiers.\n"
+                "- Do not force brand buzzwords unless they appear in the source."
             )
             if editorial:
                 return f"{base}\n\nEditorial direction: {editorial}"

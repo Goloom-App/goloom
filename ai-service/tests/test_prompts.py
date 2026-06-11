@@ -163,13 +163,15 @@ def test_rss_source_material_prioritizes_show_notes_over_skeleton():
         "mastodon",
     )
 
-    assert "SHOW NOTES / ARTICLE" in prompt
+    assert "RSS ITEM" in prompt
     assert "WireGuard" in prompt
     assert "RSS post skeleton" in prompt
     assert "Neue Folge!" in prompt
     assert "Previous draft" not in prompt
-    assert "exact episode title" in prompt
+    assert "exact title from the source" in prompt
     assert "Editorial direction: Hebe die wichtigsten Themen hervor." in prompt
+    assert "## Output constraints" in prompt
+    assert "Include 2 to 2 relevant hashtags" in prompt
 
 
 def test_brand_voice_does_not_claim_knowledge_is_exclusive_when_empty():

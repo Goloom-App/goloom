@@ -87,7 +87,8 @@ async def test_process_generates_multi_account_post():
 
     result = await worker.process({**sample_job(), "context": sample_context()})
 
-    assert result["content"] == primary_text
+    assert result["content"].startswith(primary_text)
+    assert "#launch" in result["content"]
     assert result.get("title")
     assert result["account_content_override"] == {"acc-bluesky": "Release shipped today."}
     assert result["primary_account_id"] == "acc-mastodon"
@@ -101,6 +102,18 @@ async def test_process_generates_multi_account_post():
     callback_args = goloom_client.send_callback.await_args.args
     assert callback_args[0] == "job-1"
     assert callback_args[1] == "completed"
+
+
+def test_merge_hashtags_into_content_appends_missing_tags_within_limit():
+    parsed = VoiceEngineWorker._merge_hashtags_into_content(
+        {"content": "New blog post is live.", "hashtags": ["#tech", "#update"]},
+        max_hashtags=7,
+        char_limit=500,
+    )
+
+    assert "#tech" in parsed["content"]
+    assert "#update" in parsed["content"]
+    assert parsed["hashtags"] == ["#tech", "#update"]
 
 
 @pytest.mark.asyncio
@@ -361,7 +374,8 @@ async def test_process_retries_when_override_missing_for_lower_limit_account():
 
     result = await worker.process({**sample_job(), "context": sample_context()})
 
-    assert len(result["content"]) == 480
+    assert len(result["content"]) >= 480
+    assert "#launch" in result["content"]
     assert result["account_content_override"] == {"acc-bluesky": "Short release note."}
     assert adapter.generate.await_count == 2
     second_call = adapter.generate.await_args_list[1]

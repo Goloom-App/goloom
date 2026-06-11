@@ -83,6 +83,11 @@ class VoiceEngineWorker:
                 primary_account_id=primary_account_id,
                 primary_limit=primary_limit,
             )
+            parsed = self._merge_hashtags_into_content(
+                parsed,
+                max_hashtags=self._max_hashtags_from_context(context),
+                char_limit=primary_limit,
+            )
 
             result = {
                 "content": parsed["content"],
@@ -316,12 +321,62 @@ class VoiceEngineWorker:
         if not params.get("rss_automation") and not str(params.get("rss_article_title") or "").strip():
             return ""
         return (
-            "RSS / episode rules:\n"
-            "- This is a NEW post written from the show notes, not a polish of a previous draft.\n"
-            "- Copy the episode title and number from the source material exactly — do not invent #382 when the source says #381.\n"
-            "- Use the episode page link from the source — never substitute the RSS feed URL.\n"
-            "- Include at least two concrete details from the show notes; skip generic filler about Open Source or cloud trends unless they are in the notes.\n\n"
+            "RSS item rules:\n"
+            "- This is a NEW post written from the feed item body, not a polish of a previous draft.\n"
+            "- Keep the title and any numbers/identifiers exactly as in the source.\n"
+            "- Use the item link from the source — never substitute the RSS feed subscription URL.\n"
+            "- Include at least two concrete details from the body; skip generic filler not supported by the source.\n\n"
         )
+
+    @staticmethod
+    def _max_hashtags_from_context(context: dict) -> int:
+        profile = context.get("profile") or {}
+        style_metadata = profile.get("style_metadata") or profile.get("styleMetadata") or {}
+        try:
+            return max(0, int(style_metadata.get("max_hashtags") or style_metadata.get("maxHashtags") or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _normalize_hashtag(tag: str) -> str:
+        cleaned = str(tag).strip()
+        if not cleaned:
+            return ""
+        return cleaned if cleaned.startswith("#") else f"#{cleaned.lstrip('#')}"
+
+    @classmethod
+    def _merge_hashtags_into_content(cls, parsed: dict[str, Any], *, max_hashtags: int, char_limit: int) -> dict[str, Any]:
+        content = str(parsed.get("content") or "").strip()
+        raw_tags = parsed.get("hashtags") or []
+        if not isinstance(raw_tags, list):
+            raw_tags = []
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for tag in raw_tags:
+            normalized_tag = cls._normalize_hashtag(str(tag))
+            if not normalized_tag:
+                continue
+            key = normalized_tag.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(normalized_tag)
+
+        if max_hashtags > 0:
+            normalized = normalized[:max_hashtags]
+
+        missing = [tag for tag in normalized if tag.casefold() not in content.casefold()]
+        for tag in missing:
+            candidate = f"{content} {tag}".strip()
+            if len(candidate) <= char_limit:
+                content = candidate
+            else:
+                break
+
+        parsed["content"] = content
+        parsed["hashtags"] = normalized
+        return parsed
 
     async def _generate_with_retries(
         self,

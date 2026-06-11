@@ -284,7 +284,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
                 placeholder="https://example.com/feed.xml"
               />
               <p className="brand-field__hint">
-                Es wird die neueste Folge aus dem Feed geladen — Titel, Link und Show Notes landen im Prompt.
+                Es wird der neueste Eintrag aus dem Feed geladen — Titel, Link und Inhalt landen im Prompt.
               </p>
             </label>
             <label className="field">
@@ -294,7 +294,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
                 rows={4}
                 value={occasion}
                 onChange={(e) => setOccasion(e.target.value)}
-                placeholder="z. B. Neue Folge bewerben, Folgentitel und -nummer nennen, 2–3 Themen aus den Show Notes hervorheben."
+                placeholder="z. B. Neuen Eintrag bewerben, Titel nennen, 2–3 konkrete Punkte aus dem Inhalt hervorheben."
               />
             </label>
           </>
