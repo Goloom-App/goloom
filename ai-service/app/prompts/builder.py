@@ -166,7 +166,9 @@ class PromptBuilder:
                 constraints.extend(
                     [
                         "Neuer Text — keine Sätze oder Einstiege aus der Vorlage oder den letzten Posts recyceln.",
-                        "Neugier statt Buzzword-Listen (nicht Web/Open Source/AI/3D-Druck etc. aneinanderreihen).",
+                        "Nur Fakten aus der Vorlage: kein erfundenes Folgenthema, keine Gäste, keine Technik-Schwerpunkte.",
+                        "Keine rhetorischen Fragen zu Inhalten, die nicht in der Vorlage stehen (z. B. „Was besprechen wir zu AI/3D-Druck?“).",
+                        "Brand-Wissen und letzte Posts sind nur für Ton/Deduplizierung — nicht als Themenquelle.",
                         "Kein „tauche/taucht ein“ und keine generische Show-Beschreibung.",
                     ]
                 )
@@ -174,7 +176,9 @@ class PromptBuilder:
                 constraints.extend(
                     [
                         "Fresh wording — do not recycle template sentences or recent post openings.",
-                        "Build curiosity — no laundry lists of technologies or show topics.",
+                        "Template facts only — do not invent episode topics, guests, or technology angles.",
+                        "No rhetorical questions about subjects not named in the template.",
+                        "Brand knowledge and recent posts are for tone/dedup only — not topic sources.",
                         'Avoid "tauche/taucht ein" and generic show descriptions.',
                     ]
                 )
@@ -184,9 +188,22 @@ class PromptBuilder:
 
         max_hashtags = int(style_metadata.get("max_hashtags") or 0)
         if max_hashtags > 0:
-            constraints.append(
-                f"Hashtags are important for reach — use up to {max_hashtags} relevant tags derived from the source topics."
-            )
+            if params and self._recurring_post_kind(params) in {"announcement", "main"}:
+                if german:
+                    constraints.append(
+                        f"Bis zu {max_hashtags} Hashtags nur aus der Vorlage oder Marken-/Show-Namen "
+                        "(z. B. #Podcast #ShowName) — keine Themen-Tags (#AI, #OpenSource, …), "
+                        "wenn sie nicht wörtlich in der Vorlage stehen."
+                    )
+                else:
+                    constraints.append(
+                        f"Use up to {max_hashtags} hashtags only from the template or brand/show names "
+                        "(e.g. #Podcast #ShowName) — no topic tags (#AI, #OpenSource, …) unless literal in the template."
+                    )
+            else:
+                constraints.append(
+                    f"Hashtags are important for reach — use up to {max_hashtags} relevant tags derived from the source topics."
+                )
 
         constraints.append(
             "Style-note examples (e.g. sample sentence patterns) are not catchphrases — "
@@ -301,10 +318,10 @@ class PromptBuilder:
                 ),
                 (
                     "Die Vorlage unten liefert nur Fakten und Zeitform (z. B. „Am Freitag …“ statt „heute“) — "
-                    "Formulierung und Aufbau sollen neu sein."
+                    "Formulierung und Aufbau sollen neu sein, aber keine neuen inhaltlichen Behauptungen."
                     if german
                     else "The template below supplies facts and timing only (e.g. a weekday/date vs. “today”) — "
-                    "wording and structure must be new."
+                    "new wording and structure, but no new factual claims."
                 ),
             ]
         else:
@@ -316,10 +333,10 @@ class PromptBuilder:
                 ),
                 (
                     "Die Vorlage unten liefert Fakten und Zeitform (z. B. „heute Abend“) — "
-                    "der Post soll trotzdem frisch klingen, nicht wie Copy-Paste."
+                    "frisch formulieren, aber nichts erfinden, was nicht in der Vorlage steht."
                     if german
                     else "The template below supplies facts and timing (e.g. “heute Abend”) — "
-                    "still write fresh copy, not a polished template."
+                    "fresh wording only; do not invent facts beyond the template."
                 ),
             ]
 
@@ -342,16 +359,16 @@ class PromptBuilder:
         if german:
             header = "Recurring-Vorlage (Variablen ausgefüllt — nur Fakten übernehmen, keinen Wortlaut):"
             rules = (
-                "Übernimm: Zeitform (Datum oder „heute“), Folgennummer, Event-Name, Link, Hashtags.\n"
-                "Schreib einen neuen Post — keine Satzübernahme, anderer Einstieg als die Vorlage und die letzten Posts.\n"
-                "Weck Neugier mit einem konkreten Hook, statt Themen aneinanderzureihen."
+                "Erlaubte Fakten (nur wenn in der Vorlage): Zeitform, Folgennummer, Event-Name, Links, CTAs, Hashtags.\n"
+                "Neuer Einstieg und Formulierung — aber keine neuen Themen, Gäste oder Technik-Schwerpunkte erfinden.\n"
+                "Keine Teaser-Fragen zu Folgeninhalten, die nicht in der Vorlage genannt sind."
             )
         else:
             header = "Recurring template (expanded — facts only, not wording):"
             rules = (
-                "Carry over: timing (date vs. today), episode number, event name, link, hashtags.\n"
-                "Write a new post — do not reuse template sentences; use a different opening than recent posts.\n"
-                "Hook with curiosity, not a stacked list of show topics."
+                "Allowed facts (only if in the template): timing, episode number, event name, links, CTAs, hashtags.\n"
+                "Fresh opening and wording — do not invent new topics, guests, or technology angles.\n"
+                "No teaser questions about episode content not named in the template."
             )
         return f"{header}\n---\n{source_content}\n---\n{rules}"
 
@@ -502,9 +519,13 @@ class PromptBuilder:
 
         if self._recurring_post_kind(params) in {"announcement", "main"}:
             base = (
-                "Write a fresh recurring-template social post. "
-                "Extract facts and timing from the template below, but create new wording, "
-                "structure, and a curiosity-building hook — not a polished copy of the template."
+                "Write a fresh recurring-template social post.\n"
+                "- Every specific fact must come from the template below (timing, episode number, "
+                "event name, links, CTAs).\n"
+                "- Do not invent what the episode will cover — no teaser topics, guests, or tech "
+                "angles unless the template names them.\n"
+                "- New wording and structure only — not new subject matter.\n"
+                "- Do not use brand knowledge or recent posts as a source of episode topics."
             )
             if editorial:
                 return f"{base}\n\nEditorial direction: {editorial}"

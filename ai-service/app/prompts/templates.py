@@ -116,7 +116,7 @@ def render_task_prompt(
             [
                 "",
                 "## Do not repeat",
-                "Recent posts below are for deduplication only — do not copy their openings, structure, or phrasing.",
+                "Recent posts below are for deduplication only — do not copy their openings, structure, phrasing, or subject matter.",
                 format_list(recent_posts),
             ]
         )

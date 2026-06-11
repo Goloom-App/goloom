@@ -347,9 +347,10 @@ class VoiceEngineWorker:
             return ""
         return (
             "Recurring post rules:\n"
-            "- Write a fresh post — do not reuse template sentences or openings from recent posts.\n"
-            "- Keep timing facts from the template (named date vs. heute/today) and required links/numbers.\n"
-            "- Hook with curiosity or a concrete angle — no generic technology laundry lists.\n\n"
+            "- Fresh wording only — do not reuse template sentences or openings from recent posts.\n"
+            "- Keep timing, links, and numbers exactly as grounded in the template.\n"
+            "- Announce the event; do not invent episode topics or technology angles not in the template.\n"
+            "- No rhetorical teaser questions about subjects absent from the template.\n\n"
         )
 
     @staticmethod
@@ -472,7 +473,7 @@ class VoiceEngineWorker:
                     f"{prompt}\n\nRevise the previous answer and return JSON only. "
                     f"Fix this issue: {last_error}. "
                     f"The primary content MUST be at most {primary_limit} characters. "
-                    "Write fresh copy from the template facts — do not paste the template verbatim. "
+                    "Write fresh copy using only template facts — do not invent topics or paste the template verbatim. "
                     "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
                 )
             else:

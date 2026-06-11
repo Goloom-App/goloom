@@ -198,8 +198,8 @@ def test_recurring_announcement_schedule_forbids_heute():
     assert "template below supplies facts" in prompt
     assert "Recurring template" in prompt
     assert "Am Freitag 13.06" in prompt
-    assert "Write a new post" in prompt
-    assert "Fresh wording" in prompt or "do not reuse template sentences" in prompt
+    assert "do not invent" in prompt.lower()
+    assert "Template facts only" in prompt or "do not reuse template sentences" in prompt
     assert "Previous draft" not in prompt
 
 
@@ -224,7 +224,8 @@ def test_recurring_main_uses_template_heute_wording():
     assert "Role: MAIN EVENT" in prompt
     assert "heute Abend live" in prompt
     assert "fresh recurring-template" in prompt
-    assert "curiosity" in prompt.lower()
+    assert "do not invent" in prompt.lower()
+    assert "episode topics" in prompt.lower()
 
 
 def test_recurring_publication_plan_german():
@@ -252,7 +253,7 @@ def test_recurring_publication_plan_german():
     assert "Vorlage unten liefert nur Fakten" in prompt
     assert "Am Freitag 13.06" in prompt
     assert "Neuer Text" in prompt
-    assert "Schreib einen neuen Post" in prompt
+    assert "keine neuen Themen" in prompt or "Keine Teaser-Fragen" in prompt
 
 
 def test_brand_voice_does_not_claim_knowledge_is_exclusive_when_empty():
