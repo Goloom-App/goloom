@@ -109,7 +109,8 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
   const [vibeSummary, setVibeSummary] = useState<string | null>(null)
   const [vibeSuggestion, setVibeSuggestion] = useState<string | null>(null)
   const [vibeJobId, setVibeJobId] = useState<string | null>(null)
-  const [brandPromptText, setBrandPromptText] = useState<string | null>(null)
+  const [brandPromptSystem, setBrandPromptSystem] = useState<string | null>(null)
+  const [brandPromptTask, setBrandPromptTask] = useState<string | null>(null)
 
   // Profile assistant
   const [assistantBrief, setAssistantBrief] = useState('')
@@ -359,8 +360,8 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
           platform: 'mastodon',
         },
       })
-      // The generation prompt already includes the full brand context — show that.
-      setBrandPromptText(preview.system_prompt || preview.generation_prompt)
+      setBrandPromptSystem(preview.system_prompt || null)
+      setBrandPromptTask(preview.generation_prompt || null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Prompt-Vorschau fehlgeschlagen')
     }
@@ -727,7 +728,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
       <SectionCard
         icon={<Eye size={18} />}
         title="So sieht dein Brand im Prompt aus"
-        subtitle="Verständnis-Layer: dieser System-Prompt wird bei jeder Generierung an die KI gesendet. Speichere zuerst Änderungen am Profil."
+        subtitle="Brand Voice (System) + Aufgabe (User) — beides geht bei jeder Generierung an die KI. Speichere zuerst Änderungen am Profil."
         headerExtra={
           <button
             type="button"
@@ -740,13 +741,25 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
           </button>
         }
       >
-        {brandPromptText ? (
-          <details open className="brand-prompt-preview">
-            <summary>
-              <FileText size={14} /> System-Prompt
-            </summary>
-            <pre>{brandPromptText}</pre>
-          </details>
+        {brandPromptSystem || brandPromptTask ? (
+          <>
+            {brandPromptSystem ? (
+              <details open className="brand-prompt-preview" data-testid="brand-prompt-system">
+                <summary>
+                  <FileText size={14} /> Brand Voice (System-Prompt)
+                </summary>
+                <pre>{brandPromptSystem}</pre>
+              </details>
+            ) : null}
+            {brandPromptTask ? (
+              <details className="brand-prompt-preview" data-testid="brand-prompt-task">
+                <summary>
+                  <FileText size={14} /> Aufgabe (User-Prompt)
+                </summary>
+                <pre>{brandPromptTask}</pre>
+              </details>
+            ) : null}
+          </>
         ) : (
           <p className="brand-field__hint" style={{ margin: 0 }}>
             Noch keine Vorschau geladen. „Brand-Prompt zeigen" oben rechts klicken.

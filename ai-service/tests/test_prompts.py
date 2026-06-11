@@ -148,7 +148,7 @@ def test_inject_few_shot_appends_examples():
     assert "Keep the CTA subtle." in prompt
 
 
-def test_build_generation_prompt_is_task_only_without_brand_voice():
+def test_build_generation_prompt_includes_compact_brand_anchor_not_full_profile():
     builder = PromptBuilder()
 
     prompt = builder.build_generation_prompt(
@@ -161,7 +161,10 @@ def test_build_generation_prompt_is_task_only_without_brand_voice():
         "bluesky",
     )
 
-    assert "Brand voice:" not in prompt
+    assert "## Brand voice for this post" in prompt
+    assert "A small team that ships in public." in prompt
+    assert "Quality bar:" not in prompt
+    assert "Especially avoid these words/phrases:" not in prompt
     assert "## Task" in prompt
     assert "Announce the new feature rollout." in prompt
     assert "Platform: bluesky" in prompt

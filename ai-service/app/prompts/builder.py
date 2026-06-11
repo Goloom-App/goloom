@@ -90,6 +90,7 @@ class PromptBuilder:
         mood_adjustments = self._mood_adjustments(params)
 
         return render_generation_prompt(
+            system_prompt=self.build_brand_voice_prompt(context),
             platform=str(constraints["platform"]),
             char_limit=int(constraints["char_limit"]),
             hashtag_rule=str(constraints["hashtag_rule"]),

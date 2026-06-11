@@ -72,7 +72,8 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
   // Editor
   const [moodAdjustments, setMoodAdjustments] = useState<AIMoodAdjustment[]>([])
   const [showPromptPreview, setShowPromptPreview] = useState(false)
-  const [promptText, setPromptText] = useState('')
+  const [promptSystemText, setPromptSystemText] = useState('')
+  const [promptTaskText, setPromptTaskText] = useState('')
   const [savingDraftId, setSavingDraftId] = useState<string | null>(null)
 
   const activeJobs = jobs?.filter((j) => j.status === 'pending' || j.status === 'processing') ?? []
@@ -172,7 +173,8 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
         teamId: team.id,
         params: buildGenerationParams(Boolean(latestVoiceResult)),
       })
-      setPromptText(preview.generation_prompt)
+      setPromptSystemText(preview.system_prompt || '')
+      setPromptTaskText(preview.generation_prompt || '')
       setShowPromptPreview(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Prompt-Vorschau fehlgeschlagen')
@@ -337,12 +339,22 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
             <p className="brand-field__hint">Wähle aus, was angepasst werden soll, und klicke „Neu generieren".</p>
           </div>
 
-          {showPromptPreview && promptText && (
-            <details open className="brand-prompt-preview" data-testid="gen-prompt-preview-panel">
-              <summary><FileText size={14} /> Haupt-Prompt</summary>
-              <pre>{promptText}</pre>
-            </details>
-          )}
+          {showPromptPreview && (promptSystemText || promptTaskText) ? (
+            <div className="stack stack--sm" data-testid="gen-prompt-preview-panel">
+              {promptSystemText ? (
+                <details open className="brand-prompt-preview" data-testid="gen-prompt-system">
+                  <summary><FileText size={14} /> Brand Voice (System)</summary>
+                  <pre>{promptSystemText}</pre>
+                </details>
+              ) : null}
+              {promptTaskText ? (
+                <details open className="brand-prompt-preview" data-testid="gen-prompt-task">
+                  <summary><FileText size={14} /> Aufgabe (User)</summary>
+                  <pre>{promptTaskText}</pre>
+                </details>
+              ) : null}
+            </div>
+          ) : null}
         </SectionCard>
       )}
 
