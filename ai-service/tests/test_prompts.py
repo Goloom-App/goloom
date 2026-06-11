@@ -195,11 +195,12 @@ def test_recurring_announcement_schedule_forbids_heute():
 
     assert "## Publication plan" in prompt
     assert "Role: ANNOUNCEMENT" in prompt
-    assert "template below supplies facts" in prompt
+    assert "template supplies facts" in prompt
     assert "Recurring template" in prompt
     assert "Am Freitag 13.06" in prompt
-    assert "do not invent" in prompt.lower()
-    assert "Template facts only" in prompt or "do not reuse template sentences" in prompt
+    assert "grounding" in prompt.lower()
+    assert "enhancement" in prompt.lower()
+    assert "No invented facts" in prompt or "do not reuse template sentences" in prompt
     assert "Previous draft" not in prompt
 
 
@@ -223,9 +224,9 @@ def test_recurring_main_uses_template_heute_wording():
 
     assert "Role: MAIN EVENT" in prompt
     assert "heute Abend live" in prompt
-    assert "fresh recurring-template" in prompt
-    assert "do not invent" in prompt.lower()
-    assert "episode topics" in prompt.lower()
+    assert "fresh social post from a recurring template" in prompt
+    assert "persuasive emphasis" in prompt.lower()
+    assert "episode" not in prompt.lower()
 
 
 def test_recurring_publication_plan_german():
@@ -250,10 +251,57 @@ def test_recurring_publication_plan_german():
     )
 
     assert "Rolle: ANKÜNDIGUNG" in prompt
-    assert "Vorlage unten liefert nur Fakten" in prompt
+    assert "Die Vorlage liefert Fakten" in prompt
     assert "Am Freitag 13.06" in prompt
     assert "Neuer Text" in prompt
-    assert "keine neuen Themen" in prompt or "Keine Teaser-Fragen" in prompt
+    assert "Keine erfundenen Fakten" in prompt
+    assert "frisch und einladend" in prompt
+
+
+def test_recurring_campaign_uses_prompt_hint_for_emphasis():
+    builder = PromptBuilder()
+
+    prompt = builder.build_generation_prompt(
+        sample_context(),
+        {
+            "recurring_post_kind": "main",
+            "prompt_hint": "Betone den 20% Rabatt und die Deadline am Sonntag.",
+            "source_content": (
+                "Sommer-Sale: 20% auf alles bis Sonntag.\n"
+                "Shop: https://shop.example/sale"
+            ),
+        },
+        "bluesky",
+    )
+
+    assert "Betone den 20% Rabatt" in prompt
+    assert "Editorial direction" in prompt
+    assert "persuasive emphasis" in prompt.lower()
+    assert "campaign" in prompt.lower()
+
+
+def test_recurring_stammtisch_template_allows_warm_invite():
+    builder = PromptBuilder()
+
+    prompt = builder.build_generation_prompt(
+        sample_context(),
+        {
+            "recurring_post_kind": "announcement",
+            "post_scheduled_at": "2026-06-18T17:00:00Z",
+            "main_event_at": "2026-06-20T18:00:00Z",
+            "prompt_hint": "Lockere Einladung, Fokus auf Gemeinschaft und offene Diskussion.",
+            "source_content": (
+                "Am Samstag 20.06., 18 Uhr: Open Source Stammtisch im Café Linz.\n"
+                "Alle willkommen — https://stammtisch.example"
+            ),
+        },
+        "mastodon",
+    )
+
+    assert "Lockere Einladung" in prompt
+    assert "Open Source Stammtisch" in prompt
+    assert "inviting" in prompt.lower() or "einladend" in prompt.lower()
+    assert "episode" not in prompt.lower()
 
 
 def test_brand_voice_does_not_claim_knowledge_is_exclusive_when_empty():

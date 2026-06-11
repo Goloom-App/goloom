@@ -698,7 +698,7 @@ export function RecurringPostsView({
                       checked={aiEnhanceEnabled}
                       onChange={setAiEnhanceEnabled}
                       title={t('rss.aiEnhanceEnabled')}
-                      description="Die KI schreibt den Template-Text vor dem Veröffentlichen mit dem Markenstil neu."
+                      description={t('recurring.aiEnhanceDescription')}
                       testId="recurring-ai-enhance"
                     />
                     {aiEnhanceEnabled ? (
@@ -720,7 +720,10 @@ export function RecurringPostsView({
                         ) : null}
                         <label className="field">
                           <span>{t('rss.aiPrompt')}</span>
-                          <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('rss.aiPromptPlaceholder')} />
+                          <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('recurring.aiPromptPlaceholder')} />
+                          <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                            {t('recurring.aiPromptHint')}
+                          </p>
                         </label>
                         <label className="field">
                           <span>{t('rss.titleHint')}</span>

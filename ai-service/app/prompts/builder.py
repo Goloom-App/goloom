@@ -49,6 +49,21 @@ class PromptBuilder:
     FORMATTING_RULE_LIMIT = 4
     RECENT_POST_EXCERPT_CHARS = 140
 
+    RECURRING_USER_REQUEST_BASE = (
+        "Write a fresh social post from a recurring template.\n"
+        "Grounding — every specific claim (dates, times, places, names, prices, offers, "
+        "links, numbers, agenda items) must come from one of:\n"
+        "- the expanded template below\n"
+        "- the editorial direction below (if provided)\n"
+        "- the paired announcement reference (if provided)\n"
+        "Enhancement — where AI adds value:\n"
+        "- sharper wording, rhythm, and CTA; more engaging but faithful copy\n"
+        "- a new opening and structure vs. the template and recent posts\n"
+        "- persuasive emphasis on what the sources already state (event, campaign, meetup, product, etc.)\n"
+        "Do not add factual specifics from brand knowledge, industry profile, or recent posts — "
+        "use those only for tone and deduplication."
+    )
+
     def build_system_prompt(self, context: dict) -> str:
         return self.build_brand_voice_prompt(context)
 
@@ -162,26 +177,7 @@ class PromptBuilder:
         style_metadata = self._style_metadata(context)
         german = str(style_metadata.get("preferred_language") or "en").strip().lower().startswith("de")
         if params and self._recurring_post_kind(params) in {"announcement", "main"}:
-            if german:
-                constraints.extend(
-                    [
-                        "Neuer Text — keine Sätze oder Einstiege aus der Vorlage oder den letzten Posts recyceln.",
-                        "Nur Fakten aus der Vorlage: kein erfundenes Folgenthema, keine Gäste, keine Technik-Schwerpunkte.",
-                        "Keine rhetorischen Fragen zu Inhalten, die nicht in der Vorlage stehen (z. B. „Was besprechen wir zu AI/3D-Druck?“).",
-                        "Brand-Wissen und letzte Posts sind nur für Ton/Deduplizierung — nicht als Themenquelle.",
-                        "Kein „tauche/taucht ein“ und keine generische Show-Beschreibung.",
-                    ]
-                )
-            else:
-                constraints.extend(
-                    [
-                        "Fresh wording — do not recycle template sentences or recent post openings.",
-                        "Template facts only — do not invent episode topics, guests, or technology angles.",
-                        "No rhetorical questions about subjects not named in the template.",
-                        "Brand knowledge and recent posts are for tone/dedup only — not topic sources.",
-                        'Avoid "tauche/taucht ein" and generic show descriptions.',
-                    ]
-                )
+            constraints.extend(self._recurring_output_constraints(german))
         for rule in self._string_list(style_metadata.get("formatting_rules")):
             if "emoji" in rule.casefold():
                 constraints.append(f"Respect this emoji rule: {rule}")
@@ -189,17 +185,7 @@ class PromptBuilder:
         max_hashtags = int(style_metadata.get("max_hashtags") or 0)
         if max_hashtags > 0:
             if params and self._recurring_post_kind(params) in {"announcement", "main"}:
-                if german:
-                    constraints.append(
-                        f"Bis zu {max_hashtags} Hashtags nur aus der Vorlage oder Marken-/Show-Namen "
-                        "(z. B. #Podcast #ShowName) — keine Themen-Tags (#AI, #OpenSource, …), "
-                        "wenn sie nicht wörtlich in der Vorlage stehen."
-                    )
-                else:
-                    constraints.append(
-                        f"Use up to {max_hashtags} hashtags only from the template or brand/show names "
-                        "(e.g. #Podcast #ShowName) — no topic tags (#AI, #OpenSource, …) unless literal in the template."
-                    )
+                constraints.append(self._recurring_hashtag_constraint(max_hashtags, german))
             else:
                 constraints.append(
                     f"Hashtags are important for reach — use up to {max_hashtags} relevant tags derived from the source topics."
@@ -288,6 +274,37 @@ class PromptBuilder:
             return str(auto.get("post_kind") or "").strip().lower()
         return ""
 
+    @staticmethod
+    def _recurring_output_constraints(german: bool) -> list[str]:
+        if german:
+            return [
+                "Neuer Text — keine Sätze oder Einstiege aus der Vorlage oder den letzten Posts recyceln.",
+                "Keine erfundenen Fakten: Orte, Preise, Rabatte, Agenda-Themen, Produkte oder Gäste, "
+                "die nicht in Vorlage, redaktioneller Anweisung oder Ankündigungs-Referenz stehen.",
+                "Redaktionelle Anweisung darf Betonung und Winkel steuern — aber keine neuen Fakten einführen.",
+                "Brand-Wissen und letzte Posts nur für Ton und Deduplizierung — nicht als Themenquelle.",
+            ]
+        return [
+            "Fresh wording — do not recycle template sentences or recent post openings.",
+            "No invented facts: venues, prices, discounts, agenda topics, products, or guests "
+            "unless stated in the template, editorial direction, or announcement reference.",
+            "Editorial direction may shape emphasis and angle — but cannot introduce new facts.",
+            "Brand knowledge and recent posts are for tone and dedup only — not topic sources.",
+        ]
+
+    @staticmethod
+    def _recurring_hashtag_constraint(max_hashtags: int, german: bool) -> str:
+        if german:
+            return (
+                f"Bis zu {max_hashtags} Hashtags aus Vorlage oder redaktioneller Anweisung — "
+                "keine generischen Branchen-/Hobby-Tags aus dem Brand-Profil, "
+                "wenn sie nicht wörtlich in diesen Quellen stehen."
+            )
+        return (
+            f"Use up to {max_hashtags} hashtags grounded in the template or editorial direction — "
+            "not generic industry/hobby tags from the brand profile unless literal in those sources."
+        )
+
     def _param_schedule_value(self, params: dict, key: str, nested: tuple[str, str]) -> str:
         direct = str(params.get(key) or "").strip()
         if direct:
@@ -317,11 +334,11 @@ class PromptBuilder:
                     else "Role: ANNOUNCEMENT (published before the event)."
                 ),
                 (
-                    "Die Vorlage unten liefert nur Fakten und Zeitform (z. B. „Am Freitag …“ statt „heute“) — "
-                    "Formulierung und Aufbau sollen neu sein, aber keine neuen inhaltlichen Behauptungen."
+                    "Die Vorlage liefert Fakten und Zeitform (z. B. „Am Freitag …“ statt „heute“) — "
+                    "frisch und einladend formulieren, ohne neue Fakten."
                     if german
-                    else "The template below supplies facts and timing only (e.g. a weekday/date vs. “today”) — "
-                    "new wording and structure, but no new factual claims."
+                    else "The template supplies facts and timing (e.g. a weekday/date vs. “today”) — "
+                    "write fresh, inviting copy without adding new facts."
                 ),
             ]
         else:
@@ -332,11 +349,11 @@ class PromptBuilder:
                     else "Role: MAIN EVENT (published on the event day)."
                 ),
                 (
-                    "Die Vorlage unten liefert Fakten und Zeitform (z. B. „heute Abend“) — "
-                    "frisch formulieren, aber nichts erfinden, was nicht in der Vorlage steht."
+                    "Die Vorlage liefert Fakten und Zeitform (z. B. „heute Abend“) — "
+                    "frisch und mitreißend formulieren, ohne neue Fakten."
                     if german
-                    else "The template below supplies facts and timing (e.g. “heute Abend”) — "
-                    "fresh wording only; do not invent facts beyond the template."
+                    else "The template supplies facts and timing (e.g. “tonight”) — "
+                    "write fresh, energetic copy without adding new facts."
                 ),
             ]
 
@@ -357,18 +374,16 @@ class PromptBuilder:
     def _recurring_template_source(self, source_content: str, context: dict) -> str:
         german = str(self._style_metadata(context).get("preferred_language") or "en").strip().lower().startswith("de")
         if german:
-            header = "Recurring-Vorlage (Variablen ausgefüllt — nur Fakten übernehmen, keinen Wortlaut):"
+            header = "Wiederkehrende Vorlage (ausgefüllt — Fakten übernehmen, Wortlaut neu schreiben):"
             rules = (
-                "Erlaubte Fakten (nur wenn in der Vorlage): Zeitform, Folgennummer, Event-Name, Links, CTAs, Hashtags.\n"
-                "Neuer Einstieg und Formulierung — aber keine neuen Themen, Gäste oder Technik-Schwerpunkte erfinden.\n"
-                "Keine Teaser-Fragen zu Folgeninhalten, die nicht in der Vorlage genannt sind."
+                "Alle Fakten oben beibehalten (Zeit, Ort, Angebot, Links, Zahlen, Namen).\n"
+                "Neu formulieren und betonen — keine zusätzlichen Fakten jenseits der Quellen in der Aufgabe."
             )
         else:
-            header = "Recurring template (expanded — facts only, not wording):"
+            header = "Recurring template (expanded — keep facts, rewrite wording):"
             rules = (
-                "Allowed facts (only if in the template): timing, episode number, event name, links, CTAs, hashtags.\n"
-                "Fresh opening and wording — do not invent new topics, guests, or technology angles.\n"
-                "No teaser questions about episode content not named in the template."
+                "Carry over every fact above (timing, venue, offer, links, numbers, names).\n"
+                "Rephrase and emphasize — no extra facts beyond the grounding sources in the task."
             )
         return f"{header}\n---\n{source_content}\n---\n{rules}"
 
@@ -518,17 +533,13 @@ class PromptBuilder:
             return base
 
         if self._recurring_post_kind(params) in {"announcement", "main"}:
-            base = (
-                "Write a fresh recurring-template social post.\n"
-                "- Every specific fact must come from the template below (timing, episode number, "
-                "event name, links, CTAs).\n"
-                "- Do not invent what the episode will cover — no teaser topics, guests, or tech "
-                "angles unless the template names them.\n"
-                "- New wording and structure only — not new subject matter.\n"
-                "- Do not use brand knowledge or recent posts as a source of episode topics."
-            )
+            base = self.RECURRING_USER_REQUEST_BASE
             if editorial:
-                return f"{base}\n\nEditorial direction: {editorial}"
+                return (
+                    f"{base}\n\n"
+                    "Editorial direction (shapes emphasis and angle — cannot add facts beyond the template):\n"
+                    f"{editorial}"
+                )
             return base
 
         if editorial:

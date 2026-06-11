@@ -131,7 +131,7 @@ async def test_recurring_post_uses_generation_mode_not_refine():
     assert "Refine an existing draft" not in prompt
     assert "Multi-account output rules" in prompt
     assert "Recurring post rules" in prompt
-    assert "do not invent episode topics" in prompt.lower()
+    assert "persuasive emphasis" in prompt.lower()
 
 
 @pytest.mark.asyncio
