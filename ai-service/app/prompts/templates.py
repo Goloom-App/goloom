@@ -39,7 +39,7 @@ def render_brand_voice_prompt(
         sections.extend(
             [
                 "",
-                "Words that fit this account (use when natural, never force):",
+                "Words that fit this account (only when relevant to this specific post — never force):",
                 format_inline_list(preferred_words),
             ]
         )
@@ -62,17 +62,23 @@ def render_brand_voice_prompt(
             ]
         )
 
+    if knowledge_sources:
+        sections.extend(
+            [
+                "",
+                "Brand knowledge base (static facts about us — not episode-specific content):",
+                format_list(knowledge_sources),
+            ]
+        )
+
     sections.extend(
         [
-            "",
-            "Facts you may use (exclusive source — do not invent beyond this):",
-            format_list(knowledge_sources),
-            "If a fact is not above, omit it rather than guessing.",
             "",
             "Posts that sound like us (match tone and attitude, not structure or layout):",
             format_style_examples(style_examples),
             "",
             f"Language: {preferred_language} | Hashtag budget: up to {max_hashtags}",
+            "Episode- or article-specific facts always come from the source material in the task message.",
         ]
     )
 
@@ -85,7 +91,6 @@ def render_task_prompt(
     char_limit: int,
     hashtag_rule: str,
     user_request: str,
-    brand_anchor: str = "",
     source_material: list[str],
     recent_posts: list[str],
     campaign_hint: str = "",
@@ -93,22 +98,10 @@ def render_task_prompt(
     mood_adjustments: list[str] | None = None,
     technical_notes: list[str] | None = None,
 ) -> str:
-    sections: list[str] = []
-    if brand_anchor.strip():
-        sections.extend(
-            [
-                "## Brand voice for this post",
-                brand_anchor.strip(),
-                "Your system instructions contain the full brand profile, facts, and style references — follow them.",
-            ]
-        )
-
-    sections.extend(
-        [
-            "## Task",
-            user_request.strip() or "Write a platform-ready post for this account.",
-        ]
-    )
+    sections: list[str] = [
+        "## Task",
+        user_request.strip() or "Write a platform-ready post for this account.",
+    ]
 
     if source_material:
         sections.extend(["", "## Source material", *source_material])
@@ -177,16 +170,15 @@ def render_generation_prompt(
 ) -> str:
     """Build the per-request task prompt.
 
-    ``system_prompt`` is accepted for backwards compatibility. When provided,
-    a compact brand anchor is derived from it for the task prompt.
+    ``system_prompt`` is accepted for backwards compatibility but is not
+    duplicated into the task — brand voice lives only in the system message.
     """
-    brand_anchor = _brand_anchor_from_system_prompt(system_prompt)
+    _ = system_prompt
     return render_task_prompt(
         platform=platform,
         char_limit=char_limit,
         hashtag_rule=hashtag_rule,
         user_request=user_request,
-        brand_anchor=brand_anchor,
         source_material=source_material or [],
         recent_posts=recent_posts or [],
         campaign_hint=campaign_hint,
@@ -321,33 +313,3 @@ def format_value(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False, sort_keys=True)
     return str(value)
 
-
-def _brand_anchor_from_system_prompt(system_prompt: str) -> str:
-    if not system_prompt.strip():
-        return ""
-    lines = [line.strip() for line in system_prompt.splitlines() if line.strip()]
-    if not lines:
-        return ""
-    anchor_lines: list[str] = []
-    if lines[0].startswith("You write social media posts for"):
-        anchor_lines.append(lines[0])
-    capture = False
-    for line in lines:
-        if line == "Brand voice:":
-            capture = True
-            continue
-        if capture:
-            if line in {
-                "Quality bar:",
-                "Style notes (soft guidelines — not a checklist):",
-                "Words that fit this account (use when natural, never force):",
-                "Signature phrases (only when they fit perfectly):",
-                "Especially avoid these words/phrases:",
-                "Facts you may use (exclusive source — do not invent beyond this):",
-                "Posts that sound like us (match tone and attitude, not structure or layout):",
-            } or line.startswith("Language:"):
-                break
-            anchor_lines.append(line)
-    if not anchor_lines:
-        return lines[0]
-    return "\n\n".join(anchor_lines[:4])

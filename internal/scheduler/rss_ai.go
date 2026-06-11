@@ -10,6 +10,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/htmltext"
 	"git.f4mily.net/goloom/internal/rss"
 )
 
@@ -35,13 +36,13 @@ func (s *Service) submitRSSAIEnhancement(
 	draft bool,
 	ownerID string,
 ) error {
+	articleText := htmltext.ExtractReadableText(strings.TrimSpace(item.Content))
 	params := map[string]any{
-		"refine_content":       true,
-		"source_content":       templateContent,
-		"rss_article_title":    strings.TrimSpace(item.Title),
-		"rss_article_content":  strings.TrimSpace(item.Content),
-		"rss_article_link":     strings.TrimSpace(item.Link),
-		"prompt_hint":        strings.TrimSpace(feed.PromptHint),
+		"occasion":            strings.TrimSpace(feed.PromptHint),
+		"post_skeleton":       templateContent,
+		"rss_article_title":   strings.TrimSpace(item.Title),
+		"rss_article_content": articleText,
+		"rss_article_link":    strings.TrimSpace(item.Link),
 		"title_hint":         strings.TrimSpace(feed.TitleHint),
 		"target_account_ids": feed.TargetAccountIDs,
 		"schedule":             false,

@@ -144,8 +144,10 @@ class VoiceEngineWorker:
         )
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'next available slot'}."
         title_hint = self._title_json_instruction(params, include_title)
+        rss_rules = self._rss_generation_rules(params)
         return (
             f"{base_prompt}\n\n"
+            f"{rss_rules}"
             "Multi-account output rules:\n"
             f"- Primary account: {primary.get('username') or primary_id} (id={primary_id}, {primary_platform}, "
             f"limit {primary_limit} characters).\n"
@@ -303,9 +305,23 @@ class VoiceEngineWorker:
 
     @staticmethod
     def _is_refine_mode(params: dict[str, Any]) -> bool:
+        if params.get("rss_automation") or str(params.get("rss_article_title") or "").strip():
+            return params.get("refine_content") is True or params.get("refine") is True
         if params.get("refine_content") is True or params.get("refine") is True:
             return True
         return bool(str(params.get("source_content") or params.get("existing_content") or "").strip())
+
+    @staticmethod
+    def _rss_generation_rules(params: dict[str, Any]) -> str:
+        if not params.get("rss_automation") and not str(params.get("rss_article_title") or "").strip():
+            return ""
+        return (
+            "RSS / episode rules:\n"
+            "- This is a NEW post written from the show notes, not a polish of a previous draft.\n"
+            "- Copy the episode title and number from the source material exactly — do not invent #382 when the source says #381.\n"
+            "- Use the episode page link from the source — never substitute the RSS feed URL.\n"
+            "- Include at least two concrete details from the show notes; skip generic filler about Open Source or cloud trends unless they are in the notes.\n\n"
+        )
 
     async def _generate_with_retries(
         self,

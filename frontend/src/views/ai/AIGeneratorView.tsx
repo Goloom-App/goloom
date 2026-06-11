@@ -64,6 +64,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
 
   // Task input
   const [occasion, setOccasion] = useState('')
+  const [rssFeedUrl, setRssFeedUrl] = useState('')
   const [occasionType, setOccasionType] = useState<'text' | 'url' | 'rss'>('text')
   const [outputFormat, setOutputFormat] = useState<AIOutputFormat>('post')
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
@@ -120,10 +121,16 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
       platform: accounts.find((a) => selectedAccounts.includes(a.id))?.provider ?? 'mastodon',
     }
     if (occasionType === 'url') params.source_url = occasion.trim()
-    if (occasionType === 'rss') params.rss_feed_url = occasion.trim()
+    if (occasionType === 'rss') {
+      params.rss_feed_url = rssFeedUrl.trim()
+      params.occasion = occasion.trim()
+    }
     if (refine && latestVoiceResult?.result?.content) {
       params.refine_content = true
       params.source_content = String(latestVoiceResult.result.content)
+    } else if (occasionType === 'rss') {
+      delete params.refine_content
+      delete params.source_content
     }
     for (const mood of moodAdjustments) params[mood] = true
     return params
@@ -131,7 +138,16 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
 
   const handleGenerate = async () => {
     setError(null)
-    if (!occasion.trim()) {
+    if (occasionType === 'rss') {
+      if (!rssFeedUrl.trim()) {
+        setError('Bitte RSS-Feed-URL angeben')
+        return
+      }
+      if (!occasion.trim()) {
+        setError('Bitte eine Anweisung für den Post angeben')
+        return
+      }
+    } else if (!occasion.trim()) {
       setError('Bitte einen Anlass angeben')
       return
     }
@@ -171,7 +187,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
     try {
       const preview = await promptPreview.mutateAsync({
         teamId: team.id,
-        params: buildGenerationParams(Boolean(latestVoiceResult)),
+        params: buildGenerationParams(false),
       })
       setPromptSystemText(preview.system_prompt || '')
       setPromptTaskText(preview.generation_prompt || '')
@@ -256,22 +272,48 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
             testIdPrefix="gen-occasion-type"
           />
         </div>
-        <label className="field">
-          <span>{occasionType === 'text' ? 'Beschreibung des Anlasses' : occasionType === 'url' ? 'URL' : 'RSS-Feed-Link'}</span>
-          <textarea
-            data-testid="gen-occasion"
-            rows={4}
-            value={occasion}
-            onChange={(e) => setOccasion(e.target.value)}
-            placeholder={
-              occasionType === 'text'
-                ? 'Worum geht es? Was ist neu, was willst du teilen?'
-                : occasionType === 'url'
-                  ? 'https://…'
-                  : 'https://example.com/feed.xml'
-            }
-          />
-        </label>
+        {occasionType === 'rss' ? (
+          <>
+            <label className="field">
+              <span>RSS-Feed-URL</span>
+              <input
+                data-testid="gen-rss-feed-url"
+                type="url"
+                value={rssFeedUrl}
+                onChange={(e) => setRssFeedUrl(e.target.value)}
+                placeholder="https://example.com/feed.xml"
+              />
+              <p className="brand-field__hint">
+                Es wird die neueste Folge aus dem Feed geladen — Titel, Link und Show Notes landen im Prompt.
+              </p>
+            </label>
+            <label className="field">
+              <span>Anweisung</span>
+              <textarea
+                data-testid="gen-occasion"
+                rows={4}
+                value={occasion}
+                onChange={(e) => setOccasion(e.target.value)}
+                placeholder="z. B. Neue Folge bewerben, Folgentitel und -nummer nennen, 2–3 Themen aus den Show Notes hervorheben."
+              />
+            </label>
+          </>
+        ) : (
+          <label className="field">
+            <span>{occasionType === 'text' ? 'Beschreibung des Anlasses' : 'URL'}</span>
+            <textarea
+              data-testid="gen-occasion"
+              rows={4}
+              value={occasion}
+              onChange={(e) => setOccasion(e.target.value)}
+              placeholder={
+                occasionType === 'text'
+                  ? 'Worum geht es? Was ist neu, was willst du teilen?'
+                  : 'https://…'
+              }
+            />
+          </label>
+        )}
         <div className="field">
           <span>Format</span>
           <Segmented

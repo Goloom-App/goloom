@@ -40,9 +40,15 @@ func (a *API) handleAITrigger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	enrichedParams, err := enrichAIJobParams(r.Context(), ensureJSONObject(input.Params))
+	if err != nil {
+		a.writeError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	payload, err := json.Marshal(struct {
 		Params json.RawMessage `json:"params"`
-	}{Params: ensureJSONObject(input.Params)})
+	}{Params: enrichedParams})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

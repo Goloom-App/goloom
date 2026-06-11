@@ -45,9 +45,15 @@ func (a *API) handleAIPromptPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	enrichedParams, err := enrichAIJobParams(r.Context(), ensureJSONObject(input.Params))
+	if err != nil {
+		a.writeError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	payload, err := json.Marshal(map[string]any{
 		"context": json.RawMessage(contextRaw),
-		"params":  ensureJSONObject(input.Params),
+		"params":  enrichedParams,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

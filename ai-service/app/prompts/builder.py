@@ -197,6 +197,13 @@ class PromptBuilder:
                 break
         return excerpts
 
+    def _has_rss_source(self, params: dict) -> bool:
+        return bool(
+            str(params.get("rss_article_title") or "").strip()
+            or str(params.get("rss_article_content") or params.get("rss_article_summary") or "").strip()
+            or str(params.get("rss_article_link") or "").strip()
+        )
+
     def _source_material(self, params: dict) -> list[str]:
         sections: list[str] = []
 
@@ -204,17 +211,32 @@ class PromptBuilder:
         rss_link = str(params.get("rss_article_link") or "").strip()
         rss_content = str(params.get("rss_article_content") or params.get("rss_article_summary") or "").strip()
         if rss_title or rss_link or rss_content:
-            lines = ["From RSS article:"]
+            lines = [
+                "SHOW NOTES / ARTICLE (primary factual source — every specific claim must come from here):",
+            ]
             if rss_title:
                 lines.append(f"Title: {rss_title}")
             if rss_link:
                 lines.append(f"Link: {rss_link}")
             if rss_content:
                 lines.append(f"Text:\n---\n{rss_content}\n---")
+            lines.append(
+                "The episode title, number, and link above are authoritative. "
+                "Pick 2-4 concrete topics from the show notes and work them in naturally. "
+                "Do not invent guests, episode numbers, links, or opinions."
+            )
             sections.append("\n".join(lines))
 
+        skeleton = str(params.get("post_skeleton") or "").strip()
         source_content = str(params.get("source_content") or params.get("existing_content") or "").strip()
-        if source_content:
+        if not skeleton and source_content and self._has_rss_source(params):
+            skeleton = source_content
+        if skeleton and self._has_rss_source(params):
+            sections.append(
+                "RSS post skeleton (optional layout/CTA hints only — not factual content):\n"
+                f"---\n{skeleton}\n---"
+            )
+        elif source_content:
             sections.append(
                 "Previous draft (facts and tone reference only — do not copy structure or layout verbatim):\n"
                 f"---\n{source_content}\n---"
@@ -305,10 +327,27 @@ class PromptBuilder:
         return hints
 
     def _resolve_user_request(self, params: dict) -> str:
+        editorial = ""
         for key in ("occasion", "prompt_hint", "content_hint", "request", "prompt", "instruction"):
             value = params.get(key)
             if isinstance(value, str) and value.strip():
-                return value.strip()
+                editorial = value.strip()
+                break
+
+        if self._has_rss_source(params):
+            base = (
+                "Write a new social post promoting this podcast episode.\n"
+                "- Use the exact episode title and episode number from the source material.\n"
+                "- Use the episode page link from the source — never the RSS feed URL.\n"
+                "- Mention 2-3 concrete topics from the show notes; do not invent themes or bump the episode number.\n"
+                "- Do not force brand buzzwords (e.g. Open Source) unless they appear in the show notes."
+            )
+            if editorial:
+                return f"{base}\n\nEditorial direction: {editorial}"
+            return base
+
+        if editorial:
+            return editorial
         return "Write a post that fits this account and the source material."
 
     def _technical_notes(self, params: dict) -> list[str]:
@@ -327,6 +366,10 @@ class PromptBuilder:
             "remove_marketing_speak",
             "source_content",
             "existing_content",
+            "post_skeleton",
+            "rss_feed_url",
+            "refine_content",
+            "refine",
             "rss_article_title",
             "rss_article_content",
             "rss_article_summary",

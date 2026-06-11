@@ -95,7 +95,7 @@ async def test_process_generates_multi_account_post():
     first_call = adapter.generate.await_args_list[0]
     assert "Brand voice:" in first_call.args[1]
     assert "Quality bar:" in first_call.args[1]
-    assert "## Brand voice for this post" in first_call.args[0]
+    assert "## Brand voice for this post" not in first_call.args[0]
     assert "## Task" in first_call.args[0]
     goloom_client.send_callback.assert_awaited_once()
     callback_args = goloom_client.send_callback.await_args.args

@@ -57,13 +57,3 @@ func TestExtractReadableTextFromHTML_FallsBackToRegex(t *testing.T) {
 	}
 }
 
-func TestTruncateKnowledgeText(t *testing.T) {
-	long := strings.Repeat("a", maxKnowledgeExtractLen+10)
-	got := truncateKnowledgeText(long)
-	if len([]rune(got)) != maxKnowledgeExtractLen+1 {
-		t.Fatalf("expected truncated length %d, got %d", maxKnowledgeExtractLen+1, len([]rune(got)))
-	}
-	if !strings.HasSuffix(got, "…") {
-		t.Fatalf("expected ellipsis suffix, got %q", got)
-	}
-}

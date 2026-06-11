@@ -148,7 +148,42 @@ def test_inject_few_shot_appends_examples():
     assert "Keep the CTA subtle." in prompt
 
 
-def test_build_generation_prompt_includes_compact_brand_anchor_not_full_profile():
+def test_rss_source_material_prioritizes_show_notes_over_skeleton():
+    builder = PromptBuilder()
+
+    prompt = builder.build_generation_prompt(
+        sample_context(),
+        {
+            "occasion": "Hebe die wichtigsten Themen hervor.",
+            "rss_article_title": "Folge 300: WireGuard",
+            "rss_article_content": "Wir sprechen über WireGuard, Headscale und Mesh-VPNs.",
+            "rss_article_link": "https://example.com/300",
+            "post_skeleton": "Neue Folge!\n\n{link}",
+        },
+        "mastodon",
+    )
+
+    assert "SHOW NOTES / ARTICLE" in prompt
+    assert "WireGuard" in prompt
+    assert "RSS post skeleton" in prompt
+    assert "Neue Folge!" in prompt
+    assert "Previous draft" not in prompt
+    assert "exact episode title" in prompt
+    assert "Editorial direction: Hebe die wichtigsten Themen hervor." in prompt
+
+
+def test_brand_voice_does_not_claim_knowledge_is_exclusive_when_empty():
+    builder = PromptBuilder()
+    ctx = sample_context()
+    ctx["knowledge_sources"] = []
+
+    prompt = builder.build_brand_voice_prompt(ctx)
+
+    assert "exclusive source" not in prompt
+    assert "source material in the task message" in prompt
+
+
+def test_build_generation_prompt_keeps_brand_voice_out_of_task_prompt():
     builder = PromptBuilder()
 
     prompt = builder.build_generation_prompt(
@@ -161,8 +196,8 @@ def test_build_generation_prompt_includes_compact_brand_anchor_not_full_profile(
         "bluesky",
     )
 
-    assert "## Brand voice for this post" in prompt
-    assert "A small team that ships in public." in prompt
+    assert "## Brand voice for this post" not in prompt
+    assert "A small team that ships in public." not in prompt
     assert "Quality bar:" not in prompt
     assert "Especially avoid these words/phrases:" not in prompt
     assert "## Task" in prompt
