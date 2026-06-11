@@ -20,7 +20,8 @@ var weekdayNames = []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 // Month and day are zero-padded to width 2. If counter is nil, {counter} becomes "".
 // If mainEventAt is non-nil, {main_day}, {main_month}, {main_weekday_name} are
 // expanded from that time; otherwise they become empty strings.
-func ExpandDynamicVariables(content string, publishedAt time.Time, counter *int, mainEventAt *time.Time) string {
+// If mainCounter is non-nil, {main_counter} is expanded from that value; otherwise "".
+func ExpandDynamicVariables(content string, publishedAt time.Time, counter *int, mainEventAt *time.Time, mainCounter *int) string {
 	if content == "" {
 		return ""
 	}
@@ -56,6 +57,12 @@ func ExpandDynamicVariables(content string, publishedAt time.Time, counter *int,
 		counterStr = strconv.Itoa(*counter)
 	}
 	out = strings.ReplaceAll(out, "{counter}", counterStr)
+
+	mainCounterStr := ""
+	if mainCounter != nil {
+		mainCounterStr = strconv.Itoa(*mainCounter)
+	}
+	out = strings.ReplaceAll(out, "{main_counter}", mainCounterStr)
 
 	// Main-event variables (for announcement posts)
 	if mainEventAt != nil {

@@ -515,7 +515,7 @@
       "announcementCounterStart": "Zähler-Start (Ankündigung)",
       "announcementDifferentTargets": "Andere Konten für die Ankündigung verwenden",
       "announcementTargets": "Ankündigungs-Ziele",
-      "announcementHint": "Wird automatisch eine feste Anzahl Tage vor jedem Haupttermin veröffentlicht. Verwenden Sie {main_day}, {main_month}, {main_weekday_name} für das Hauptereignis-Datum.",
+      "announcementHint": "Wird automatisch eine feste Anzahl Tage vor jedem Haupttermin veröffentlicht. Verwenden Sie {main_day}, {main_month}, {main_weekday_name} für das Hauptereignis-Datum und {main_counter} für den Zähler des Hauptbeitrags ({counter} ist der separate Ankündigungs-Zähler).",
       "announcementContentRequired": "Ankündigungstext ist erforderlich, wenn Ankündigungen aktiviert sind.",
       "announcementTargetsRequired": "Wählen Sie mindestens ein Konto für die Ankündigung oder nutzen Sie dieselben Ziele wie beim Hauptbeitrag.",
       "announcementBadge": "Kündigt an",

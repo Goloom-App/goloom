@@ -644,9 +644,9 @@ func ResolveAutomationPostTitle(templateTitle, aiTitle string) string {
 }
 
 // ExpandPostTemplateTitle renders dynamic variables in a recurring template title.
-func ExpandPostTemplateTitle(title string, scheduledAt time.Time, counter int, mainEventAt *time.Time) string {
+func ExpandPostTemplateTitle(title string, scheduledAt time.Time, counter int, mainEventAt *time.Time, mainCounter *int) string {
 	counterVal := counter
-	return strings.TrimSpace(ExpandDynamicVariables(title, scheduledAt, &counterVal, mainEventAt))
+	return strings.TrimSpace(ExpandDynamicVariables(title, scheduledAt, &counterVal, mainEventAt, mainCounter))
 }
 
 // EngagementHourBucket aggregates engagement score by UTC hour-of-day for posted content.

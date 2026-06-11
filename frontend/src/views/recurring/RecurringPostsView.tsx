@@ -19,7 +19,7 @@ type Api = ReturnType<typeof createApiClient>
 
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function expandContent(tpl: string, d: Date, counter: number, mainEvent?: Date): string {
+function expandContent(tpl: string, d: Date, counter: number, mainEvent?: Date, mainCounter?: number): string {
   let s = tpl
   s = s.replace(/\{day([+-]\d+)\}/g, (_m, off: string) => zeroPad(clampDay(d.getDate() + parseInt(off, 10))))
   s = s.replace(/\{month([+-]\d+)\}/g, (_m, off: string) => zeroPad(clampMonth(d.getMonth() + 1 + parseInt(off, 10))))
@@ -29,6 +29,11 @@ function expandContent(tpl: string, d: Date, counter: number, mainEvent?: Date):
   s = s.replace(/\{weekday\}/g, String(d.getDay()))
   s = s.replace(/\{weekday_name\}/g, WEEKDAY_NAMES[d.getDay()])
   s = s.replace(/\{counter\}/g, String(counter))
+  if (mainCounter != null) {
+    s = s.replace(/\{main_counter\}/g, String(mainCounter))
+  } else {
+    s = s.replace(/\{main_counter\}/g, '')
+  }
   if (mainEvent) {
     s = s.replace(/\{main_day\}/g, zeroPad(mainEvent.getDate()))
     s = s.replace(/\{main_month\}/g, zeroPad(mainEvent.getMonth() + 1))
@@ -45,13 +50,13 @@ function zeroPad(n: number): string { return n < 10 ? '0' + n : String(n) }
 function clampDay(d: number): number { return Math.max(1, Math.min(31, d)) }
 function clampMonth(m: number): number { return Math.max(1, Math.min(12, m)) }
 
-function ContentPreview({ content, previewDate, counterStart, mainEvent }: { content: string; previewDate: Date | null; counterStart: number; mainEvent?: Date }) {
+function ContentPreview({ content, previewDate, counterStart, mainEvent, mainCounterStart }: { content: string; previewDate: Date | null; counterStart: number; mainEvent?: Date; mainCounterStart?: number }) {
   const { t } = useTranslation()
   if (!content.trim() || !previewDate) return null
   return (
     <div className="recurrence-form__preview">
       <span className="recurrence-form__label">{t('recurring.expandedPreview')}</span>
-      <div className="recurrence-form__expanded">{expandContent(content, previewDate, counterStart, mainEvent)}</div>
+      <div className="recurrence-form__expanded">{expandContent(content, previewDate, counterStart, mainEvent, mainCounterStart)}</div>
     </div>
   )
 }
@@ -641,6 +646,7 @@ export function RecurringPostsView({
                         previewDate={announcementPreviewDate}
                         counterStart={announcementCounterStart}
                         mainEvent={firstOccurrence ?? undefined}
+                        mainCounterStart={counterStart}
                       />
                       <ToggleSwitch
                         checked={announcementDifferentTargets}

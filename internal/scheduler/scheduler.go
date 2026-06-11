@@ -238,7 +238,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			}
 		}
 		publishedAt := time.Now().UTC()
-		content = domain.ExpandDynamicVariables(content, publishedAt, post.TemplateCounter, nil)
+		content = domain.ExpandDynamicVariables(content, publishedAt, post.TemplateCounter, nil, nil)
 
 		localMedia := domain.FilterMediaIDsForAccount(post.MediaIDs, post.MediaExcludeByAccount, account.ID)
 		remoteMedia, err := s.syncMediaToProvider(ctx, post.TeamID, localMedia, account, providerImpl, provider.PublishAuth{
@@ -602,8 +602,12 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 	if counterVal < 1 {
 		counterVal = 1
 	}
-	content := domain.ExpandDynamicVariables(tmpl.AnnouncementContent, announceAt, &counterVal, &mainEventAt)
-	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.AnnouncementTitle, announceAt, counterVal, &mainEventAt)
+	mainCounterVal := tmpl.CounterNext
+	if mainCounterVal < 1 {
+		mainCounterVal = 1
+	}
+	content := domain.ExpandDynamicVariables(tmpl.AnnouncementContent, announceAt, &counterVal, &mainEventAt, &mainCounterVal)
+	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.AnnouncementTitle, announceAt, counterVal, &mainEventAt, &mainCounterVal)
 	targets := tmpl.AnnouncementTargetAccountIDs
 	if len(targets) == 0 {
 		targets = tmpl.TargetAccountIDs
@@ -653,8 +657,8 @@ func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTem
 
 func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time, occurrenceAt time.Time, role string) error {
 	counterVal := tmpl.CounterNext
-	expandedContent := domain.ExpandDynamicVariables(tmpl.Content, scheduledAt, &counterVal, nil)
-	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.Title, scheduledAt, counterVal, nil)
+	expandedContent := domain.ExpandDynamicVariables(tmpl.Content, scheduledAt, &counterVal, nil, nil)
+	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.Title, scheduledAt, counterVal, nil, nil)
 	outputMode := tmpl.OutputMode
 	if outputMode == "" {
 		outputMode = domain.AutomationOutputScheduled

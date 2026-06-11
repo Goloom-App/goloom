@@ -515,7 +515,7 @@
       "announcementCounterStart": "Announcement counter start",
       "announcementDifferentTargets": "Use different accounts for the announcement",
       "announcementTargets": "Announcement targets",
-      "announcementHint": "Posts automatically a fixed number of days before each main occurrence. Use {main_day}, {main_month}, {main_weekday_name} for the main event date.",
+      "announcementHint": "Posts automatically a fixed number of days before each main occurrence. Use {main_day}, {main_month}, {main_weekday_name} for the main event date and {main_counter} for the main post counter ({counter} is the separate announcement counter).",
       "announcementContentRequired": "Announcement content is required when announcements are enabled.",
       "announcementTargetsRequired": "Select at least one account for the announcement, or use the same targets as the main post.",
       "announcementBadge": "Announces",

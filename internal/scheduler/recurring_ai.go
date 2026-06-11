@@ -55,8 +55,12 @@ func expandedAnnouncementReference(tmpl domain.PostTemplate, mainEventAt time.Ti
 	if counterVal < 1 {
 		counterVal = 1
 	}
-	content = domain.ExpandDynamicVariables(tmpl.AnnouncementContent, announceAt, &counterVal, &mainEventAt)
-	title = domain.ExpandPostTemplateTitle(tmpl.AnnouncementTitle, announceAt, counterVal, &mainEventAt)
+	mainCounterVal := tmpl.CounterNext
+	if mainCounterVal < 1 {
+		mainCounterVal = 1
+	}
+	content = domain.ExpandDynamicVariables(tmpl.AnnouncementContent, announceAt, &counterVal, &mainEventAt, &mainCounterVal)
+	title = domain.ExpandPostTemplateTitle(tmpl.AnnouncementTitle, announceAt, counterVal, &mainEventAt, &mainCounterVal)
 	return content, title
 }
 

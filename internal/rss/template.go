@@ -52,5 +52,5 @@ func ExpandContent(template string, fields ItemFields) string {
 		out = strings.ReplaceAll(out, old, val)
 	}
 	counter := fields.Counter
-	return domain.ExpandDynamicVariables(out, published, &counter, nil)
+	return domain.ExpandDynamicVariables(out, published, &counter, nil, nil)
 }

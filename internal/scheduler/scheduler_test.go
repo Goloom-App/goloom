@@ -1222,7 +1222,7 @@ func TestService_materializePostTemplates_announcement(t *testing.T) {
 		CounterNext:            7,
 		AnnouncementEnabled:    true,
 		AnnouncementTitle:      "announcement",
-		AnnouncementContent:    "coming on {main_month}/{main_day} ({main_weekday_name})",
+		AnnouncementContent:    "episode #{main_counter} on {main_month}/{main_day} ({main_weekday_name})",
 		AnnouncementDaysBefore: 2,
 		AnnouncementCounterNext: 1,
 	}
@@ -1262,7 +1262,7 @@ func TestService_materializePostTemplates_announcement(t *testing.T) {
 	}
 	// Announcement content is pre-expanded (including {main_*} from parent)
 	// {main_month}=05 {main_day}=27 {main_weekday_name}=Wed
-	wantContent := "coming on 05/27 (Wed)"
+	wantContent := "episode #7 on 05/27 (Wed)"
 	if annCall.Content != wantContent {
 		t.Fatalf("announcement content: want %q, got %q", wantContent, annCall.Content)
 	}
