@@ -9,14 +9,14 @@ test.describe('recurring posts form', () => {
   })
 
   test('renders kind selector with weekly/monthly options', async ({ page }) => {
-    await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
+    await page.getByTestId('recurring-add-template').click()
     await expect(page.getByRole('radio', { name: /weekly|wöchentlich/i })).toBeVisible()
     await expect(page.getByRole('radio', { name: /monthly.*day of month|monatlich.*tag des monats/i })).toBeVisible()
     await expect(page.getByRole('radio', { name: /monthly.*anchor|monatlich.*anker/i })).toBeVisible()
   })
 
   test('weekly recurrence saves correctly', async ({ page }) => {
-    await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
+    await page.getByTestId('recurring-add-template').click()
 
     await page.getByLabel(/title|titel/i).fill('E2E Weekly Test')
     await page.getByLabel(/content|inhalt/i).fill('Test content #{counter}')
@@ -49,7 +49,7 @@ test.describe('recurring posts form', () => {
   })
 
   test('monthly_dom recurrence saves correctly', async ({ page }) => {
-    await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
+    await page.getByTestId('recurring-add-template').click()
 
     await page.getByLabel(/title|titel/i).fill('E2E Monthly Test')
     await page.getByLabel(/content|inhalt/i).fill('Monthly #{counter}')
@@ -75,13 +75,13 @@ test.describe('recurring posts form', () => {
   })
 
   test('validates required fields', async ({ page }) => {
-    await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
+    await page.getByTestId('recurring-add-template').click()
     await page.getByRole('button', { name: /create|erstellen/i }).evaluate(el => (el as HTMLButtonElement).click())
     await expect(page.getByText(/required|erforderlich/i)).toBeVisible()
   })
 
   test('monthly ordinal weekday supports multiple occurrences', async ({ page }) => {
-    await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
+    await page.getByTestId('recurring-add-template').click()
     await page.getByRole('radio', { name: /monthly.*ordinal|monatlich.*wochentag/i }).click()
     await page.getByTestId('recurring-ordinal-0-1').click()
     await page.getByTestId('recurring-ordinal-weekday-0-fri').click()
@@ -92,7 +92,7 @@ test.describe('recurring posts form', () => {
   })
 
   test('preview shows upcoming occurrences', async ({ page }) => {
-    await page.getByRole('button', { name: /new template|neue vorlage/i }).click()
+    await page.getByTestId('recurring-add-template').click()
 
     await page.getByLabel(/title|titel/i).fill('Preview Test')
     await page.getByLabel(/content|inhalt/i).fill('Preview #{counter}')

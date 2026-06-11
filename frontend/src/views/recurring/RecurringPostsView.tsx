@@ -351,7 +351,7 @@ export function RecurringPostsView({
             <p className="hint">{t('recurring.hint')}</p>
           </div>
           {canEdit ? (
-            <button type="button" className="btn btn--secondary btn--sm" onClick={openEditor}>
+            <button type="button" className="btn btn--secondary btn--sm" onClick={openEditor} data-testid="recurring-add-template">
               <Plus size={16} />
               <span>{t('recurring.addTemplate', 'Add template')}</span>
             </button>
