@@ -190,10 +190,13 @@ def test_recurring_announcement_schedule_forbids_heute():
         "mastodon",
     )
 
-    assert "RECURRING SCHEDULE" in prompt
-    assert "ANNOUNCEMENT" in prompt
-    assert 'Do NOT use "heute"' in prompt
+    assert "## Publication plan" in prompt
+    assert "Role: ANNOUNCEMENT" in prompt
+    assert "Publish date of this post" in prompt
+    assert "Main event date" in prompt
+    assert 'Do not say the event is "heute"' in prompt
     assert "Sat, 2026-06-13" in prompt
+    assert "publication plan" in prompt
 
 
 def test_recurring_main_schedule_allows_heute():
@@ -211,8 +214,32 @@ def test_recurring_main_schedule_allows_heute():
         "mastodon",
     )
 
-    assert "Post type: MAIN" in prompt
-    assert '"Heute"/"today" is appropriate' in prompt
+    assert "Role: MAIN EVENT" in prompt
+    assert '"heute"/"today" refers to this date' in prompt
+
+
+def test_recurring_publication_plan_german():
+    builder = PromptBuilder()
+    ctx = sample_context()
+    ctx["profile"]["style_metadata"]["preferred_language"] = "de"
+
+    prompt = builder.build_generation_prompt(
+        ctx,
+        {
+            "recurring_post_kind": "announcement",
+            "post_scheduled_at": "2026-06-11T18:00:00Z",
+            "main_event_at": "2026-06-13T20:00:00Z",
+            "days_before_main_event": 2,
+            "source_content": "Reminder.",
+            "refine_content": True,
+        },
+        "mastodon",
+    )
+
+    assert "Rolle: ANKÜNDIGUNG" in prompt
+    assert "Veröffentlichung dieses Posts" in prompt
+    assert "Datum des eigentlichen Events" in prompt
+    assert "„heute“" in prompt
 
 
 def test_brand_voice_does_not_claim_knowledge_is_exclusive_when_empty():

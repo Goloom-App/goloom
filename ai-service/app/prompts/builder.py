@@ -105,6 +105,7 @@ class PromptBuilder:
             mood_adjustments=mood_adjustments,
             parameter_notes=self._technical_notes(params),
             output_constraints=self._output_constraints(context),
+            recurring_plan=self._recurring_publication_plan(params, context),
         )
 
     def build_vibe_preview_prompt(self, context: dict) -> str:
@@ -254,48 +255,93 @@ class PromptBuilder:
             return str(auto.get(nested[1]) or "").strip()
         return ""
 
-    def _recurring_schedule_material(self, params: dict, context: dict) -> str:
+    def _recurring_publication_plan(self, params: dict, context: dict) -> str:
         kind = self._recurring_post_kind(params)
         if kind not in {"announcement", "main"}:
             return ""
 
         language = str(self._style_metadata(context).get("preferred_language") or "en")
+        german = language.strip().lower().startswith("de")
         post_at = self._param_schedule_value(params, "post_scheduled_at", ("recurring_automation", "scheduled_at"))
         main_at = self._param_schedule_value(params, "main_event_at", ("recurring_automation", "template_occurrence_at"))
-
-        lines = ["RECURRING SCHEDULE (timing rules are strict):"]
-        if post_at:
-            lines.append(f"- This post publishes: {format_schedule_label(post_at, language=language)}")
-        if main_at:
-            lines.append(f"- Main event date: {format_schedule_label(main_at, language=language)}")
+        post_label = format_schedule_label(post_at, language=language) if post_at else ""
+        main_label = format_schedule_label(main_at, language=language) if main_at else ""
 
         if kind == "announcement":
+            lines = [
+                (
+                    "Rolle: ANKÜNDIGUNG — Teaser-Post, der VOR dem eigentlichen Event veröffentlicht wird."
+                    if german
+                    else "Role: ANNOUNCEMENT — teaser post published BEFORE the main event."
+                ),
+            ]
+            if post_label:
+                lines.append(
+                    f"Veröffentlichung dieses Posts (wann Leser ihn sehen): {post_label}"
+                    if german
+                    else f"Publish date of this post (when readers see it): {post_label}"
+                )
+            if main_label:
+                lines.append(
+                    f"Datum des eigentlichen Events (das beworbene Datum): {main_label}"
+                    if german
+                    else f"Main event date (what you are promoting): {main_label}"
+                )
             days_before = params.get("days_before_main_event")
             if days_before is not None:
-                lines.append(f"- Lead time: {days_before} day(s) before the main event")
+                lines.append(
+                    f"Vorlauf: {days_before} Tag(e) vor dem Event."
+                    if german
+                    else f"Lead time: {days_before} day(s) before the event."
+                )
             lines.extend(
                 [
-                    "- Post type: ANNOUNCEMENT (teaser before the event).",
-                    "- The event is NOT today — name the main event date explicitly (weekday + calendar date).",
-                    '- Do NOT use "heute" or "today" for the event itself.',
+                    (
+                        "Du planst den Text für den Veröffentlichungstag oben — das Event liegt in der Zukunft."
+                        if german
+                        else "You are writing for the publish date above — the event is still in the future."
+                    ),
+                    (
+                        'Sag nicht, das Event ist „heute“ oder „today“ — nenne stattdessen das Event-Datum.'
+                        if german
+                        else 'Do not say the event is "heute" or "today" — name the event date instead.'
+                    ),
                 ]
             )
-        else:
-            lines.extend(
-                [
-                    "- Post type: MAIN (event-day post).",
-                    '- "Heute"/"today" is appropriate only when it matches the main event date above.',
-                    "- If an announcement reference is provided, stay consistent with its promises.",
-                ]
+            return "\n".join(lines)
+
+        lines = [
+            (
+                "Rolle: HAUPTPOST — Post am Tag des eigentlichen Events."
+                if german
+                else "Role: MAIN EVENT — post on the actual event day."
+            ),
+        ]
+        event_label = main_label or post_label
+        if event_label:
+            lines.append(
+                f"Veröffentlichung (= Event-Tag): {event_label}"
+                if german
+                else f"Publish date (= event day): {event_label}"
             )
+        lines.extend(
+            [
+                (
+                    "Du planst den Text für den Event-Tag — „heute“ bezieht sich auf dieses Datum."
+                    if german
+                    else 'You are writing for the event day — "heute"/"today" refers to this date.'
+                ),
+                (
+                    "Falls eine Ankündigung als Referenz dabei ist: Versprechen und Ton beibehalten."
+                    if german
+                    else "If an announcement reference is provided, keep its promises and tone."
+                ),
+            ]
+        )
         return "\n".join(lines)
 
     def _source_material(self, params: dict, context: dict | None = None) -> list[str]:
         sections: list[str] = []
-
-        recurring = self._recurring_schedule_material(params, context or {})
-        if recurring:
-            sections.append(recurring)
 
         rss_title = str(params.get("rss_article_title") or "").strip()
         rss_link = str(params.get("rss_article_link") or "").strip()
@@ -431,6 +477,15 @@ class PromptBuilder:
                 "- Use the item link from the source — never the RSS subscription/feed URL.\n"
                 "- Mention 2-3 concrete details from the body text; do not invent themes or change identifiers.\n"
                 "- Do not force brand buzzwords unless they appear in the source."
+            )
+            if editorial:
+                return f"{base}\n\nEditorial direction: {editorial}"
+            return base
+
+        if self._recurring_post_kind(params) in {"announcement", "main"}:
+            base = (
+                "Write a recurring-template social post. "
+                "Follow the publication plan for your role (announcement vs main event) and dates."
             )
             if editorial:
                 return f"{base}\n\nEditorial direction: {editorial}"

@@ -98,11 +98,15 @@ def render_task_prompt(
     mood_adjustments: list[str] | None = None,
     technical_notes: list[str] | None = None,
     output_constraints: list[str] | None = None,
+    recurring_plan: str = "",
 ) -> str:
     sections: list[str] = [
         "## Task",
         user_request.strip() or "Write a platform-ready post for this account.",
     ]
+
+    if recurring_plan.strip():
+        sections.extend(["", "## Publication plan", recurring_plan.strip()])
 
     if source_material:
         sections.extend(["", "## Source material", *source_material])
@@ -173,6 +177,7 @@ def render_generation_prompt(
     output_format: str = "",
     mood_adjustments: list[str] | None = None,
     output_constraints: list[str] | None = None,
+    recurring_plan: str = "",
 ) -> str:
     """Build the per-request task prompt.
 
@@ -192,6 +197,7 @@ def render_generation_prompt(
         mood_adjustments=mood_adjustments,
         technical_notes=parameter_notes or [],
         output_constraints=output_constraints or [],
+        recurring_plan=recurring_plan,
     )
 
 

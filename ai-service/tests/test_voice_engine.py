@@ -190,7 +190,8 @@ async def test_process_refine_mode_includes_announcement_reference_for_main_post
     prompt = adapter.generate.await_args_list[0].args[0]
     assert "Paired announcement to stay consistent with" in prompt
     assert "Coming Friday" in prompt
-    assert "MAIN recurring post" in prompt
+    assert "MAIN EVENT" in prompt
+    assert "## Publication plan" in prompt
 
 
 @pytest.mark.asyncio
