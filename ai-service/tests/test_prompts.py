@@ -1,4 +1,5 @@
 from app.prompts import PromptBuilder
+from app.prompts.anti_ai import CORE_AVOID_WORDS, DEFAULT_BANNED_WORD_LIMIT
 
 
 def sample_context() -> dict:
@@ -12,61 +13,100 @@ def sample_context() -> dict:
                 "banned_words": ["synergy", "crypto"],
                 "max_hashtags": 2,
                 "preferred_language": "en",
+                "identity": {
+                    "persona": "A small team that ships in public.",
+                    "main_value": "Practical release notes without hype.",
+                },
+                "language_dna": {
+                    "sentence_style": "Short and direct.",
+                    "humor_style": "Dry.",
+                },
+                "reach_strategy": {
+                    "hook_style": "Lead with the change users care about.",
+                },
             },
         },
         "campaign_formats": [
             {
+                "id": "fmt-1",
                 "name": "Weekly roundup",
                 "required_hashtags": ["#launch"],
                 "is_active": True,
             }
         ],
         "style_examples": [
-            {"platform": "mastodon", "content": "Big progress, shared simply.", "notes": "warm"}
+            {"platform": "mastodon", "content": "Big progress, shared simply.", "notes": "warm"},
+            {"platform": "mastodon", "content": "Second example.", "notes": ""},
+            {"platform": "mastodon", "content": "Third example.", "notes": ""},
+            {"platform": "mastodon", "content": "Fourth example.", "notes": ""},
         ],
-        "recent_posts": [{"content": "Previous shipping update."}],
+        "recent_posts": [
+            {"content": "Previous shipping update."},
+            {"content": "Another older post."},
+            {"content": "Third older post."},
+            {"content": "Fourth older post should not appear."},
+        ],
     }
 
 
-def test_build_system_prompt_injects_writing_rules_and_banned_words():
+def test_build_brand_voice_prompt_is_positive_and_compact():
     builder = PromptBuilder()
 
-    prompt = builder.build_system_prompt(sample_context())
+    prompt = builder.build_brand_voice_prompt(sample_context())
 
-    assert 'team "Launch Crew"' in prompt
-    assert "Output constraints:" in prompt
-    assert "Formatting rules:" in prompt
-    assert "Banned words and phrases" in prompt
+    assert 'team "Launch Crew"' not in prompt  # new format uses quotes differently
+    assert 'You write social media posts for "Launch Crew".' in prompt
+    assert "Brand voice:" in prompt
+    assert "Quality bar:" in prompt
+    assert "A small team that ships in public." in prompt
     assert "Keep sentences short" in prompt
     assert "synergy" in prompt
     assert "crypto" in prompt
-    # Section headers must not be nested as list items under each other.
-    assert "- Formatting rules:" not in prompt
-    assert "- Banned words and phrases" not in prompt
+    assert "Posts that sound like us" in prompt
+    assert "Fourth example." not in prompt
+    assert "Recent posts to avoid duplicating" not in prompt
+    assert "Available campaign formats" not in prompt
+    assert "Sound human, not AI:" not in prompt
 
 
-def test_build_system_prompt_merges_anti_ai_defaults():
+def test_build_brand_voice_caps_banned_words_and_style_examples():
     builder = PromptBuilder()
+    ctx = sample_context()
+    ctx["profile"]["style_metadata"]["banned_words"] = [
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+    ]
 
-    prompt = builder.build_system_prompt(sample_context())
+    prompt = builder.build_brand_voice_prompt(ctx)
 
-    # Anti-AI section is present by default
-    assert "Sound human, not AI:" in prompt
-    # Some signature banned phrases are merged in
-    assert "tauche ein" in prompt
-    assert "game-changer" in prompt or "game changer" in prompt
+    assert prompt.count("Example ") == 3
+    for word in ("six", "seven"):
+        assert word not in prompt
 
 
-def test_anti_ai_override_drops_defaults():
+def test_anti_ai_override_drops_quality_defaults():
     builder = PromptBuilder()
     ctx = sample_context()
     ctx["profile"]["style_metadata"]["language_dna"] = {"anti_ai_override": True}
 
-    prompt = builder.build_system_prompt(ctx)
+    prompt = builder.build_brand_voice_prompt(ctx)
 
-    # Override removes the defaults entirely
     assert "tauche ein" not in prompt
-    assert "Sound human, not AI:\n- None provided." in prompt
+    assert "Write like someone who actually lives this topic" not in prompt
+    assert "synergy" in prompt
+
+
+def test_core_avoid_words_fill_remaining_slots():
+    from app.prompts.anti_ai import capped_banned_words
+
+    words = capped_banned_words(["alpha", "beta"], override=False, limit=DEFAULT_BANNED_WORD_LIMIT)
+    assert words[:2] == ["alpha", "beta"]
+    assert any(word in words for word in CORE_AVOID_WORDS)
 
 
 def test_profile_assistant_prompt_includes_brief_and_schema():
@@ -108,20 +148,25 @@ def test_inject_few_shot_appends_examples():
     assert "Keep the CTA subtle." in prompt
 
 
-def test_build_generation_prompt_combines_system_and_platform_constraints():
+def test_build_generation_prompt_is_task_only_without_brand_voice():
     builder = PromptBuilder()
 
     prompt = builder.build_generation_prompt(
         sample_context(),
         {
-            "prompt_hint": "Announce the new feature rollout.",
+            "occasion": "Announce the new feature rollout.",
             "target_account_ids": ["acct-1", "acct-2"],
+            "campaign_format_id": "fmt-1",
         },
         "bluesky",
     )
 
-    assert "Formatting rules:" in prompt
+    assert "Brand voice:" not in prompt
+    assert "## Task" in prompt
+    assert "Announce the new feature rollout." in prompt
     assert "Platform: bluesky" in prompt
     assert "Character limit: 300" in prompt
-    assert "Announce the new feature rollout." in prompt
     assert 'target_account_ids: ["acct-1", "acct-2"]' in prompt
+    assert "Campaign: Weekly roundup" in prompt
+    assert "Previous shipping update." in prompt
+    assert "Fourth older post should not appear." not in prompt

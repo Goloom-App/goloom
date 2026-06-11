@@ -57,10 +57,8 @@ class CampaignWorker:
                 ),
                 platform,
             )
-            prompt = self.prompt_builder.inject_few_shot(base_prompt, context.get("style_examples", []))
-
             response = await self.adapter.generate(
-                prompt,
+                base_prompt,
                 system_prompt,
                 model=self.adapter.config.model,
                 temperature=0.7,

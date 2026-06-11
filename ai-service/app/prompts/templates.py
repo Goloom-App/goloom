@@ -2,103 +2,184 @@ import json
 from typing import Any
 
 
-def render_system_prompt(
+def render_brand_voice_prompt(
     *,
     team_name: str,
     preferred_language: str,
     max_hashtags: int,
+    voice_summary: str,
+    quality_principles: list[str],
     formatting_rules: list[str],
     banned_words: list[str],
     preferred_words: list[str],
     signature_phrases: list[str],
-    identity_lines: list[str],
-    language_dna_lines: list[str],
-    reach_strategy_lines: list[str],
-    anti_ai_rules: list[str],
     knowledge_sources: list[str],
-    campaign_formats: list[str],
     style_examples: list[str],
-    recent_posts: list[str],
 ) -> str:
-    return f"""You are Goloom's social media writing assistant for team \"{team_name}\".
+    sections = [
+        f'You write social media posts for "{team_name}".',
+        "",
+        "Brand voice:",
+        voice_summary.strip() or "Write clearly and authentically for this account.",
+        "",
+        "Quality bar:",
+        format_list(quality_principles),
+    ]
 
-Follow the team's brand voice, writing rules, and safety constraints exactly.
+    if formatting_rules:
+        sections.extend(
+            [
+                "",
+                "Style notes (soft guidelines — not a checklist):",
+                format_list(formatting_rules),
+            ]
+        )
 
-Brand identity:
-{format_list(identity_lines)}
+    if preferred_words:
+        sections.extend(
+            [
+                "",
+                "Words that fit this account (use when natural, never force):",
+                format_inline_list(preferred_words),
+            ]
+        )
 
-Language DNA:
-{format_list(language_dna_lines)}
+    if signature_phrases:
+        sections.extend(
+            [
+                "",
+                "Signature phrases (only when they fit perfectly):",
+                format_inline_list(signature_phrases),
+            ]
+        )
 
-Reach strategy:
-{format_list(reach_strategy_lines)}
+    if banned_words:
+        sections.extend(
+            [
+                "",
+                "Especially avoid these words/phrases:",
+                format_inline_list(banned_words),
+            ]
+        )
 
-Sound human, not AI:
-{format_list(anti_ai_rules)}
+    sections.extend(
+        [
+            "",
+            "Facts you may use (exclusive source — do not invent beyond this):",
+            format_list(knowledge_sources),
+            "If a fact is not above, omit it rather than guessing.",
+            "",
+            "Posts that sound like us (match tone and attitude, not structure or layout):",
+            format_style_examples(style_examples),
+            "",
+            f"Language: {preferred_language} | Hashtag budget: up to {max_hashtags}",
+        ]
+    )
 
-Output constraints:
-- Preferred language: {preferred_language}
-- Team hashtag ceiling: {max_hashtags}
-
-Formatting rules:
-{format_list(formatting_rules)}
-
-Banned words and phrases (never use, including casing variants):
-{format_list(banned_words)}
-
-Preferred words (use when natural, never force):
-{format_list(preferred_words)}
-
-Signature phrases (weave in occasionally if a perfect fit):
-{format_list(signature_phrases)}
-
-Knowledge base (exclusive factual source — CRITICAL):
-{format_list(knowledge_sources)}
-If a fact is not present in the knowledge base above, do NOT invent it. Say less rather than hallucinate.
-
-Available campaign formats:
-{format_list(campaign_formats)}
-
-Reference style examples:
-{format_list(style_examples)}
-
-Recent posts to avoid duplicating:
-{format_list(recent_posts)}
-""".strip()
+    return "\n".join(sections).strip()
 
 
-def render_generation_prompt(
+def render_task_prompt(
     *,
-    system_prompt: str,
     platform: str,
     char_limit: int,
     hashtag_rule: str,
     user_request: str,
-    parameter_notes: list[str],
+    source_material: list[str],
+    recent_posts: list[str],
+    campaign_hint: str = "",
+    output_format: str = "",
+    mood_adjustments: list[str] | None = None,
+    technical_notes: list[str] | None = None,
+) -> str:
+    sections = [
+        "## Task",
+        user_request.strip() or "Write a platform-ready post for this account.",
+    ]
+
+    if source_material:
+        sections.extend(["", "## Source material", *source_material])
+
+    if recent_posts:
+        sections.extend(
+            [
+                "",
+                "## Do not repeat",
+                "Recent posts below are for deduplication only — do not copy their openings, structure, or phrasing.",
+                format_list(recent_posts),
+            ]
+        )
+
+    if campaign_hint.strip():
+        sections.extend(["", "## Campaign goal", campaign_hint.strip()])
+
+    format_hint = f"\n- Output shape: {output_format}" if output_format else ""
+    mood_hint = ""
+    if mood_adjustments:
+        mood_hint = "\n\nMood for this draft:\n" + format_list(mood_adjustments)
+
+    sections.extend(
+        [
+            "",
+            "## Platform",
+            f"- Platform: {platform}",
+            f"- Character limit: {char_limit}",
+            f"- Hashtag guidance: {hashtag_rule}{format_hint}",
+        ]
+    )
+
+    if technical_notes:
+        sections.extend(["", "## Technical notes", format_list(technical_notes)])
+
+    sections.extend(
+        [
+            mood_hint,
+            "",
+            "Respond with a JSON object using this exact structure (no markdown, no code fences):",
+            '{"content": "the post text", "hashtags": ["hashtag1", "hashtag2"], "platform_metadata": {"key": "value"}}',
+        ]
+    )
+
+    return "\n".join(section for section in sections if section is not None).strip()
+
+
+# Backwards-compatible alias used by tests and external callers.
+def render_system_prompt(**kwargs: Any) -> str:
+    return render_brand_voice_prompt(**kwargs)
+
+
+def render_generation_prompt(
+    *,
+    system_prompt: str = "",
+    platform: str,
+    char_limit: int,
+    hashtag_rule: str,
+    user_request: str,
+    parameter_notes: list[str] | None = None,
+    source_material: list[str] | None = None,
+    recent_posts: list[str] | None = None,
+    campaign_hint: str = "",
     output_format: str = "",
     mood_adjustments: list[str] | None = None,
 ) -> str:
-    format_hint = f"\nOutput format: {output_format}" if output_format else ""
-    mood_hint = ""
-    if mood_adjustments:
-        mood_hint = "\nMood adjustments:\n" + format_list(mood_adjustments)
+    """Build the per-request task prompt.
 
-    return f"""{system_prompt}
-
-Platform constraints:
-- Platform: {platform}
-- Character limit: {char_limit}
-- Hashtag guidance: {hashtag_rule}{format_hint}{mood_hint}
-
-Generation request:
-{user_request}
-
-Supporting parameters:
-{format_list(parameter_notes)}
-
-Respond with a JSON object using this exact structure (no markdown, no code fences):
-{{"content": "the post text", "hashtags": ["hashtag1", "hashtag2"], "platform_metadata": {{"key": "value"}}}}
-""".strip()
+    ``system_prompt`` is accepted for backwards compatibility but ignored —
+    brand voice belongs in the LLM system message only.
+    """
+    _ = system_prompt
+    return render_task_prompt(
+        platform=platform,
+        char_limit=char_limit,
+        hashtag_rule=hashtag_rule,
+        user_request=user_request,
+        source_material=source_material or [],
+        recent_posts=recent_posts or [],
+        campaign_hint=campaign_hint,
+        output_format=output_format,
+        mood_adjustments=mood_adjustments,
+        technical_notes=parameter_notes or [],
+    )
 
 
 def render_few_shot_prompt(examples: list[str]) -> str:
@@ -140,8 +221,8 @@ Rules:
 - Persona must read like a real person, not a corporate role.
 - archetype is a 2-5 word label (e.g. "Tech Podcast", "Solo Indie Dev", "Zahnarztpraxis", "Boutique Werbeagentur").
 - preferred_words and signature_phrases must be domain-specific, not generic.
-- banned_words: list 3-8 hype words this account should never say.
-- formatting_rules: 3-6 short, opinionated rules.
+- banned_words: at most 5 words this account should especially avoid.
+- formatting_rules: 2-4 soft style notes, not rigid laws.
 - main_value: one concrete sentence; no buzzwords.
 
 Respond with ONLY valid JSON (no markdown, no code fences) matching this exact schema:
@@ -204,6 +285,21 @@ def format_list(items: list[str]) -> str:
     if not items:
         return "- None provided."
     return "\n".join(f"- {item}" for item in items)
+
+
+def format_inline_list(items: list[str]) -> str:
+    if not items:
+        return "- None."
+    return "- " + ", ".join(items)
+
+
+def format_style_examples(items: list[str]) -> str:
+    if not items:
+        return "- None provided — write in the brand voice described above."
+    blocks = []
+    for index, item in enumerate(items, start=1):
+        blocks.append(f"Example {index}:\n---\n{item.strip()}\n---")
+    return "\n\n".join(blocks)
 
 
 def format_value(value: Any) -> str:

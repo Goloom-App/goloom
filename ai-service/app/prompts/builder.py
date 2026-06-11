@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .anti_ai import ANTI_AI_STYLE_RULES, merged_banned_words
+from .anti_ai import QUALITY_VOICE_PRINCIPLES, capped_banned_words
 from .templates import (
     format_value,
+    render_brand_voice_prompt,
     render_few_shot_prompt,
     render_generation_prompt,
     render_profile_assistant_prompt,
-    render_system_prompt,
     render_vibe_preview_prompt,
 )
 
@@ -29,96 +29,85 @@ class PromptBuilder:
     }
 
     OUTPUT_FORMAT_HINTS = {
-        "post": "Standard single post.",
-        "teaser": "Short teaser that builds curiosity for linked content.",
-        "poll": "Frame as a poll question with 2-4 answer options in the text.",
-        "thread": "First post of a thread; hint that more follows.",
+        "post": "Single post — structure is up to you.",
+        "teaser": "Short teaser that builds curiosity; hook first, link or CTA second.",
+        "poll": "Poll question with 2-4 answer options woven into the text.",
+        "thread": "Opening post of a thread; do not summarise the whole thread.",
     }
 
     MOOD_ADJUSTMENT_HINTS = {
-        "more_expertise": "Emphasize domain expertise and concrete facts from the knowledge base.",
+        "more_expertise": "Lean on concrete facts from the source material; show domain depth.",
         "shorter_punchier": "Cut length aggressively. Every word must earn its place.",
-        "remove_marketing_speak": "Replace hype adjectives with hard facts. Strip every buzzword.",
+        "remove_marketing_speak": "Strip hype adjectives; replace with specifics.",
     }
 
+    BRAND_STYLE_EXAMPLE_LIMIT = 3
+    TASK_RECENT_POST_LIMIT = 3
+    FORMATTING_RULE_LIMIT = 4
+    RECENT_POST_EXCERPT_CHARS = 140
+
     def build_system_prompt(self, context: dict) -> str:
+        return self.build_brand_voice_prompt(context)
+
+    def build_brand_voice_prompt(self, context: dict) -> str:
         style_metadata = self._style_metadata(context)
         team_name = self._get_nested(context, ("team", "name"), ("team", "display_name"), default="unknown team")
-        campaign_formats = [
-            self._format_campaign_format(item)
-            for item in self._get_nested(context, ("campaign_formats",), ("campaignFormats",), default=[])
-        ]
-        style_examples = [
-            self._format_style_example(item)
-            for item in self._get_nested(context, ("style_examples",), ("styleExamples",), default=[])
-        ]
-        recent_posts = [
-            self._format_recent_post(item)
-            for item in self._get_nested(context, ("recent_posts",), ("recentPosts",), default=[])
-        ]
         knowledge_sources = [
             self._format_knowledge_source(item)
             for item in self._get_nested(context, ("knowledge_sources",), ("knowledgeSources",), default=[])
         ]
+        style_examples = self._limited_style_examples(context)
 
         dna = self._nested_mapping(style_metadata, "language_dna", "languageDna")
         anti_ai_override = bool(dna.get("anti_ai_override") or dna.get("antiAiOverride") or False)
 
-        banned_words = merged_banned_words(
+        banned_words = capped_banned_words(
             self._string_list(style_metadata.get("banned_words")),
             override=anti_ai_override,
         )
         preferred_words = self._string_list(dna.get("preferred_words") or dna.get("preferredWords"))
         signature_phrases = self._string_list(dna.get("signature_phrases") or dna.get("signaturePhrases"))
+        formatting_rules = self._string_list(style_metadata.get("formatting_rules"))[: self.FORMATTING_RULE_LIMIT]
 
-        return render_system_prompt(
+        return render_brand_voice_prompt(
             team_name=str(team_name),
             preferred_language=str(style_metadata.get("preferred_language") or "unspecified"),
             max_hashtags=int(style_metadata.get("max_hashtags") or 0),
-            formatting_rules=self._string_list(style_metadata.get("formatting_rules")),
+            voice_summary=self._brand_voice_summary(style_metadata),
+            quality_principles=[] if anti_ai_override else list(QUALITY_VOICE_PRINCIPLES),
+            formatting_rules=formatting_rules,
             banned_words=banned_words,
             preferred_words=preferred_words,
             signature_phrases=signature_phrases,
-            identity_lines=self._identity_lines(style_metadata),
-            language_dna_lines=self._language_dna_lines(style_metadata),
-            reach_strategy_lines=self._reach_strategy_lines(style_metadata),
-            anti_ai_rules=[] if anti_ai_override else list(ANTI_AI_STYLE_RULES),
             knowledge_sources=knowledge_sources,
-            campaign_formats=campaign_formats,
             style_examples=style_examples,
-            recent_posts=recent_posts,
         )
 
     def build_generation_prompt(self, context: dict, params: dict, platform: str) -> str:
         constraints = self.apply_platform_constraints(platform)
         user_request = self._resolve_user_request(params)
-        parameter_notes = self._parameter_notes(params)
         output_format = self._output_format_hint(params)
         mood_adjustments = self._mood_adjustments(params)
 
         return render_generation_prompt(
-            system_prompt=self.build_system_prompt(context),
             platform=str(constraints["platform"]),
             char_limit=int(constraints["char_limit"]),
             hashtag_rule=str(constraints["hashtag_rule"]),
             user_request=user_request,
-            parameter_notes=parameter_notes,
+            source_material=self._source_material(params),
+            recent_posts=self._recent_post_excerpts(context),
+            campaign_hint=self._campaign_task_hint(context, params),
             output_format=output_format,
             mood_adjustments=mood_adjustments,
+            parameter_notes=self._technical_notes(params),
         )
 
     def build_vibe_preview_prompt(self, context: dict) -> str:
         style_metadata = self._style_metadata(context)
         team_name = self._get_nested(context, ("team", "name"), default="unknown team")
-        summary_parts = [
-            *self._identity_lines(style_metadata),
-            *self._language_dna_lines(style_metadata),
-            *self._reach_strategy_lines(style_metadata),
-            f"Preferred language: {style_metadata.get('preferred_language') or 'unspecified'}",
-        ]
         return render_vibe_preview_prompt(
             team_name=str(team_name),
-            profile_summary="\n".join(f"- {line}" for line in summary_parts if line),
+            profile_summary=self._brand_voice_summary(style_metadata),
         )
 
     def build_profile_assistant_prompt(self, params: dict) -> str:
@@ -147,6 +136,126 @@ class PromptBuilder:
             "hashtag_rule": hashtag_rule,
         }
 
+    def _brand_voice_summary(self, style_metadata: dict[str, Any]) -> str:
+        identity = self._nested_mapping(style_metadata, "identity")
+        dna = self._nested_mapping(style_metadata, "language_dna", "languageDna")
+        reach = self._nested_mapping(style_metadata, "reach_strategy", "reachStrategy")
+
+        paragraphs: list[str] = []
+
+        persona = str(identity.get("persona") or "").strip()
+        archetype = str(identity.get("archetype") or "").strip()
+        if persona:
+            paragraphs.append(persona)
+        elif archetype:
+            paragraphs.append(f"This is a {archetype} account.")
+
+        industry = str(identity.get("industry") or "").strip()
+        main_value = str(identity.get("main_value") or identity.get("mainValue") or "").strip()
+        audience = str(identity.get("target_audience") or identity.get("targetAudience") or "").strip()
+        context_bits = [bit for bit in (industry, main_value, audience) if bit]
+        if context_bits:
+            paragraphs.append(" ".join(context_bits))
+
+        voice_bits: list[str] = []
+        sentence_style = str(dna.get("sentence_style") or dna.get("sentenceStyle") or "").strip()
+        if sentence_style:
+            voice_bits.append(sentence_style)
+        humor = str(dna.get("humor_style") or dna.get("humorStyle") or "").strip()
+        if humor:
+            voice_bits.append(f"Humor: {humor}")
+        hook = str(reach.get("hook_style") or reach.get("hookStyle") or "").strip()
+        if hook:
+            voice_bits.append(f"Hooks: {hook}")
+        cta = str(reach.get("cta_focus") or reach.get("ctaFocus") or "").strip()
+        if cta:
+            voice_bits.append(f"CTAs: {cta}")
+        if voice_bits:
+            paragraphs.append(" ".join(voice_bits))
+
+        return "\n\n".join(paragraphs)
+
+    def _limited_style_examples(self, context: dict) -> list[str]:
+        examples = [
+            self._format_style_example_content(item)
+            for item in self._get_nested(context, ("style_examples",), ("styleExamples",), default=[])
+        ]
+        return [item for item in examples if item][: self.BRAND_STYLE_EXAMPLE_LIMIT]
+
+    def _recent_post_excerpts(self, context: dict) -> list[str]:
+        excerpts: list[str] = []
+        for item in self._get_nested(context, ("recent_posts",), ("recentPosts",), default=[]):
+            text = self._format_recent_post(item)
+            if not text:
+                continue
+            compact = " ".join(text.split())
+            if len(compact) > self.RECENT_POST_EXCERPT_CHARS:
+                compact = compact[: self.RECENT_POST_EXCERPT_CHARS].rstrip() + "…"
+            excerpts.append(compact)
+            if len(excerpts) >= self.TASK_RECENT_POST_LIMIT:
+                break
+        return excerpts
+
+    def _source_material(self, params: dict) -> list[str]:
+        sections: list[str] = []
+
+        rss_title = str(params.get("rss_article_title") or "").strip()
+        rss_link = str(params.get("rss_article_link") or "").strip()
+        rss_content = str(params.get("rss_article_content") or params.get("rss_article_summary") or "").strip()
+        if rss_title or rss_link or rss_content:
+            lines = ["From RSS article:"]
+            if rss_title:
+                lines.append(f"Title: {rss_title}")
+            if rss_link:
+                lines.append(f"Link: {rss_link}")
+            if rss_content:
+                lines.append(f"Text:\n---\n{rss_content}\n---")
+            sections.append("\n".join(lines))
+
+        source_content = str(params.get("source_content") or params.get("existing_content") or "").strip()
+        if source_content:
+            sections.append(
+                "Previous draft (facts and tone reference only — do not copy structure or layout verbatim):\n"
+                f"---\n{source_content}\n---"
+            )
+
+        announcement = str(params.get("announcement_reference_content") or "").strip()
+        announcement_title = str(params.get("announcement_reference_title") or "").strip()
+        if announcement or announcement_title:
+            lines = ["Paired announcement to stay consistent with:"]
+            if announcement_title:
+                lines.append(f"Title: {announcement_title}")
+            if announcement:
+                lines.append(f"Text:\n---\n{announcement}\n---")
+            sections.append("\n".join(lines))
+
+        return sections
+
+    def _campaign_task_hint(self, context: dict, params: dict) -> str:
+        campaign_format_id = str(params.get("campaign_format_id") or params.get("campaignFormatId") or "").strip()
+        if not campaign_format_id:
+            return ""
+
+        campaign_formats = self._get_nested(context, ("campaign_formats",), ("campaignFormats",), default=[])
+        for item in campaign_formats:
+            if not isinstance(item, Mapping):
+                continue
+            if str(item.get("id") or "") != campaign_format_id:
+                continue
+            name = str(item.get("name") or "Campaign").strip()
+            hashtags = self._string_list(item.get("required_hashtags") or item.get("requiredHashtags"))
+            structure = item.get("structure")
+            lines = [
+                f"Campaign: {name}",
+                "Treat any template as a goal, not a form to fill in — vary openings and structure.",
+            ]
+            if structure:
+                lines.append(f"Suggested elements (reorder or adapt freely): {format_value(structure)}")
+            if hashtags:
+                lines.append(f"Required hashtags: {', '.join(hashtags)}")
+            return "\n".join(lines)
+        return ""
+
     def _style_metadata(self, context: dict) -> dict[str, Any]:
         profile = self._get_nested(context, ("profile",), default={})
         if isinstance(profile, Mapping):
@@ -161,43 +270,6 @@ class PromptBuilder:
             if isinstance(value, Mapping):
                 return dict(value)
         return {}
-
-    def _identity_lines(self, style_metadata: dict[str, Any]) -> list[str]:
-        identity = self._nested_mapping(style_metadata, "identity")
-        lines: list[str] = []
-        if archetype := str(identity.get("archetype") or "").strip():
-            lines.append(f"Archetype: {archetype}")
-        if persona := str(identity.get("persona") or "").strip():
-            lines.append(f"Voice persona: {persona}")
-        if industry := str(identity.get("industry") or "").strip():
-            lines.append(f"Industry: {industry}")
-        if main_value := str(identity.get("main_value") or identity.get("mainValue") or "").strip():
-            lines.append(f"Core value proposition: {main_value}")
-        if audience := str(identity.get("target_audience") or identity.get("targetAudience") or "").strip():
-            lines.append(f"Target audience: {audience}")
-        return lines
-
-    def _language_dna_lines(self, style_metadata: dict[str, Any]) -> list[str]:
-        dna = self._nested_mapping(style_metadata, "language_dna", "languageDna")
-        lines: list[str] = []
-        sentence_style = str(dna.get("sentence_style") or dna.get("sentenceStyle") or "").strip()
-        if sentence_style:
-            lines.append(f"Sentence style: {sentence_style}")
-        humor = str(dna.get("humor_style") or dna.get("humorStyle") or "").strip()
-        if humor:
-            lines.append(f"Humor: {humor}")
-        return lines
-
-    def _reach_strategy_lines(self, style_metadata: dict[str, Any]) -> list[str]:
-        reach = self._nested_mapping(style_metadata, "reach_strategy", "reachStrategy")
-        lines: list[str] = []
-        hook = str(reach.get("hook_style") or reach.get("hookStyle") or "").strip()
-        if hook:
-            lines.append(f"Hook style: {hook}")
-        cta = str(reach.get("cta_focus") or reach.get("ctaFocus") or "").strip()
-        if cta:
-            lines.append(f"CTA focus: {cta}")
-        return lines
 
     def _format_knowledge_source(self, item: Any) -> str:
         if not isinstance(item, Mapping):
@@ -236,9 +308,9 @@ class PromptBuilder:
             value = params.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
-        return "Create a platform-ready social media draft aligned with the team style."
+        return "Write a post that fits this account and the source material."
 
-    def _parameter_notes(self, params: dict) -> list[str]:
+    def _technical_notes(self, params: dict) -> list[str]:
         notes: list[str] = []
         skip = {
             "prompt_hint",
@@ -252,23 +324,32 @@ class PromptBuilder:
             "more_expertise",
             "shorter_punchier",
             "remove_marketing_speak",
+            "source_content",
+            "existing_content",
+            "rss_article_title",
+            "rss_article_content",
+            "rss_article_summary",
+            "rss_article_link",
+            "announcement_reference_content",
+            "announcement_reference_title",
+            "campaign_format_id",
+            "campaignFormatId",
+            "output_format",
+            "format",
+            "platform",
         }
         for key, value in params.items():
             if key in skip:
                 continue
+            if key.endswith("_at") or key.endswith("At"):
+                continue
             notes.append(f"{key}: {format_value(value)}")
         return notes
 
-    def _format_campaign_format(self, item: Any) -> str:
+    def _format_style_example_content(self, item: Any) -> str:
         if not isinstance(item, Mapping):
-            return str(item)
-
-        name = item.get("name") or "unnamed format"
-        hashtags = self._string_list(item.get("required_hashtags") or item.get("requiredHashtags"))
-        active = item.get("is_active") if "is_active" in item else item.get("isActive")
-        suffix = f"; hashtags={', '.join(hashtags)}" if hashtags else ""
-        state = "active" if active is not False else "inactive"
-        return f"{name} ({state}{suffix})"
+            return str(item).strip()
+        return str(item.get("content") or "").strip()
 
     def _format_style_example(self, item: Any) -> str:
         if not isinstance(item, Mapping):
@@ -288,7 +369,7 @@ class PromptBuilder:
         if content:
             return content
         title = str(item.get("title") or "").strip()
-        return title or "Untitled recent post"
+        return title or ""
 
     def _format_few_shot_example(self, index: int, example: Any) -> str:
         if isinstance(example, Mapping):

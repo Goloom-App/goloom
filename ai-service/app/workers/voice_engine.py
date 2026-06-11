@@ -65,7 +65,7 @@ class VoiceEngineWorker:
                     scheduled_at=scheduled_at,
                     include_title=include_title,
                 )
-            prompt = self.prompt_builder.inject_few_shot(base_prompt, context.get("style_examples", []))
+            prompt = base_prompt
 
             parsed = await self._generate_with_retries(
                 prompt=prompt,
@@ -142,13 +142,6 @@ class VoiceEngineWorker:
                 )
             )
         )
-        campaign_hint = ""
-        if campaign_format:
-            campaign_hint = (
-                f"\nCampaign format: {campaign_format.get('name') or 'unnamed'}.\n"
-                f"Template structure: {json.dumps(campaign_format.get('structure') or {}, ensure_ascii=False)}\n"
-                f"Required hashtags: {', '.join(self._string_list(campaign_format.get('required_hashtags'))) or 'none'}"
-            )
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'next available slot'}."
         title_hint = self._title_json_instruction(params, include_title)
         return (
@@ -167,7 +160,7 @@ class VoiceEngineWorker:
             '- "account_content_override": object mapping account_id -> shorter text ONLY where required\n'
             '- "hashtags": array of hashtags\n'
             '- "platform_metadata": object\n'
-            f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
+            f"Accounts:\n" + "\n".join(account_lines) + schedule_hint
         )
 
     def _build_refine_prompt(
@@ -213,15 +206,7 @@ class VoiceEngineWorker:
                 )
             )
         )
-        campaign_hint = ""
-        if campaign_format:
-            campaign_hint = (
-                f"\nCampaign format: {campaign_format.get('name') or 'unnamed'}.\n"
-                f"Template structure: {json.dumps(campaign_format.get('structure') or {}, ensure_ascii=False)}"
-            )
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'unchanged'}."
-        article_section = self._rss_article_section(params)
-        announcement_section = self._announcement_reference_section(params)
         post_kind_section = self._recurring_post_kind_section(params)
         title_hint = self._title_json_instruction(params, include_title)
         return (
@@ -230,9 +215,6 @@ class VoiceEngineWorker:
             f"{post_kind_section}"
             f"Primary account: {primary.get('username') or primary_account_id} (id={primary_account_id}, "
             f"limit {primary_limit} characters).\n"
-            f"Template starting point (adapt using the source article facts):\n---\n{source_content}\n---\n"
-            f"{article_section}"
-            f"{announcement_section}"
             f"Refinement goal: {refinement_hint}\n"
             f"- \"content\": refined primary text for account id {primary_account_id}; "
             f"MUST NOT exceed {primary_limit} characters (hard limit)\n"
@@ -242,7 +224,7 @@ class VoiceEngineWorker:
             "- Do NOT create a separate version for every account.\n"
             "- Overrides must be shorter compressions of the refined primary text.\n"
             f"Return JSON only with keys {self._title_json_keys(include_title)}content, account_content_override, hashtags, platform_metadata.\n"
-            f"Accounts:\n" + "\n".join(account_lines) + campaign_hint + schedule_hint
+            f"Accounts:\n" + "\n".join(account_lines) + schedule_hint
         )
 
     @staticmethod

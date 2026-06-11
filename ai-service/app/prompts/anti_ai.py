@@ -1,79 +1,58 @@
-"""Default anti-AI-speak rules and banned phrases applied to every prompt.
+"""Lightweight defaults that steer voice quality without negative-programming overload.
 
-These defaults keep generated posts from sounding like generic LLM output.
-They are merged into the system prompt unless a team explicitly opts out
-via ``language_dna.anti_ai_override``.
+Teams can opt out via ``language_dna.anti_ai_override`` — then only their own
+banned words (if any) are used.
 """
 from __future__ import annotations
 
-# Phrases that strongly signal "this was written by an LLM" and almost never
-# appear in genuine human social media writing. Merged into banned_words.
-ANTI_AI_BANNED_PHRASES: tuple[str, ...] = (
-    # German marketing-LLM tells
+# Positive principles replace long lists of micro-rules.
+QUALITY_VOICE_PRINCIPLES: tuple[str, ...] = (
+    "Write like someone who actually lives this topic — conversational, sometimes blunt, never salesy.",
+    "Prefer concrete facts and observations over adjectives. When unsure, say less instead of padding.",
+    "Vary rhythm naturally: short punches, longer asides, fragments are fine. Do not sound polished or 'optimized'.",
+)
+
+# Only the worst universal tells — merged only when the team has fewer than ``limit`` custom words.
+CORE_AVOID_WORDS: tuple[str, ...] = (
     "tauche ein",
-    "tauchen sie ein",
-    "spannend",
-    "spannende reise",
-    "revolutionär",
-    "bahnbrechend",
-    "in der heutigen schnelllebigen welt",
-    "in einer welt, in der",
-    "im wandel der zeit",
-    "es ist wichtig zu beachten",
-    "zusammenfassend lässt sich sagen",
-    "lass uns gemeinsam",
-    "lasst uns gemeinsam",
-    "auf eine reise",
-    "ein game-changer",
-    # English LLM tells
-    "in today's fast-paced world",
-    "in a world where",
-    "let's dive in",
-    "dive into",
-    "delve into",
     "game-changer",
-    "game changer",
-    "in conclusion",
-    "moreover",
-    "furthermore",
-    "elevate your",
-    "unleash",
-    "unlock the power",
-    "harness the power",
-    "leverage",
-    "seamless",
-    "robust solution",
-    "comprehensive solution",
-    "cutting-edge",
-    "best-in-class",
-    "next-level",
-    "it's not just",
+    "revolutionär",
 )
 
-# Structural style rules that fight typical LLM output patterns.
-# Rendered as bullet points in the system prompt.
-ANTI_AI_STYLE_RULES: tuple[str, ...] = (
-    "Write like a human writes social posts. Imperfect, conversational, sometimes blunt.",
-    "Never open with 'In a world where…', 'In today's…', 'Stell dir vor…', or any other rhetorical scene-setter.",
-    "Avoid the 'It's not just X, it's Y' pattern.",
-    "Avoid three-part rhetorical lists ('faster, smarter, better'). Pick one thing and say it.",
-    "Em-dashes (—) only when a comma genuinely will not do. Never two em-dashes in one post.",
-    "No empty hype adjectives (amazing, incredible, revolutionary). Use concrete facts or numbers instead.",
-    "Sentence fragments are fine. Starting a sentence with 'Und', 'Aber', 'And', 'But' is fine.",
-    "No closing summary like 'Zusammengefasst…' or 'In short…'. Stop when the point is made.",
-    "Do not announce what the post is about ('Heute geht es um…'). Just say it.",
-)
+DEFAULT_BANNED_WORD_LIMIT = 5
 
 
-def merged_banned_words(profile_banned: list[str], override: bool = False) -> list[str]:
-    """Combine team banned words with the anti-AI defaults.
+def capped_banned_words(
+    profile_banned: list[str],
+    *,
+    override: bool = False,
+    limit: int = DEFAULT_BANNED_WORD_LIMIT,
+) -> list[str]:
+    """Return at most ``limit`` banned words, prioritising team-specific terms."""
+    team = []
+    seen: set[str] = set()
+    for raw in profile_banned:
+        word = raw.strip()
+        if not word:
+            continue
+        key = word.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        team.append(word)
+        if len(team) >= limit:
+            break
 
-    If ``override`` is True the team has explicitly opted out and only their
-    own banned words are returned.
-    """
     if override:
-        return sorted({w.strip() for w in profile_banned if w and w.strip()})
-    combined = {w.strip().lower() for w in profile_banned if w and w.strip()}
-    for phrase in ANTI_AI_BANNED_PHRASES:
-        combined.add(phrase.strip().lower())
-    return sorted(combined)
+        return team
+
+    for phrase in CORE_AVOID_WORDS:
+        if len(team) >= limit:
+            break
+        key = phrase.strip().lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        team.append(phrase)
+
+    return team

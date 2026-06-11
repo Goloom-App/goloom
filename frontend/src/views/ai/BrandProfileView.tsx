@@ -548,22 +548,22 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
             testId="brand-formatting-rule"
           />
           <p className="brand-field__hint">
-            Konkrete Schreibregeln für Emoji, Satzbau und Stil — landen direkt im System-Prompt unter „Formatting rules".
+            Weiche Stil-Hinweise (max. 4) — keine Checkliste. Z. B. Emoji-Nutzung oder Satzlänge.
           </p>
         </div>
 
         <div className="field">
           <span>Zusätzlich verbotene Wörter</span>
           <TagInput values={bannedWords} onChange={setBannedWords} placeholder="z. B. branchenspezifische Hype-Wörter" testId="brand-banned-word" />
-          <p className="brand-field__hint">Goloom blockt bereits typische KI-Phrasen („tauche ein", „spannend", „game-changer" …).</p>
+          <p className="brand-field__hint">Max. 5 Wörter, die dich besonders nerven. Weniger ist mehr — der Fokus liegt auf positiver Stimm-Vorgabe.</p>
         </div>
 
         <ToggleSwitch
           checked={antiAiOverride}
           onChange={setAntiAiOverride}
           testId="brand-anti-ai-override"
-          title="Standard-KI-Phrasen-Block deaktivieren"
-          description="Nicht empfohlen. Verhindert typische LLM-Klischees. Nur deaktivieren, wenn du sehr genau weißt, was du tust."
+          title="Qualitäts-Leitplanken deaktivieren"
+          description="Nicht empfohlen. Entfernt die eingebauten positiven Stimm-Hinweise gegen KI-Klischees."
         />
       </SectionCard>
 
@@ -760,7 +760,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
         <SectionCard
           icon={<FileText size={18} />}
           title="Beispieltexte"
-          subtitle="Referenz-Posts für den System-Prompt. Die KI orientiert sich am Stil — nicht am exakten Wortlaut."
+          subtitle="2–3 Posts, die du wirklich gut findest. Nur Ton und Haltung werden übernommen — nicht Struktur oder Layout."
           testId="brand-examples-section"
           headerExtra={
             <Dialog.Root open={exampleDialogOpen} onOpenChange={setExampleDialogOpen}>

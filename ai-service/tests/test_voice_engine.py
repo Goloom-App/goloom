@@ -93,9 +93,9 @@ async def test_process_generates_multi_account_post():
     assert result["primary_account_id"] == "acc-mastodon"
     assert result["scheduled_at"] is not None
     first_call = adapter.generate.await_args_list[0]
-    # Brand voice is rendered as writing rules + anti-AI defaults, no legacy "Tonality:" line.
-    assert "Formatting rules:" in first_call.args[1]
-    assert "Sound human, not AI:" in first_call.args[1]
+    assert "Brand voice:" in first_call.args[1]
+    assert "Quality bar:" in first_call.args[1]
+    assert "## Task" in first_call.args[0]
     goloom_client.send_callback.assert_awaited_once()
     callback_args = goloom_client.send_callback.await_args.args
     assert callback_args[0] == "job-1"
@@ -135,7 +135,7 @@ async def test_process_refine_mode_skips_minimum_length():
 
     assert result["content"] == refined
     first_call = adapter.generate.await_args_list[0]
-    assert "Template starting point" in first_call.args[0]
+    assert "Previous draft (facts and tone reference only" in first_call.args[0]
     assert adapter.generate.await_count == 1
 
 
@@ -174,7 +174,7 @@ async def test_process_refine_mode_includes_announcement_reference_for_main_post
     )
 
     prompt = adapter.generate.await_args_list[0].args[0]
-    assert "Paired announcement reference" in prompt
+    assert "Paired announcement to stay consistent with" in prompt
     assert "Coming Friday" in prompt
     assert "MAIN recurring post" in prompt
 
