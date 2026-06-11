@@ -499,6 +499,7 @@
       "regenerateOccurrenceConfirm": "Den ausgewählten Termin aus der aktuellen Vorlage neu generieren?\n\nDies kann nicht rückgängig gemacht werden.",
       "regenerateNoOccurrences": "Keine neu generierbaren Termine für diese Vorlage gefunden.",
       "regenerateSelectOccurrence": "Termin zum Neu-Generieren",
+      "regenerateAiQueued": "KI erstellt neuen Beitrag… Kalender aktualisiert sich gleich.",
       "editTemplate": "Bearbeiten",
       "editTitle": "Wiederholungsvorlage bearbeiten",
       "counterStart": "Zähler-Start",

@@ -16,9 +16,10 @@ interface AutomationViewProps {
   accounts: AccountRecord[]
   canEdit: boolean
   onStatus: (msg: string | null) => void
+  onPostsRefresh?: () => void | Promise<void>
 }
 
-export function AutomationView({ team, api, accounts, canEdit, onStatus }: AutomationViewProps) {
+export function AutomationView({ team, api, accounts, canEdit, onStatus, onPostsRefresh }: AutomationViewProps) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<AutomationTab>('recurring')
 
@@ -62,6 +63,7 @@ export function AutomationView({ team, api, accounts, canEdit, onStatus }: Autom
           accounts={accounts}
           canEdit={canEdit}
           onStatus={onStatus}
+          onPostsRefresh={onPostsRefresh}
           team={team}
         />
       ) : (

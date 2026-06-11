@@ -163,6 +163,42 @@ async def test_recurring_post_accepts_short_fresh_copy():
     assert goloom_client.send_callback.await_args.args[1] == "completed"
 
 
+@pytest.mark.asyncio
+async def test_recurring_post_without_title_succeeds():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    short_copy = "Freitag wieder live: Binärgewitter. Link im Profil."
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(
+            {
+                "content": short_copy,
+                "account_content_override": {},
+                "hashtags": [],
+                "platform_metadata": {},
+            }
+        ),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process(
+        {
+            **sample_job(
+                recurring_post_kind="main",
+                source_content="Am Freitag 13.06. ist es wieder so weit: Binärgewitter Live!",
+                main_event_at="2026-06-13T20:00:00Z",
+            ),
+            "context": sample_context(),
+        }
+    )
+
+    assert result["content"].startswith(short_copy)
+    assert "title" not in result
+    assert goloom_client.send_callback.await_args.args[1] == "completed"
+
+
 def test_merge_hashtags_into_content_appends_missing_tags_within_limit():
     parsed = VoiceEngineWorker._merge_hashtags_into_content(
         {"content": "New blog post is live.", "hashtags": ["#tech", "#update"]},

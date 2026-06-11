@@ -1906,6 +1906,7 @@ function App() {
             accounts={teamAccounts}
             canEdit={canEditScheduledPosts}
             onStatus={(msg) => setStatusMessage(msg)}
+            onPostsRefresh={() => loadDashboard({ silent: true })}
           />
         ) : null}
 

@@ -16,6 +16,8 @@ func (a *API) finishRecurringAutomationFromAI(r *http.Request, job domain.AIJob,
 	}
 	content := strings.TrimSpace(res.Content)
 	if content == "" {
+		a.log.WarnContext(r.Context(), "recurring automation: empty ai content, using template fallback",
+			"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind)
 		a.finishRecurringAutomationFallback(r, job, meta)
 		return
 	}
@@ -25,8 +27,12 @@ func (a *API) finishRecurringAutomationFromAI(r *http.Request, job domain.AIJob,
 func (a *API) finishRecurringAutomationFallback(r *http.Request, job domain.AIJob, meta *recurringAutomationMeta) {
 	content := meta.FallbackContent
 	if content == "" {
+		a.log.WarnContext(r.Context(), "recurring automation: fallback skipped, no template content",
+			"job_id", job.ID, "template_id", meta.TemplateID)
 		return
 	}
+	a.log.WarnContext(r.Context(), "recurring automation: using expanded template fallback",
+		"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind)
 	a.createRecurringAutomationPost(r, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
 }
 
@@ -80,6 +86,8 @@ func (a *API) createRecurringAutomationPost(
 		UseVersions:            len(normalizedOverrides) > 0,
 	})
 	if err != nil {
+		a.log.ErrorContext(r.Context(), "recurring automation: create scheduled post failed",
+			"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind, "error", err)
 		return
 	}
 }

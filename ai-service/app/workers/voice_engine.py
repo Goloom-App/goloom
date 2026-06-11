@@ -112,8 +112,8 @@ class VoiceEngineWorker:
     async def _try_callback(self, job_id: str, status: str, result: dict, error_message: str = "") -> None:
         try:
             await self.goloom_client.send_callback(job_id, status, result, error_message)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("AI callback failed for job %s (%s): %s", job_id, status, exc)
 
     def _build_multi_account_prompt(
         self,
@@ -293,6 +293,8 @@ class VoiceEngineWorker:
 
     @staticmethod
     def _include_title_in_response(params: dict[str, Any], refine_mode: bool) -> bool:
+        if VoiceEngineWorker._recurring_kind(params) in {"announcement", "main"}:
+            return bool(str(params.get("title_hint") or "").strip())
         if not refine_mode:
             return True
         return bool(str(params.get("title_hint") or "").strip())
@@ -436,14 +438,14 @@ class VoiceEngineWorker:
                 max_tokens=1500,
                 author_user_id=author_user_id,
             )
-            result = self._parse_result(response.content, include_title=include_title, refine_mode=refine_mode)
-            result = self._normalize_multi_account_result(
-                result,
-                selected_accounts=selected_accounts,
-                primary_account_id=primary_account_id,
-                primary_limit=primary_limit,
-            )
             try:
+                result = self._parse_result(response.content, include_title=include_title, refine_mode=refine_mode)
+                result = self._normalize_multi_account_result(
+                    result,
+                    selected_accounts=selected_accounts,
+                    primary_account_id=primary_account_id,
+                    primary_limit=primary_limit,
+                )
                 self._validate_lengths(
                     result,
                     selected_accounts,

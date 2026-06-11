@@ -1,5 +1,5 @@
 import { format, parseISO } from 'date-fns'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { CalendarClock, Clock, MoreVertical, Pencil, Plus, Target, Trash2, X } from 'lucide-react'
@@ -9,6 +9,7 @@ import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
 import { Segmented, ToggleSwitch } from '../../components/ui'
+import { useAIJobStream } from '../../hooks/useSSE'
 import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord, AutomationOutputMode } from '../../types'
 import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
@@ -67,6 +68,7 @@ export function RecurringPostsView({
   accounts,
   canEdit,
   onStatus,
+  onPostsRefresh,
   team,
 }: {
   teamId: string
@@ -74,9 +76,12 @@ export function RecurringPostsView({
   accounts: AccountRecord[]
   canEdit: boolean
   onStatus: (msg: string | null) => void
+  onPostsRefresh?: () => void | Promise<void>
   team?: { isAiEnabled?: boolean }
 }) {
   const { t } = useTranslation()
+  const { lastEvent } = useAIJobStream(teamId)
+  const awaitingAiRegenerateRef = useRef(false)
   const [items, setItems] = useState<BackendPostTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -144,6 +149,36 @@ export function RecurringPostsView({
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  useEffect(() => {
+    if (!awaitingAiRegenerateRef.current || !lastEvent) {
+      return
+    }
+    try {
+      const job = JSON.parse(lastEvent.data) as { type?: string; status?: string }
+      if (
+        job.type === 'voice_engine'
+        && (job.status === 'completed' || job.status === 'failed')
+      ) {
+        awaitingAiRegenerateRef.current = false
+        void onPostsRefresh?.()
+      }
+    } catch {
+      // ignore malformed SSE payloads
+    }
+  }, [lastEvent, onPostsRefresh])
+
+  async function afterRegenerate(templateId: string): Promise<boolean> {
+    const res = await api.listPostTemplates(teamId)
+    const tmpl = (res.items ?? []).find((item) => item.id === templateId)
+    await onPostsRefresh?.()
+    if (tmpl?.ai_enhance_enabled && team?.isAiEnabled) {
+      awaitingAiRegenerateRef.current = true
+      onStatus(t('recurring.regenerateAiQueued', { defaultValue: 'KI erstellt neuen Post…' }))
+      return true
+    }
+    return false
+  }
 
   function toggleTargetAccount(accountId: string) {
     setTargetIds((cur) =>
@@ -334,10 +369,13 @@ export function RecurringPostsView({
       const result = await api.regeneratePostTemplate(teamId, id, { mode: 'horizon' })
       setRegeneratePanel(null)
       await refresh()
-      onStatus(t('status.regenerateSuccess', {
-        count: result.regenerated_occurrences,
-        deleted: result.deleted_posts,
-      }))
+      const aiQueued = await afterRegenerate(id)
+      if (!aiQueued) {
+        onStatus(t('status.regenerateSuccess', {
+          count: result.regenerated_occurrences,
+          deleted: result.deleted_posts,
+        }))
+      }
     } catch (e) {
       const raw = e instanceof Error ? e.message : t('status.regenerateFailed')
       onStatus(translateApiError(raw, t))
@@ -377,10 +415,13 @@ export function RecurringPostsView({
       const result = await api.regeneratePostTemplate(teamId, id, { mode: 'occurrence', occurrence_at: occ })
       setRegeneratePanel(null)
       await refresh()
-      onStatus(t('status.regenerateSuccess', {
-        count: result.regenerated_occurrences,
-        deleted: result.deleted_posts,
-      }))
+      const aiQueued = await afterRegenerate(id)
+      if (!aiQueued) {
+        onStatus(t('status.regenerateSuccess', {
+          count: result.regenerated_occurrences,
+          deleted: result.deleted_posts,
+        }))
+      }
     } catch (e) {
       const raw = e instanceof Error ? e.message : t('status.regenerateFailed')
       onStatus(translateApiError(raw, t))

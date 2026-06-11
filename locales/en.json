@@ -499,6 +499,7 @@
       "regenerateOccurrenceConfirm": "Regenerate the selected occurrence from the current template?\n\nThis cannot be undone.",
       "regenerateNoOccurrences": "No regenerable occurrences found for this template.",
       "regenerateSelectOccurrence": "Occurrence to regenerate",
+      "regenerateAiQueued": "AI is writing a fresh post… the calendar will update shortly.",
       "editTemplate": "Edit",
       "editTitle": "Edit recurring template",
       "counterStart": "Counter start",
