@@ -34,10 +34,15 @@ def test_build_system_prompt_injects_writing_rules_and_banned_words():
     prompt = builder.build_system_prompt(sample_context())
 
     assert 'team "Launch Crew"' in prompt
-    assert "Writing rules:" in prompt
+    assert "Output constraints:" in prompt
+    assert "Formatting rules:" in prompt
+    assert "Banned words and phrases" in prompt
     assert "Keep sentences short" in prompt
     assert "synergy" in prompt
     assert "crypto" in prompt
+    # Section headers must not be nested as list items under each other.
+    assert "- Formatting rules:" not in prompt
+    assert "- Banned words and phrases" not in prompt
 
 
 def test_build_system_prompt_merges_anti_ai_defaults():
@@ -115,7 +120,7 @@ def test_build_generation_prompt_combines_system_and_platform_constraints():
         "bluesky",
     )
 
-    assert "Writing rules:" in prompt
+    assert "Formatting rules:" in prompt
     assert "Platform: bluesky" in prompt
     assert "Character limit: 300" in prompt
     assert "Announce the new feature rollout." in prompt

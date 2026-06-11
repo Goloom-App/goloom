@@ -36,16 +36,20 @@ Reach strategy:
 Sound human, not AI:
 {format_list(anti_ai_rules)}
 
-Writing rules:
+Output constraints:
 - Preferred language: {preferred_language}
 - Team hashtag ceiling: {max_hashtags}
-- Formatting rules:
+
+Formatting rules:
 {format_list(formatting_rules)}
-- Banned words and phrases (never use, including casing variants):
+
+Banned words and phrases (never use, including casing variants):
 {format_list(banned_words)}
-- Preferred words (use when natural, never force):
+
+Preferred words (use when natural, never force):
 {format_list(preferred_words)}
-- Signature phrases (weave in occasionally if a perfect fit):
+
+Signature phrases (weave in occasionally if a perfect fit):
 {format_list(signature_phrases)}
 
 Knowledge base (exclusive factual source — CRITICAL):

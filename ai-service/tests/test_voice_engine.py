@@ -94,7 +94,7 @@ async def test_process_generates_multi_account_post():
     assert result["scheduled_at"] is not None
     first_call = adapter.generate.await_args_list[0]
     # Brand voice is rendered as writing rules + anti-AI defaults, no legacy "Tonality:" line.
-    assert "Writing rules:" in first_call.args[1]
+    assert "Formatting rules:" in first_call.args[1]
     assert "Sound human, not AI:" in first_call.args[1]
     goloom_client.send_callback.assert_awaited_once()
     callback_args = goloom_client.send_callback.await_args.args
