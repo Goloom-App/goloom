@@ -216,9 +216,15 @@ class VoiceEngineWorker:
         schedule_hint = f"\nTarget schedule (UTC): {format_datetime(scheduled_at) or 'unchanged'}."
         post_kind_section = self._recurring_post_kind_section(params)
         title_hint = self._title_json_instruction(params, include_title)
+        refine_intro = (
+            "Improve the rendered recurring template for multi-account publishing. "
+            "Preserve its date/time wording (named date vs. heute/today).\n"
+            if str(params.get("recurring_post_kind") or "").strip().lower() in {"announcement", "main"}
+            else "Refine an existing draft for multi-account publishing.\n"
+        )
         return (
             f"{base_prompt}\n\n"
-            "Refine an existing draft for multi-account publishing.\n"
+            f"{refine_intro}"
             f"{post_kind_section}"
             f"Primary account: {primary.get('username') or primary_account_id} (id={primary_account_id}, "
             f"limit {primary_limit} characters).\n"
@@ -239,13 +245,13 @@ class VoiceEngineWorker:
         kind = str(params.get("recurring_post_kind") or "").strip().lower()
         if kind == "announcement":
             return (
-                "Recurring ANNOUNCEMENT — follow the publication plan: publish date vs event date differ. "
-                "Name the event date; do not say the event is today.\n"
+                "Recurring ANNOUNCEMENT — the rendered template shows the intended pre-event wording. "
+                "Do not replace a named date with “heute”.\n"
             )
         if kind == "main":
             return (
-                "Recurring MAIN EVENT post — follow the publication plan: this goes live on the event day. "
-                '"Heute"/"today" is fine for the event. Stay consistent with any announcement reference.\n'
+                "Recurring MAIN EVENT — the rendered template shows the intended event-day wording. "
+                'Keep “heute”/“today” if the template uses it. Stay consistent with any announcement reference.\n'
             )
         return ""
 

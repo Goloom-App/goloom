@@ -184,7 +184,10 @@ def test_recurring_announcement_schedule_forbids_heute():
             "post_scheduled_at": "2026-06-11T18:00:00Z",
             "main_event_at": "2026-06-13T20:00:00Z",
             "days_before_main_event": 2,
-            "source_content": "Reminder: episode tonight.",
+            "source_content": (
+                "Am Freitag 13.06. ist es wieder so weit: Binärgewitter Live!\n\n"
+                "Hört rein unter: https://blog.binaergewitter.de/pages/live/"
+            ),
             "refine_content": True,
         },
         "mastodon",
@@ -192,14 +195,14 @@ def test_recurring_announcement_schedule_forbids_heute():
 
     assert "## Publication plan" in prompt
     assert "Role: ANNOUNCEMENT" in prompt
-    assert "Publish date of this post" in prompt
-    assert "Main event date" in prompt
-    assert 'Do not say the event is "heute"' in prompt
-    assert "Sat, 2026-06-13" in prompt
-    assert "publication plan" in prompt
+    assert "rendered template below" in prompt
+    assert "Rendered recurring template" in prompt
+    assert "Am Freitag 13.06" in prompt
+    assert "Keep the template's temporal meaning" in prompt
+    assert "Previous draft" not in prompt
 
 
-def test_recurring_main_schedule_allows_heute():
+def test_recurring_main_uses_template_heute_wording():
     builder = PromptBuilder()
 
     prompt = builder.build_generation_prompt(
@@ -208,14 +211,18 @@ def test_recurring_main_schedule_allows_heute():
             "recurring_post_kind": "main",
             "post_scheduled_at": "2026-06-13T20:00:00Z",
             "main_event_at": "2026-06-13T20:00:00Z",
-            "source_content": "We go live tonight.",
+            "source_content": (
+                "Der Countdown läuft, heute Abend live für euch: Binärgewitter Folge #384\n\n"
+                "Hört rein unter: https://blog.binaergewitter.de/pages/live/"
+            ),
             "refine_content": True,
         },
         "mastodon",
     )
 
     assert "Role: MAIN EVENT" in prompt
-    assert '"heute"/"today" refers to this date' in prompt
+    assert "heute Abend live" in prompt
+    assert "Keep the template's temporal meaning" in prompt
 
 
 def test_recurring_publication_plan_german():
@@ -230,16 +237,19 @@ def test_recurring_publication_plan_german():
             "post_scheduled_at": "2026-06-11T18:00:00Z",
             "main_event_at": "2026-06-13T20:00:00Z",
             "days_before_main_event": 2,
-            "source_content": "Reminder.",
+            "source_content": (
+                "Am Freitag 13.06. ist es wieder so weit: Binärgewitter Live!\n\n"
+                "Hört rein unter: https://blog.binaergewitter.de/pages/live/"
+            ),
             "refine_content": True,
         },
         "mastodon",
     )
 
     assert "Rolle: ANKÜNDIGUNG" in prompt
-    assert "Veröffentlichung dieses Posts" in prompt
-    assert "Datum des eigentlichen Events" in prompt
-    assert "„heute“" in prompt
+    assert "gerenderte Template-Text unten" in prompt
+    assert "Am Freitag 13.06" in prompt
+    assert "Behalte die zeitliche Aussage" in prompt
 
 
 def test_brand_voice_does_not_claim_knowledge_is_exclusive_when_empty():

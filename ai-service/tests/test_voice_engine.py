@@ -192,6 +192,7 @@ async def test_process_refine_mode_includes_announcement_reference_for_main_post
     assert "Coming Friday" in prompt
     assert "MAIN EVENT" in prompt
     assert "## Publication plan" in prompt
+    assert "rendered recurring template" in prompt.lower()
 
 
 @pytest.mark.asyncio

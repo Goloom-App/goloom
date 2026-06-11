@@ -270,75 +270,65 @@ class PromptBuilder:
         if kind == "announcement":
             lines = [
                 (
-                    "Rolle: ANKÜNDIGUNG — Teaser-Post, der VOR dem eigentlichen Event veröffentlicht wird."
+                    "Rolle: ANKÜNDIGUNG (wird vor dem Event veröffentlicht)."
                     if german
-                    else "Role: ANNOUNCEMENT — teaser post published BEFORE the main event."
+                    else "Role: ANNOUNCEMENT (published before the event)."
+                ),
+                (
+                    "Der gerenderte Template-Text unten ist die maßgebliche Quelle für Timing und Formulierung — "
+                    "dort steht bereits, welches Datum genannt wird (z. B. „Am Freitag …“ statt „heute“)."
+                    if german
+                    else "The rendered template below is the authoritative source for timing and wording — "
+                    "it already states the correct date framing (e.g. a weekday/date instead of “today”)."
                 ),
             ]
-            if post_label:
-                lines.append(
-                    f"Veröffentlichung dieses Posts (wann Leser ihn sehen): {post_label}"
+        else:
+            lines = [
+                (
+                    "Rolle: HAUPTPOST (wird am Event-Tag veröffentlicht)."
                     if german
-                    else f"Publish date of this post (when readers see it): {post_label}"
-                )
-            if main_label:
-                lines.append(
-                    f"Datum des eigentlichen Events (das beworbene Datum): {main_label}"
+                    else "Role: MAIN EVENT (published on the event day)."
+                ),
+                (
+                    "Der gerenderte Template-Text unten ist die maßgebliche Quelle — "
+                    "wenn dort „heute“ steht, ist das korrekt für diesen Post."
                     if german
-                    else f"Main event date (what you are promoting): {main_label}"
-                )
-            days_before = params.get("days_before_main_event")
-            if days_before is not None:
-                lines.append(
-                    f"Vorlauf: {days_before} Tag(e) vor dem Event."
-                    if german
-                    else f"Lead time: {days_before} day(s) before the event."
-                )
-            lines.extend(
-                [
-                    (
-                        "Du planst den Text für den Veröffentlichungstag oben — das Event liegt in der Zukunft."
-                        if german
-                        else "You are writing for the publish date above — the event is still in the future."
-                    ),
-                    (
-                        'Sag nicht, das Event ist „heute“ oder „today“ — nenne stattdessen das Event-Datum.'
-                        if german
-                        else 'Do not say the event is "heute" or "today" — name the event date instead.'
-                    ),
-                ]
-            )
-            return "\n".join(lines)
+                    else "The rendered template below is the authoritative source — "
+                    'if it says “heute”/“today”, that is correct for this post.'
+                ),
+            ]
 
-        lines = [
-            (
-                "Rolle: HAUPTPOST — Post am Tag des eigentlichen Events."
-                if german
-                else "Role: MAIN EVENT — post on the actual event day."
-            ),
-        ]
-        event_label = main_label or post_label
-        if event_label:
+        if post_label:
             lines.append(
-                f"Veröffentlichung (= Event-Tag): {event_label}"
+                f"Veröffentlichung dieses Posts: {post_label}"
                 if german
-                else f"Publish date (= event day): {event_label}"
+                else f"This post publishes: {post_label}"
             )
-        lines.extend(
-            [
-                (
-                    "Du planst den Text für den Event-Tag — „heute“ bezieht sich auf dieses Datum."
-                    if german
-                    else 'You are writing for the event day — "heute"/"today" refers to this date.'
-                ),
-                (
-                    "Falls eine Ankündigung als Referenz dabei ist: Versprechen und Ton beibehalten."
-                    if german
-                    else "If an announcement reference is provided, keep its promises and tone."
-                ),
-            ]
-        )
+        if main_label and kind == "announcement":
+            lines.append(
+                f"Event-Datum: {main_label}"
+                if german
+                else f"Event date: {main_label}"
+            )
         return "\n".join(lines)
+
+    def _recurring_template_source(self, source_content: str, context: dict) -> str:
+        german = str(self._style_metadata(context).get("preferred_language") or "en").strip().lower().startswith("de")
+        if german:
+            header = "Gerenderter Recurring-Template-Text (Variablen bereits ausgefüllt):"
+            rules = (
+                "Behalte die zeitliche Aussage des Templates bei (Datum vs. „heute“/„heute Abend“). "
+                "Verbessere nur Sprache, Flow und Brand-Voice. "
+                "Links und Hashtags aus dem Template möglichst beibehalten."
+            )
+        else:
+            header = "Rendered recurring template (variables already expanded):"
+            rules = (
+                "Keep the template's temporal meaning (named date vs. “today”/“tonight”). "
+                "Only improve language, flow, and brand voice. "
+                "Preserve links and hashtags from the template when possible."
+            )
+        return f"{header}\n---\n{source_content}\n---\n{rules}"
 
     def _source_material(self, params: dict, context: dict | None = None) -> list[str]:
         sections: list[str] = []
@@ -373,10 +363,13 @@ class PromptBuilder:
                 f"---\n{skeleton}\n---"
             )
         elif source_content:
-            sections.append(
-                "Previous draft (facts and tone reference only — do not copy structure or layout verbatim):\n"
-                f"---\n{source_content}\n---"
-            )
+            if self._recurring_post_kind(params) in {"announcement", "main"}:
+                sections.append(self._recurring_template_source(source_content, context or {}))
+            else:
+                sections.append(
+                    "Previous draft (facts and tone reference only — do not copy structure or layout verbatim):\n"
+                    f"---\n{source_content}\n---"
+                )
 
         announcement = str(params.get("announcement_reference_content") or "").strip()
         announcement_title = str(params.get("announcement_reference_title") or "").strip()
@@ -484,8 +477,8 @@ class PromptBuilder:
 
         if self._recurring_post_kind(params) in {"announcement", "main"}:
             base = (
-                "Write a recurring-template social post. "
-                "Follow the publication plan for your role (announcement vs main event) and dates."
+                "Polish the rendered recurring template below for publication. "
+                "The template already defines the correct timing — keep its date vs. today wording."
             )
             if editorial:
                 return f"{base}\n\nEditorial direction: {editorial}"
