@@ -6,6 +6,25 @@ from typing import Any
 
 
 WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+WEEKDAY_NAMES_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"]
+
+
+def format_schedule_label(iso_value: str, *, language: str = "en") -> str:
+    """Human-readable schedule label for prompts (UTC)."""
+    raw = str(iso_value or "").strip()
+    if not raw:
+        return ""
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(UTC)
+    except ValueError:
+        return raw
+
+    weekday_index = (dt.weekday() + 1) % 7
+    if str(language).strip().lower().startswith("de"):
+        weekday = WEEKDAY_NAMES_DE[weekday_index]
+        return f"{weekday}, {dt.day:02d}.{dt.month:02d}.{dt.year}, {dt.hour:02d}:{dt.minute:02d} UTC"
+    weekday = WEEKDAY_NAMES[weekday_index]
+    return f"{weekday}, {dt.strftime('%Y-%m-%d')}, {dt.strftime('%H:%M')} UTC"
 
 
 def resolve_scheduled_at(

@@ -239,13 +239,15 @@ class VoiceEngineWorker:
         kind = str(params.get("recurring_post_kind") or "").strip().lower()
         if kind == "announcement":
             return (
-                "This is a recurring-template ANNOUNCEMENT post (teaser before the main event). "
-                "Keep it shorter, build anticipation, and align tone with the paired main post.\n"
+                "This is a recurring-template ANNOUNCEMENT (published before the main event). "
+                "Name the main event date — do not say the event is today. "
+                "Keep it shorter and build anticipation.\n"
             )
         if kind == "main":
             return (
-                "This is the MAIN recurring post. If an announcement reference is provided below, "
-                "stay consistent with its wording, promises, and tone while expanding into the full post.\n"
+                "This is the MAIN recurring post on the event day. "
+                '"Heute"/"today" is fine when it matches the main event date in the schedule section. '
+                "Stay consistent with any announcement reference below.\n"
             )
         return ""
 

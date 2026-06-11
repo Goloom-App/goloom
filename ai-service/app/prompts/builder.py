@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from app.scheduling.slots import format_schedule_label
+
 from .anti_ai import QUALITY_VOICE_PRINCIPLES, capped_banned_words
 from .templates import (
     format_value,
@@ -96,7 +98,7 @@ class PromptBuilder:
             char_limit=int(constraints["char_limit"]),
             hashtag_rule=str(constraints["hashtag_rule"]),
             user_request=user_request,
-            source_material=self._source_material(params),
+            source_material=self._source_material(params, context),
             recent_posts=self._recent_post_excerpts(context),
             campaign_hint=self._campaign_task_hint(context, params),
             output_format=output_format,
@@ -234,8 +236,66 @@ class PromptBuilder:
             or str(params.get("rss_article_link") or "").strip()
         )
 
-    def _source_material(self, params: dict) -> list[str]:
+    def _recurring_post_kind(self, params: dict) -> str:
+        kind = str(params.get("recurring_post_kind") or "").strip().lower()
+        if kind:
+            return kind
+        auto = params.get("recurring_automation")
+        if isinstance(auto, Mapping):
+            return str(auto.get("post_kind") or "").strip().lower()
+        return ""
+
+    def _param_schedule_value(self, params: dict, key: str, nested: tuple[str, str]) -> str:
+        direct = str(params.get(key) or "").strip()
+        if direct:
+            return direct
+        auto = params.get(nested[0])
+        if isinstance(auto, Mapping):
+            return str(auto.get(nested[1]) or "").strip()
+        return ""
+
+    def _recurring_schedule_material(self, params: dict, context: dict) -> str:
+        kind = self._recurring_post_kind(params)
+        if kind not in {"announcement", "main"}:
+            return ""
+
+        language = str(self._style_metadata(context).get("preferred_language") or "en")
+        post_at = self._param_schedule_value(params, "post_scheduled_at", ("recurring_automation", "scheduled_at"))
+        main_at = self._param_schedule_value(params, "main_event_at", ("recurring_automation", "template_occurrence_at"))
+
+        lines = ["RECURRING SCHEDULE (timing rules are strict):"]
+        if post_at:
+            lines.append(f"- This post publishes: {format_schedule_label(post_at, language=language)}")
+        if main_at:
+            lines.append(f"- Main event date: {format_schedule_label(main_at, language=language)}")
+
+        if kind == "announcement":
+            days_before = params.get("days_before_main_event")
+            if days_before is not None:
+                lines.append(f"- Lead time: {days_before} day(s) before the main event")
+            lines.extend(
+                [
+                    "- Post type: ANNOUNCEMENT (teaser before the event).",
+                    "- The event is NOT today — name the main event date explicitly (weekday + calendar date).",
+                    '- Do NOT use "heute" or "today" for the event itself.',
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "- Post type: MAIN (event-day post).",
+                    '- "Heute"/"today" is appropriate only when it matches the main event date above.',
+                    "- If an announcement reference is provided, stay consistent with its promises.",
+                ]
+            )
+        return "\n".join(lines)
+
+    def _source_material(self, params: dict, context: dict | None = None) -> list[str]:
         sections: list[str] = []
+
+        recurring = self._recurring_schedule_material(params, context or {})
+        if recurring:
+            sections.append(recurring)
 
         rss_title = str(params.get("rss_article_title") or "").strip()
         rss_link = str(params.get("rss_article_link") or "").strip()
@@ -411,6 +471,12 @@ class PromptBuilder:
             "output_format",
             "format",
             "platform",
+            "recurring_post_kind",
+            "recurring_automation",
+            "post_scheduled_at",
+            "main_event_at",
+            "days_before_main_event",
+            "template_occurrence_at",
         }
         for key, value in params.items():
             if key in skip:

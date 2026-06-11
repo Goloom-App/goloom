@@ -174,6 +174,47 @@ def test_rss_source_material_prioritizes_show_notes_over_skeleton():
     assert "Include 2 to 2 relevant hashtags" in prompt
 
 
+def test_recurring_announcement_schedule_forbids_heute():
+    builder = PromptBuilder()
+
+    prompt = builder.build_generation_prompt(
+        sample_context(),
+        {
+            "recurring_post_kind": "announcement",
+            "post_scheduled_at": "2026-06-11T18:00:00Z",
+            "main_event_at": "2026-06-13T20:00:00Z",
+            "days_before_main_event": 2,
+            "source_content": "Reminder: episode tonight.",
+            "refine_content": True,
+        },
+        "mastodon",
+    )
+
+    assert "RECURRING SCHEDULE" in prompt
+    assert "ANNOUNCEMENT" in prompt
+    assert 'Do NOT use "heute"' in prompt
+    assert "Sat, 2026-06-13" in prompt
+
+
+def test_recurring_main_schedule_allows_heute():
+    builder = PromptBuilder()
+
+    prompt = builder.build_generation_prompt(
+        sample_context(),
+        {
+            "recurring_post_kind": "main",
+            "post_scheduled_at": "2026-06-13T20:00:00Z",
+            "main_event_at": "2026-06-13T20:00:00Z",
+            "source_content": "We go live tonight.",
+            "refine_content": True,
+        },
+        "mastodon",
+    )
+
+    assert "Post type: MAIN" in prompt
+    assert '"Heute"/"today" is appropriate' in prompt
+
+
 def test_brand_voice_does_not_claim_knowledge_is_exclusive_when_empty():
     builder = PromptBuilder()
     ctx = sample_context()
