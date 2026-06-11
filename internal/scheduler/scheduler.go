@@ -695,7 +695,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 	occAt := occurrenceAt.UTC()
 	input := domain.CreatePostInput{
 		Title:                 expandedTitle,
-		Content:               tmpl.Content,
+		Content:               expandedContent,
 		ScheduledAt:           at,
 		TargetAccounts:        tmpl.TargetAccountIDs,
 		Visibility:            tmpl.Visibility,

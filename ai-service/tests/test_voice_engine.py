@@ -134,6 +134,35 @@ async def test_recurring_post_uses_generation_mode_not_refine():
     assert "fresh post" in prompt.lower()
 
 
+@pytest.mark.asyncio
+async def test_recurring_post_accepts_short_fresh_copy():
+    adapter = AsyncMock()
+    adapter.config = LLMConfig(provider="openai", model="gpt-4o", api_key="test-key")
+    short_copy = "Freitag wieder live: Binärgewitter. Link im Profil."
+    adapter.generate.return_value = LLMResponse(
+        content=json.dumps(_generation_payload(content=short_copy, account_content_override={})),
+        model="gpt-4o",
+        usage={},
+    )
+    goloom_client = AsyncMock()
+    worker = VoiceEngineWorker(adapter, goloom_client, PromptBuilder())
+
+    result = await worker.process(
+        {
+            **sample_job(
+                recurring_post_kind="main",
+                source_content="Am Freitag 13.06. ist es wieder so weit: Binärgewitter Live!",
+                main_event_at="2026-06-13T20:00:00Z",
+            ),
+            "context": sample_context(),
+        }
+    )
+
+    assert result["content"].startswith(short_copy)
+    goloom_client.send_callback.assert_awaited_once()
+    assert goloom_client.send_callback.await_args.args[1] == "completed"
+
+
 def test_merge_hashtags_into_content_appends_missing_tags_within_limit():
     parsed = VoiceEngineWorker._merge_hashtags_into_content(
         {"content": "New blog post is live.", "hashtags": ["#tech", "#update"]},

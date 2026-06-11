@@ -43,6 +43,7 @@ class VoiceEngineWorker:
             system_prompt = self.prompt_builder.build_system_prompt(context)
             primary_account_id = str(primary.get("id") or "")
             refine_mode = self._is_refine_mode(params)
+            recurring_generation = self._recurring_kind(params) in {"announcement", "main"}
             include_title = self._include_title_in_response(params, refine_mode)
             if refine_mode:
                 base_prompt = self._build_refine_prompt(
@@ -75,6 +76,7 @@ class VoiceEngineWorker:
                 selected_accounts=selected_accounts,
                 author_user_id=author_user_id,
                 refine_mode=refine_mode,
+                recurring_generation=recurring_generation,
                 include_title=include_title,
             )
             parsed = self._normalize_multi_account_result(
@@ -420,6 +422,7 @@ class VoiceEngineWorker:
         selected_accounts: list[dict[str, Any]],
         author_user_id: str,
         refine_mode: bool = False,
+        recurring_generation: bool = False,
         include_title: bool = False,
     ) -> dict[str, Any]:
         current_prompt = prompt
@@ -447,6 +450,7 @@ class VoiceEngineWorker:
                     primary_limit=primary_limit,
                     primary_account_id=primary_account_id,
                     refine_mode=refine_mode,
+                    skip_min_primary_length=refine_mode or recurring_generation,
                 )
                 return result
             except ValueError as exc:
@@ -459,6 +463,14 @@ class VoiceEngineWorker:
                     f"Fix this issue: {last_error}. "
                     f"The primary content MUST be at most {primary_limit} characters. "
                     "Keep the refined primary text faithful to the source draft while improving quality. "
+                    "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
+                )
+            elif recurring_generation:
+                current_prompt = (
+                    f"{prompt}\n\nRevise the previous answer and return JSON only. "
+                    f"Fix this issue: {last_error}. "
+                    f"The primary content MUST be at most {primary_limit} characters. "
+                    "Write fresh copy from the template facts — do not paste the template verbatim. "
                     "Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
                 )
             else:
@@ -545,9 +557,10 @@ class VoiceEngineWorker:
         primary_limit: int,
         primary_account_id: str,
         refine_mode: bool = False,
+        skip_min_primary_length: bool = False,
     ) -> None:
         content = str(result.get("content") or "")
-        if not refine_mode:
+        if not refine_mode and not skip_min_primary_length:
             min_primary = self._min_primary_length(primary_limit, selected_accounts)
             if len(content) < min_primary:
                 raise ValueError(
