@@ -38,6 +38,9 @@ test.describe.serial('AI profile and generator', () => {
     await expect(page.getByTestId('brand-hook')).toBeVisible()
     await expect(page.getByTestId('brand-cta')).toBeVisible()
     await expect(page.getByTestId('brand-anti-ai-override')).toBeVisible()
+    await expect(page.getByTestId('brand-formatting-rule')).toBeVisible()
+    await expect(page.getByTestId('brand-profile-tab-profile')).toBeVisible()
+    await expect(page.getByTestId('brand-profile-tab-examples')).toBeVisible()
     await expect(page.getByTestId('brand-knowledge-section')).toBeVisible()
     await expect(page.getByTestId('brand-save-setup')).toBeVisible()
     await expect(page.getByTestId('brand-show-prompt')).toBeVisible()
@@ -71,6 +74,27 @@ test.describe.serial('AI profile and generator', () => {
     await page.getByTestId('brand-assistant-submit').click()
     await expect(page.getByTestId('brand-status-error')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByTestId('brand-status-error')).toContainText('Bitte beschreibe')
+  })
+
+  test('can save formatting rules and manage style examples', async ({ page }) => {
+    await page.getByRole('button', { name: 'AI Profile', exact: true }).click()
+    await expect(page.getByTestId('brand-profile-view')).toBeVisible({ timeout: 10_000 })
+
+    await page.getByTestId('brand-formatting-rule').fill('Max. 2 Emojis pro Post')
+    await page.getByTestId('brand-formatting-rule').press('Enter')
+    await page.getByTestId('brand-save-setup').click()
+    await expect(page.getByTestId('brand-status-success')).toBeVisible({ timeout: 10_000 })
+
+    await page.getByTestId('brand-profile-tab-examples').click()
+    await expect(page.getByTestId('brand-examples-section')).toBeVisible()
+    await page.getByTestId('brand-add-example').click()
+    await expect(page.getByTestId('brand-example-dialog')).toBeVisible()
+    await page.getByTestId('brand-example-content').fill('E2E example post with #hashtag and a clear CTA.')
+    await page.getByTestId('brand-example-notes').fill('Typischer Ankündigungs-Post')
+    await page.getByTestId('brand-example-submit').click()
+
+    await expect(page.getByTestId('brand-status-success')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('E2E example post with #hashtag and a clear CTA.')).toBeVisible()
   })
 
   test('can add a knowledge source', async ({ page }) => {
