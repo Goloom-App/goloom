@@ -178,6 +178,25 @@ export function useCreateKnowledgeSource() {
   })
 }
 
+export function useUpdateKnowledgeSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      teamId,
+      sourceId,
+      data,
+    }: {
+      teamId: string
+      sourceId: string
+      data: Parameters<ApiClient['updateKnowledgeSource']>[2]
+    }) => mapKnowledgeSource(await getApiClient().updateKnowledgeSource(teamId, sourceId, data)),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: [...teamKey(variables.teamId), 'knowledge-sources'] })
+      void queryClient.invalidateQueries({ queryKey: ['ai-context', variables.teamId] })
+    },
+  })
+}
+
 export function useDeleteKnowledgeSource() {
   const queryClient = useQueryClient()
   return useMutation({

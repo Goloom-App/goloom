@@ -1161,6 +1161,23 @@ export function createApiClient(options: ApiClientOptions) {
         body: JSON.stringify(payload),
       })
     },
+    updateKnowledgeSource(
+      teamID: string,
+      sourceID: string,
+      payload: {
+        type: 'text' | 'url' | 'file'
+        name: string
+        content?: string
+        source_url?: string
+        media_id?: string
+      },
+    ) {
+      return request<BackendKnowledgeSource>(options, `/v1/teams/${teamID}/knowledge-sources/${sourceID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify(payload),
+      })
+    },
     deleteKnowledgeSource(teamID: string, sourceID: string) {
       return request<void>(options, `/v1/teams/${teamID}/knowledge-sources/${sourceID}`, {
         method: 'DELETE',

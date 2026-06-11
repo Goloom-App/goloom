@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import {
   Bot,
   Eye,
@@ -8,11 +9,13 @@ import {
   MessageCircle,
   Minus,
   Plus,
+  RefreshCw,
   Save,
   Sparkles,
   Target,
   Trash2,
   Wand2,
+  X,
 } from 'lucide-react'
 
 import { ActionBar, SectionCard, Segmented, TagInput, ToggleSwitch } from '../../components/ui'
@@ -21,34 +24,55 @@ import {
   useUpsertTeamProfile,
   useKnowledgeSources,
   useCreateKnowledgeSource,
+  useUpdateKnowledgeSource,
   useDeleteKnowledgeSource,
   useTriggerAIJob,
   useAIJobs,
   useAIPromptPreview,
+  useStyleExamples,
+  useCreateStyleExample,
+  useDeleteStyleExample,
 } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
-import type { TeamRecord } from '../../types'
+import type { KnowledgeSource, TeamRecord } from '../../types'
 
 interface BrandProfileViewProps {
   team: TeamRecord
 }
+
+type ProfileTab = 'profile' | 'examples'
 
 function knowledgeIcon(type: 'text' | 'url' | 'file') {
   if (type === 'url') return <Globe size={16} />
   return <FileText size={16} />
 }
 
+function knowledgePreview(source: KnowledgeSource): string {
+  const snippet = source.content.trim().slice(0, 140)
+  if (source.type === 'url') {
+    const url = source.sourceUrl?.trim() || 'URL'
+    if (!snippet) return url
+    return `${url} · ${snippet}${source.content.length > 140 ? '…' : ''}`
+  }
+  return snippet + (source.content.length > 140 ? '…' : '')
+}
+
 export function BrandProfileView({ team }: BrandProfileViewProps) {
   const { data: profile, isLoading } = useTeamProfile(team.id)
   const { data: knowledgeSources } = useKnowledgeSources(team.id)
+  const { data: styleExamples, isLoading: examplesLoading } = useStyleExamples(team.id)
   const { data: jobs } = useAIJobs(team.id)
   const upsertProfile = useUpsertTeamProfile()
   const createKnowledge = useCreateKnowledgeSource()
+  const updateKnowledge = useUpdateKnowledgeSource()
   const deleteKnowledge = useDeleteKnowledgeSource()
+  const createExample = useCreateStyleExample()
+  const deleteExample = useDeleteStyleExample()
   const triggerJob = useTriggerAIJob()
   const promptPreview = useAIPromptPreview()
   useAIJobStream(team.id)
 
+  const [activeTab, setActiveTab] = useState<ProfileTab>('profile')
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
@@ -64,6 +88,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
   const [humorStyle, setHumorStyle] = useState('')
   const [preferredWords, setPreferredWords] = useState<string[]>([])
   const [signaturePhrases, setSignaturePhrases] = useState<string[]>([])
+  const [formattingRules, setFormattingRules] = useState<string[]>([])
   const [bannedWords, setBannedWords] = useState<string[]>([])
   const [antiAiOverride, setAntiAiOverride] = useState(false)
 
@@ -91,6 +116,12 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
   const [assistantJobId, setAssistantJobId] = useState<string | null>(null)
   const [assistantOpen, setAssistantOpen] = useState(false)
 
+  // Style examples
+  const [exampleDialogOpen, setExampleDialogOpen] = useState(false)
+  const [examplePlatform, setExamplePlatform] = useState('general')
+  const [exampleContent, setExampleContent] = useState('')
+  const [exampleNotes, setExampleNotes] = useState('')
+
   useEffect(() => {
     if (!profile) return
     const meta = profile.styleMetadata
@@ -103,6 +134,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
     setHumorStyle(meta.languageDna?.humorStyle ?? '')
     setPreferredWords(meta.languageDna?.preferredWords ?? [])
     setSignaturePhrases(meta.languageDna?.signaturePhrases ?? [])
+    setFormattingRules(meta.formattingRules ?? [])
     setAntiAiOverride(Boolean(meta.languageDna?.antiAiOverride))
     setBannedWords(meta.bannedWords ?? [])
     setHookStyle(meta.reachStrategy?.hookStyle ?? '')
@@ -150,6 +182,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
       if (dna.humor_style) setHumorStyle(String(dna.humor_style))
       if (Array.isArray(dna.preferred_words)) setPreferredWords(dna.preferred_words.map(String))
       if (Array.isArray(dna.signature_phrases)) setSignaturePhrases(dna.signature_phrases.map(String))
+      if (Array.isArray(proposed.formatting_rules)) setFormattingRules((proposed.formatting_rules as unknown[]).map(String))
       if (Array.isArray(proposed.banned_words)) setBannedWords((proposed.banned_words as unknown[]).map(String))
       if (reach.hook_style) setHookStyle(String(reach.hook_style))
       if (reach.cta_focus) setCtaFocus(String(reach.cta_focus))
@@ -174,7 +207,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
   }
 
   const buildStyleMetadata = () => ({
-    formatting_rules: profile?.styleMetadata.formattingRules ?? [],
+    formatting_rules: formattingRules,
     banned_words: bannedWords,
     max_hashtags: maxHashtags,
     preferred_language: preferredLanguage,
@@ -244,6 +277,26 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
     }
   }
 
+  const handleRefetchKnowledge = async (source: KnowledgeSource) => {
+    if (source.type !== 'url' || !source.sourceUrl?.trim()) return
+    setError(null)
+    try {
+      await updateKnowledge.mutateAsync({
+        teamId: team.id,
+        sourceId: source.id,
+        data: {
+          type: 'url',
+          name: source.name,
+          source_url: source.sourceUrl,
+          content: '',
+        },
+      })
+      setStatusMessage(`„${source.name}" neu von URL geladen`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'URL-Inhalt konnte nicht neu geladen werden')
+    }
+  }
+
   const handleAddKnowledge = async () => {
     if (!kbName.trim()) return
     setError(null)
@@ -261,6 +314,37 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
       setStatusMessage('Wissensquelle hinzugefügt')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Wissensquelle konnte nicht hinzugefügt werden')
+    }
+  }
+
+  const handleAddExample = async () => {
+    if (!exampleContent.trim()) return
+    setError(null)
+    try {
+      await createExample.mutateAsync({
+        teamId: team.id,
+        data: {
+          platform: examplePlatform,
+          content: exampleContent.trim(),
+          notes: exampleNotes.trim(),
+        },
+      })
+      setExampleContent('')
+      setExampleNotes('')
+      setExampleDialogOpen(false)
+      setStatusMessage('Beispieltext hinzugefügt')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Beispieltext konnte nicht hinzugefügt werden')
+    }
+  }
+
+  const handleDeleteExample = async (exampleId: string) => {
+    setError(null)
+    try {
+      await deleteExample.mutateAsync({ teamId: team.id, exampleId })
+      setStatusMessage('Beispieltext entfernt')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Beispieltext konnte nicht entfernt werden')
     }
   }
 
@@ -299,6 +383,20 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
         </div>
       )}
 
+      <div className="brand-profile-tabs">
+        <Segmented<ProfileTab>
+          value={activeTab}
+          options={[
+            { id: 'profile', label: 'Profil' },
+            { id: 'examples', label: 'Beispieltexte' },
+          ]}
+          onChange={setActiveTab}
+          testIdPrefix="brand-profile-tab"
+        />
+      </div>
+
+      {activeTab === 'profile' && (
+        <>
       {/* AI Assistant */}
       <SectionCard
         hero
@@ -442,6 +540,19 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
         </div>
 
         <div className="field">
+          <span>Formatting-Regeln</span>
+          <TagInput
+            values={formattingRules}
+            onChange={setFormattingRules}
+            placeholder="z. B. Max. 2 Emojis pro Post, kein Emoji pro Zeile"
+            testId="brand-formatting-rule"
+          />
+          <p className="brand-field__hint">
+            Konkrete Schreibregeln für Emoji, Satzbau und Stil — landen direkt im System-Prompt unter „Formatting rules".
+          </p>
+        </div>
+
+        <div className="field">
           <span>Zusätzlich verbotene Wörter</span>
           <TagInput values={bannedWords} onChange={setBannedWords} placeholder="z. B. branchenspezifische Hype-Wörter" testId="brand-banned-word" />
           <p className="brand-field__hint">Goloom blockt bereits typische KI-Phrasen („tauche ein", „spannend", „game-changer" …).</p>
@@ -530,19 +641,31 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
                 <span className="brand-knowledge-item__icon">{knowledgeIcon(source.type)}</span>
                 <div className="brand-knowledge-item__body">
                   <span className="brand-knowledge-item__name">{source.name}</span>
-                  <span className="brand-knowledge-item__meta">
-                    {source.type} · {source.content.slice(0, 100)}
-                    {source.content.length > 100 ? '…' : ''}
-                  </span>
+                  <span className="brand-knowledge-item__meta">{knowledgePreview(source)}</span>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--icon-sm"
-                  aria-label={`${source.name} entfernen`}
-                  onClick={() => void deleteKnowledge.mutateAsync({ teamId: team.id, sourceId: source.id })}
-                >
-                  <Trash2 size={14} />
-                </button>
+                <div className="brand-knowledge-item__actions">
+                  {source.type === 'url' && source.sourceUrl ? (
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--icon-sm"
+                      data-testid={`brand-knowledge-refetch-${source.id}`}
+                      aria-label={`${source.name} von URL neu laden`}
+                      title="Von URL neu laden"
+                      onClick={() => void handleRefetchKnowledge(source)}
+                      disabled={updateKnowledge.isPending}
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--icon-sm"
+                    aria-label={`${source.name} entfernen`}
+                    onClick={() => void deleteKnowledge.mutateAsync({ teamId: team.id, sourceId: source.id })}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -630,6 +753,118 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
           </p>
         )}
       </SectionCard>
+        </>
+      )}
+
+      {activeTab === 'examples' && (
+        <SectionCard
+          icon={<FileText size={18} />}
+          title="Beispieltexte"
+          subtitle="Referenz-Posts für den System-Prompt. Die KI orientiert sich am Stil — nicht am exakten Wortlaut."
+          testId="brand-examples-section"
+          headerExtra={
+            <Dialog.Root open={exampleDialogOpen} onOpenChange={setExampleDialogOpen}>
+              <Dialog.Trigger asChild>
+                <button type="button" className="btn btn--secondary btn--sm" data-testid="brand-add-example">
+                  <Plus size={14} /> Beispiel hinzufügen
+                </button>
+              </Dialog.Trigger>
+              <Dialog.Portal>
+                <Dialog.Overlay className="dialog-overlay" />
+                <Dialog.Content className="dialog-content" data-testid="brand-example-dialog">
+                  <div className="drawer-header">
+                    <Dialog.Title className="drawer-title">Beispieltext hinzufügen</Dialog.Title>
+                    <Dialog.Close asChild>
+                      <button type="button" className="btn btn--ghost btn--icon-sm" aria-label="Schließen">
+                        <X size={20} />
+                      </button>
+                    </Dialog.Close>
+                  </div>
+                  <div className="drawer-body stack">
+                    <label className="field">
+                      <span>Plattform</span>
+                      <select
+                        data-testid="brand-example-platform"
+                        value={examplePlatform}
+                        onChange={(e) => setExamplePlatform(e.target.value)}
+                      >
+                        <option value="general">Allgemein</option>
+                        <option value="mastodon">Mastodon</option>
+                        <option value="bluesky">Bluesky</option>
+                        <option value="friendica">Friendica</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Post-Text</span>
+                      <textarea
+                        data-testid="brand-example-content"
+                        rows={6}
+                        value={exampleContent}
+                        onChange={(e) => setExampleContent(e.target.value)}
+                        placeholder="Echten Post hier einfügen …"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Notiz (optional)</span>
+                      <input
+                        data-testid="brand-example-notes"
+                        value={exampleNotes}
+                        onChange={(e) => setExampleNotes(e.target.value)}
+                        placeholder="z. B. Typischer Livestream-Post"
+                      />
+                    </label>
+                    <div className="flex-row--end gap-2 mt-4">
+                      <Dialog.Close asChild>
+                        <button type="button" className="btn btn--ghost">
+                          Abbrechen
+                        </button>
+                      </Dialog.Close>
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        data-testid="brand-example-submit"
+                        onClick={() => void handleAddExample()}
+                        disabled={!exampleContent.trim() || createExample.isPending}
+                      >
+                        {createExample.isPending ? 'Speichern…' : 'Hinzufügen'}
+                      </button>
+                    </div>
+                  </div>
+                </Dialog.Content>
+              </Dialog.Portal>
+            </Dialog.Root>
+          }
+        >
+          {examplesLoading ? (
+            <p className="hint">Lade Beispieltexte…</p>
+          ) : (styleExamples ?? []).length === 0 ? (
+            <div className="brand-knowledge-empty">
+              Noch keine Beispieltexte — füge echte Posts hinzu, die deinen Stil zeigen.
+            </div>
+          ) : (
+            <div className="brand-examples-list">
+              {(styleExamples ?? []).map((example) => (
+                <div key={example.id} className="brand-example-item" data-testid={`brand-example-${example.id}`}>
+                  <div className="brand-example-item__header">
+                    <span className="brand-example-item__platform">{example.platform}</span>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--icon-sm"
+                      aria-label="Beispieltext entfernen"
+                      onClick={() => void handleDeleteExample(example.id)}
+                      disabled={deleteExample.isPending}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  <p className="brand-example-item__content">{example.content}</p>
+                  {example.notes ? <p className="brand-example-item__notes">{example.notes}</p> : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      )}
 
       <ActionBar
         right={

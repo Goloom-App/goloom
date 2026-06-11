@@ -5259,6 +5259,13 @@ select {
   white-space: nowrap;
 }
 
+.brand-knowledge-item__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
 .brand-knowledge-empty {
   padding: var(--space-4);
   text-align: center;
@@ -5267,6 +5274,59 @@ select {
   background: var(--surface);
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
+}
+
+.brand-profile-tabs {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.brand-examples-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.brand-example-item {
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.brand-example-item__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.brand-example-item__platform {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text-soft);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+
+.brand-example-item__content {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.brand-example-item__notes {
+  margin: var(--space-2) 0 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
 }
 
 /* --- Generated post preview ----------------------------------------- */

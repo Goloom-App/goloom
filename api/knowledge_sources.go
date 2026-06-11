@@ -6,15 +6,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 )
-
-var htmlTagPattern = regexp.MustCompile(`<[^>]+>`)
 
 func (a *API) handleListKnowledgeSources(w http.ResponseWriter, r *http.Request) {
 	items, err := a.store.ListKnowledgeSources(r.Context(), r.PathValue("teamID"))
@@ -123,7 +120,5 @@ func fetchURLText(ctx context.Context, rawURL string) (string, error) {
 		return "", errors.New("url fetch failed")
 	}
 
-	text := htmlTagPattern.ReplaceAllString(string(body), " ")
-	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
-	return strings.TrimSpace(text), nil
+	return extractReadableTextFromHTML(string(body)), nil
 }
