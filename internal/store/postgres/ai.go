@@ -530,13 +530,13 @@ func scanAIJob(row interface{ Scan(dest ...any) error }) (domain.AIJob, error) {
 
 func (s *Store) GetAIServiceConfig(ctx context.Context, teamID string) (domain.AIServiceConfig, error) {
 	const query = `
-		SELECT id, team_id, service_url, description, created_at
+		SELECT id, team_id, provider, model, base_url, api_key_ciphertext, description, created_at
 		FROM ai_service_configs
 		WHERE team_id = $1
 		ORDER BY created_at DESC
 		LIMIT 1
 	`
-	cfg, err := scanAIServiceConfig(s.pool.QueryRow(ctx, query, teamID))
+	cfg, err := s.scanAIServiceConfig(s.pool.QueryRow(ctx, query, teamID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.AIServiceConfig{}, fmt.Errorf("ai service config not found: %w", pgx.ErrNoRows)
@@ -547,22 +547,41 @@ func (s *Store) GetAIServiceConfig(ctx context.Context, teamID string) (domain.A
 }
 
 func (s *Store) UpsertAIServiceConfig(ctx context.Context, teamID string, input domain.AIServiceConfig) (domain.AIServiceConfig, error) {
+	apiKeyCiphertext := ""
+	if strings.TrimSpace(input.APIKey) != "" {
+		var encErr error
+		apiKeyCiphertext, encErr = s.encrypter.Encrypt(input.APIKey)
+		if encErr != nil {
+			return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: encrypt api key: %w", encErr)
+		}
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
+	// Empty API key on update keeps the stored key.
+	if apiKeyCiphertext == "" {
+		var existing string
+		err := tx.QueryRow(ctx, `SELECT api_key_ciphertext FROM ai_service_configs WHERE team_id = $1 ORDER BY created_at DESC LIMIT 1`, teamID).Scan(&existing)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: read existing key: %w", err)
+		}
+		apiKeyCiphertext = existing
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM ai_service_configs WHERE team_id = $1`, teamID); err != nil {
 		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: delete: %w", err)
 	}
 
 	const insertQuery = `
-		INSERT INTO ai_service_configs (team_id, service_url, description)
-		VALUES ($1, $2, $3)
-		RETURNING id, team_id, service_url, description, created_at
+		INSERT INTO ai_service_configs (team_id, provider, model, base_url, api_key_ciphertext, description)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, team_id, provider, model, base_url, api_key_ciphertext, description, created_at
 	`
-	cfg, err := scanAIServiceConfig(tx.QueryRow(ctx, insertQuery, teamID, input.ServiceURL, input.Description))
+	cfg, err := s.scanAIServiceConfig(tx.QueryRow(ctx, insertQuery, teamID, input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description))
 	if err != nil {
 		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: insert: %w", err)
 	}
@@ -573,13 +592,17 @@ func (s *Store) UpsertAIServiceConfig(ctx context.Context, teamID string, input 
 	return cfg, nil
 }
 
-func scanAIServiceConfig(row interface{ Scan(dest ...any) error }) (domain.AIServiceConfig, error) {
+func (s *Store) scanAIServiceConfig(row interface{ Scan(dest ...any) error }) (domain.AIServiceConfig, error) {
 	var cfg domain.AIServiceConfig
 	var teamID sql.NullString
+	var apiKeyCiphertext string
 	if err := row.Scan(
 		&cfg.ID,
 		&teamID,
-		&cfg.ServiceURL,
+		&cfg.Provider,
+		&cfg.Model,
+		&cfg.BaseURL,
+		&apiKeyCiphertext,
 		&cfg.Description,
 		&cfg.CreatedAt,
 	); err != nil {
@@ -587,6 +610,14 @@ func scanAIServiceConfig(row interface{ Scan(dest ...any) error }) (domain.AISer
 	}
 	if teamID.Valid {
 		cfg.TeamID = &teamID.String
+	}
+	if apiKeyCiphertext != "" {
+		apiKey, err := s.encrypter.Decrypt(apiKeyCiphertext)
+		if err != nil {
+			return domain.AIServiceConfig{}, fmt.Errorf("decrypt ai api key: %w", err)
+		}
+		cfg.APIKey = apiKey
+		cfg.APIKeySet = true
 	}
 	return cfg, nil
 }

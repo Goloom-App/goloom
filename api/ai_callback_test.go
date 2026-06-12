@@ -3,29 +3,45 @@ package api_test
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"testing"
 	"time"
 
+	"git.f4mily.net/goloom/api"
 	"git.f4mily.net/goloom/internal/auth"
+	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/i18n"
+	"git.f4mily.net/goloom/internal/provider"
 	sqlitestore "git.f4mily.net/goloom/internal/store/sqlite"
 	"github.com/google/uuid"
 )
 
-type aiCallbackFixture struct {
-	store  *sqlitestore.Store
-	h      http.Handler
-	bearer string
-	team   domain.Team
-	user   domain.User
+type aiCompletionFixture struct {
+	store *sqlitestore.Store
+	api   *api.API
+	team  domain.Team
+	user  domain.User
 }
 
-func newAICallbackFixture(t *testing.T, scopes ...string) aiCallbackFixture {
+func newAICompletionFixture(t *testing.T) aiCompletionFixture {
 	t.Helper()
 	ctx := context.Background()
 	s := newAICRUDStore(t)
-	h := newAICRUDHandler(t, s)
+
+	authSvc, err := auth.New(ctx, config.Config{}, s)
+	if err != nil {
+		t.Fatalf("auth.New: %v", err)
+	}
+	reg := provider.NewRegistry(
+		provider.NewBlueskyProvider(),
+		provider.NewFriendicaProvider(),
+		provider.NewMastodonProvider(provider.MastodonRegistrationConfig{}),
+	)
+	catalog, err := i18n.Load()
+	if err != nil {
+		t.Fatalf("i18n.Load: %v", err)
+	}
+	apiInstance := api.New(nil, s, authSvc, reg, config.Config{}, nil, catalog, nil, nil)
 
 	u, err := s.UpsertOIDCUser(ctx, "ai-cb-"+uuid.NewString(), "callback@example.test", "AI Callback")
 	if err != nil {
@@ -39,19 +55,10 @@ func newAICallbackFixture(t *testing.T, scopes ...string) aiCallbackFixture {
 	if _, err := s.UpdateTeam(ctx, team.ID, domain.UpdateTeamInput{Name: team.Name, IsAIEnabled: &enabled}); err != nil {
 		t.Fatal(err)
 	}
-
-	rawScopes, err := json.Marshal(scopes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "cb-token", nil, string(rawScopes), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return aiCallbackFixture{store: s, h: h, bearer: bearer, team: team, user: u}
+	return aiCompletionFixture{store: s, api: apiInstance, team: team, user: u}
 }
 
-func makeCallbackJob(t *testing.T, f aiCallbackFixture, status domain.AIJobStatus) domain.AIJob {
+func makeCallbackJob(t *testing.T, f aiCompletionFixture, status domain.AIJobStatus) domain.AIJob {
 	t.Helper()
 	job, err := f.store.CreateAIJob(context.Background(), domain.AIJob{
 		TeamID:       f.team.ID,
@@ -66,29 +73,13 @@ func makeCallbackJob(t *testing.T, f aiCallbackFixture, status domain.AIJobStatu
 	return job
 }
 
-func TestAICallback(t *testing.T) {
+func TestCompleteAIJob(t *testing.T) {
 	t.Run("UpdatesStatusNoAutoDraft", func(t *testing.T) {
 		ctx := context.Background()
-		f := newAICallbackFixture(t, auth.ScopeAIWriteDrafts)
+		f := newAICompletionFixture(t)
 		job := makeCallbackJob(t, f, domain.AIJobStatusPending)
 
-		rec := doRequest(t, f.h, http.MethodPost, "/v1/webhooks/ai-callback", f.bearer, map[string]any{
-			"job_id":        job.ID,
-			"status":        "completed",
-			"result":        map[string]any{"content": "hello"},
-			"error_message": "",
-		})
-		if rec.Code != http.StatusOK {
-			t.Fatalf("POST ai-callback: got %d; body: %s", rec.Code, rec.Body.String())
-		}
-
-		var resp map[string]bool
-		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-			t.Fatalf("decode response: %v", err)
-		}
-		if !resp["acknowledged"] {
-			t.Fatalf("acknowledged = false, want true")
-		}
+		f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"hello"}`), "")
 
 		updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
 		if err != nil {
@@ -107,9 +98,9 @@ func TestAICallback(t *testing.T) {
 		}
 	})
 
-	t.Run("AutoCreatesDraftOnCompletion", func(t *testing.T) {
+	t.Run("AutoCreatesPostOnCompletion", func(t *testing.T) {
 		ctx := context.Background()
-		f := newAICallbackFixture(t, auth.ScopeAIWriteDrafts)
+		f := newAICompletionFixture(t)
 
 		if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{
 			TeamID:             f.team.ID,
@@ -121,18 +112,15 @@ func TestAICallback(t *testing.T) {
 
 		job := makeCallbackJob(t, f, domain.AIJobStatusPending)
 		scheduledAt := time.Date(2027, 1, 15, 12, 0, 0, 0, time.UTC)
-
-		rec := doRequest(t, f.h, http.MethodPost, "/v1/webhooks/ai-callback", f.bearer, map[string]any{
-			"job_id": job.ID,
-			"status": "completed",
-			"result": map[string]any{
-				"content":      "AI-generated post content",
-				"scheduled_at": scheduledAt.Format(time.RFC3339),
-			},
+		result, err := json.Marshal(map[string]any{
+			"content":      "AI-generated post content",
+			"scheduled_at": scheduledAt.Format(time.RFC3339),
 		})
-		if rec.Code != http.StatusOK {
-			t.Fatalf("POST ai-callback auto-draft: got %d; body: %s", rec.Code, rec.Body.String())
+		if err != nil {
+			t.Fatal(err)
 		}
+
+		f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, result, "")
 
 		updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
 		if err != nil {
@@ -157,40 +145,21 @@ func TestAICallback(t *testing.T) {
 		}
 	})
 
-	t.Run("Returns401WhenNoAuth", func(t *testing.T) {
-		f := newAICallbackFixture(t, auth.ScopeAIWriteDrafts)
-		job := makeCallbackJob(t, f, domain.AIJobStatusPending)
-
-		rec := doRequest(t, f.h, http.MethodPost, "/v1/webhooks/ai-callback", "", map[string]any{
-			"job_id": job.ID,
-			"status": "completed",
-		})
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("expected 401, got %d; body: %s", rec.Code, rec.Body.String())
-		}
-	})
-
 	t.Run("IdempotentForTerminalJob", func(t *testing.T) {
 		ctx := context.Background()
-		f := newAICallbackFixture(t, auth.ScopeAIWriteDrafts)
+		f := newAICompletionFixture(t)
+
+		if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{
+			TeamID:             f.team.ID,
+			AutoPublishEnabled: true,
+			StyleMetadata:      domain.StyleMetadata{Tonality: "casual"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+
 		job := makeCallbackJob(t, f, domain.AIJobStatusCompleted)
 
-		rec := doRequest(t, f.h, http.MethodPost, "/v1/webhooks/ai-callback", f.bearer, map[string]any{
-			"job_id": job.ID,
-			"status": "completed",
-			"result": map[string]any{"content": "duplicate"},
-		})
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected 200 for duplicate callback, got %d; body: %s", rec.Code, rec.Body.String())
-		}
-
-		var resp map[string]bool
-		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-			t.Fatalf("decode response: %v", err)
-		}
-		if !resp["acknowledged"] {
-			t.Fatalf("acknowledged = false, want true")
-		}
+		f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"duplicate"}`), "")
 
 		refetched, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
 		if err != nil {
@@ -199,17 +168,32 @@ func TestAICallback(t *testing.T) {
 		if refetched.Status != domain.AIJobStatusCompleted {
 			t.Fatalf("job status changed unexpectedly: got %q", refetched.Status)
 		}
+
+		posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+		if err != nil {
+			t.Fatalf("ListTeamPosts: %v", err)
+		}
+		if len(posts) != 0 {
+			t.Fatalf("terminal job must not trigger side effects, got %d posts", len(posts))
+		}
 	})
 
-	t.Run("Returns404ForNonexistentJob", func(t *testing.T) {
-		f := newAICallbackFixture(t, auth.ScopeAIWriteDrafts)
+	t.Run("MarksJobFailed", func(t *testing.T) {
+		ctx := context.Background()
+		f := newAICompletionFixture(t)
+		job := makeCallbackJob(t, f, domain.AIJobStatusPending)
 
-		rec := doRequest(t, f.h, http.MethodPost, "/v1/webhooks/ai-callback", f.bearer, map[string]any{
-			"job_id": uuid.NewString(),
-			"status": "completed",
-		})
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("expected 404, got %d; body: %s", rec.Code, rec.Body.String())
+		f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusFailed, nil, "provider exploded")
+
+		updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
+		if err != nil {
+			t.Fatalf("GetAIJobByIDGlobal: %v", err)
+		}
+		if updated.Status != domain.AIJobStatusFailed {
+			t.Fatalf("job status = %q, want %q", updated.Status, domain.AIJobStatusFailed)
+		}
+		if updated.ErrorMessage != "provider exploded" {
+			t.Fatalf("error message = %q", updated.ErrorMessage)
 		}
 	})
 }

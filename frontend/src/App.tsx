@@ -26,6 +26,7 @@ import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admi
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { SettingsView } from './views/settings/SettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
+import { AIChatWidget } from './components/ai/AIChatWidget'
 import { BrandProfileView } from './views/ai/BrandProfileView'
 import { AIGeneratorView } from './views/ai/AIGeneratorView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
@@ -134,10 +135,11 @@ function App() {
   const [teamAiEnabled, setTeamAiEnabled] = useState(false)
   const [externalPostMonitorEnabled, setExternalPostMonitorEnabled] = useState(false)
   const [importOldPostsOpen, setImportOldPostsOpen] = useState(false)
-  const [teamTokenPlaintext, setTeamTokenPlaintext] = useState<string | null>(null)
-  const [teamTokenName, setTeamTokenName] = useState('')
-  const [teamAiServiceUrl, setTeamAiServiceUrl] = useState('')
-  const [teamAiServiceDesc, setTeamAiServiceDesc] = useState('')
+  const [teamAiProvider, setTeamAiProvider] = useState('openai')
+  const [teamAiModel, setTeamAiModel] = useState('')
+  const [teamAiBaseUrl, setTeamAiBaseUrl] = useState('')
+  const [teamAiApiKey, setTeamAiApiKey] = useState('')
+  const [teamAiKeySet, setTeamAiKeySet] = useState(false)
   const [adminAIEnabledTeams, setAdminAIEnabledTeams] = useState<BackendTeam[]>([])
   const [adminAIEnabledTeamsLoading, setAdminAIEnabledTeamsLoading] = useState(false)
   const [adminProviderDraft, setAdminProviderDraft] = useState<AdminProviderDraft>(() => defaultAdminProviderDraft())
@@ -1009,11 +1011,16 @@ function App() {
         description: selectedTeam.description ?? '',
         is_ai_enabled: teamAiEnabled,
       })
-      if (teamAiEnabled && teamAiServiceUrl.trim()) {
-        await api.upsertAIServiceConfig(selectedTeam.id, {
-          service_url: teamAiServiceUrl.trim(),
-          description: teamAiServiceDesc.trim() || 'ai service',
+      if (teamAiEnabled && (teamAiApiKey.trim() || teamAiKeySet)) {
+        const cfg = await api.upsertAIServiceConfig(selectedTeam.id, {
+          provider: teamAiProvider,
+          model: teamAiModel.trim(),
+          base_url: teamAiBaseUrl.trim(),
+          api_key: teamAiApiKey.trim(),
+          description: 'team llm',
         })
+        setTeamAiApiKey('')
+        setTeamAiKeySet(Boolean(cfg.api_key_set))
       }
       await loadDashboard({ silent: true })
     }, t('status.teamSettingsUpdated'))
@@ -1038,47 +1045,35 @@ function App() {
     }, t('status.teamSettingsUpdated'))
   }
 
-  async function handleCreateTeamApiToken() {
-    if (!api || !selectedTeam || !teamTokenName.trim()) {
-      return
-    }
-    const expEnd = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`)
-    if (!newApiTokenExpiresYmd.trim() || Number.isNaN(expEnd.getTime()) || expEnd.getTime() <= Date.now()) {
-      setError(t('settings.expiryHint'))
-      return
-    }
-    await runAction(async () => {
-      const expiresAt = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`).toISOString()
-      const res = await api.createMyApiToken({
-        name: teamTokenName.trim(),
-        expires_at: expiresAt,
-        scopes: ['ai:read:context', 'ai:write:drafts', 'ai:trigger:jobs'],
-        team_id: selectedTeam.id,
-      })
-      setTeamTokenPlaintext(res.token)
-      setTeamTokenName('')
-      const list = await api.listMyApiTokens()
-      setApiTokens(list.items ?? [])
-    }, t('status.apiTokenCreated'))
-  }
-
   async function handleSaveAiServiceConfig() {
     if (!api || !selectedTeam) return
     await runAction(async () => {
-      await api.upsertAIServiceConfig(selectedTeam.id, {
-        service_url: teamAiServiceUrl.trim(),
-        description: teamAiServiceDesc.trim() || 'ai service',
+      const cfg = await api.upsertAIServiceConfig(selectedTeam.id, {
+        provider: teamAiProvider,
+        model: teamAiModel.trim(),
+        base_url: teamAiBaseUrl.trim(),
+        api_key: teamAiApiKey.trim(),
+        description: 'team llm',
       })
+      setTeamAiApiKey('')
+      setTeamAiKeySet(Boolean(cfg.api_key_set))
       setStatusMessage(t('status.saved'))
     }, t('status.saved'))
   }
 
   useEffect(() => {
     if (!api || !selectedTeamId) return
+    setTeamAiProvider('openai')
+    setTeamAiModel('')
+    setTeamAiBaseUrl('')
+    setTeamAiApiKey('')
+    setTeamAiKeySet(false)
     api.getAIServiceConfig(selectedTeamId)
       .then((cfg) => {
-        setTeamAiServiceUrl(cfg.service_url ?? '')
-        setTeamAiServiceDesc(cfg.description ?? '')
+        setTeamAiProvider(cfg.provider || 'openai')
+        setTeamAiModel(cfg.model ?? '')
+        setTeamAiBaseUrl(cfg.base_url ?? '')
+        setTeamAiKeySet(Boolean(cfg.api_key_set))
       })
       .catch(() => {})
   }, [api, selectedTeamId])
@@ -1997,22 +1992,39 @@ function App() {
                   />
                   {teamAiEnabled ? (
                     <div className="stack stack--sm mt-1">
-                      <h4 className="subsection-title">{t('teams.aiServiceUrlTitle')}</h4>
-                      <p className="hint">{t('teams.aiServiceUrlHint')}</p>
+                      <h4 className="subsection-title">{t('teams.aiProviderTitle')}</h4>
+                      <p className="hint">{t('teams.aiProviderHint')}</p>
                       <label className="field">
-                        <span>{t('teams.aiServiceUrlLabel')}</span>
+                        <span>{t('teams.aiProviderLabel')}</span>
+                        <select value={teamAiProvider} onChange={(event) => setTeamAiProvider(event.target.value)}>
+                          <option value="openai">OpenAI</option>
+                          <option value="anthropic">Anthropic</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>{t('teams.aiModelLabel')}</span>
                         <input
-                          value={teamAiServiceUrl}
-                          onChange={(event) => setTeamAiServiceUrl(event.target.value)}
-                          placeholder="http://ai-service:8090"
+                          value={teamAiModel}
+                          onChange={(event) => setTeamAiModel(event.target.value)}
+                          placeholder={teamAiProvider === 'anthropic' ? 'claude-opus-4-8' : 'gpt-4o'}
                         />
                       </label>
                       <label className="field">
-                        <span>{t('common.description')}</span>
+                        <span>{t('teams.aiApiKeyLabel')}</span>
                         <input
-                          value={teamAiServiceDesc}
-                          onChange={(event) => setTeamAiServiceDesc(event.target.value)}
-                          placeholder="ai service"
+                          type="password"
+                          value={teamAiApiKey}
+                          onChange={(event) => setTeamAiApiKey(event.target.value)}
+                          placeholder={teamAiKeySet ? t('teams.aiApiKeyStored') : 'sk-…'}
+                          autoComplete="off"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>{t('teams.aiBaseUrlLabel')}</span>
+                        <input
+                          value={teamAiBaseUrl}
+                          onChange={(event) => setTeamAiBaseUrl(event.target.value)}
+                          placeholder={t('teams.aiBaseUrlPlaceholder')}
                         />
                       </label>
                     </div>
@@ -2022,7 +2034,7 @@ function App() {
                       type="button"
                       className="btn btn--primary"
                       onClick={() => void handleSavePersonalAiSettings()}
-                      disabled={syncing || (teamAiEnabled && !teamAiServiceUrl.trim())}
+                      disabled={syncing || (teamAiEnabled && !teamAiApiKey.trim() && !teamAiKeySet)}
                     >
                       {t('teams.saveChanges')}
                     </button>
@@ -2122,22 +2134,39 @@ function App() {
 
                   {teamAiEnabled && (
                     <div className="stack stack--sm mt-1">
-                      <h4 className="subsection-title">{t('teams.aiServiceUrlTitle')}</h4>
-                      <p className="hint">{t('teams.aiServiceUrlHint')}</p>
+                      <h4 className="subsection-title">{t('teams.aiProviderTitle')}</h4>
+                      <p className="hint">{t('teams.aiProviderHint')}</p>
                       <label className="field">
-                        <span>{t('teams.aiServiceUrlLabel')}</span>
+                        <span>{t('teams.aiProviderLabel')}</span>
+                        <select value={teamAiProvider} onChange={(event) => setTeamAiProvider(event.target.value)}>
+                          <option value="openai">OpenAI</option>
+                          <option value="anthropic">Anthropic</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>{t('teams.aiModelLabel')}</span>
                         <input
-                          value={teamAiServiceUrl}
-                          onChange={(event) => setTeamAiServiceUrl(event.target.value)}
-                          placeholder="http://ai-service:8000"
+                          value={teamAiModel}
+                          onChange={(event) => setTeamAiModel(event.target.value)}
+                          placeholder={teamAiProvider === 'anthropic' ? 'claude-opus-4-8' : 'gpt-4o'}
                         />
                       </label>
                       <label className="field">
-                        <span>{t('common.description')}</span>
+                        <span>{t('teams.aiApiKeyLabel')}</span>
                         <input
-                          value={teamAiServiceDesc}
-                          onChange={(event) => setTeamAiServiceDesc(event.target.value)}
-                          placeholder="ai service"
+                          type="password"
+                          value={teamAiApiKey}
+                          onChange={(event) => setTeamAiApiKey(event.target.value)}
+                          placeholder={teamAiKeySet ? t('teams.aiApiKeyStored') : 'sk-…'}
+                          autoComplete="off"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>{t('teams.aiBaseUrlLabel')}</span>
+                        <input
+                          value={teamAiBaseUrl}
+                          onChange={(event) => setTeamAiBaseUrl(event.target.value)}
+                          placeholder={t('teams.aiBaseUrlPlaceholder')}
                         />
                       </label>
                       <div>
@@ -2145,49 +2174,9 @@ function App() {
                           type="button"
                           className="btn btn--primary"
                           onClick={() => void handleSaveAiServiceConfig()}
-                          disabled={syncing || !teamAiServiceUrl.trim()}
+                          disabled={syncing || (!teamAiApiKey.trim() && !teamAiKeySet)}
                         >
-                          Save AI Service
-                        </button>
-                      </div>
-
-                      <hr className="divider" />
-
-                      <h4 className="subsection-title">Team API Token</h4>
-                      <p className="hint">
-                        This token is used by the AI service to authenticate against the goloom API for this team.
-                      </p>
-
-                      {teamTokenPlaintext ? (
-                        <div className="token-reveal">
-                          <p className="hint">Copy this token now — it won't be shown again.</p>
-                          <code className="token-reveal__value">{teamTokenPlaintext}</code>
-                          <button
-                            type="button"
-                            className="button button--secondary"
-                            onClick={() => setTeamTokenPlaintext(null)}
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      ) : null}
-
-                      <div className="flex-row--wrap">
-                        <label className="field min-w-12">
-                          <span>Token name</span>
-                          <input
-                            value={teamTokenName}
-                            onChange={(event) => setTeamTokenName(event.target.value)}
-                            placeholder="e.g. ai-service-prod"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="btn btn--primary"
-                          onClick={() => void handleCreateTeamApiToken()}
-                          disabled={syncing || !teamTokenName.trim()}
-                        >
-                          Create AI Token
+                          {t('teams.saveAiConfig')}
                         </button>
                       </div>
                     </div>
@@ -2370,6 +2359,15 @@ function App() {
           onOpenChange={setImportOldPostsOpen}
           accounts={teamAccounts}
           onImport={handleImportOldPosts}
+        />
+      )}
+
+      {api && selectedTeam?.isAiEnabled && (
+        <AIChatWidget
+          key={selectedTeam.id}
+          api={api}
+          teamId={selectedTeam.id}
+          onOpenInComposer={openComposerFromGeneratedContent}
         />
       )}
 

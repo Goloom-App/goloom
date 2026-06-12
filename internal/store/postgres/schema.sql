@@ -287,10 +287,19 @@ create table if not exists ai_jobs (
 create table if not exists ai_service_configs (
     id uuid primary key default gen_random_uuid(),
     team_id uuid references teams(id) on delete cascade,
-    service_url text not null,
+    provider text not null default 'openai',
+    model text not null default '',
+    base_url text not null default '',
+    api_key_ciphertext text not null default '',
     description text not null default '',
     created_at timestamptz not null default now()
 );
+
+alter table ai_service_configs add column if not exists provider text not null default 'openai';
+alter table ai_service_configs add column if not exists model text not null default '';
+alter table ai_service_configs add column if not exists base_url text not null default '';
+alter table ai_service_configs add column if not exists api_key_ciphertext text not null default '';
+alter table ai_service_configs drop column if exists service_url;
 
 create table if not exists rss_feed_configs (
     id uuid primary key default gen_random_uuid(),

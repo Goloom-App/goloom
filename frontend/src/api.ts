@@ -387,9 +387,32 @@ export interface BackendAITriggerResponse {
 export interface BackendAIServiceConfig {
   id: string
   team_id: string | null
-  service_url: string
+  provider: string
+  model: string
+  base_url: string
+  api_key_set: boolean
   description: string
   created_at: string
+}
+
+export interface BackendAIChatMention {
+  type: 'campaign' | 'recurring' | 'rss'
+  id: string
+  name: string
+}
+
+export interface BackendAIChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  mentions?: BackendAIChatMention[]
+}
+
+export interface BackendAIChatEvent {
+  type: 'status' | 'message' | 'tool_call' | 'tool_result' | 'error' | 'done'
+  message?: string
+  tool_name?: string
+  tool_args?: unknown
+  payload?: unknown
 }
 
 export interface BackendReviewQueueItem extends BackendPost {
@@ -1335,7 +1358,11 @@ export function createApiClient(options: ApiClientOptions) {
     upsertAIServiceConfig(
       teamID: string,
       payload: {
-        service_url: string
+        provider: string
+        model: string
+        base_url: string
+        // Write-only: empty keeps the stored key.
+        api_key: string
         description: string
       },
     ) {
@@ -1344,6 +1371,50 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token),
         body: JSON.stringify(payload),
       })
+    },
+    async streamAIChat(
+      teamID: string,
+      messages: BackendAIChatMessage[],
+      onEvent: (event: BackendAIChatEvent) => void,
+      signal?: AbortSignal,
+    ) {
+      const baseUrl = options.baseUrl.trim().replace(/\/$/, '')
+      const response = await fetch(`${baseUrl}/v1/teams/${teamID}/ai/chat`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify({ messages }),
+        signal,
+      })
+      if (!response.ok || !response.body) {
+        const message = await response.text().catch(() => '')
+        throw new ApiError(response.status, message || i18n.t('common.requestFailed', { status: response.status }))
+      }
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done) {
+          break
+        }
+        buffer += decoder.decode(value, { stream: true })
+        let separator = buffer.indexOf('\n\n')
+        while (separator !== -1) {
+          const chunk = buffer.slice(0, separator)
+          buffer = buffer.slice(separator + 2)
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data:')) {
+              continue
+            }
+            try {
+              onEvent(JSON.parse(line.slice(5).trim()) as BackendAIChatEvent)
+            } catch {
+              /* ignore malformed event */
+            }
+          }
+          separator = buffer.indexOf('\n\n')
+        }
+      }
     },
     getProactiveSettings(teamID: string) {
       return request<BackendProactiveTriggerSettings>(options, `/v1/teams/${teamID}/proactive-settings`, {

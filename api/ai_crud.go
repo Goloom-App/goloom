@@ -277,14 +277,39 @@ func (a *API) handleGetAIServiceConfig(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, cfg)
 }
 
+type aiServiceConfigRequest struct {
+	Provider    string `json:"provider"`
+	Model       string `json:"model"`
+	BaseURL     string `json:"base_url"`
+	Description string `json:"description"`
+	// APIKey is write-only: empty keeps the stored key.
+	APIKey string `json:"api_key"`
+}
+
 func (a *API) handleUpsertAIServiceConfig(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
-	var input domain.AIServiceConfig
+	var input aiServiceConfigRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
-	cfg, err := a.store.UpsertAIServiceConfig(r.Context(), teamID, input)
+	provider := strings.ToLower(strings.TrimSpace(input.Provider))
+	switch provider {
+	case "", "openai", "anthropic":
+	default:
+		a.writeError(w, r, "invalid_ai_provider", http.StatusBadRequest)
+		return
+	}
+	if provider == "" {
+		provider = "openai"
+	}
+	cfg, err := a.store.UpsertAIServiceConfig(r.Context(), teamID, domain.AIServiceConfig{
+		Provider:    provider,
+		Model:       strings.TrimSpace(input.Model),
+		BaseURL:     strings.TrimSpace(input.BaseURL),
+		Description: input.Description,
+		APIKey:      strings.TrimSpace(input.APIKey),
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -201,7 +201,10 @@ export interface AIJob {
 export interface AIServiceConfig {
   id: string
   teamId: string | null
-  serviceUrl: string
+  provider: string
+  model: string
+  baseUrl: string
+  apiKeySet: boolean
   description: string
   createdAt: string
 }

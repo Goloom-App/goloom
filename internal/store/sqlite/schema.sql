@@ -113,7 +113,10 @@ create table if not exists ai_jobs (
 create table if not exists ai_service_configs (
     id text primary key,
     team_id text references teams(id) on delete cascade,
-    service_url text not null,
+    provider text not null default 'openai',
+    model text not null default '',
+    base_url text not null default '',
+    api_key_ciphertext text not null default '',
     description text not null default '',
     created_at text not null default (datetime('now'))
 );

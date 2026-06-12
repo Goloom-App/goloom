@@ -313,11 +313,18 @@ type AIJob struct {
 	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
 }
 
+// AIServiceConfig stores the per-team LLM provider configuration. The API key
+// is encrypted at rest and never serialized in API responses; APIKeySet tells
+// clients whether a key is present.
 type AIServiceConfig struct {
 	ID          string    `json:"id"`
 	TeamID      *string   `json:"team_id,omitempty"`
-	ServiceURL  string    `json:"service_url"`
+	Provider    string    `json:"provider"`
+	Model       string    `json:"model"`
+	BaseURL     string    `json:"base_url"`
 	Description string    `json:"description"`
+	APIKey      string    `json:"-"`
+	APIKeySet   bool      `json:"api_key_set"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -459,6 +466,39 @@ type AIContext struct {
 
 const AIContextRecentPostsLimit = 50
 const AIContextUpcomingPostsLimit = 50
+
+type AIChatMessageRole string
+
+const (
+	AIChatMessageRoleUser      AIChatMessageRole = "user"
+	AIChatMessageRoleAssistant AIChatMessageRole = "assistant"
+	AIChatMessageRoleSystem    AIChatMessageRole = "system"
+	AIChatMessageRoleTool      AIChatMessageRole = "tool"
+)
+
+type AIChatMentionType string
+
+const (
+	AIChatMentionTypeCampaign  AIChatMentionType = "campaign"
+	AIChatMentionTypeRecurring AIChatMentionType = "recurring"
+	AIChatMentionTypeRSS        AIChatMentionType = "rss"
+)
+
+type AIChatMention struct {
+	Type AIChatMentionType `json:"type"`
+	ID   string            `json:"id"`
+	Name string            `json:"name"`
+}
+
+type AIChatMessage struct {
+	Role     AIChatMessageRole `json:"role"`
+	Content  string            `json:"content"`
+	Mentions []AIChatMention   `json:"mentions,omitempty"`
+}
+
+type AIChatRequest struct {
+	Messages []AIChatMessage `json:"messages"`
+}
 
 // MaxCharsForProvider returns the default character limit for a provider, honoring per-account overrides.
 func MaxCharsForProvider(provider string, override *int) int {

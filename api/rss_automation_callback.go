@@ -2,36 +2,36 @@ package api
 
 import (
 	"encoding/json"
-	"net/http"
+	"context"
 	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
 
-func (a *API) finishRSSAutomationFromAI(r *http.Request, job domain.AIJob, rawResult json.RawMessage, meta *rssAutomationMeta) {
+func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, rawResult json.RawMessage, meta *rssAutomationMeta) {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {
 		_ = json.Unmarshal(rawResult, &res)
 	}
 	content := strings.TrimSpace(res.Content)
 	if content == "" {
-		a.finishRSSAutomationFallback(r, job, meta)
+		a.finishRSSAutomationFallback(ctx, job, meta)
 		return
 	}
-	a.createRSSAutomationPost(r, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
+	a.createRSSAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
 }
 
-func (a *API) finishRSSAutomationFallback(r *http.Request, job domain.AIJob, meta *rssAutomationMeta) {
+func (a *API) finishRSSAutomationFallback(ctx context.Context, job domain.AIJob, meta *rssAutomationMeta) {
 	content := meta.FallbackContent
 	if content == "" {
 		return
 	}
-	a.createRSSAutomationPost(r, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
+	a.createRSSAutomationPost(ctx, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
 }
 
 func (a *API) createRSSAutomationPost(
-	r *http.Request,
+	ctx context.Context,
 	job domain.AIJob,
 	meta *rssAutomationMeta,
 	content string,
@@ -54,7 +54,7 @@ func (a *API) createRSSAutomationPost(
 		User: domain.User{ID: job.AuthorUserID},
 		Kind: "api_token",
 	}
-	post, err := a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
+	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, domain.CreatePostInput{
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
@@ -69,6 +69,6 @@ func (a *API) createRSSAutomationPost(
 	if err != nil {
 		return
 	}
-	_ = a.store.UpdateRSSImportedItemPostID(r.Context(), meta.FeedID, meta.ItemKey, post.ID)
-	_ = a.store.IncrementRSSFeedCounter(r.Context(), meta.FeedID)
+	_ = a.store.UpdateRSSImportedItemPostID(ctx, meta.FeedID, meta.ItemKey, post.ID)
+	_ = a.store.IncrementRSSFeedCounter(ctx, meta.FeedID)
 }

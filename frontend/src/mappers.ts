@@ -267,7 +267,10 @@ export function mapAIServiceConfig(raw: BackendAIServiceConfig): AIServiceConfig
   return {
     id: raw.id,
     teamId: raw.team_id,
-    serviceUrl: raw.service_url,
+    provider: raw.provider,
+    model: raw.model,
+    baseUrl: raw.base_url,
+    apiKeySet: Boolean(raw.api_key_set),
     description: raw.description,
     createdAt: raw.created_at,
   }

@@ -117,7 +117,7 @@ func Run(ctx context.Context) error {
 		}),
 	)
 
-	jobManager := aijobs.NewManager(dataStore, nil, cfg.PublicBaseURL)
+	jobManager := aijobs.NewManager(dataStore, nil)
 
 	schedulerService := scheduler.New(
 		logger,

@@ -497,15 +497,16 @@ func collectAIJobs(rows *sql.Rows) ([]domain.AIJob, error) {
 
 func (s *Store) GetAIServiceConfig(ctx context.Context, teamID string) (domain.AIServiceConfig, error) {
 	var (
-		cfg        domain.AIServiceConfig
-		teamIDNull sql.NullString
-		createdAt  string
+		cfg              domain.AIServiceConfig
+		teamIDNull       sql.NullString
+		apiKeyCiphertext string
+		createdAt        string
 	)
 	err := s.db.QueryRowContext(ctx, `
-		select id, team_id, service_url, description, created_at
+		select id, team_id, provider, model, base_url, api_key_ciphertext, description, created_at
 		from ai_service_configs
 		where team_id = ?`, teamID,
-	).Scan(&cfg.ID, &teamIDNull, &cfg.ServiceURL, &cfg.Description, &createdAt)
+	).Scan(&cfg.ID, &teamIDNull, &cfg.Provider, &cfg.Model, &cfg.BaseURL, &apiKeyCiphertext, &cfg.Description, &createdAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.AIServiceConfig{}, fmt.Errorf("ai service config not found: %w", sql.ErrNoRows)
@@ -516,12 +517,29 @@ func (s *Store) GetAIServiceConfig(ctx context.Context, teamID string) (domain.A
 		tid := teamIDNull.String
 		cfg.TeamID = &tid
 	}
+	if apiKeyCiphertext != "" {
+		apiKey, decErr := s.encrypter.Decrypt(apiKeyCiphertext)
+		if decErr != nil {
+			return domain.AIServiceConfig{}, fmt.Errorf("decrypt ai api key: %w", decErr)
+		}
+		cfg.APIKey = apiKey
+		cfg.APIKeySet = true
+	}
 	cfg.CreatedAt, err = parseTime(createdAt)
 	return cfg, err
 }
 
 func (s *Store) UpsertAIServiceConfig(ctx context.Context, teamID string, input domain.AIServiceConfig) (domain.AIServiceConfig, error) {
 	now := nowString()
+	apiKeyCiphertext := ""
+	if strings.TrimSpace(input.APIKey) != "" {
+		var encErr error
+		apiKeyCiphertext, encErr = s.encrypter.Encrypt(input.APIKey)
+		if encErr != nil {
+			return domain.AIServiceConfig{}, fmt.Errorf("encrypt ai api key: %w", encErr)
+		}
+	}
+
 	var existingID string
 	err := s.db.QueryRowContext(ctx, `select id from ai_service_configs where team_id = ?`, teamID).Scan(&existingID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -530,16 +548,24 @@ func (s *Store) UpsertAIServiceConfig(ctx context.Context, teamID string, input 
 	if errors.Is(err, sql.ErrNoRows) {
 		newID := uuid.NewString()
 		_, err = s.db.ExecContext(ctx, `
-			insert into ai_service_configs (id, team_id, service_url, description, created_at)
-			values (?, ?, ?, ?, ?)`,
-			newID, teamID, input.ServiceURL, input.Description, now,
+			insert into ai_service_configs (id, team_id, provider, model, base_url, api_key_ciphertext, description, created_at)
+			values (?, ?, ?, ?, ?, ?, ?, ?)`,
+			newID, teamID, input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description, now,
 		)
-	} else {
+	} else if apiKeyCiphertext != "" {
 		_, err = s.db.ExecContext(ctx, `
 			update ai_service_configs
-			set service_url = ?, description = ?
+			set provider = ?, model = ?, base_url = ?, api_key_ciphertext = ?, description = ?
 			where team_id = ?`,
-			input.ServiceURL, input.Description, teamID,
+			input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description, teamID,
+		)
+	} else {
+		// Empty API key on update keeps the stored key.
+		_, err = s.db.ExecContext(ctx, `
+			update ai_service_configs
+			set provider = ?, model = ?, base_url = ?, description = ?
+			where team_id = ?`,
+			input.Provider, input.Model, input.BaseURL, input.Description, teamID,
 		)
 	}
 	if err != nil {

@@ -482,32 +482,42 @@ func TestAIServiceConfigUpsert(t *testing.T) {
 	}
 
 	cfg, err := s.UpsertAIServiceConfig(ctx, team.ID, domain.AIServiceConfig{
-		ServiceURL:  "http://ai.example:8080",
+		Provider:    "openai",
+		Model:       "gpt-4o",
+		APIKey:      "secret-key-1",
 		Description: "Main AI backend",
 	})
 	if err != nil {
 		t.Fatalf("UpsertAIServiceConfig: %v", err)
 	}
-	if cfg.ServiceURL != "http://ai.example:8080" {
-		t.Fatalf("ServiceURL: got %q", cfg.ServiceURL)
+	if cfg.Provider != "openai" || cfg.Model != "gpt-4o" {
+		t.Fatalf("provider/model: got %q/%q", cfg.Provider, cfg.Model)
+	}
+	if !cfg.APIKeySet || cfg.APIKey != "secret-key-1" {
+		t.Fatalf("api key roundtrip: set=%v key=%q", cfg.APIKeySet, cfg.APIKey)
 	}
 
+	// Empty APIKey on update keeps the stored key.
 	cfg2, err := s.UpsertAIServiceConfig(ctx, team.ID, domain.AIServiceConfig{
-		ServiceURL:  "http://ai2.example:8080",
+		Provider:    "anthropic",
+		Model:       "claude-opus-4-8",
 		Description: "Updated backend",
 	})
 	if err != nil {
 		t.Fatalf("UpsertAIServiceConfig update: %v", err)
 	}
-	if cfg2.ServiceURL != "http://ai2.example:8080" {
-		t.Fatalf("ServiceURL after update: got %q", cfg2.ServiceURL)
+	if cfg2.Provider != "anthropic" || cfg2.Model != "claude-opus-4-8" {
+		t.Fatalf("provider/model after update: got %q/%q", cfg2.Provider, cfg2.Model)
+	}
+	if !cfg2.APIKeySet || cfg2.APIKey != "secret-key-1" {
+		t.Fatalf("api key should be kept: set=%v key=%q", cfg2.APIKeySet, cfg2.APIKey)
 	}
 
 	got, err := s.GetAIServiceConfig(ctx, team.ID)
 	if err != nil {
 		t.Fatalf("GetAIServiceConfig: %v", err)
 	}
-	if got.ServiceURL != "http://ai2.example:8080" {
-		t.Fatalf("GetAIServiceConfig ServiceURL: got %q", got.ServiceURL)
+	if got.Provider != "anthropic" || !got.APIKeySet {
+		t.Fatalf("GetAIServiceConfig: got provider %q, key set %v", got.Provider, got.APIKeySet)
 	}
 }

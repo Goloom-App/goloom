@@ -297,7 +297,6 @@ Caveman (ultra):
 
 | Child | Scope | Parent-owned rules |
 |---|---|---|
-| [`ai-service/AGENTS.md`](ai-service/AGENTS.md) | Python FastAPI microservice for AI content generation | LLM adapters, prompt templates, job workers |
 | [`frontend/AGENTS.md`](frontend/AGENTS.md) | React SPA (Vite, TypeScript, PWA) embedded in Go binary | Build output contract: `internal/webui/dist`, API proxy config |
 | [`internal/AGENTS.md`](internal/AGENTS.md) | Go core packages — all business logic | Package dependency graph, bootstrap sequence, shared concerns (config, logging, store interface) |
 | [`internal/auth/AGENTS.md`](internal/auth/AGENTS.md) | Auth, authorization, OIDC, feature flags | Security-critical: middleware chains, scope definitions, bootstrap token lifecycle |
@@ -336,4 +335,3 @@ Caveman (ultra):
 - `go.mod` / `go.sum` — Go module definition
 - `redocly.yaml` — Redocly API docs config
 - `renovate.json` — Dependency update automation
-- `pyrightconfig.json` — Python type checking config

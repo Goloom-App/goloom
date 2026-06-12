@@ -75,6 +75,11 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 			unique (feed_id, item_key)
 		)`,
 		`create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id)`,
+		`alter table ai_service_configs add column provider text not null default 'openai'`,
+		`alter table ai_service_configs add column model text not null default ''`,
+		`alter table ai_service_configs add column base_url text not null default ''`,
+		`alter table ai_service_configs add column api_key_ciphertext text not null default ''`,
+		`alter table ai_service_configs drop column service_url`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)
@@ -327,7 +332,7 @@ func sqliteIgnoreDuplicateColumn(err error) bool {
 		return true
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "duplicate column") || strings.Contains(msg, "already exists")
+	return strings.Contains(msg, "duplicate column") || strings.Contains(msg, "already exists") || strings.Contains(msg, "no such column")
 }
 
 func (s *Store) EnsurePersonalTeam(ctx context.Context, userID string) (domain.Team, error) {

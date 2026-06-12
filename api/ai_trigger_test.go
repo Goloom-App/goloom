@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -17,28 +16,38 @@ import (
 )
 
 type aiTriggerFixture struct {
-	store  *sqlitestore.Store
-	h      http.Handler
-	bearer string
-	team   domain.Team
-	user   domain.User
+	store   *sqlitestore.Store
+	h       http.Handler
+	bearer  string
+	team    domain.Team
+	user    domain.User
+	manager *aijobs.Manager
 }
 
-type failingTransport struct {
-	err error
+// fakeRunner executes AI jobs without an LLM provider.
+type fakeRunner struct {
+	result json.RawMessage
+	err    error
+	ran    chan domain.AIJob
 }
 
-func (t failingTransport) Dispatch(context.Context, domain.AIJob, string) error {
-	return t.err
+func (r *fakeRunner) RunJob(_ context.Context, job domain.AIJob, _ domain.AIServiceConfig, _ domain.AIContext) (json.RawMessage, error) {
+	if r.ran != nil {
+		select {
+		case r.ran <- job:
+		default:
+		}
+	}
+	return r.result, r.err
 }
 
-func newAITriggerFixture(t *testing.T, transport aijobs.Transport, scopes ...string) aiTriggerFixture {
+func newAITriggerFixture(t *testing.T, runner aijobs.Runner, scopes ...string) aiTriggerFixture {
 	t.Helper()
 	ctx := context.Background()
 	s := newAICRUDStore(t)
 	var jobManager *aijobs.Manager
-	if transport != nil {
-		jobManager = aijobs.NewManager(s, transport, "http://goloom.test")
+	if runner != nil {
+		jobManager = aijobs.NewManager(s, runner)
 	}
 	h := newAICRUDHandlerWithManager(t, s, jobManager)
 
@@ -63,24 +72,27 @@ func newAITriggerFixture(t *testing.T, transport aijobs.Transport, scopes ...str
 		t.Fatal(err)
 	}
 
-	return aiTriggerFixture{store: s, h: h, bearer: bearer, team: team, user: u}
+	return aiTriggerFixture{store: s, h: h, bearer: bearer, team: team, user: u, manager: jobManager}
+}
+
+func upsertTestLLMConfig(t *testing.T, s *sqlitestore.Store, teamID string) {
+	t.Helper()
+	if _, err := s.UpsertAIServiceConfig(context.Background(), teamID, domain.AIServiceConfig{
+		Provider:    "openai",
+		Model:       "gpt-test",
+		APIKey:      "test-api-key",
+		Description: "test",
+	}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestAITrigger(t *testing.T) {
 	t.Run("Creates202WithJobID", func(t *testing.T) {
 		ctx := context.Background()
-		dispatched := make(chan struct{}, 1)
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer r.Body.Close()
-			dispatched <- struct{}{}
-			w.WriteHeader(http.StatusAccepted)
-		}))
-		defer server.Close()
-
-		fixture := newAITriggerFixture(t, nil, auth.ScopeAITriggerJobs)
-		if _, err := fixture.store.UpsertAIServiceConfig(ctx, fixture.team.ID, domain.AIServiceConfig{ServiceURL: server.URL, Description: "test"}); err != nil {
-			t.Fatal(err)
-		}
+		runner := &fakeRunner{result: json.RawMessage(`{"content":"hello"}`), ran: make(chan domain.AIJob, 1)}
+		fixture := newAITriggerFixture(t, runner, auth.ScopeAITriggerJobs)
+		upsertTestLLMConfig(t, fixture.store, fixture.team.ID)
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{
 			"type":   domain.AIJobTypeVoiceEngine,
@@ -105,10 +117,11 @@ func TestAITrigger(t *testing.T) {
 		}
 
 		select {
-		case <-dispatched:
+		case <-runner.ran:
 		case <-time.After(time.Second):
-			t.Fatal("expected AI dispatch request")
+			t.Fatal("expected in-process AI job execution")
 		}
+		fixture.manager.Wait()
 
 		job, err := fixture.store.GetAIJobByID(ctx, fixture.team.ID, got.JobID)
 		if err != nil {
@@ -120,11 +133,14 @@ func TestAITrigger(t *testing.T) {
 		if job.Type != domain.AIJobTypeVoiceEngine {
 			t.Fatalf("type = %q, want %q", job.Type, domain.AIJobTypeVoiceEngine)
 		}
+		if job.Status != domain.AIJobStatusCompleted {
+			t.Fatalf("stored status = %q, want %q", job.Status, domain.AIJobStatusCompleted)
+		}
 	})
 
 	t.Run("Returns422WhenNoConfig", func(t *testing.T) {
 		ctx := context.Background()
-		fixture := newAITriggerFixture(t, nil, auth.ScopeAITriggerJobs)
+		fixture := newAITriggerFixture(t, &fakeRunner{}, auth.ScopeAITriggerJobs)
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{
 			"type":   domain.AIJobTypeCampaignAutopilot,
@@ -238,21 +254,18 @@ func TestAITrigger(t *testing.T) {
 		}
 	})
 
-	t.Run("Returns202WhenServiceUnreachable", func(t *testing.T) {
+	t.Run("MarksJobFailedWhenProviderErrors", func(t *testing.T) {
 		ctx := context.Background()
-		transport := failingTransport{err: errors.New("dial tcp 127.0.0.1:1: connect: connection refused")}
-		fixture := newAITriggerFixture(t, transport, auth.ScopeAITriggerJobs)
-
-		if _, err := fixture.store.UpsertAIServiceConfig(ctx, fixture.team.ID, domain.AIServiceConfig{ServiceURL: "http://127.0.0.1:1", Description: "unreachable"}); err != nil {
-			t.Fatal(err)
-		}
+		runner := &fakeRunner{err: errors.New("llm api error: status 401")}
+		fixture := newAITriggerFixture(t, runner, auth.ScopeAITriggerJobs)
+		upsertTestLLMConfig(t, fixture.store, fixture.team.ID)
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{
 			"type":   domain.AIJobTypeProactiveTrigger,
 			"params": map[string]any{"source": "rss"},
 		})
 		if rec.Code != http.StatusAccepted {
-			t.Fatalf("POST ai-trigger unreachable: got %d; body: %s", rec.Code, rec.Body.String())
+			t.Fatalf("POST ai-trigger failing runner: got %d; body: %s", rec.Code, rec.Body.String())
 		}
 
 		var got struct {
@@ -268,6 +281,8 @@ func TestAITrigger(t *testing.T) {
 		if got.Status != domain.AIJobStatusPending {
 			t.Fatalf("response status = %q, want %q", got.Status, domain.AIJobStatusPending)
 		}
+
+		fixture.manager.Wait()
 
 		job, err := fixture.store.GetAIJobByID(ctx, fixture.team.ID, got.JobID)
 		if err != nil {

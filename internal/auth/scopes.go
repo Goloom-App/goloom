@@ -13,6 +13,7 @@ const (
 	ScopeAIReadContext = "ai:read:context"
 	ScopeAIWriteDrafts = "ai:write:drafts"
 	ScopeAITriggerJobs = "ai:trigger:jobs"
+	ScopeAIChat        = "ai:chat"
 )
 
 func PrincipalFromContext(ctx context.Context) *domain.AuthenticatedPrincipal {

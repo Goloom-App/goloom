@@ -1,6 +1,6 @@
 APP_NAME := goloom
 
-.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-install website-dev website-build website-screenshots ai-service-build ai-service-run ai-service-test
+.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-install website-dev website-build website-screenshots
 
 fmt:
 	go fmt ./...
@@ -63,12 +63,3 @@ website-build: docs-api-build
 	pnpm --dir website build
 	mkdir -p website/dist/docs/api-reference
 	cp docs/api/dist/index.html website/dist/docs/api-reference/index.html
-
-ai-service-build:
-	cd ai-service && uv sync --dev
-
-ai-service-run:
-	cd ai-service && uv run uvicorn app.main:app --host 0.0.0.0 --port 8090
-
-ai-service-test:
-	cd ai-service && uv run python -m pytest tests/ -v

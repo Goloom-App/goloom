@@ -2,22 +2,16 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"net/http"
 	"strings"
 	"time"
 
-	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 )
 
-type aiCallbackRequest struct {
-	JobID        string             `json:"job_id"`
-	Status       domain.AIJobStatus `json:"status"`
-	Result       json.RawMessage    `json:"result"`
-	ErrorMessage string             `json:"error_message"`
-}
-
+// aiCallbackResult is the shape of completed AI job results consumed by the
+// completion side effects below.
 type aiCallbackResult struct {
 	Title                  string            `json:"title"`
 	Content                string            `json:"content"`
@@ -26,109 +20,63 @@ type aiCallbackResult struct {
 	AccountContentOverride map[string]string `json:"account_content_override"`
 }
 
-func (a *API) handleAICallback(w http.ResponseWriter, r *http.Request) {
-	var input aiCallbackRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+// CompleteAIJob implements aijobs.Completer: it persists the final job status
+// and applies completion side effects (automation finishing, auto publishing,
+// SSE updates).
+func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJobStatus, result json.RawMessage, errorMessage string) {
+	if status != domain.AIJobStatusCompleted && status != domain.AIJobStatusFailed {
 		return
 	}
 
-	if strings.TrimSpace(input.JobID) == "" {
-		a.writeError(w, r, "job_id_required", http.StatusBadRequest)
-		return
-	}
-	if input.Status != domain.AIJobStatusCompleted && input.Status != domain.AIJobStatusFailed {
-		a.writeError(w, r, "invalid_status", http.StatusBadRequest)
-		return
-	}
-
-	job, err := a.store.GetAIJobByIDGlobal(r.Context(), input.JobID)
+	job, err := a.store.GetAIJobByIDGlobal(ctx, jobID)
 	if err != nil {
-		a.writeError(w, r, "ai_job_not_found", http.StatusNotFound)
+		a.log.ErrorContext(ctx, "ai job completion: job not found", "job_id", jobID, "error", err)
 		return
 	}
-
 	if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed {
-		auth.WriteJSON(w, http.StatusOK, map[string]bool{"acknowledged": true})
 		return
 	}
 
 	var resultBytes []byte
-	if len(input.Result) > 0 {
-		resultBytes = []byte(input.Result)
+	if len(result) > 0 {
+		resultBytes = []byte(result)
 	}
-	if err := a.store.UpdateAIJobStatus(r.Context(), job.ID, input.Status, resultBytes, input.ErrorMessage); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, resultBytes, errorMessage); err != nil {
+		a.log.ErrorContext(ctx, "ai job completion: update status failed", "job_id", jobID, "error", err)
 		return
 	}
 
-	updatedJob, err := a.store.GetAIJobByIDGlobal(r.Context(), job.ID)
+	updatedJob, err := a.store.GetAIJobByIDGlobal(ctx, job.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.log.ErrorContext(ctx, "ai job completion: reload job failed", "job_id", jobID, "error", err)
 		return
 	}
 
-	if input.Status == domain.AIJobStatusCompleted {
+	if status == domain.AIJobStatusCompleted {
 		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRSSAutomationFromAI(r, job, input.Result, meta)
+			a.finishRSSAutomationFromAI(ctx, job, result, meta)
 		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRecurringAutomationFromAI(r, job, input.Result, meta)
+			a.finishRecurringAutomationFromAI(ctx, job, result, meta)
 		} else {
-			profile, profErr := a.store.GetTeamProfile(r.Context(), job.TeamID)
+			profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 			if profErr == nil && profile.AutoPublishEnabled {
-				a.autoCreatePostFromCallbackResult(r, job, input.Result)
+				a.autoCreatePostFromCallbackResult(ctx, job, result)
 			}
 		}
-	} else if input.Status == domain.AIJobStatusFailed {
+	} else {
 		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRSSAutomationFallback(r, job, meta)
+			a.finishRSSAutomationFallback(ctx, job, meta)
 		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRecurringAutomationFallback(r, job, meta)
+			a.finishRecurringAutomationFallback(ctx, job, meta)
 		}
 	}
 
 	if event, evErr := aiJobStreamEvent(updatedJob); evErr == nil {
 		a.hub.Publish(job.TeamID, event)
 	}
-
-	auth.WriteJSON(w, http.StatusOK, map[string]bool{"acknowledged": true})
 }
 
-func (a *API) autoCreateDraftFromCallbackResult(r *http.Request, job domain.AIJob, rawResult json.RawMessage) {
-	var res aiCallbackResult
-	if len(rawResult) > 0 {
-		_ = json.Unmarshal(rawResult, &res)
-	}
-
-	content := strings.TrimSpace(res.Content)
-	if content == "" {
-		return
-	}
-
-	targetAccounts := targetAccountIDsFromJobPayload(job.Payload)
-	if len(targetAccounts) == 0 {
-		return
-	}
-	overrides := domain.NormalizeAccountContentOverride(res.AccountContentOverride, targetAccounts)
-
-	principal := domain.AuthenticatedPrincipal{
-		User: domain.User{ID: job.AuthorUserID},
-		Kind: "api_token",
-	}
-
-	_, _ = a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
-		Title:                  strings.TrimSpace(res.Title),
-		Content:                content,
-		TargetAccounts:         targetAccounts,
-		AccountContentOverride: overrides,
-		ScheduledAt:            time.Now().UTC(),
-		Draft:                  true,
-		AuthorUserID:           &job.AuthorUserID,
-		UseVersions:            len(overrides) > 0,
-	})
-}
-
-func (a *API) autoCreatePostFromCallbackResult(r *http.Request, job domain.AIJob, rawResult json.RawMessage) {
+func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {
 		_ = json.Unmarshal(rawResult, &res)
@@ -155,7 +103,7 @@ func (a *API) autoCreatePostFromCallbackResult(r *http.Request, job domain.AIJob
 		Kind: "api_token",
 	}
 
-	_, _ = a.store.CreateScheduledPost(r.Context(), job.TeamID, principal, domain.CreatePostInput{
+	_, _ = a.store.CreateScheduledPost(ctx, job.TeamID, principal, domain.CreatePostInput{
 		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,

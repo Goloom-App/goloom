@@ -49,14 +49,17 @@ type destinationInfo struct {
 }
 
 func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner, catalog *i18n.Catalog, jobManager *aijobs.Manager, hub *sse.Hub) *API {
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
 	if jobManager == nil {
-		jobManager = aijobs.NewManager(store, nil, cfg.PublicBaseURL)
+		jobManager = aijobs.NewManager(store, nil)
 	}
 	if hub == nil {
 		hub = sse.NewHub()
 	}
 
-	return &API{
+	api := &API{
 		log:         logger,
 		store:       store,
 		auth:        authService,
@@ -67,6 +70,9 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		jobManager:  jobManager,
 		hub:         hub,
 	}
+	// AI jobs execute in-process; the API applies their completion side effects.
+	jobManager.SetCompleter(api)
+	return api
 }
 
 func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.Handler {
@@ -176,12 +182,12 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/ai-context", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIReadContext)(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIContext))))))
 	mux.Handle("POST /v1/teams/{teamID}/posts/draft", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIWriteDrafts)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAIDraft))))))
 	mux.Handle("POST /v1/teams/{teamID}/ai-trigger", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAITriggerJobs)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAITrigger))))))
+	mux.Handle("POST /v1/teams/{teamID}/ai/chat", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIChat)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIChat))))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAIJobs)))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/{jobID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIJob)))))
 	mux.Handle("POST /v1/teams/{teamID}/ai-jobs/{jobID}/cancel", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAITriggerJobs)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCancelAIJob))))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/stream", a.auth.AcceptQueryToken("token")(a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIJobStream))))))
 	mux.Handle("GET /v1/admin/ai-enabled-teams", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminListAIEnabledTeams))))
-	mux.Handle("POST /v1/webhooks/ai-callback", a.auth.RequireAuth(auth.RequireScope(auth.ScopeAIWriteDrafts)(http.HandlerFunc(a.handleAICallback))))
 
 	chain := security.CORSMiddleware(allowedOrigins)(limiter.Middleware(mux))
 	if a.log != nil {

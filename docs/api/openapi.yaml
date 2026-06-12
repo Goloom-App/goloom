@@ -893,29 +893,34 @@ paths:
                 $ref: "#/components/schemas/ProactiveTriggerSettings"
         "400":
           $ref: "#/components/responses/BadRequest"
-  /v1/webhooks/ai-callback:
+  /v1/teams/{teamID}/ai/chat:
     post:
       tags: [AI]
-      summary: AI job callback webhook
-      description: Receives asynchronous job results from the AI service. No auth required.
-      security: []
+      summary: AI chat assistant (SSE)
+      description: |
+        Streams an AI assistant conversation as Server-Sent Events. The
+        assistant can call tools that create drafts, campaign formats, and
+        automations for the team. Requires the `ai:chat` scope and a
+        configured team LLM provider.
+      parameters:
+        - $ref: "#/components/parameters/teamID"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AICallbackRequest"
+              $ref: "#/components/schemas/AIChatRequest"
       responses:
         "200":
-          description: Callback acknowledged
+          description: SSE stream of chat events
           content:
-            application/json:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/AICallbackResponse"
+                type: string
         "400":
           $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Team LLM provider not configured
   /v1/admin/ai-enabled-teams:
     get:
       tags: [Admin]
@@ -1584,10 +1589,17 @@ components:
         team_id:
           type: string
           format: uuid
-
-        service_url:
+        provider:
+          type: string
+          enum: [openai, anthropic]
+        model:
+          type: string
+        base_url:
           type: string
           format: uri
+        api_key_set:
+          type: boolean
+          description: Whether an API key is stored. The key itself is never returned.
         description:
           type: string
         created_at:
@@ -1595,13 +1607,53 @@ components:
           format: date-time
     UpsertAIServiceConfigInput:
       type: object
-      required: [service_url]
       properties:
-        service_url:
+        provider:
+          type: string
+          enum: [openai, anthropic]
+        model:
+          type: string
+          description: Provider model id; empty uses the provider default.
+        base_url:
           type: string
           format: uri
+          description: Optional API base URL override.
+        api_key:
+          type: string
+          description: Write-only. Empty keeps the stored key.
         description:
           type: string
+    AIChatMention:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [campaign, recurring, rss]
+        id:
+          type: string
+        name:
+          type: string
+    AIChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        mentions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AIChatMention"
+    AIChatRequest:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/AIChatMessage"
     ExternalPostMonitorSettings:
       type: object
       properties:
@@ -1686,21 +1738,3 @@ components:
           format: uuid
         metadata:
           type: object
-    AICallbackRequest:
-      type: object
-      required: [job_id, status]
-      properties:
-        job_id:
-          type: string
-          format: uuid
-        status:
-          $ref: "#/components/schemas/AIJobStatus"
-        result:
-          type: object
-        error_message:
-          type: string
-    AICallbackResponse:
-      type: object
-      properties:
-        acknowledged:
-          type: boolean

@@ -1,12 +1,10 @@
 package api
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
 	"net/http"
-	"strings"
 
+	"git.f4mily.net/goloom/internal/ai"
 	"git.f4mily.net/goloom/internal/auth"
 )
 
@@ -27,19 +25,7 @@ func (a *API) handleAIPromptPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	config, err := a.store.GetAIServiceConfig(r.Context(), teamID)
-	if err != nil {
-		a.writeError(w, r, "ai_service_not_configured", http.StatusUnprocessableEntity)
-		return
-	}
-
 	aiContext, err := a.store.GetTeamAIContext(r.Context(), teamID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	contextRaw, err := json.Marshal(aiContext)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -51,44 +37,22 @@ func (a *API) handleAIPromptPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload, err := json.Marshal(map[string]any{
-		"context": json.RawMessage(contextRaw),
-		"params":  enrichedParams,
+	platform := "mastodon"
+	var platformProbe struct {
+		Platform string `json:"platform"`
+	}
+	if err := json.Unmarshal(enrichedParams, &platformProbe); err == nil && platformProbe.Platform != "" {
+		platform = platformProbe.Platform
+	}
+
+	generationPrompt, err := ai.BuildGenerationPromptFromParams(aiContext, enrichedParams, platform)
+	if err != nil {
+		a.writeError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	auth.WriteJSON(w, http.StatusOK, aiPromptPreviewResponse{
+		SystemPrompt:     ai.BuildSystemPrompt(aiContext),
+		GenerationPrompt: generationPrompt,
 	})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	serviceURL := strings.TrimRight(strings.TrimSpace(config.ServiceURL), "/")
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, serviceURL+"/api/v1/prompt-preview", bytes.NewReader(payload))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		a.writeError(w, r, "ai_service_unavailable", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if resp.StatusCode != http.StatusOK {
-		a.writeError(w, r, "ai_service_unavailable", http.StatusBadGateway)
-		return
-	}
-
-	var preview aiPromptPreviewResponse
-	if err := json.Unmarshal(body, &preview); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	auth.WriteJSON(w, http.StatusOK, preview)
 }
