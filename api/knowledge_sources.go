@@ -1,13 +1,9 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
@@ -93,32 +89,3 @@ func (a *API) handleDeleteKnowledgeSource(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func fetchURLText(ctx context.Context, rawURL string) (string, error) {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" {
-		return "", errors.New("source_url is required")
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "goloom-knowledge-fetch/1.0")
-
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", errors.New("url fetch failed")
-	}
-
-	return extractReadableTextFromHTML(string(body)), nil
-}

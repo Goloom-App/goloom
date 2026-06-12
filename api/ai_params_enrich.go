@@ -27,6 +27,16 @@ func enrichAIJobParams(ctx context.Context, raw json.RawMessage) (json.RawMessag
 		}
 	}
 
+	pageURL := strings.TrimSpace(stringParam(params["source_url"]))
+	if pageURL == "" {
+		pageURL = strings.TrimSpace(stringParam(params["sourceUrl"]))
+	}
+	if pageURL != "" {
+		if err := enrichParamsFromWebPage(ctx, params, pageURL); err != nil {
+			return nil, fmt.Errorf("source_url_fetch_failed: %w", err)
+		}
+	}
+
 	out, err := json.Marshal(params)
 	if err != nil {
 		return raw, err

@@ -127,7 +127,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
     }
     if (occasionType === 'url') {
       params.source_url = sourceUrl.trim()
-      params.source_content = sourceContent.trim()
+      if (sourceContent.trim()) params.source_content = sourceContent.trim()
       if (occasion.trim()) params.occasion = occasion.trim()
     }
     if (occasionType === 'rss') {
@@ -152,10 +152,6 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
     if (occasionType === 'url') {
       if (!sourceUrl.trim()) {
         setError('Bitte eine URL angeben')
-        return
-      }
-      if (!sourceContent.trim()) {
-        setError('Bitte Quelltext einfügen — die KI ruft die Seite nicht automatisch ab')
         return
       }
     } else if (occasionType === 'rss') {
@@ -304,17 +300,17 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
                 placeholder="https://example.com/artikel"
               />
               <p className="brand-field__hint">
-                Link für den fertigen Post. Die KI lädt die Seite nicht selbst — Inhalt unten einfügen.
+                Seiteninhalt wird beim Generieren automatisch geladen (wie beim RSS-Feed).
               </p>
             </label>
             <label className="field">
-              <span>Quelltext</span>
+              <span>Quelltext (optional)</span>
               <textarea
                 data-testid="gen-source-content"
                 rows={6}
                 value={sourceContent}
                 onChange={(e) => setSourceContent(e.target.value)}
-                placeholder="Text von der Seite hier einfügen: Titel, Kernaussagen, Zitate, Zahlen …"
+                placeholder="Optional: eigenen Text einfügen — überschreibt den automatisch geladenen Inhalt."
               />
             </label>
             <label className="field">

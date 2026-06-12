@@ -164,7 +164,7 @@ def test_web_page_source_uses_url_and_pasted_content():
     assert "PAGE SOURCE" in prompt
     assert "https://example.com/sale" in prompt
     assert "20% auf alles" in prompt
-    assert "Do not fetch or guess" in prompt
+    assert "do not invent details" in prompt.lower()
     assert "Editorial direction: Kurzer Teaser mit Link." in prompt
 
 

@@ -32,6 +32,31 @@ var contentSelectors = []string{
 	"main", "article", "[role='main']", ".content", "#content", ".post", ".entry-content", "body",
 }
 
+// ExtractPageTitle returns og:title or the document <title> when present.
+func ExtractPageTitle(html string) string {
+	html = strings.TrimSpace(html)
+	if html == "" {
+		return ""
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return ""
+	}
+
+	if title, ok := doc.Find(`meta[property="og:title"]`).Attr("content"); ok {
+		if cleaned := strings.TrimSpace(title); cleaned != "" {
+			return cleaned
+		}
+	}
+	if title, ok := doc.Find(`meta[name="twitter:title"]`).Attr("content"); ok {
+		if cleaned := strings.TrimSpace(title); cleaned != "" {
+			return cleaned
+		}
+	}
+	return strings.TrimSpace(doc.Find("title").First().Text())
+}
+
 // ExtractReadableText returns visible text without scripts, styles, or markup noise.
 func ExtractReadableText(html string) string {
 	html = strings.TrimSpace(html)

@@ -5,6 +5,16 @@ import (
 	"testing"
 )
 
+func TestExtractPageTitle_prefersOpenGraph(t *testing.T) {
+	html := `<html><head>
+<meta property="og:title" content="OG Title"/>
+<title>HTML Title</title>
+</head><body></body></html>`
+	if got := ExtractPageTitle(html); got != "OG Title" {
+		t.Fatalf("ExtractPageTitle = %q, want OG Title", got)
+	}
+}
+
 func TestExtractReadableText_stripsScriptsAndKeepsArticle(t *testing.T) {
 	html := `<html><head><title>x</title><script>alert(1)</script></head>
 <body><article><h1>Episode 42</h1><p>We talk about <strong>WireGuard</strong> and self-hosting.</p></article></body></html>`

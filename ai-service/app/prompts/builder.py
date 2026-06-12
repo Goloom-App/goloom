@@ -393,19 +393,22 @@ class PromptBuilder:
     def _web_page_source_section(self, params: dict) -> str:
         source_url = str(params.get("source_url") or params.get("sourceUrl") or "").strip()
         source_content = str(params.get("source_content") or params.get("existing_content") or "").strip()
+        page_title = str(params.get("page_title") or "").strip()
         lines = [
             "PAGE SOURCE (primary factual basis — every specific claim must come from here):",
         ]
         if source_url:
             lines.append(f"Link: {source_url}")
+        if page_title:
+            lines.append(f"Title: {page_title}")
         if source_content:
             lines.append(f"Content:\n---\n{source_content}\n---")
         elif source_url:
             lines.append(
-                "No page content was provided — keep claims minimal and do not invent article body text."
+                "Page content could not be extracted — keep claims minimal and do not invent article body text."
             )
         lines.append(
-            "Use the link above in the post. Do not fetch or guess additional page content beyond what was provided."
+            "Use the link above in the post. Base claims only on the title/content above — do not invent details."
         )
         return "\n".join(lines)
 
@@ -603,6 +606,7 @@ class PromptBuilder:
             "existing_content",
             "source_url",
             "sourceUrl",
+            "page_title",
             "post_skeleton",
             "rss_feed_url",
             "refine_content",

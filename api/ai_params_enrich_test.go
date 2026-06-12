@@ -52,3 +52,68 @@ func TestEnrichAIJobParams_fetchesLatestRSSItem(t *testing.T) {
 		t.Fatalf("content = %q", content)
 	}
 }
+
+func TestEnrichAIJobParams_fetchesWebPageWhenSourceContentMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<!doctype html><html><head>
+<title>Summer Sale</title>
+<meta property="og:title" content="20% Summer Sale"/>
+</head><body><main><p>20% off everything until Sunday.</p></main></body></html>`))
+	}))
+	defer server.Close()
+
+	raw, err := json.Marshal(map[string]any{
+		"source_url": server.URL,
+		"occasion":   "Short teaser with link.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	enriched, err := enrichAIJobParams(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(enriched, &params); err != nil {
+		t.Fatal(err)
+	}
+	content := stringParam(params["source_content"])
+	if !strings.Contains(content, "20% off everything") {
+		t.Fatalf("content = %q", content)
+	}
+	if params["page_title"] != "20% Summer Sale" {
+		t.Fatalf("page_title = %v", params["page_title"])
+	}
+}
+
+func TestEnrichAIJobParams_keepsManualSourceContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("fetch should be skipped when source_content is provided")
+	}))
+	defer server.Close()
+
+	raw, err := json.Marshal(map[string]any{
+		"source_url":      server.URL,
+		"source_content":  "Manual pasted notes.",
+		"occasion":        "Teaser.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	enriched, err := enrichAIJobParams(context.Background(), raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal(enriched, &params); err != nil {
+		t.Fatal(err)
+	}
+	if params["source_content"] != "Manual pasted notes." {
+		t.Fatalf("source_content = %v", params["source_content"])
+	}
+}
