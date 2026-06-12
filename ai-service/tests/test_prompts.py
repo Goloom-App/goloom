@@ -148,6 +148,47 @@ def test_inject_few_shot_appends_examples():
     assert "Keep the CTA subtle." in prompt
 
 
+def test_web_page_source_uses_url_and_pasted_content():
+    builder = PromptBuilder()
+
+    prompt = builder.build_generation_prompt(
+        sample_context(),
+        {
+            "occasion": "Kurzer Teaser mit Link.",
+            "source_url": "https://example.com/sale",
+            "source_content": "Sommer-Sale: 20% auf alles bis Sonntag.",
+        },
+        "bluesky",
+    )
+
+    assert "PAGE SOURCE" in prompt
+    assert "https://example.com/sale" in prompt
+    assert "20% auf alles" in prompt
+    assert "Do not fetch or guess" in prompt
+    assert "Editorial direction: Kurzer Teaser mit Link." in prompt
+
+
+def test_rss_supplemental_source_text():
+    builder = PromptBuilder()
+
+    prompt = builder.build_generation_prompt(
+        sample_context(),
+        {
+            "occasion": "Neue Folge bewerben.",
+            "rss_article_title": "Folge 300: WireGuard",
+            "rss_article_content": "Wir sprechen über WireGuard.",
+            "rss_article_link": "https://example.com/300",
+            "source_content": "Zusatz: Live-Chat ab 20 Uhr.",
+        },
+        "mastodon",
+    )
+
+    assert "RSS ITEM" in prompt
+    assert "Additional provided source text" in prompt
+    assert "Live-Chat ab 20 Uhr" in prompt
+    assert "RSS post skeleton" not in prompt
+
+
 def test_rss_source_material_prioritizes_show_notes_over_skeleton():
     builder = PromptBuilder()
 

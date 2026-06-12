@@ -8,6 +8,7 @@ import {
   useAIJobs,
   useCancelAIJob,
   useAIPromptPreview,
+  useCampaignFormats,
 } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
@@ -53,6 +54,7 @@ const OCCASION_TYPES: { id: 'text' | 'url' | 'rss'; label: string }[] = [
 
 export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGeneratorViewProps) {
   const { data: profile } = useTeamProfile(team.id)
+  const { data: formats } = useCampaignFormats(team.id)
   const { data: jobs } = useAIJobs(team.id)
   const triggerJob = useTriggerAIJob()
   const cancelJob = useCancelAIJob()
@@ -64,8 +66,11 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
 
   // Task input
   const [occasion, setOccasion] = useState('')
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [sourceContent, setSourceContent] = useState('')
   const [rssFeedUrl, setRssFeedUrl] = useState('')
   const [occasionType, setOccasionType] = useState<'text' | 'url' | 'rss'>('text')
+  const [campaignFormatId, setCampaignFormatId] = useState('')
   const [outputFormat, setOutputFormat] = useState<AIOutputFormat>('post')
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
@@ -120,11 +125,17 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
       mood_adjustments: moodAdjustments,
       platform: accounts.find((a) => selectedAccounts.includes(a.id))?.provider ?? 'mastodon',
     }
-    if (occasionType === 'url') params.source_url = occasion.trim()
+    if (occasionType === 'url') {
+      params.source_url = sourceUrl.trim()
+      params.source_content = sourceContent.trim()
+      if (occasion.trim()) params.occasion = occasion.trim()
+    }
     if (occasionType === 'rss') {
       params.rss_feed_url = rssFeedUrl.trim()
+      if (sourceContent.trim()) params.source_content = sourceContent.trim()
       params.occasion = occasion.trim()
     }
+    if (campaignFormatId) params.campaign_format_id = campaignFormatId
     if (refine && latestVoiceResult?.result?.content) {
       params.refine_content = true
       params.source_content = String(latestVoiceResult.result.content)
@@ -138,7 +149,16 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
 
   const handleGenerate = async () => {
     setError(null)
-    if (occasionType === 'rss') {
+    if (occasionType === 'url') {
+      if (!sourceUrl.trim()) {
+        setError('Bitte eine URL angeben')
+        return
+      }
+      if (!sourceContent.trim()) {
+        setError('Bitte Quelltext einfügen — die KI ruft die Seite nicht automatisch ab')
+        return
+      }
+    } else if (occasionType === 'rss') {
       if (!rssFeedUrl.trim()) {
         setError('Bitte RSS-Feed-URL angeben')
         return
@@ -272,7 +292,43 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
             testIdPrefix="gen-occasion-type"
           />
         </div>
-        {occasionType === 'rss' ? (
+        {occasionType === 'url' ? (
+          <>
+            <label className="field">
+              <span>URL</span>
+              <input
+                data-testid="gen-source-url"
+                type="url"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                placeholder="https://example.com/artikel"
+              />
+              <p className="brand-field__hint">
+                Link für den fertigen Post. Die KI lädt die Seite nicht selbst — Inhalt unten einfügen.
+              </p>
+            </label>
+            <label className="field">
+              <span>Quelltext</span>
+              <textarea
+                data-testid="gen-source-content"
+                rows={6}
+                value={sourceContent}
+                onChange={(e) => setSourceContent(e.target.value)}
+                placeholder="Text von der Seite hier einfügen: Titel, Kernaussagen, Zitate, Zahlen …"
+              />
+            </label>
+            <label className="field">
+              <span>Anweisung (optional)</span>
+              <textarea
+                data-testid="gen-occasion"
+                rows={3}
+                value={occasion}
+                onChange={(e) => setOccasion(e.target.value)}
+                placeholder="z. B. Teaser mit Hook, Fokus auf den Hauptnutzen, Frage ans Publikum."
+              />
+            </label>
+          </>
+        ) : occasionType === 'rss' ? (
           <>
             <label className="field">
               <span>RSS-Feed-URL</span>
@@ -284,36 +340,60 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
                 placeholder="https://example.com/feed.xml"
               />
               <p className="brand-field__hint">
-                Es wird der neueste Eintrag aus dem Feed geladen — Titel, Link und Inhalt landen im Prompt.
+                Optional: neuester Feed-Eintrag wird geladen. Bei Problemen Quelltext manuell ergänzen.
               </p>
+            </label>
+            <label className="field">
+              <span>Quelltext (optional)</span>
+              <textarea
+                data-testid="gen-source-content"
+                rows={6}
+                value={sourceContent}
+                onChange={(e) => setSourceContent(e.target.value)}
+                placeholder="Show Notes, Artikeltext oder Stichpunkte — ergänzt oder ersetzt den Feed-Inhalt."
+              />
             </label>
             <label className="field">
               <span>Anweisung</span>
               <textarea
                 data-testid="gen-occasion"
-                rows={4}
+                rows={3}
                 value={occasion}
                 onChange={(e) => setOccasion(e.target.value)}
-                placeholder="z. B. Neuen Eintrag bewerben, Titel nennen, 2–3 konkrete Punkte aus dem Inhalt hervorheben."
+                placeholder="z. B. Neuen Eintrag bewerben, Titel nennen, 2–3 konkrete Punkte hervorheben."
               />
             </label>
           </>
         ) : (
           <label className="field">
-            <span>{occasionType === 'text' ? 'Beschreibung des Anlasses' : 'URL'}</span>
+            <span>Beschreibung des Anlasses</span>
             <textarea
               data-testid="gen-occasion"
               rows={4}
               value={occasion}
               onChange={(e) => setOccasion(e.target.value)}
-              placeholder={
-                occasionType === 'text'
-                  ? 'Worum geht es? Was ist neu, was willst du teilen?'
-                  : 'https://…'
-              }
+              placeholder="Worum geht es? Was ist neu, was willst du teilen?"
             />
           </label>
         )}
+        <label className="field">
+          <span>Campaign-Format (optional)</span>
+          <select
+            data-testid="gen-campaign-format"
+            value={campaignFormatId}
+            onChange={(e) => setCampaignFormatId(e.target.value)}
+          >
+            <option value="">Kein Campaign-Format</option>
+            {(formats ?? []).filter((f) => f.isActive).map((format) => (
+              <option key={format.id} value={format.id}>
+                {format.name}
+              </option>
+            ))}
+          </select>
+          <p className="brand-field__hint">
+            Struktur und Pflicht-Hashtags aus dem Campaign-Format werden in den Prompt übernommen.
+          </p>
+        </label>
         <div className="field">
           <span>Format</span>
           <Segmented

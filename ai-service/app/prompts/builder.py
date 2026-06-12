@@ -387,8 +387,33 @@ class PromptBuilder:
             )
         return f"{header}\n---\n{source_content}\n---\n{rules}"
 
+    def _has_web_page_source(self, params: dict) -> bool:
+        return bool(str(params.get("source_url") or params.get("sourceUrl") or "").strip())
+
+    def _web_page_source_section(self, params: dict) -> str:
+        source_url = str(params.get("source_url") or params.get("sourceUrl") or "").strip()
+        source_content = str(params.get("source_content") or params.get("existing_content") or "").strip()
+        lines = [
+            "PAGE SOURCE (primary factual basis — every specific claim must come from here):",
+        ]
+        if source_url:
+            lines.append(f"Link: {source_url}")
+        if source_content:
+            lines.append(f"Content:\n---\n{source_content}\n---")
+        elif source_url:
+            lines.append(
+                "No page content was provided — keep claims minimal and do not invent article body text."
+            )
+        lines.append(
+            "Use the link above in the post. Do not fetch or guess additional page content beyond what was provided."
+        )
+        return "\n".join(lines)
+
     def _source_material(self, params: dict, context: dict | None = None) -> list[str]:
         sections: list[str] = []
+
+        if self._has_web_page_source(params):
+            sections.append(self._web_page_source_section(params))
 
         rss_title = str(params.get("rss_article_title") or "").strip()
         rss_link = str(params.get("rss_article_link") or "").strip()
@@ -412,14 +437,17 @@ class PromptBuilder:
 
         skeleton = str(params.get("post_skeleton") or "").strip()
         source_content = str(params.get("source_content") or params.get("existing_content") or "").strip()
-        if not skeleton and source_content and self._has_rss_source(params):
-            skeleton = source_content
         if skeleton and self._has_rss_source(params):
             sections.append(
                 "RSS post skeleton (optional layout/CTA hints only — not factual content):\n"
                 f"---\n{skeleton}\n---"
             )
-        elif source_content:
+        elif source_content and self._has_rss_source(params):
+            sections.append(
+                "Additional provided source text (supplements the RSS item; keep RSS title/link authoritative):\n"
+                f"---\n{source_content}\n---"
+            )
+        elif source_content and not self._has_web_page_source(params):
             if self._recurring_post_kind(params) in {"announcement", "main"}:
                 sections.append(self._recurring_template_source(source_content, context or {}))
             else:
@@ -520,6 +548,17 @@ class PromptBuilder:
                 editorial = value.strip()
                 break
 
+        if self._has_web_page_source(params):
+            base = (
+                "Write a social post based on the provided page link and content below.\n"
+                "- Use the link from the source material in the post.\n"
+                "- Every specific claim must come from the provided content text.\n"
+                "- Do not invent facts, quotes, or details not supported by the source."
+            )
+            if editorial:
+                return f"{base}\n\nEditorial direction: {editorial}"
+            return base
+
         if self._has_rss_source(params):
             base = (
                 "Write a new social post based on the RSS feed item below.\n"
@@ -562,6 +601,8 @@ class PromptBuilder:
             "remove_marketing_speak",
             "source_content",
             "existing_content",
+            "source_url",
+            "sourceUrl",
             "post_skeleton",
             "rss_feed_url",
             "refine_content",
