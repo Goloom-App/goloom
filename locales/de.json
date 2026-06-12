@@ -369,7 +369,13 @@
       "allPlatforms": "Alle Plattformen",
       "days30": "30 Tage",
       "days90": "90 Tage",
-      "days365": "365 Tage"
+      "days365": "365 Tage",
+      "insightDistinctTags": "Verschiedene Hashtags",
+      "insightTotalUses": "Verwendungen gesamt",
+      "insightAvgPerPost": "Ø Hashtags pro Beitrag",
+      "insightPostsWithTags": "Beiträge mit Hashtags",
+      "insightEngagementWith": "Ø Interaktionen mit Hashtags",
+      "insightEngagementWithout": "Ø Interaktionen ohne Hashtags"
     },
     "accounts": {
       "connectedTitle": "Verbundene Konten",

@@ -35,6 +35,7 @@ type Store interface {
 	ReplacePostHashtags(ctx context.Context, postID, accountID string, tags []hashtag.Tag) error
 	BackfillPostHashtags(ctx context.Context) error
 	ListTeamHashtagPerformance(ctx context.Context, teamID string, days int, provider string, limit int) ([]domain.HashtagPerformance, error)
+	GetTeamHashtagInsights(ctx context.Context, teamID string, days int, provider string) (domain.HashtagInsights, error)
 
 	// TeamProfile methods
 	CreateTeamProfile(ctx context.Context, teamID string, input domain.TeamProfile) (domain.TeamProfile, error)

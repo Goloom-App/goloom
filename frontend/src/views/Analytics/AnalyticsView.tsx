@@ -8,6 +8,7 @@ import { Icon } from '../../icons'
 import type {
   BackendAccountGrowthPoint,
   BackendEngagementHeatmapBucket,
+  BackendHashtagInsights,
   BackendHashtagPerformance,
   BackendMetricHistoryPoint,
   BackendPostAnalyticsListRow,
@@ -163,7 +164,7 @@ export function AnalyticsView({
   fetchChart: (opts: { metric: string; days?: number }) => Promise<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>
   fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
   fetchPostMetrics?: (postId: string) => Promise<{ items: BackendPostMetric[] }>
-  fetchHashtags?: (opts?: { days?: number; provider?: string; limit?: number }) => Promise<{ items: BackendHashtagPerformance[] }>
+  fetchHashtags?: (opts?: { days?: number; provider?: string; limit?: number }) => Promise<{ items: BackendHashtagPerformance[]; insights?: BackendHashtagInsights }>
   fetchHeatmap?: (opts?: { days?: number }) => Promise<{ buckets: BackendEngagementHeatmapBucket[] }>
 }) {
   const { t } = useTranslation()
@@ -180,6 +181,7 @@ export function AnalyticsView({
   const [postMetricsLoading, setPostMetricsLoading] = useState(false)
   const [heatmapBuckets, setHeatmapBuckets] = useState<BackendEngagementHeatmapBucket[]>([])
   const [hashtags, setHashtags] = useState<BackendHashtagPerformance[]>([])
+  const [hashtagInsights, setHashtagInsights] = useState<BackendHashtagInsights | null>(null)
   const [hashtagProvider, setHashtagProvider] = useState<string>('all')
   const [hashtagDays, setHashtagDays] = useState<number>(90)
   const [hashtagsLoading, setHashtagsLoading] = useState(false)
@@ -333,11 +335,13 @@ export function AnalyticsView({
       .then((res) => {
         if (!cancelled) {
           setHashtags(res.items ?? [])
+          setHashtagInsights(res.insights ?? null)
         }
       })
       .catch(() => {
         if (!cancelled) {
           setHashtags([])
+          setHashtagInsights(null)
         }
       })
       .finally(() => {
@@ -561,8 +565,6 @@ export function AnalyticsView({
               </div>
             </section>
           </div>
-
-          {fetchHeatmap ? <ActivityHeatmapPanel buckets={heatmapBuckets} /> : null}
         </div>
       )}
 
@@ -639,6 +641,8 @@ export function AnalyticsView({
               )
             })}
           </div>
+
+          {fetchHeatmap ? <ActivityHeatmapPanel buckets={heatmapBuckets} /> : null}
         </div>
       )}
 
@@ -661,6 +665,46 @@ export function AnalyticsView({
             </div>
           </div>
           <p className="hint">{t('analytics.hashtagPerformanceHint')}</p>
+          {hashtagInsights && hashtagInsights.posts_total > 0 ? (
+            <ul className="analytics-delta-grid">
+              <li className="analytics-delta-card">
+                <span className="analytics-delta-card__metric">{t('analytics.insightDistinctTags')}</span>
+                <span className="analytics-delta-card__total">{hashtagInsights.distinct_tags.toLocaleString()}</span>
+              </li>
+              <li className="analytics-delta-card">
+                <span className="analytics-delta-card__metric">{t('analytics.insightTotalUses')}</span>
+                <span className="analytics-delta-card__total">{hashtagInsights.total_tag_uses.toLocaleString()}</span>
+              </li>
+              <li className="analytics-delta-card">
+                <span className="analytics-delta-card__metric">{t('analytics.insightAvgPerPost')}</span>
+                <span className="analytics-delta-card__total">
+                  {hashtagInsights.avg_tags_per_post.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                </span>
+              </li>
+              <li className="analytics-delta-card">
+                <span className="analytics-delta-card__metric">{t('analytics.insightPostsWithTags')}</span>
+                <span className="analytics-delta-card__total">
+                  {hashtagInsights.posts_with_tags.toLocaleString()}
+                  <span className="hint"> / {hashtagInsights.posts_total.toLocaleString()}</span>
+                </span>
+                <span className="analytics-delta-card__delta">
+                  {Math.round((hashtagInsights.posts_with_tags / hashtagInsights.posts_total) * 100)}%
+                </span>
+              </li>
+              <li className="analytics-delta-card">
+                <span className="analytics-delta-card__metric">{t('analytics.insightEngagementWith')}</span>
+                <span className="analytics-delta-card__total">
+                  {hashtagInsights.avg_engagement_with_tags.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                </span>
+              </li>
+              <li className="analytics-delta-card">
+                <span className="analytics-delta-card__metric">{t('analytics.insightEngagementWithout')}</span>
+                <span className="analytics-delta-card__total">
+                  {hashtagInsights.avg_engagement_without_tags.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                </span>
+              </li>
+            </ul>
+          ) : null}
           {hashtagsLoading ? (
             <p className="hint">{t('common.loadingAnalytics')}</p>
           ) : hashtags.length === 0 ? (

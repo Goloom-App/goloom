@@ -670,6 +670,10 @@ func (m *mockStore) ListTeamHashtagPerformance(ctx context.Context, teamID strin
 	return nil, nil
 }
 
+func (m *mockStore) GetTeamHashtagInsights(ctx context.Context, teamID string, days int, provider string) (domain.HashtagInsights, error) {
+	return domain.HashtagInsights{}, nil
+}
+
 func (m *mockStore) AdvancePostTemplateAnnouncementCounter(ctx context.Context, templateID string, counterNext int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

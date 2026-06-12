@@ -86,6 +86,69 @@ func (s *Store) BackfillPostHashtags(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 
+// GetTeamHashtagInsights summarizes hashtag usage for posted content within a
+// time window, optionally filtered by provider.
+func (s *Store) GetTeamHashtagInsights(ctx context.Context, teamID string, days int, provider string) (domain.HashtagInsights, error) {
+	if days <= 0 {
+		days = 90
+	}
+	if days > 366 {
+		days = 366
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -days)
+	provider = strings.TrimSpace(strings.ToLower(provider))
+	hasProvider := provider != "" && provider != "all"
+
+	args := []any{teamID, cutoff}
+	metricsFilter, tagsFilter, postsFilter := "", "", ""
+	if hasProvider {
+		args = append(args, provider)
+		metricsFilter = " and ma.provider = $3"
+		tagsFilter = " and ta.provider = $3"
+		postsFilter = ` and exists (
+			select 1 from scheduled_post_targets t
+			inner join social_accounts pa on pa.id = t.account_id
+			where t.post_id = p.id and pa.provider = $3)`
+	}
+	query := `
+		with posts as (
+			select p.id,
+			       coalesce((select sum(pm.value)
+			                 from post_metrics pm
+			                 inner join social_accounts ma on ma.id = pm.account_id
+			                 where pm.post_id = p.id` + metricsFilter + `), 0) as engagement,
+			       (select count(distinct ph.tag_norm)
+			        from post_hashtags ph
+			        inner join social_accounts ta on ta.id = ph.account_id
+			        where ph.post_id = p.id` + tagsFilter + `) as tag_count
+			from scheduled_posts p
+			where p.team_id = $1 and p.status = 'posted' and p.scheduled_at >= $2` + postsFilter + `
+		)
+		select count(*)::bigint,
+		       coalesce(sum(case when tag_count > 0 then 1 else 0 end), 0)::bigint,
+		       coalesce(sum(tag_count), 0)::bigint,
+		       coalesce(sum(case when tag_count > 0 then engagement else 0 end), 0)::bigint,
+		       coalesce(sum(case when tag_count = 0 then engagement else 0 end), 0)::bigint
+		from posts`
+	var postsTotal, postsWithTags, totalTagUses, engagementWith, engagementWithout int64
+	if err := s.pool.QueryRow(ctx, query, args...).Scan(&postsTotal, &postsWithTags, &totalTagUses, &engagementWith, &engagementWithout); err != nil {
+		return domain.HashtagInsights{}, err
+	}
+
+	distinctQuery := `
+		select count(distinct ph.tag_norm)::bigint
+		from post_hashtags ph
+		inner join scheduled_posts p on p.id = ph.post_id
+		inner join social_accounts ta on ta.id = ph.account_id
+		where p.team_id = $1 and p.status = 'posted' and p.scheduled_at >= $2` + tagsFilter
+	var distinctTags int64
+	if err := s.pool.QueryRow(ctx, distinctQuery, args...).Scan(&distinctTags); err != nil {
+		return domain.HashtagInsights{}, err
+	}
+
+	return domain.BuildHashtagInsights(postsTotal, postsWithTags, distinctTags, totalTagUses, engagementWith, engagementWithout), nil
+}
+
 // ListTeamHashtagPerformance aggregates engagement per normalized hashtag for
 // posted content, optionally filtered by provider and time window.
 func (s *Store) ListTeamHashtagPerformance(ctx context.Context, teamID string, days int, provider string, limit int) ([]domain.HashtagPerformance, error) {

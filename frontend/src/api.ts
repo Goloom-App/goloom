@@ -195,6 +195,16 @@ export interface BackendHashtagPerformance {
   score: number
 }
 
+export interface BackendHashtagInsights {
+  posts_total: number
+  posts_with_tags: number
+  distinct_tags: number
+  total_tag_uses: number
+  avg_tags_per_post: number
+  avg_engagement_with_tags: number
+  avg_engagement_without_tags: number
+}
+
 export interface BackendEngagementHeatmapBucket {
   weekday: number
   hour: number
@@ -979,7 +989,7 @@ export function createApiClient(options: ApiClientOptions) {
         params.set('limit', String(opts.limit))
       }
       const suffix = params.toString()
-      return request<{ days: number; provider: string; items: BackendHashtagPerformance[] }>(
+      return request<{ days: number; provider: string; items: BackendHashtagPerformance[]; insights?: BackendHashtagInsights }>(
         options,
         `/v1/teams/${teamID}/analytics/hashtags${suffix ? `?${suffix}` : ''}`,
         {

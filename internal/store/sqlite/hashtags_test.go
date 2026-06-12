@@ -108,6 +108,39 @@ func TestHashtagPerformanceAndBackfill(t *testing.T) {
 	if len(rows) != 0 {
 		t.Fatalf("expected no rows for bluesky filter, got %#v", rows)
 	}
+
+	// Insights: 3 posts (p1 two tags, p2 one tag, backfilled post one tag),
+	// plus one posted post without hashtags.
+	newPostedPost("Kein Tag hier", 2)
+	insights, err := s.GetTeamHashtagInsights(ctx, team.ID, 90, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if insights.PostsTotal != 4 || insights.PostsWithTags != 3 {
+		t.Fatalf("posts: %#v", insights)
+	}
+	if insights.DistinctTags != 3 || insights.TotalTagUses != 4 {
+		t.Fatalf("tags: %#v", insights)
+	}
+	if insights.AvgTagsPerPost != 1.0 {
+		t.Fatalf("avg tags per post = %v, want 1.0", insights.AvgTagsPerPost)
+	}
+	// With tags: (10+6+3)/3, without: 2/1.
+	if insights.AvgEngagementWithoutTags != 2 {
+		t.Fatalf("avg engagement without tags = %v, want 2", insights.AvgEngagementWithoutTags)
+	}
+	if diff := insights.AvgEngagementWithTags - 19.0/3.0; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("avg engagement with tags = %v, want %v", insights.AvgEngagementWithTags, 19.0/3.0)
+	}
+
+	// Provider filter returns zeroed tag counts but still counts posts on that provider.
+	insights, err = s.GetTeamHashtagInsights(ctx, team.ID, 90, "bluesky")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if insights.PostsTotal != 0 || insights.DistinctTags != 0 {
+		t.Fatalf("bluesky insights should be empty: %#v", insights)
+	}
 }
 
 func TestGetTeamEngagementHeatmap(t *testing.T) {

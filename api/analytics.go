@@ -108,7 +108,13 @@ func (a *API) handleTeamHashtagAnalytics(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
-	items, err := a.store.ListTeamHashtagPerformance(r.Context(), r.PathValue("teamID"), days, provider, limit)
+	teamID := r.PathValue("teamID")
+	items, err := a.store.ListTeamHashtagPerformance(r.Context(), teamID, days, provider, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	insights, err := a.store.GetTeamHashtagInsights(r.Context(), teamID, days, provider)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -117,6 +123,7 @@ func (a *API) handleTeamHashtagAnalytics(w http.ResponseWriter, r *http.Request)
 		"days":     days,
 		"provider": provider,
 		"items":    sliceOrEmpty(items),
+		"insights": insights,
 	})
 }
 

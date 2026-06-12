@@ -734,6 +734,39 @@ type HashtagPerformance struct {
 // HashtagScoreSmoothing is k in score = total_engagement / (uses + k).
 const HashtagScoreSmoothing = 3
 
+// HashtagInsights summarizes hashtag usage across a team's posted content
+// within a time window. Engagement averages compare posts that used at least
+// one hashtag against posts without any.
+type HashtagInsights struct {
+	PostsTotal               int64   `json:"posts_total"`
+	PostsWithTags            int64   `json:"posts_with_tags"`
+	DistinctTags             int64   `json:"distinct_tags"`
+	TotalTagUses             int64   `json:"total_tag_uses"`
+	AvgTagsPerPost           float64 `json:"avg_tags_per_post"`
+	AvgEngagementWithTags    float64 `json:"avg_engagement_with_tags"`
+	AvgEngagementWithoutTags float64 `json:"avg_engagement_without_tags"`
+}
+
+// BuildHashtagInsights derives the per-post averages from raw aggregation sums.
+func BuildHashtagInsights(postsTotal, postsWithTags, distinctTags, totalTagUses, engagementWithTags, engagementWithoutTags int64) HashtagInsights {
+	insights := HashtagInsights{
+		PostsTotal:    postsTotal,
+		PostsWithTags: postsWithTags,
+		DistinctTags:  distinctTags,
+		TotalTagUses:  totalTagUses,
+	}
+	if postsTotal > 0 {
+		insights.AvgTagsPerPost = float64(totalTagUses) / float64(postsTotal)
+	}
+	if postsWithTags > 0 {
+		insights.AvgEngagementWithTags = float64(engagementWithTags) / float64(postsWithTags)
+	}
+	if without := postsTotal - postsWithTags; without > 0 {
+		insights.AvgEngagementWithoutTags = float64(engagementWithoutTags) / float64(without)
+	}
+	return insights
+}
+
 // FinalizeScores derives AvgEngagement and the smoothed Score from the
 // aggregated Uses/TotalEngagement values.
 func (h *HashtagPerformance) FinalizeScores() {
