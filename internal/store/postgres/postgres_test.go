@@ -23,6 +23,19 @@ func postgresDSN(t *testing.T) string {
 	return dsn
 }
 
+func truncateUsers(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, postgresDSN(t))
+	if err != nil {
+		t.Fatalf("connect for truncate: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, "truncate table users cascade"); err != nil {
+		t.Fatalf("truncate users: %v", err)
+	}
+}
+
 func newTestStore(t *testing.T) *postgres.Store {
 	t.Helper()
 	enc, err := security.NewEncrypter("postgres-integration-test-secret-32b")
@@ -41,6 +54,9 @@ func newTestStore(t *testing.T) *postgres.Store {
 func TestPostgres_UpsertOIDCUser_firstIsAdmin(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
+	// "First user" semantics need an empty users table; earlier tests in this
+	// package share the database, so reset it for this test.
+	truncateUsers(t)
 	u1, err := s.UpsertOIDCUser(ctx, "sub-pg-"+uuid.NewString(), "a@pg.test", "A")
 	if err != nil {
 		t.Fatal(err)
@@ -130,8 +146,11 @@ func TestPostgres_TeamsAndMemberships(t *testing.T) {
 		t.Fatal(err)
 	}
 	teams, err := s.ListTeamsForUser(ctx, owner.ID, false)
-	if err != nil || len(teams) != 1 {
-		t.Fatalf("owner teams: %v %#v", err, teams)
+	if err != nil || len(teams) != 2 {
+		t.Fatalf("owner teams (personal + shared): %v %#v", err, teams)
+	}
+	if !teams[0].IsPersonal || teams[0].PersonalForUserID != owner.ID {
+		t.Fatalf("expected personal workspace first: %#v", teams[0])
 	}
 	if _, err := s.AddTeamMember(ctx, team.ID, domain.AddTeamMemberInput{UserID: member.ID, Role: domain.RoleEditor}); err != nil {
 		t.Fatal(err)
@@ -186,7 +205,7 @@ func TestPostgres_ProviderInstances(t *testing.T) {
 		ClientID:    "cid2",
 	})
 	if err != nil || updated.Name != "renamed-pg" {
-		t.Fatalf("update: %+v", updated)
+		t.Fatalf("update: %+v err=%v", updated, err)
 	}
 	plainAfter, err := s.DecryptProviderInstanceClientSecret(updated)
 	if err != nil || plainAfter != "secret" {
@@ -297,18 +316,28 @@ func TestPostgres_GetScheduledPostByID_returnsFullPost(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 	u, _ := s.UpsertOIDCUser(ctx, "gspid-"+uuid.NewString(), "gspid@pg.test", "GSPID")
-	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "gspid-"+uuid.NewString(), Description: "desc"})
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "gspid-" + uuid.NewString(), Description: "desc"})
 	acc, _ := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
 		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
 		InstanceURL: "https://x", Username: "x", AccessToken: "t",
 	})
 	principal := domain.AuthenticatedPrincipal{User: u}
-	tmplID := "tmpl-" + uuid.NewString()
+	enabled := true
+	tmpl, err := s.CreatePostTemplate(ctx, team.ID, principal, domain.CreatePostTemplateInput{
+		Title:            "tmpl",
+		Content:          "tmpl body {counter}",
+		RecurrenceJSON:   `{"kind":"weekly","weekdays":[1],"hour":9,"minute":0,"timezone":"UTC"}`,
+		TargetAccountIDs: []string{acc.ID},
+		Enabled:          &enabled,
+	})
+	if err != nil {
+		t.Fatalf("CreatePostTemplate: %v", err)
+	}
 	tmplCtr := 3
 	post, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
 		Content: "test body", ScheduledAt: time.Now().UTC(),
 		TargetAccounts:  []string{acc.ID},
-		PostTemplateID:  &tmplID,
+		PostTemplateID:  &tmpl.ID,
 		TemplateCounter: &tmplCtr,
 	})
 	if err != nil {
@@ -332,8 +361,8 @@ func TestPostgres_GetScheduledPostByID_returnsFullPost(t *testing.T) {
 	if len(got.TargetAccounts) != 1 || got.TargetAccounts[0] != acc.ID {
 		t.Fatalf("TargetAccounts: got %v, want [%q]", got.TargetAccounts, acc.ID)
 	}
-	if got.PostTemplateID == nil || *got.PostTemplateID != tmplID {
-		t.Fatalf("PostTemplateID: got %v, want %q", got.PostTemplateID, tmplID)
+	if got.PostTemplateID == nil || *got.PostTemplateID != tmpl.ID {
+		t.Fatalf("PostTemplateID: got %v, want %q", got.PostTemplateID, tmpl.ID)
 	}
 	if got.TemplateCounter == nil || *got.TemplateCounter != tmplCtr {
 		t.Fatalf("TemplateCounter: got %v, want %d", got.TemplateCounter, tmplCtr)

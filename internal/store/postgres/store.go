@@ -547,11 +547,20 @@ func (s *Store) CreateProviderInstance(ctx context.Context, createdByUserID stri
 		input.InstanceURL,
 		input.ClientID,
 		clientSecretCiphertext,
-		input.Scopes,
+		normalizedScopes(input.Scopes),
 		input.AuthorizationEndpoint,
 		input.TokenEndpoint,
 		createdByUserID,
 	))
+}
+
+// normalizedScopes keeps the scopes column not-null when no scopes are set
+// (pgx encodes a nil slice as SQL NULL), matching the sqlite backend.
+func normalizedScopes(scopes []string) []string {
+	if scopes == nil {
+		return []string{}
+	}
+	return scopes
 }
 
 func (s *Store) UpdateProviderInstance(ctx context.Context, instanceID string, input domain.PreparedProviderInstance) (domain.ProviderInstance, error) {
@@ -593,7 +602,7 @@ func (s *Store) UpdateProviderInstance(ctx context.Context, instanceID string, i
 		input.InstanceURL,
 		input.ClientID,
 		clientSecretCiphertext,
-		input.Scopes,
+		normalizedScopes(input.Scopes),
 		input.AuthorizationEndpoint,
 		input.TokenEndpoint,
 		instanceID,

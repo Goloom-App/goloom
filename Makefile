@@ -1,6 +1,6 @@
 APP_NAME := goloom
 
-.PHONY: fmt tidy build test run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-install website-dev website-build website-screenshots
+.PHONY: fmt tidy build test test-postgres cover run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-install website-dev website-build website-screenshots
 
 fmt:
 	go fmt ./...
@@ -13,6 +13,24 @@ build: frontend-build
 
 test:
 	go test ./...
+
+# Prefer docker when its daemon is reachable, otherwise podman.
+CONTAINER_RUNTIME := $(shell docker info >/dev/null 2>&1 && echo docker || echo podman)
+
+# Postgres integration tests: throwaway Postgres container on port 15432,
+# torn down afterwards. The postgres store tests skip without TEST_POSTGRES_URL.
+test-postgres:
+	$(CONTAINER_RUNTIME) run -d --rm --name goloom-test-pg \
+		-e POSTGRES_PASSWORD=test -e POSTGRES_DB=goloom_test \
+		-p 15432:5432 docker.io/library/postgres:16-alpine
+	@until $(CONTAINER_RUNTIME) exec goloom-test-pg pg_isready -U postgres >/dev/null 2>&1; do sleep 0.5; done
+	@TEST_POSTGRES_URL="postgres://postgres:test@localhost:15432/goloom_test?sslmode=disable" \
+		go test ./internal/store/postgres/; \
+		status=$$?; $(CONTAINER_RUNTIME) rm -f goloom-test-pg >/dev/null; exit $$status
+
+cover:
+	go test ./... -coverprofile=coverage.out -covermode=count
+	@go tool cover -func=coverage.out | tail -1
 
 run: frontend-build
 	go run ./cmd/server

@@ -292,13 +292,17 @@ func TestAIContext(t *testing.T) {
 
 	principal := domain.AuthenticatedPrincipal{User: u}
 	for range 3 {
-		_, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+		post, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
 			Content:        "test post",
 			ScheduledAt:    time.Now().UTC().Add(-time.Minute),
 			TargetAccounts: []string{acc.ID},
 		})
 		if err != nil {
 			t.Fatalf("CreateScheduledPost: %v", err)
+		}
+		// RecentPosts only includes published posts.
+		if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+			t.Fatalf("MarkPostResult: %v", err)
 		}
 	}
 

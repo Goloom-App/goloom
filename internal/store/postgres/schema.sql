@@ -172,6 +172,10 @@ create table if not exists scheduled_post_targets (
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
     published_url text,
     last_error text,
+    publish_metadata text not null default '{}',
+    remote_post_id text,
+    metrics_last_sync_date text,
+    metrics_last_sync_at timestamptz,
     primary key (post_id, account_id)
 );
 

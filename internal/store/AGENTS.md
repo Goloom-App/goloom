@@ -21,14 +21,17 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 - Any new Store method must be added to the interface in `store.go`
 - Implement in both `sqlite/` and `postgres/` packages
-- Schema changes need migration SQL (ALTER TABLE) in both backends
-- Tests use real database (SQLite in-memory or PostgreSQL test DB)
+- New columns go into the `create table` statement of **both** schema files; `alter table … if not exists` is only the migration path for existing databases. The postgres schema must always apply cleanly on an empty database (indexes may not reference columns that only a later alter creates)
+- Normalize nil slices/maps before writing not-null Postgres columns (pgx encodes nil as SQL NULL; sqlite JSON-encodes instead) — see `normalizedScopes` in `postgres/store.go`
+- Tests use real databases: SQLite in-memory per test; Postgres via `make test-postgres` (tests skip without `TEST_POSTGRES_URL`)
+- Postgres tests share one database per run — tests that need global state (e.g. "first user is admin") must reset it themselves
 - Follow existing naming conventions in SQL queries
 - Use parameterized queries to prevent SQL injection
 
 ## Verification
 
 - `go test ./internal/store/...` must pass
+- `make test-postgres` must pass for every store or schema change (throwaway container, fresh schema)
 - Both SQLite and PostgreSQL implementations must pass identical test suites
 
 ## Child DOX Index
