@@ -913,6 +913,11 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: engagement hours: %w", err)
 	}
 
+	topHashtags, err := s.ListTeamHashtagPerformance(ctx, teamID, 90, "", 20)
+	if err != nil {
+		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: top hashtags: %w", err)
+	}
+
 	if formats == nil {
 		formats = []domain.CampaignFormat{}
 	}
@@ -933,6 +938,7 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		Accounts:         accountSummaries,
 		UpcomingPosts:    upcomingPosts,
 		EngagementHours:  engagementHours,
+		TopHashtags:      topHashtags,
 	}, nil
 }
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/hashtag"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/store"
 )
@@ -650,6 +651,22 @@ func (m *mockStore) UpsertMediaProviderMapping(ctx context.Context, mapping doma
 }
 
 func (m *mockStore) GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int) ([]domain.EngagementHeatmapBucket, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ReplacePostHashtags(ctx context.Context, postID, accountID string, tags []hashtag.Tag) error {
+	return nil
+}
+
+func (m *mockStore) BackfillPostHashtags(ctx context.Context) error {
+	return nil
+}
+
+func (m *mockStore) ListTeamHashtagPerformance(ctx context.Context, teamID string, days int, provider string, limit int) ([]domain.HashtagPerformance, error) {
 	return nil, nil
 }
 

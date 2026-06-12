@@ -619,3 +619,43 @@ func (h *Handler) handleGetAnalytics(ctx context.Context, req *mcp.CallToolReque
 		TopPosts: topPosts,
 	}, nil
 }
+
+// ===== Get Hashtag Performance =====
+
+func (h *Handler) handleGetHashtagPerformance(ctx context.Context, req *mcp.CallToolRequest, input GetHashtagPerformanceInput) (*mcp.CallToolResult, GetHashtagPerformanceOutput, error) {
+	principal := principalFromContext(ctx)
+	if principal == nil {
+		return nil, GetHashtagPerformanceOutput{}, fmt.Errorf("unauthorized")
+	}
+
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	if err != nil || !allowed {
+		return nil, GetHashtagPerformanceOutput{}, fmt.Errorf("forbidden")
+	}
+
+	days := input.Days
+	if days <= 0 {
+		days = 90
+	}
+	limit := input.Limit
+	if limit <= 0 || limit > 50 {
+		limit = 20
+	}
+	items, err := h.store.ListTeamHashtagPerformance(ctx, input.TeamID, days, input.Provider, limit)
+	if err != nil {
+		return nil, GetHashtagPerformanceOutput{}, err
+	}
+
+	out := GetHashtagPerformanceOutput{Hashtags: make([]HashtagPerformanceValue, 0, len(items))}
+	for _, item := range items {
+		out.Hashtags = append(out.Hashtags, HashtagPerformanceValue{
+			Tag:             item.Tag,
+			Display:         item.Display,
+			Uses:            item.Uses,
+			TotalEngagement: item.TotalEngagement,
+			AvgEngagement:   item.AvgEngagement,
+			Score:           item.Score,
+		})
+	}
+	return nil, out, nil
+}

@@ -10,7 +10,11 @@ import (
 
 	"git.f4mily.net/goloom/internal/ai"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/htmltext"
 )
+
+// chatFetchMaxChars caps how much fetched page text is fed back to the model.
+const chatFetchMaxChars = 8000
 
 // handleAIChat streams an AI assistant conversation over SSE. The model can
 // call tools that create drafts, campaigns, and automations for the team.
@@ -123,6 +127,57 @@ func (a *API) chatMentionContext(ctx context.Context, teamID string, messages []
 	return sections
 }
 
+// chatAccountLimitError rejects content that exceeds a targeted account's
+// character limit. The message is fed back to the model so it can retry with
+// shorter text or per-account overrides.
+func chatAccountLimitError(aiContext domain.AIContext, targets []string, content string, overrides map[string]string) error {
+	accounts := map[string]domain.AIAccountSummary{}
+	for _, account := range aiContext.Accounts {
+		accounts[account.ID] = account
+	}
+	var problems []string
+	for _, id := range targets {
+		account, ok := accounts[id]
+		if !ok || account.MaxChars <= 0 {
+			continue
+		}
+		text := content
+		if override, ok := overrides[id]; ok && strings.TrimSpace(override) != "" {
+			text = override
+		}
+		if length := len([]rune(text)); length > account.MaxChars {
+			name := account.Username
+			if name == "" {
+				name = account.ID
+			}
+			problems = append(problems, fmt.Sprintf("account %s (id=%s) allows %d characters but the text for it has %d", name, account.ID, account.MaxChars, length))
+		}
+	}
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("character limit exceeded: %s. Shorten the content or add account_content_override entries that fit each account's limit, then call the tool again",
+		strings.Join(problems, "; "))
+}
+
+// chatUnknownAccountError rejects account IDs that are not connected to the team.
+func chatUnknownAccountError(aiContext domain.AIContext, targets []string) error {
+	known := map[string]bool{}
+	for _, account := range aiContext.Accounts {
+		known[account.ID] = true
+	}
+	var unknown []string
+	for _, id := range targets {
+		if !known[id] {
+			unknown = append(unknown, id)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	return fmt.Errorf("unknown account ids: %s. Use the connected account ids listed in the system context", strings.Join(unknown, ", "))
+}
+
 func (a *API) chatTools(teamID string, principal domain.AuthenticatedPrincipal, aiContext domain.AIContext) []ai.ChatTool {
 	defaultAccountIDs := make([]string, 0, len(aiContext.Accounts))
 	for _, account := range aiContext.Accounts {
@@ -130,6 +185,43 @@ func (a *API) chatTools(teamID string, principal domain.AuthenticatedPrincipal, 
 	}
 
 	return []ai.ChatTool{
+		{
+			Tool: ai.Tool{
+				Name: "fetch_url",
+				Description: "Fetch a web page and return its readable text content. Use this whenever the user shares a link " +
+					"whose content you need (e.g. to draft a post about it). Never invent what a page contains.",
+				InputSchema: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"url": {"type": "string", "description": "Absolute http(s) URL of the page to fetch"}
+					},
+					"required": ["url"]
+				}`),
+			},
+			Execute: func(ctx context.Context, args json.RawMessage) (string, json.RawMessage, error) {
+				var in struct {
+					URL string `json:"url"`
+				}
+				if err := json.Unmarshal(args, &in); err != nil {
+					return "", nil, fmt.Errorf("invalid arguments: %w", err)
+				}
+				body, err := fetchURLBody(ctx, in.URL)
+				if err != nil {
+					return "", nil, fmt.Errorf("could not fetch %s: %w", in.URL, err)
+				}
+				text := htmltext.ExtractReadableText(body)
+				if strings.TrimSpace(text) == "" {
+					return "", nil, fmt.Errorf("the page at %s contained no readable text", in.URL)
+				}
+				if runes := []rune(text); len(runes) > chatFetchMaxChars {
+					text = string(runes[:chatFetchMaxChars]) + "\n[… truncated]"
+				}
+				if title := htmltext.ExtractPageTitle(body); title != "" {
+					text = "Page title: " + title + "\n\n" + text
+				}
+				return text, nil, nil
+			},
+		},
 		{
 			Tool: ai.Tool{
 				Name: "create_draft",
@@ -141,17 +233,21 @@ func (a *API) chatTools(teamID string, principal domain.AuthenticatedPrincipal, 
 						"title": {"type": "string", "description": "Short internal title for editors (max 120 chars)"},
 						"content": {"type": "string", "description": "The full post text including hashtags"},
 						"target_account_ids": {"type": "array", "items": {"type": "string"}, "description": "Account IDs to target; omit to target all connected accounts"},
-						"scheduled_at": {"type": "string", "description": "Optional RFC3339 publication time suggestion"}
+						"account_content_override": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Per-account alternative post text keyed by account ID, for accounts whose character limit the main content would exceed"},
+						"campaign_format_id": {"type": "string", "description": "Campaign format this draft belongs to; the draft is scheduled on the campaign's next free weekday slot"},
+						"scheduled_at": {"type": "string", "description": "Optional RFC3339 publication time; only when the user asked for a specific time"}
 					},
 					"required": ["content"]
 				}`),
 			},
 			Execute: func(ctx context.Context, args json.RawMessage) (string, json.RawMessage, error) {
 				var in struct {
-					Title            string   `json:"title"`
-					Content          string   `json:"content"`
-					TargetAccountIDs []string `json:"target_account_ids"`
-					ScheduledAt      string   `json:"scheduled_at"`
+					Title                  string            `json:"title"`
+					Content                string            `json:"content"`
+					TargetAccountIDs       []string          `json:"target_account_ids"`
+					AccountContentOverride map[string]string `json:"account_content_override"`
+					CampaignFormatID       string            `json:"campaign_format_id"`
+					ScheduledAt            string            `json:"scheduled_at"`
 				}
 				if err := json.Unmarshal(args, &in); err != nil {
 					return "", nil, fmt.Errorf("invalid arguments: %w", err)
@@ -166,25 +262,125 @@ func (a *API) chatTools(teamID string, principal domain.AuthenticatedPrincipal, 
 				if len(targets) == 0 {
 					return "", nil, fmt.Errorf("the team has no connected accounts")
 				}
+				if err := chatUnknownAccountError(aiContext, targets); err != nil {
+					return "", nil, err
+				}
 				scheduledAt := time.Now().UTC()
 				if in.ScheduledAt != "" {
 					if parsed, err := time.Parse(time.RFC3339, in.ScheduledAt); err == nil {
 						scheduledAt = parsed.UTC()
 					}
+				} else if formatID := strings.TrimSpace(in.CampaignFormatID); formatID != "" {
+					format, err := a.store.GetCampaignFormatByID(ctx, teamID, formatID)
+					if err != nil {
+						return "", nil, fmt.Errorf("unknown campaign format %q", formatID)
+					}
+					if slot := ai.NextCampaignSlot(aiContext, &format); slot != nil {
+						scheduledAt = *slot
+					}
+				}
+				overrides := domain.NormalizeAccountContentOverride(in.AccountContentOverride, targets)
+				if err := chatAccountLimitError(aiContext, targets, in.Content, overrides); err != nil {
+					return "", nil, err
 				}
 				post, err := a.store.CreateScheduledPost(ctx, teamID, principal, domain.CreatePostInput{
-					Title:          strings.TrimSpace(in.Title),
-					Content:        in.Content,
-					TargetAccounts: targets,
-					ScheduledAt:    scheduledAt,
-					Draft:          true,
-					AuthorUserID:   &principal.User.ID,
+					Title:                  strings.TrimSpace(in.Title),
+					Content:                in.Content,
+					TargetAccounts:         targets,
+					ScheduledAt:            scheduledAt,
+					Draft:                  true,
+					AccountContentOverride: overrides,
+					UseVersions:            len(overrides) > 0,
+					AuthorUserID:           &principal.User.ID,
 				})
 				if err != nil {
 					return "", nil, err
 				}
 				payload, _ := json.Marshal(post)
-				return fmt.Sprintf("Draft created with id %s.", post.ID), payload, nil
+				return fmt.Sprintf("Draft created with id %s, scheduled for %s.", post.ID, scheduledAt.Format(time.RFC3339)), payload, nil
+			},
+		},
+		{
+			Tool: ai.Tool{
+				Name: "update_draft",
+				Description: "Update an existing draft or scheduled (not yet published) post. Use this instead of create_draft " +
+					"whenever the user asks for changes to a post that already exists — especially one you created earlier in " +
+					"this conversation. Only pass the fields that should change.",
+				InputSchema: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"post_id": {"type": "string", "description": "ID of the post to update"},
+						"title": {"type": "string", "description": "New internal title (max 120 chars)"},
+						"content": {"type": "string", "description": "New full post text including hashtags"},
+						"target_account_ids": {"type": "array", "items": {"type": "string"}, "description": "New target account IDs"},
+						"account_content_override": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Per-account alternative post text keyed by account ID; replaces all existing overrides"},
+						"scheduled_at": {"type": "string", "description": "New RFC3339 publication time"}
+					},
+					"required": ["post_id"]
+				}`),
+			},
+			Execute: func(ctx context.Context, args json.RawMessage) (string, json.RawMessage, error) {
+				var in struct {
+					PostID                 string            `json:"post_id"`
+					Title                  *string           `json:"title"`
+					Content                *string           `json:"content"`
+					TargetAccountIDs       []string          `json:"target_account_ids"`
+					AccountContentOverride map[string]string `json:"account_content_override"`
+					ScheduledAt            string            `json:"scheduled_at"`
+				}
+				if err := json.Unmarshal(args, &in); err != nil {
+					return "", nil, fmt.Errorf("invalid arguments: %w", err)
+				}
+				post, err := a.store.GetScheduledPost(ctx, teamID, strings.TrimSpace(in.PostID))
+				if err != nil {
+					return "", nil, fmt.Errorf("no post with id %q in this team", in.PostID)
+				}
+				if post.Status == domain.PostStatusPosted || post.Status == domain.PostStatusProcessing {
+					return "", nil, fmt.Errorf("post %s is already published or publishing and cannot be edited", post.ID)
+				}
+
+				var patch domain.UpdatePostPatch
+				targets := post.TargetAccounts
+				if normalized := domain.NormalizeMediaIDs(in.TargetAccountIDs); len(normalized) > 0 {
+					if err := chatUnknownAccountError(aiContext, normalized); err != nil {
+						return "", nil, err
+					}
+					targets = normalized
+					patch.TargetAccounts = domain.PatchField[[]string]{Set: true, Value: normalized}
+				}
+				content := post.Content
+				if in.Content != nil && strings.TrimSpace(*in.Content) != "" {
+					content = *in.Content
+					patch.Content = domain.PatchField[string]{Set: true, Value: *in.Content}
+				}
+				if in.Title != nil {
+					patch.Title = domain.PatchField[string]{Set: true, Value: strings.TrimSpace(*in.Title)}
+				}
+				if in.ScheduledAt != "" {
+					parsed, err := time.Parse(time.RFC3339, in.ScheduledAt)
+					if err != nil {
+						return "", nil, fmt.Errorf("scheduled_at must be RFC3339, got %q", in.ScheduledAt)
+					}
+					patch.ScheduledAt = domain.PatchField[time.Time]{Set: true, Value: parsed.UTC()}
+				}
+
+				overrides := map[string]string{}
+				if in.AccountContentOverride != nil {
+					overrides = domain.NormalizeAccountContentOverride(in.AccountContentOverride, targets)
+					patch.AccountContentOverride = domain.PatchField[map[string]string]{Set: true, Value: overrides}
+				} else if versions, err := a.store.ListPostVersionsForTeamPost(ctx, teamID, post.ID); err == nil {
+					overrides = domain.VersionsToOverrideMap(versions)
+				}
+				if err := chatAccountLimitError(aiContext, targets, content, overrides); err != nil {
+					return "", nil, err
+				}
+
+				updated, err := a.store.PatchScheduledPost(ctx, teamID, post.ID, patch)
+				if err != nil {
+					return "", nil, err
+				}
+				payload, _ := json.Marshal(updated)
+				return fmt.Sprintf("Post %s updated.", updated.ID), payload, nil
 			},
 		},
 		{
@@ -363,6 +559,60 @@ func (a *API) chatTools(teamID string, principal domain.AuthenticatedPrincipal, 
 				}
 				payload, _ := json.Marshal(feed)
 				return fmt.Sprintf("RSS automation %q created with id %s.", feed.Name, feed.ID), payload, nil
+			},
+		},
+		{
+			Tool: ai.Tool{
+				Name: "get_top_hashtags",
+				Description: "Query the team's best-performing hashtags from published post analytics. " +
+					"Returns per hashtag: uses, total engagement, average engagement per post, and a smoothed score. " +
+					"Use it to pick proven hashtags for a draft (only topically fitting ones; using none is fine) or to answer hashtag questions.",
+				InputSchema: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"days": {"type": "integer", "description": "Time window in days (default 90, max 366)"},
+						"provider": {"type": "string", "description": "Filter by platform: bluesky, mastodon or friendica; omit for all"},
+						"limit": {"type": "integer", "description": "Maximum number of hashtags to return (default 20, max 50)"}
+					}
+				}`),
+			},
+			Execute: func(ctx context.Context, args json.RawMessage) (string, json.RawMessage, error) {
+				var in struct {
+					Days     int    `json:"days"`
+					Provider string `json:"provider"`
+					Limit    int    `json:"limit"`
+				}
+				if err := json.Unmarshal(args, &in); err != nil {
+					return "", nil, fmt.Errorf("invalid arguments: %w", err)
+				}
+				if in.Days <= 0 {
+					in.Days = 90
+				}
+				if in.Limit <= 0 || in.Limit > 50 {
+					in.Limit = 20
+				}
+				items, err := a.store.ListTeamHashtagPerformance(ctx, teamID, in.Days, in.Provider, in.Limit)
+				if err != nil {
+					return "", nil, err
+				}
+				if len(items) == 0 {
+					return "No hashtag performance data yet for this team and filter.", nil, nil
+				}
+				var sb strings.Builder
+				fmt.Fprintf(&sb, "Top hashtags (last %d days", in.Days)
+				if p := strings.TrimSpace(in.Provider); p != "" && p != "all" {
+					fmt.Fprintf(&sb, ", %s", p)
+				}
+				sb.WriteString("):\n")
+				for _, item := range items {
+					display := item.Display
+					if display == "" {
+						display = item.Tag
+					}
+					fmt.Fprintf(&sb, "- #%s: %d uses, %d total engagement, avg %.1f per post, score %.1f\n",
+						display, item.Uses, item.TotalEngagement, item.AvgEngagement, item.Score)
+				}
+				return sb.String(), nil, nil
 			},
 		},
 	}

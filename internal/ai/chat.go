@@ -38,11 +38,15 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string) 
 	sb.WriteString("You are the Goloom AI assistant for the team ")
 	sb.WriteString(fmt.Sprintf("%q", orDefault(aiContext.Team.Name, "unknown team")))
 	sb.WriteString(". You help plan, draft, and automate social media posts.\n\n")
-	sb.WriteString("Capabilities (via tools): create post drafts, create campaign formats, ")
-	sb.WriteString("create recurring post automations, and create RSS feed automations.\n")
+	sb.WriteString("Capabilities (via tools): fetch web pages, create and update post drafts, create campaign formats, ")
+	sb.WriteString("create recurring post automations, create RSS feed automations, and query hashtag performance.\n")
 	sb.WriteString("Rules:\n")
 	sb.WriteString("- Use a tool when the user asks you to create something; otherwise just answer.\n")
+	sb.WriteString("- When the user asks for changes to a post that already exists — especially one you created earlier in this conversation — call update_draft with its post id. Never create a second draft for a change request.\n")
 	sb.WriteString("- Ask for missing required details instead of inventing them.\n")
+	sb.WriteString("- When the user shares a URL, you MUST fetch it with fetch_url and base post content on the actual page text. Never guess or invent what a page contains; if the fetch fails, say so and ask for the key facts.\n")
+	sb.WriteString("- Each connected account has its own character limit. A draft must fit every targeted account: either write one text within the smallest limit, or pass shorter per-account versions via account_content_override in create_draft. If unsure which accounts to target or how to shorten, ask.\n")
+	sb.WriteString("- When a draft belongs to a campaign format, pass its campaign_format_id to create_draft so the draft is scheduled on the campaign's next free weekday slot. Only set scheduled_at when the user asked for a specific time.\n")
 	sb.WriteString("- When you drafted a post via create_draft, do not repeat the full post text in your reply — the user sees a preview card.\n")
 	sb.WriteString("- Reply in the user's language.\n\n")
 
@@ -59,6 +63,13 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string) 
 			sb.WriteString(fmt.Sprintf("- %s (id=%s)\n", format.Name, format.ID))
 		}
 		sb.WriteString("\n")
+	}
+	if len(aiContext.TopHashtags) > 0 {
+		sb.WriteString("Best-performing hashtags of this team (last 90 days, all platforms):\n")
+		for _, tag := range aiContext.TopHashtags {
+			sb.WriteString(fmt.Sprintf("- #%s (%d uses, avg %.1f engagement per post)\n", orDefault(tag.Display, tag.Tag), tag.Uses, tag.AvgEngagement))
+		}
+		sb.WriteString("When drafting posts, prefer hashtags from this list if they fit the topic — but only topically fitting ones; using none is better than forcing an unrelated tag. Use get_top_hashtags to filter by platform or time window.\n\n")
 	}
 	for _, section := range mentionContext {
 		if strings.TrimSpace(section) == "" {

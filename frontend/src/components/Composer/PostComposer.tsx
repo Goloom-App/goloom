@@ -18,6 +18,7 @@ import {
 } from './composerUtils'
 import type { EditorDraftState } from './types'
 import { ComposerAIAssist } from './ComposerAIAssist'
+import { HashtagSuggestions } from './HashtagSuggestions'
 
 type Api = ReturnType<typeof createApiClient>
 
@@ -386,6 +387,24 @@ export function PostComposer({
             <strong>{bodyLen}</strong>
             <span>/ {maxChars || t('common.emDash')}</span>
           </div>
+
+          {teamId && api ? (
+            <HashtagSuggestions
+              teamId={teamId}
+              api={api}
+              value={effectiveBody(draft, activeTab === 'default' ? null : activeTab)}
+              onChange={(next) => {
+                if (activeTab === 'default') {
+                  setDraft((current) => ({ ...current, content: next }))
+                } else {
+                  setDraft((current) => ({
+                    ...current,
+                    accountContentOverride: { ...current.accountContentOverride, [activeTab]: next },
+                  }))
+                }
+              }}
+            />
+          ) : null}
 
           {teamId ? (
             <ComposerAIAssist

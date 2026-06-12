@@ -85,6 +85,13 @@ func resolveScheduledAt(params params, campaignFormat *domain.CampaignFormat, co
 	return nil
 }
 
+// NextCampaignSlot returns the next free publication slot for a campaign
+// format, honoring its weekday, the team's scheduling preferences, and
+// already scheduled posts.
+func NextCampaignSlot(context domain.AIContext, format *domain.CampaignFormat) *time.Time {
+	return resolveScheduledAt(params{}, format, context)
+}
+
 type clockTime struct {
 	hour   int
 	minute int

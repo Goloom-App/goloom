@@ -266,6 +266,9 @@ func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAcco
 		"text":      req.Content,
 		"createdAt": time.Now().UTC().Format(time.RFC3339),
 	}
+	if facets := blueskyFacets(req.Content); len(facets) > 0 {
+		record["facets"] = facets
+	}
 	if len(embedImages) > 0 {
 		record["embed"] = map[string]any{
 			"$type":  "app.bsky.embed.images",

@@ -353,7 +353,23 @@
       "paused": "paused",
       "followers": "Followers",
       "following": "Following",
-      "posts": "Posts"
+      "posts": "Posts",
+      "tabHashtags": "Hashtags",
+      "activityHeatmap": "Activity by weekday & hour",
+      "activityHeatmapHint": "Engagement of published posts by publish time (local time, last 90 days).",
+      "noActivityData": "No activity data yet. Metrics appear after publishing and sync.",
+      "hashtagPerformance": "Hashtag performance",
+      "hashtagPerformanceHint": "Engagement per hashtag across published posts. The score smooths outliers so single viral posts don't dominate. Casing variants are grouped together.",
+      "noHashtags": "No hashtags found in published posts yet.",
+      "hashtag": "Hashtag",
+      "hashtagUses": "Uses",
+      "hashtagTotal": "Engagement",
+      "hashtagAvg": "Avg per post",
+      "hashtagScore": "Score",
+      "allPlatforms": "All platforms",
+      "days30": "30 days",
+      "days90": "90 days",
+      "days365": "365 days"
     },
     "accounts": {
       "connectedTitle": "Connected accounts",
@@ -514,6 +530,7 @@
       "regenerateNoOccurrences": "No regenerable occurrences found for this template.",
       "regenerateSelectOccurrence": "Occurrence to regenerate",
       "regenerateAiQueued": "AI is writing a fresh post… the calendar will update shortly.",
+      "regenerateAiFailed": "AI generation failed – the post was created from the template content. ({{error}})",
       "editTemplate": "Edit",
       "editTitle": "Edit recurring template",
       "counterStart": "Counter start",
@@ -816,7 +833,10 @@
       "aiOptimizeHint": "Optimization instructions (optional)",
       "aiOptimizePlaceholder": "e.g. Make it shorter and more engaging",
       "aiOptimizeApplied": "Draft updated with AI suggestions.",
-      "aiOptimizeFailed": "AI optimization failed."
+      "aiOptimizeFailed": "AI optimization failed.",
+      "aiOpenChat": "Edit in AI chat",
+      "suggestedHashtags": "Proven hashtags",
+      "hashtagChipTitle": "{{uses}} uses · avg {{avg}} engagement per post"
     },
     "post": {
       "contentPlaceholder": "Post content will appear here...",
@@ -872,9 +892,14 @@
       "send": "Send",
       "thinking": "Thinking…",
       "draftCreated": "Draft created",
+      "draftUpdated": "Draft updated",
+      "composerContextAttached": "Composer draft attached",
+      "applyToComposer": "Apply in composer",
       "openInComposer": "Open in Composer",
       "toolRunning": "Running: {{tool}}",
+      "toolFetchUrl": "Reading linked page",
       "toolCreateDraft": "Creating draft",
+      "toolUpdateDraft": "Updating draft",
       "toolCreateCampaign": "Creating campaign",
       "toolCreateRecurring": "Creating recurring automation",
       "toolCreateRss": "Creating RSS automation",
@@ -886,7 +911,8 @@
       "commandDraft": "Draft a post about ",
       "commandCampaign": "Create a campaign for ",
       "commandRecurring": "Create a recurring post every ",
-      "commandRss": "Create an RSS automation for this feed: "
+      "commandRss": "Create an RSS automation for this feed: ",
+      "toolTopHashtags": "Querying hashtag performance"
     }
   },
   "api": {

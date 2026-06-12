@@ -11,6 +11,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/hashtag"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/socialtokens"
 	"git.f4mily.net/goloom/internal/store"
@@ -273,6 +274,9 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		if err := s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusPosted, result.URL, "", result.Metadata, provider.ResolveRemotePostID(account.Provider, result)); err != nil {
 			s.logger.Warn("failed to mark post target result", "post_id", post.ID, "account_id", account.ID, "error", err)
 			continue
+		}
+		if err := s.store.ReplacePostHashtags(ctx, post.ID, account.ID, hashtag.Extract(content)); err != nil {
+			s.logger.Warn("failed to store post hashtags", "post_id", post.ID, "account_id", account.ID, "error", err)
 		}
 		if strings.TrimSpace(result.URL) != "" {
 			utcDay := time.Now().UTC().Format("2006-01-02")

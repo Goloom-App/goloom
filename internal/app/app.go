@@ -101,6 +101,10 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("personal workspace migration: %w", err)
 	}
 
+	if err := dataStore.BackfillPostHashtags(ctx); err != nil {
+		logger.Warn("hashtag backfill failed", "error", err)
+	}
+
 	authService, err := auth.New(ctx, cfg, dataStore)
 	if err != nil {
 		return fmt.Errorf("build auth service: %w", err)

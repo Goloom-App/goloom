@@ -114,26 +114,28 @@
 /* Light theme - also defined at global scope so Radix portals can access them */
 .app-shell[data-theme="light"],
 [data-theme="light"] {
-  --canvas: #f6f7f9;
+  --canvas: #f1f3f6;
   --surface: #ffffff;
-  --surface-raised: #f1f3f6;
+  --surface-raised: #ffffff;
   --surface-overlay: #ffffff;
-  --surface-muted: #fafbfc;
-  --surface-hover: #eceef2;
+  --surface-muted: #f8f9fb;
+  --surface-hover: #eef0f4;
 
   --border: rgba(15, 23, 42, 0.08);
   --border-soft: rgba(15, 23, 42, 0.12);
   --border-strong: rgba(15, 23, 42, 0.16);
 
   --text: #0f172a;
-  --text-soft: #475569;
-  --text-dim: #94a3b8;
+  --text-soft: #334155;
+  --text-dim: #64748b;
   --text-inverse: #ffffff;
 
   --primary: #0f172a;
   --primary-foreground: #ffffff;
 
-  --accent: var(--brand-primary, #7c3aed);
+  /* Clamp light brand colors to a lightness that stays readable on white
+     surfaces; darker brand colors pass through unchanged. */
+  --accent: oklch(from var(--brand-primary, #7c3aed) min(l, 0.55) c h);
   --accent-lighter: color-mix(in srgb, var(--accent) 80%, #ffffff);
   --accent-darker: color-mix(in srgb, var(--accent) 82%, #000000);
   --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
@@ -3019,6 +3021,64 @@ select {
 
 .analytics-posts-table-wrap {
   overflow-x: auto;
+}
+
+.hashtag-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hashtag-suggestions__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.hashtag-suggestions__chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.hashtag-suggestions__chip:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.analytics-heatmap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: var(--space-4);
+  overflow-x: auto;
+}
+
+.analytics-heatmap__row {
+  display: grid;
+  grid-template-columns: 2.5rem repeat(24, minmax(14px, 1fr));
+  gap: 3px;
+  align-items: center;
+}
+
+.analytics-heatmap__day,
+.analytics-heatmap__hour-label {
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.analytics-heatmap__cell {
+  height: 18px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.analytics-heatmap__cell[data-empty] {
+  background: var(--surface-hover);
 }
 
 .analytics-post-row--clickable {

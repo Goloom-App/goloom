@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/hashtag"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store/postgres"
 	"git.f4mily.net/goloom/internal/store/sqlite"
@@ -28,6 +29,12 @@ type Store interface {
 	CreateTeam(ctx context.Context, ownerUserID string, input domain.CreateTeamInput) (domain.Team, error)
 	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
 	GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error)
+	GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int) ([]domain.EngagementHeatmapBucket, error)
+
+	// Hashtag analytics
+	ReplacePostHashtags(ctx context.Context, postID, accountID string, tags []hashtag.Tag) error
+	BackfillPostHashtags(ctx context.Context) error
+	ListTeamHashtagPerformance(ctx context.Context, teamID string, days int, provider string, limit int) ([]domain.HashtagPerformance, error)
 
 	// TeamProfile methods
 	CreateTeamProfile(ctx context.Context, teamID string, input domain.TeamProfile) (domain.TeamProfile, error)

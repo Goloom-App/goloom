@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Bot, Loader2, Send, Sparkles, X } from 'lucide-react'
 import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, createApiClient } from '../../api'
+import { composerContextEvent } from './composerChatBridge'
 
 type ApiClient = ReturnType<typeof createApiClient>
 
@@ -18,6 +19,7 @@ interface ChatEntry {
   text: string
   mentions?: BackendAIChatMention[]
   preview?: DraftPreview
+  updated?: boolean
 }
 
 interface MentionOption extends BackendAIChatMention {
@@ -45,15 +47,19 @@ interface AIChatWidgetProps {
     targetAccountIds: string[]
     scheduledAt?: string
   }) => void
+  onApplyToComposer?: (content: string) => void
 }
 
-export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProps) {
+export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer }: AIChatWidgetProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<ChatEntry[]>([])
   const [input, setInput] = useState('')
   const [pendingMentions, setPendingMentions] = useState<BackendAIChatMention[]>([])
   const [busy, setBusy] = useState(false)
+  const [composerContext, setComposerContext] = useState<string | null>(null)
+  // Once a composer draft was discussed, assistant replies offer an "apply" action.
+  const [composerSession, setComposerSession] = useState(false)
   const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([])
   const [suggestions, setSuggestions] = useState<{ kind: 'mention' | 'command'; query: string } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -69,7 +75,23 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
     setEntries([])
     setPendingMentions([])
     setInput('')
+    setComposerContext(null)
+    setComposerSession(false)
   }, [teamId])
+
+  useEffect(() => {
+    function onComposerContext(event: Event) {
+      const detail = (event as CustomEvent).detail as { content?: string } | undefined
+      if (!detail?.content?.trim()) {
+        return
+      }
+      setComposerContext(detail.content)
+      setOpen(true)
+      setTimeout(() => inputRef.current?.focus(), 0)
+    }
+    window.addEventListener(composerContextEvent, onComposerContext)
+    return () => window.removeEventListener(composerContextEvent, onComposerContext)
+  }, [])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -191,7 +213,21 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
           ])
           break
         case 'tool_result': {
-          if (event.tool_name === 'create_draft' && event.payload && typeof event.payload === 'object') {
+          // Keep successful create/update results in the model history so
+          // follow-up turns know the ids (and text) of what already exists.
+          const isError = Boolean(event.message?.startsWith('Error:'))
+          const isDraftTool = event.tool_name === 'create_draft' || event.tool_name === 'update_draft'
+          if (!isError && event.tool_name && event.tool_name !== 'fetch_url' && event.message) {
+            let note = `[${event.tool_name}] ${event.message}`
+            if (isDraftTool && event.payload && typeof event.payload === 'object') {
+              const post = event.payload as { content?: string }
+              if (post.content) {
+                note += `\nCurrent draft content:\n${post.content}`
+              }
+            }
+            history.current = [...history.current, { role: 'assistant', content: note }]
+          }
+          if (isDraftTool && event.payload && typeof event.payload === 'object') {
             const post = event.payload as {
               id?: string
               title?: string
@@ -205,6 +241,7 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
                 {
                   kind: 'preview',
                   text: '',
+                  updated: event.tool_name === 'update_draft',
                   preview: {
                     id: post.id ?? '',
                     title: post.title ?? '',
@@ -217,7 +254,7 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
             }
             return
           }
-          if (event.message?.startsWith('Error:')) {
+          if (isError) {
             setEntries((current) => [...current, { kind: 'error', text: event.message ?? '' }])
           }
           break
@@ -238,9 +275,16 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
       return
     }
     const mentions = pendingMentions.filter((mention) => text.includes(`@${mention.name}`))
+    let modelText = text
+    if (composerContext) {
+      modelText += '\n\n[The user is editing this post in the composer. Work on THIS text and reply with the revised post text only; do not create a new draft unless explicitly asked:]\n'
+        + composerContext
+      setComposerContext(null)
+      setComposerSession(true)
+    }
     const userMessage: BackendAIChatMessage = {
       role: 'user',
-      content: text,
+      content: modelText,
       mentions: mentions.length > 0 ? mentions : undefined,
     }
     history.current = [...history.current, userMessage]
@@ -301,7 +345,7 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
               if (entry.kind === 'preview' && entry.preview) {
                 return (
                   <article key={index} className="ai-chat-preview">
-                    <p className="eyebrow">{t('aiChat.draftCreated')}</p>
+                    <p className="eyebrow">{t(entry.updated ? 'aiChat.draftUpdated' : 'aiChat.draftCreated')}</p>
                     {entry.preview.title ? <strong>{entry.preview.title}</strong> : null}
                     <p className="ai-chat-preview__content">{entry.preview.content}</p>
                     <button
@@ -324,6 +368,16 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
               return (
                 <div key={index} className={`ai-chat-bubble ai-chat-bubble--${entry.kind}`}>
                   {entry.text}
+                  {entry.kind === 'assistant' && composerSession && onApplyToComposer ? (
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      style={{ display: 'block', marginTop: '0.5rem' }}
+                      onClick={() => onApplyToComposer(entry.text)}
+                    >
+                      {t('aiChat.applyToComposer')}
+                    </button>
+                  ) : null}
                 </div>
               )
             })}
@@ -333,6 +387,19 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
               </div>
             )}
           </div>
+
+          {composerContext && (
+            <div className="ai-chat-mentions">
+              <button
+                type="button"
+                className="ai-chat-chip"
+                onClick={() => setComposerContext(null)}
+                title={t('aiChat.removeMention')}
+              >
+                {t('aiChat.composerContextAttached')} ×
+              </button>
+            </div>
+          )}
 
           {pendingMentions.length > 0 && (
             <div className="ai-chat-mentions">
@@ -397,14 +464,20 @@ export function AIChatWidget({ api, teamId, onOpenInComposer }: AIChatWidgetProp
 
 function toolLabel(toolName: string, t: (key: string) => string): string {
   switch (toolName) {
+    case 'fetch_url':
+      return t('aiChat.toolFetchUrl')
     case 'create_draft':
       return t('aiChat.toolCreateDraft')
+    case 'update_draft':
+      return t('aiChat.toolUpdateDraft')
     case 'create_campaign':
       return t('aiChat.toolCreateCampaign')
     case 'create_recurring_automation':
       return t('aiChat.toolCreateRecurring')
     case 'create_rss_automation':
       return t('aiChat.toolCreateRss')
+    case 'get_top_hashtags':
+      return t('aiChat.toolTopHashtags')
     default:
       return toolName
   }

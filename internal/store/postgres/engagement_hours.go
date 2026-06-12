@@ -39,3 +39,37 @@ func (s *Store) GetTeamEngagementHourHistogram(ctx context.Context, teamID strin
 	}
 	return out, rows.Err()
 }
+
+// GetTeamEngagementHeatmap aggregates post_metrics sums by UTC weekday (0=Sunday) and hour.
+func (s *Store) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int) ([]domain.EngagementHeatmapBucket, error) {
+	if days <= 0 {
+		days = 90
+	}
+	since := time.Now().UTC().AddDate(0, 0, -days)
+	rows, err := s.pool.Query(ctx, `
+		select extract(dow from scheduled_at at time zone 'utc')::integer as wd,
+		       extract(hour from scheduled_at at time zone 'utc')::integer as hr,
+		       coalesce(sum(pm.value), 0)::bigint
+		from scheduled_posts sp
+		join post_metrics pm on pm.post_id = sp.id
+		where sp.team_id = $1
+		  and sp.status = 'posted'
+		  and sp.scheduled_at >= $2
+		group by wd, hr
+		order by wd, hr`,
+		teamID, since,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.EngagementHeatmapBucket, 0, 7*24)
+	for rows.Next() {
+		var b domain.EngagementHeatmapBucket
+		if err := rows.Scan(&b.WeekdayUTC, &b.HourUTC, &b.Score); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}

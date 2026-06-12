@@ -90,4 +90,9 @@ func (h *Handler) registerTools(server *mcp.Server) {
 		Name:        "get_analytics",
 		Description: "Get engagement analytics (likes, reposts, followers) for a team or specific posts",
 	}, h.handleGetAnalytics)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_hashtag_performance",
+		Description: "Get the team's best-performing hashtags from published post analytics (uses, engagement, smoothed score), optionally filtered by platform and time window",
+	}, h.handleGetHashtagPerformance)
 }

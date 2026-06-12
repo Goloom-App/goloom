@@ -7,6 +7,8 @@ import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import { Icon } from '../../icons'
 import type {
   BackendAccountGrowthPoint,
+  BackendEngagementHeatmapBucket,
+  BackendHashtagPerformance,
   BackendMetricHistoryPoint,
   BackendPostAnalyticsListRow,
   BackendPostMetric,
@@ -78,6 +80,62 @@ function PostMetricsDetailPanel({
   )
 }
 
+// Heatmap rows are local weekdays in Monday-first order; JS getDay() is 0=Sunday.
+const heatmapRowOrder = [1, 2, 3, 4, 5, 6, 0]
+const weekdayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+
+// Convert UTC weekday/hour buckets to the browser's local time. 2024-01-07 was
+// a Sunday, so weekday n maps onto Jan 7+n; DST nuances within the window are ignored.
+function heatmapToLocal(buckets: BackendEngagementHeatmapBucket[]): number[][] {
+  const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0))
+  for (const b of buckets) {
+    const d = new Date(Date.UTC(2024, 0, 7 + b.weekday, b.hour))
+    grid[d.getDay()][d.getHours()] += b.score
+  }
+  return grid
+}
+
+function ActivityHeatmapPanel({ buckets }: { buckets: BackendEngagementHeatmapBucket[] }) {
+  const { t } = useTranslation()
+  const grid = useMemo(() => heatmapToLocal(buckets), [buckets])
+  const maxScore = useMemo(() => Math.max(1, ...grid.flat()), [grid])
+  const hasData = useMemo(() => grid.some((row) => row.some((v) => v > 0)), [grid])
+  return (
+    <section className="glass-panel">
+      <h3 className="subsection-title">{t('analytics.activityHeatmap')}</h3>
+      <p className="hint">{t('analytics.activityHeatmapHint')}</p>
+      {!hasData ? (
+        <p className="hint">{t('analytics.noActivityData')}</p>
+      ) : (
+        <div className="analytics-heatmap" role="img" aria-label={t('analytics.activityHeatmap')}>
+          <div className="analytics-heatmap__row analytics-heatmap__row--head">
+            <span className="analytics-heatmap__day" />
+            {Array.from({ length: 24 }, (_, h) => (
+              <span key={h} className="analytics-heatmap__hour-label">
+                {h % 6 === 0 ? String(h).padStart(2, '0') : ''}
+              </span>
+            ))}
+          </div>
+          {heatmapRowOrder.map((day) => (
+            <div key={day} className="analytics-heatmap__row">
+              <span className="analytics-heatmap__day">{t(`weekdays.${weekdayKeys[day]}`)}</span>
+              {grid[day].map((score, hour) => (
+                <span
+                  key={hour}
+                  className="analytics-heatmap__cell"
+                  title={`${t(`weekdays.${weekdayKeys[day]}`)} ${String(hour).padStart(2, '0')}:00 · ${score.toLocaleString()}`}
+                  style={{ opacity: score > 0 ? 0.15 + 0.85 * (score / maxScore) : undefined }}
+                  data-empty={score === 0 || undefined}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function formatDeltaPct(n: number | undefined): string {
   if (n == null || Number.isNaN(n)) {
     return ''
@@ -95,6 +153,8 @@ export function AnalyticsView({
   fetchChart,
   fetchAccountGrowth,
   fetchPostMetrics,
+  fetchHashtags,
+  fetchHeatmap,
 }: {
   teamId: string
   accounts: AccountRecord[]
@@ -103,9 +163,11 @@ export function AnalyticsView({
   fetchChart: (opts: { metric: string; days?: number }) => Promise<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>
   fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
   fetchPostMetrics?: (postId: string) => Promise<{ items: BackendPostMetric[] }>
+  fetchHashtags?: (opts?: { days?: number; provider?: string; limit?: number }) => Promise<{ items: BackendHashtagPerformance[] }>
+  fetchHeatmap?: (opts?: { days?: number }) => Promise<{ buckets: BackendEngagementHeatmapBucket[] }>
 }) {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'posts'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'posts' | 'hashtags'>('overview')
   const [summary, setSummary] = useState<BackendTeamAnalyticsReport | null>(null)
   const [posts, setPosts] = useState<BackendPostAnalyticsListRow[]>([])
   const [series, setSeries] = useState<BackendMetricHistoryPoint[]>([])
@@ -116,6 +178,11 @@ export function AnalyticsView({
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
   const [selectedPostMetrics, setSelectedPostMetrics] = useState<BackendPostMetric[]>([])
   const [postMetricsLoading, setPostMetricsLoading] = useState(false)
+  const [heatmapBuckets, setHeatmapBuckets] = useState<BackendEngagementHeatmapBucket[]>([])
+  const [hashtags, setHashtags] = useState<BackendHashtagPerformance[]>([])
+  const [hashtagProvider, setHashtagProvider] = useState<string>('all')
+  const [hashtagDays, setHashtagDays] = useState<number>(90)
+  const [hashtagsLoading, setHashtagsLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -235,6 +302,65 @@ export function AnalyticsView({
   }, [accounts, activeTab, fetchAccountGrowth, teamId])
 
   useEffect(() => {
+    if (!teamId || !fetchHeatmap) {
+      setHeatmapBuckets([])
+      return
+    }
+    let cancelled = false
+    void fetchHeatmap({ days: 90 })
+      .then((res) => {
+        if (!cancelled) {
+          setHeatmapBuckets(res.buckets ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHeatmapBuckets([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchHeatmap, teamId])
+
+  useEffect(() => {
+    if (!teamId || !fetchHashtags || activeTab !== 'hashtags') {
+      return
+    }
+    let cancelled = false
+    setHashtagsLoading(true)
+    void fetchHashtags({ days: hashtagDays, provider: hashtagProvider === 'all' ? undefined : hashtagProvider, limit: 50 })
+      .then((res) => {
+        if (!cancelled) {
+          setHashtags(res.items ?? [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHashtags([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHashtagsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, fetchHashtags, hashtagDays, hashtagProvider, teamId])
+
+  const hashtagProviders = useMemo(() => {
+    const seen = new Set<string>()
+    for (const acc of accounts) {
+      if (acc.provider) {
+        seen.add(acc.provider)
+      }
+    }
+    return Array.from(seen).sort()
+  }, [accounts])
+
+  useEffect(() => {
     if (!fetchPostMetrics || !selectedPostId) {
       setSelectedPostMetrics([])
       return
@@ -338,6 +464,15 @@ export function AnalyticsView({
             >
               {t('analytics.tabPosts')}
             </button>
+            {fetchHashtags ? (
+              <button
+                type="button"
+                className={`view-toggle__btn ${activeTab === 'hashtags' ? 'view-toggle__btn--active' : ''}`}
+                onClick={() => setActiveTab('hashtags')}
+              >
+                {t('analytics.tabHashtags')}
+              </button>
+            ) : null}
           </div>
           <button type="button" className="button button--secondary" onClick={() => void load()} disabled={loading}>
             <Icon name="refresh" className="inline-icon" />
@@ -426,6 +561,8 @@ export function AnalyticsView({
               </div>
             </section>
           </div>
+
+          {fetchHeatmap ? <ActivityHeatmapPanel buckets={heatmapBuckets} /> : null}
         </div>
       )}
 
@@ -503,6 +640,58 @@ export function AnalyticsView({
             })}
           </div>
         </div>
+      )}
+
+      {summary && activeTab === 'hashtags' && (
+        <section className="glass-panel" style={viewGapStyle}>
+          <div className="analytics-chart-panel__head">
+            <h3 className="subsection-title">{t('analytics.hashtagPerformance')}</h3>
+            <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+              <select className="select-sm" value={hashtagDays} onChange={(e) => setHashtagDays(Number(e.target.value))}>
+                <option value={30}>{t('analytics.days30')}</option>
+                <option value={90}>{t('analytics.days90')}</option>
+                <option value={365}>{t('analytics.days365')}</option>
+              </select>
+              <select className="select-sm" value={hashtagProvider} onChange={(e) => setHashtagProvider(e.target.value)}>
+                <option value="all">{t('analytics.allPlatforms')}</option>
+                {hashtagProviders.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="hint">{t('analytics.hashtagPerformanceHint')}</p>
+          {hashtagsLoading ? (
+            <p className="hint">{t('common.loadingAnalytics')}</p>
+          ) : hashtags.length === 0 ? (
+            <p className="hint">{t('analytics.noHashtags')}</p>
+          ) : (
+            <div className="analytics-posts-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t('analytics.hashtag')}</th>
+                    <th className="text-right">{t('analytics.hashtagUses')}</th>
+                    <th className="text-right">{t('analytics.hashtagTotal')}</th>
+                    <th className="text-right">{t('analytics.hashtagAvg')}</th>
+                    <th className="text-right">{t('analytics.hashtagScore')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hashtags.map((row) => (
+                    <tr key={row.tag}>
+                      <td><span className="post-table-title">#{row.display || row.tag}</span></td>
+                      <td className="text-right">{row.uses.toLocaleString()}</td>
+                      <td className="text-right">{row.total_engagement.toLocaleString()}</td>
+                      <td className="text-right">{row.avg_engagement.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                      <td className="text-right font-bold">{row.score.toLocaleString(undefined, { maximumFractionDigits: 1 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
 
       {summary && activeTab === 'posts' && (

@@ -353,7 +353,23 @@
       "paused": "pausiert",
       "followers": "Follower",
       "following": "Following",
-      "posts": "Beiträge"
+      "posts": "Beiträge",
+      "tabHashtags": "Hashtags",
+      "activityHeatmap": "Aktivität nach Wochentag & Uhrzeit",
+      "activityHeatmapHint": "Interaktionen veröffentlichter Beiträge nach Veröffentlichungszeitpunkt (lokale Zeit, letzte 90 Tage).",
+      "noActivityData": "Noch keine Aktivitätsdaten. Metriken erscheinen nach Veröffentlichung und Sync.",
+      "hashtagPerformance": "Hashtag-Performance",
+      "hashtagPerformanceHint": "Interaktionen pro Hashtag über veröffentlichte Beiträge. Der Score glättet Ausreißer, damit einzelne virale Beiträge nicht dominieren. Groß-/Kleinschreibung wird zusammengefasst.",
+      "noHashtags": "Noch keine Hashtags in veröffentlichten Beiträgen gefunden.",
+      "hashtag": "Hashtag",
+      "hashtagUses": "Verwendungen",
+      "hashtagTotal": "Interaktionen",
+      "hashtagAvg": "Ø pro Beitrag",
+      "hashtagScore": "Score",
+      "allPlatforms": "Alle Plattformen",
+      "days30": "30 Tage",
+      "days90": "90 Tage",
+      "days365": "365 Tage"
     },
     "accounts": {
       "connectedTitle": "Verbundene Konten",
@@ -514,6 +530,7 @@
       "regenerateNoOccurrences": "Keine neu generierbaren Termine für diese Vorlage gefunden.",
       "regenerateSelectOccurrence": "Termin zum Neu-Generieren",
       "regenerateAiQueued": "KI erstellt neuen Beitrag… Kalender aktualisiert sich gleich.",
+      "regenerateAiFailed": "KI-Generierung fehlgeschlagen – der Beitrag wurde mit dem Template-Inhalt erstellt. ({{error}})",
       "editTemplate": "Bearbeiten",
       "editTitle": "Wiederholungsvorlage bearbeiten",
       "counterStart": "Zähler-Start",
@@ -808,7 +825,10 @@
       "aiOptimizeHint": "Optimierungsanweisungen (optional)",
       "aiOptimizePlaceholder": "z. B. Kürzer und ansprechender formulieren",
       "aiOptimizeApplied": "Entwurf mit KI-Vorschlägen aktualisiert.",
-      "aiOptimizeFailed": "KI-Optimierung fehlgeschlagen."
+      "aiOptimizeFailed": "KI-Optimierung fehlgeschlagen.",
+      "aiOpenChat": "Im KI-Chat bearbeiten",
+      "suggestedHashtags": "Bewährte Hashtags",
+      "hashtagChipTitle": "{{uses}} Verwendungen · Ø {{avg}} Interaktionen pro Beitrag"
     },
     "ai": {
       "generate": {
@@ -872,9 +892,14 @@
       "send": "Senden",
       "thinking": "Denkt nach…",
       "draftCreated": "Entwurf erstellt",
+      "draftUpdated": "Entwurf aktualisiert",
+      "composerContextAttached": "Composer-Entwurf angehängt",
+      "applyToComposer": "In Composer übernehmen",
       "openInComposer": "Im Composer öffnen",
       "toolRunning": "Führe aus: {{tool}}",
+      "toolFetchUrl": "Lese verlinkte Seite",
       "toolCreateDraft": "Erstelle Entwurf",
+      "toolUpdateDraft": "Aktualisiere Entwurf",
       "toolCreateCampaign": "Erstelle Kampagne",
       "toolCreateRecurring": "Erstelle wiederkehrende Automation",
       "toolCreateRss": "Erstelle RSS-Automation",
@@ -886,7 +911,8 @@
       "commandDraft": "Entwirf einen Post über ",
       "commandCampaign": "Erstelle eine Kampagne für ",
       "commandRecurring": "Erstelle einen wiederkehrenden Post jeden ",
-      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: "
+      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: ",
+      "toolTopHashtags": "Frage Hashtag-Performance ab"
     }
   },
   "api": {

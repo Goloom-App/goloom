@@ -195,10 +195,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
     <div className="glass-panel stack stack--lg">
       <div className="flex-row--between">
         <div>
-          <h2 className="section-card__title flex-row--center gap-2">
-            <Rss size={20} />
-            {t('rss.title')}
-          </h2>
+          <h2 className="section-card__title">{t('rss.title')}</h2>
           <p className="hint">{t('rss.hint')}</p>
         </div>
         {canEdit ? (

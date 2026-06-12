@@ -186,6 +186,21 @@ export interface BackendPostMetric {
   updated_at: string
 }
 
+export interface BackendHashtagPerformance {
+  tag: string
+  display: string
+  uses: number
+  total_engagement: number
+  avg_engagement: number
+  score: number
+}
+
+export interface BackendEngagementHeatmapBucket {
+  weekday: number
+  hour: number
+  score: number
+}
+
 export interface BackendPostVersion {
   post_id: string
   account_id: string
@@ -937,6 +952,36 @@ export function createApiClient(options: ApiClientOptions) {
       return request<{ hours: { hour: number; score: number }[] }>(
         options,
         `/v1/teams/${teamID}/analytics/engagement-hours${q}`,
+        {
+          headers: buildHeaders(options.token, false),
+        },
+      )
+    },
+    getTeamEngagementHeatmap(teamID: string, opts?: { days?: number }) {
+      const q = opts?.days != null && opts.days > 0 ? `?days=${encodeURIComponent(String(opts.days))}` : ''
+      return request<{ days: number; buckets: BackendEngagementHeatmapBucket[] }>(
+        options,
+        `/v1/teams/${teamID}/analytics/engagement-heatmap${q}`,
+        {
+          headers: buildHeaders(options.token, false),
+        },
+      )
+    },
+    getTeamHashtagPerformance(teamID: string, opts?: { days?: number; provider?: string; limit?: number }) {
+      const params = new URLSearchParams()
+      if (opts?.days != null && opts.days > 0) {
+        params.set('days', String(opts.days))
+      }
+      if (opts?.provider) {
+        params.set('provider', opts.provider)
+      }
+      if (opts?.limit != null && opts.limit > 0) {
+        params.set('limit', String(opts.limit))
+      }
+      const suffix = params.toString()
+      return request<{ days: number; provider: string; items: BackendHashtagPerformance[] }>(
+        options,
+        `/v1/teams/${teamID}/analytics/hashtags${suffix ? `?${suffix}` : ''}`,
         {
           headers: buildHeaders(options.token, false),
         },

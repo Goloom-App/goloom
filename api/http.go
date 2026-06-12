@@ -147,6 +147,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAllTeamPostVersions))))
 	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePatchPostVersions))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-hours", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamEngagementHourHistogram))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-heatmap", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamEngagementHeatmap))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/hashtags", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamHashtagAnalytics))))
 	mux.Handle("GET /v1/teams/{teamID}/external-post-monitor", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetExternalPostMonitor))))
 	mux.Handle("PUT /v1/teams/{teamID}/external-post-monitor", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpsertExternalPostMonitor))))
 	mux.Handle("POST /v1/teams/{teamID}/import-old-posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleImportOldPosts))))

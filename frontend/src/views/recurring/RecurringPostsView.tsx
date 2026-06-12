@@ -155,18 +155,24 @@ export function RecurringPostsView({
       return
     }
     try {
-      const job = JSON.parse(lastEvent.data) as { type?: string; status?: string }
+      const job = JSON.parse(lastEvent.data) as { type?: string; status?: string; error_message?: string }
       if (
         job.type === 'voice_engine'
         && (job.status === 'completed' || job.status === 'failed')
       ) {
         awaitingAiRegenerateRef.current = false
+        if (job.status === 'failed') {
+          onStatus(t('recurring.regenerateAiFailed', {
+            defaultValue: 'KI-Generierung fehlgeschlagen – Template-Inhalt wurde verwendet. ({{error}})',
+            error: job.error_message || 'unknown error',
+          }))
+        }
         void onPostsRefresh?.()
       }
     } catch {
       // ignore malformed SSE payloads
     }
-  }, [lastEvent, onPostsRefresh])
+  }, [lastEvent, onPostsRefresh, onStatus, t])
 
   async function afterRegenerate(templateId: string): Promise<boolean> {
     const res = await api.listPostTemplates(teamId)
@@ -454,10 +460,7 @@ export function RecurringPostsView({
       <div className="glass-panel">
         <div className="flex-row--between">
           <div>
-            <h2 className="section-card__title flex-row--center gap-2">
-              <CalendarClock size={20} />
-              {t('recurring.title')}
-            </h2>
+            <h2 className="section-card__title">{t('recurring.title')}</h2>
             <p className="hint">{t('recurring.hint')}</p>
           </div>
           {canEdit ? (

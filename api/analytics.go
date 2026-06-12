@@ -94,6 +94,47 @@ func (a *API) handleTeamAccountGrowth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (a *API) handleTeamHashtagAnalytics(w http.ResponseWriter, r *http.Request) {
+	days := 90
+	if raw := strings.TrimSpace(r.URL.Query().Get("days")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 366 {
+			days = n
+		}
+	}
+	limit := 30
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
+	items, err := a.store.ListTeamHashtagPerformance(r.Context(), r.PathValue("teamID"), days, provider, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{
+		"days":     days,
+		"provider": provider,
+		"items":    sliceOrEmpty(items),
+	})
+}
+
+func (a *API) handleTeamEngagementHeatmap(w http.ResponseWriter, r *http.Request) {
+	days := 90
+	if raw := strings.TrimSpace(r.URL.Query().Get("days")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 366 {
+			days = n
+		}
+	}
+	items, err := a.store.GetTeamEngagementHeatmap(r.Context(), r.PathValue("teamID"), days)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"days": days, "buckets": sliceOrEmpty(items)})
+}
+
 func (a *API) handleTeamAnalytics(w http.ResponseWriter, r *http.Request) {
 	top := 10
 	if raw := strings.TrimSpace(r.URL.Query().Get("top_posts")); raw != "" {

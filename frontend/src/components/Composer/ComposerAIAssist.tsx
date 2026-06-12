@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2, MessageSquareText, Sparkles } from 'lucide-react'
 
 import { getApiClient, useTriggerAIJob } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
+import { openAIChatWithComposerDraft } from '../ai/composerChatBridge'
 import type { EditorDraftState } from './types'
 
 function sleep(ms: number) {
@@ -45,6 +46,7 @@ export function ComposerAIAssist({
 
   const [instruction, setInstruction] = useState('')
   const [showInstruction, setShowInstruction] = useState(false)
+  const [optimizing, setOptimizing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
@@ -53,13 +55,17 @@ export function ComposerAIAssist({
   }
 
   const canOptimize = draft.content.trim().length > 0 && draft.targetAccountIds.length > 0
+  // Busy covers the whole round trip: trigger request plus waiting for the
+  // job result — not just the initial POST.
+  const busy = triggerJob.isPending || optimizing
 
   const handleOptimize = async () => {
-    if (!canOptimize) {
+    if (!canOptimize || busy) {
       return
     }
     setError(null)
     setStatusMessage(null)
+    setOptimizing(true)
     try {
       const response = await triggerJob.mutateAsync({
         teamId,
@@ -94,6 +100,8 @@ export function ComposerAIAssist({
       setShowInstruction(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('composer.aiOptimizeFailed'))
+    } finally {
+      setOptimizing(false)
     }
   }
 
@@ -104,7 +112,7 @@ export function ComposerAIAssist({
           type="button"
           className="btn btn--secondary btn--sm"
           data-testid="composer-ai-optimize"
-          disabled={!canOptimize || triggerJob.isPending}
+          disabled={!canOptimize || busy}
           onClick={() => {
             if (showInstruction) {
               void handleOptimize()
@@ -113,7 +121,7 @@ export function ComposerAIAssist({
             }
           }}
         >
-          {triggerJob.isPending ? (
+          {busy ? (
             <>
               <Loader2 size={14} className="spin" /> {t('composer.aiOptimizing')}
             </>
@@ -123,11 +131,20 @@ export function ComposerAIAssist({
             </>
           )}
         </button>
-        {showInstruction && !triggerJob.isPending ? (
+        {showInstruction && !busy ? (
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowInstruction(false)}>
             {t('common.cancel')}
           </button>
         ) : null}
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          data-testid="composer-ai-chat"
+          disabled={draft.content.trim().length === 0}
+          onClick={() => openAIChatWithComposerDraft(draft.content)}
+        >
+          <MessageSquareText size={14} /> {t('composer.aiOpenChat')}
+        </button>
       </div>
       {showInstruction ? (
         <label className="field">

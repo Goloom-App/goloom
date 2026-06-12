@@ -463,6 +463,7 @@ type AIContext struct {
 	Accounts         []AIAccountSummary     `json:"accounts,omitempty"`
 	UpcomingPosts    []ScheduledPost        `json:"upcoming_posts,omitempty"`
 	EngagementHours  []EngagementHourBucket `json:"engagement_hours,omitempty"`
+	TopHashtags      []HashtagPerformance   `json:"top_hashtags,omitempty"`
 }
 
 const AIContextRecentPostsLimit = 50
@@ -709,6 +710,37 @@ func ExpandPostTemplateTitle(title string, scheduledAt time.Time, counter int, m
 type EngagementHourBucket struct {
 	HourUTC int   `json:"hour"`
 	Score   int64 `json:"score"`
+}
+
+// EngagementHeatmapBucket aggregates engagement score by UTC weekday (0=Sunday) and hour-of-day.
+type EngagementHeatmapBucket struct {
+	WeekdayUTC int   `json:"weekday"`
+	HourUTC    int   `json:"hour"`
+	Score      int64 `json:"score"`
+}
+
+// HashtagPerformance aggregates engagement for one normalized hashtag across
+// posted content. Uses counts distinct posts; Score is the smoothed ranking
+// value total/(uses+k) that keeps single viral posts from dominating.
+type HashtagPerformance struct {
+	Tag             string  `json:"tag"`
+	Display         string  `json:"display"`
+	Uses            int64   `json:"uses"`
+	TotalEngagement int64   `json:"total_engagement"`
+	AvgEngagement   float64 `json:"avg_engagement"`
+	Score           float64 `json:"score"`
+}
+
+// HashtagScoreSmoothing is k in score = total_engagement / (uses + k).
+const HashtagScoreSmoothing = 3
+
+// FinalizeScores derives AvgEngagement and the smoothed Score from the
+// aggregated Uses/TotalEngagement values.
+func (h *HashtagPerformance) FinalizeScores() {
+	if h.Uses > 0 {
+		h.AvgEngagement = float64(h.TotalEngagement) / float64(h.Uses)
+	}
+	h.Score = float64(h.TotalEngagement) / float64(h.Uses+HashtagScoreSmoothing)
 }
 
 type ScheduledPostTarget struct {

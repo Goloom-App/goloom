@@ -65,7 +65,7 @@ export function useResolvedTheme(colorScheme: string): 'dark' | 'light' {
     }
     const metaTheme = document.querySelector('meta[name="theme-color"]')
     if (metaTheme) {
-      metaTheme.setAttribute('content', resolvedTheme === 'dark' ? '#0a0c10' : '#f6f7f9')
+      metaTheme.setAttribute('content', resolvedTheme === 'dark' ? '#0a0c10' : '#f1f3f6')
     }
     // Sync theme to document element so Radix portals (rendered to body) inherit CSS variables
     document.documentElement.setAttribute('data-theme', resolvedTheme)

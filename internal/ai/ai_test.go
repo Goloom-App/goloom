@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
@@ -156,6 +157,31 @@ func TestRunChatToolLoop(t *testing.T) {
 	}
 	if !foundToolResult {
 		t.Fatalf("tool result missing from follow-up request: %+v", second.Messages)
+	}
+}
+
+func TestNextCampaignSlotSkipsOccupiedWeekday(t *testing.T) {
+	// Fixed "now": Monday 2026-06-08 10:00 UTC.
+	restore := nowFunc
+	nowFunc = func() time.Time { return time.Date(2026, 6, 8, 10, 0, 0, 0, time.UTC) }
+	defer func() { nowFunc = restore }()
+
+	tuesday := 2
+	context := testContext()
+	// The next Tuesday (2026-06-09) is already taken by a scheduled post.
+	context.UpcomingPosts = []domain.ScheduledPost{
+		{ScheduledAt: time.Date(2026, 6, 9, 9, 0, 0, 0, time.UTC)},
+	}
+
+	slot := NextCampaignSlot(context, &domain.CampaignFormat{Weekday: &tuesday})
+	if slot == nil {
+		t.Fatal("expected a slot")
+	}
+	if got := slot.UTC().Format("2006-01-02"); got != "2026-06-16" {
+		t.Fatalf("slot date = %s, want next free Tuesday 2026-06-16", got)
+	}
+	if slot.Weekday() != time.Tuesday {
+		t.Fatalf("slot weekday = %s, want Tuesday", slot.Weekday())
 	}
 }
 

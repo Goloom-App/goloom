@@ -1802,6 +1802,8 @@ function App() {
             fetchChart={(opts) => api.getTeamAnalyticsChart(effectiveSelectedTeamId, opts)}
             fetchAccountGrowth={(accountID, opts) => api.getTeamAccountGrowth(effectiveSelectedTeamId, accountID, opts)}
             fetchPostMetrics={(postID) => api.getPostAnalytics(effectiveSelectedTeamId, postID)}
+            fetchHashtags={(opts) => api.getTeamHashtagPerformance(effectiveSelectedTeamId, opts)}
+            fetchHeatmap={(opts) => api.getTeamEngagementHeatmap(effectiveSelectedTeamId, opts)}
           />
         ) : null}
 
@@ -1956,6 +1958,11 @@ function App() {
           api={api}
           teamId={selectedTeam.id}
           onOpenInComposer={openComposerFromGeneratedContent}
+          onApplyToComposer={(content) => {
+            setEditorDraft((current) => ({ ...current, content }))
+            prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
+            setSection('composer')
+          }}
         />
       )}
 
