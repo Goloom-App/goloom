@@ -661,7 +661,9 @@ func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTem
 
 func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time, occurrenceAt time.Time, role string) error {
 	counterVal := tmpl.CounterNext
-	expandedContent := domain.ExpandDynamicVariables(tmpl.Content, scheduledAt, &counterVal, nil, nil)
+	// Content is NOT expanded here - it stays with {counter} placeholders
+	// and is expanded at publish time in processPost using TemplateCounter
+	content := tmpl.Content
 	expandedTitle := domain.ExpandPostTemplateTitle(tmpl.Title, scheduledAt, counterVal, nil, nil)
 	outputMode := tmpl.OutputMode
 	if outputMode == "" {
@@ -683,7 +685,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 	}
 
 	if s.shouldEnhanceRecurringWithAI(ctx, *tmpl) {
-		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, expandedContent, expandedTitle, at, draft, occurrenceAt); err != nil {
+		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, content, expandedTitle, at, draft, occurrenceAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: ai unavailable, using template", "template_id", tmpl.ID, "error", err)
 		} else {
 			return nil
@@ -695,7 +697,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 	occAt := occurrenceAt.UTC()
 	input := domain.CreatePostInput{
 		Title:                 expandedTitle,
-		Content:               expandedContent,
+		Content:               content,
 		ScheduledAt:           at,
 		TargetAccounts:        tmpl.TargetAccountIDs,
 		Visibility:            tmpl.Visibility,
