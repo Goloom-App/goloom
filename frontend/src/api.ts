@@ -40,6 +40,7 @@ export interface BackendTeam {
   is_ai_enabled?: boolean
   personal_for_user_id?: string
   scheduling_preferences?: BackendTeamSchedulingPreferences
+  brand_color?: string
 }
 
 export interface BackendPostTemplate {
@@ -555,6 +556,7 @@ export function createApiClient(options: ApiClientOptions) {
         description: string
         scheduling_preferences?: BackendTeamSchedulingPreferences
         is_ai_enabled?: boolean
+        brand_color?: string
       },
     ) {
       return request<BackendTeam>(options, `/v1/teams/${teamID}`, {

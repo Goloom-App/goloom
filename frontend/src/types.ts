@@ -150,6 +150,7 @@ export interface TeamRecord {
   isAiEnabled: boolean
   personalForUserId?: string
   schedulingPreferences?: TeamSchedulingPreferences
+  brandColor?: string
 }
 
 export interface Team extends TeamRecord {}

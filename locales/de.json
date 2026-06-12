@@ -73,7 +73,10 @@
       "noTeamLoaded": "Kein Team geladen",
       "createNewTeam": "+ Neues Team erstellen…",
       "signOut": "Abmelden",
-      "signOutTitle": "Abmelden"
+      "signOutTitle": "Abmelden",
+      "collapse": "Seitenleiste einklappen",
+      "expand": "Seitenleiste ausklappen",
+      "userMenu": "Benutzermenü"
     },
     "sidebarApp": {
       "workspace": "Arbeitsbereich",
@@ -300,7 +303,8 @@
       "noOccurrenceToSkip": "Kein geplanter Termin zum Überspringen.",
       "failedLoadMediaLibrary": "Medienbibliothek konnte nicht geladen werden",
       "deleteFailed": "Löschen fehlgeschlagen",
-      "couldNotLoadLibrary": "Bibliothek konnte nicht geladen werden"
+      "couldNotLoadLibrary": "Bibliothek konnte nicht geladen werden",
+      "brandColorUpdated": "Markenfarbe aktualisiert."
     },
     "dashboard": {
       "performance": "Performance",
@@ -438,7 +442,11 @@
       "importOldPostsResult": "{{count}} Posts importiert.",
       "addMember": "Mitglied hinzufügen",
       "selectUser": "Nutzer wählen…",
-      "addToTeam": "Zum Team hinzufügen"
+      "addToTeam": "Zum Team hinzufügen",
+      "brandingTitle": "Branding",
+      "brandingHint": "Wähle die Markenfarbe deines Teams. Sie wird für alle Teammitglieder als Akzentfarbe in der App verwendet.",
+      "brandColorLabel": "Markenfarbe",
+      "brandColorReset": "Auf Standard zurücksetzen"
     },
     "recurring": {
       "title": "Wiederkehrende Beiträge",

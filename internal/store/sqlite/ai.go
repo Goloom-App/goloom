@@ -869,17 +869,19 @@ func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
 			isAIEnabled       int
 			personalForUserID sql.NullString
 			schedulingPrefs   sql.NullString
+			brandColor        sql.NullString
 			createdAt         string
 		)
 		if err := rows.Scan(
 			&team.ID, &team.Name, &team.Description, &createdAt,
-			&isPersonal, &isAIEnabled, &personalForUserID, &schedulingPrefs,
+			&isPersonal, &isAIEnabled, &personalForUserID, &schedulingPrefs, &brandColor,
 		); err != nil {
 			return nil, err
 		}
 		team.IsPersonal = isPersonal != 0
 		team.IsAIEnabled = isAIEnabled != 0
 		team.PersonalForUserID = personalForUserID.String
+		team.BrandColor = brandColor.String
 		if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {
 			prefs, err := domain.ParseTeamSchedulingPrefsJSON(schedulingPrefs.String)
 			if err != nil {

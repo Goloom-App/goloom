@@ -73,7 +73,10 @@
       "noTeamLoaded": "No team loaded",
       "createNewTeam": "+ Create new team…",
       "signOut": "Sign out",
-      "signOutTitle": "Sign out"
+      "signOutTitle": "Sign out",
+      "collapse": "Collapse sidebar",
+      "expand": "Expand sidebar",
+      "userMenu": "User menu"
     },
     "sidebarApp": {
       "workspace": "Workspace",
@@ -300,7 +303,8 @@
       "noOccurrenceToSkip": "No scheduled occurrence to skip.",
       "failedLoadMediaLibrary": "Failed to load media library",
       "deleteFailed": "Delete failed",
-      "couldNotLoadLibrary": "Could not load library"
+      "couldNotLoadLibrary": "Could not load library",
+      "brandColorUpdated": "Brand color updated."
     },
     "dashboard": {
       "performance": "Performance",
@@ -438,7 +442,11 @@
       "importOldPostsResult": "{{count}} posts imported.",
       "addMember": "Add Member",
       "selectUser": "Select user…",
-      "addToTeam": "Add to Team"
+      "addToTeam": "Add to Team",
+      "brandingTitle": "Branding",
+      "brandingHint": "Pick your team's brand color. It is used as the accent color across the app for everyone in this team.",
+      "brandColorLabel": "Brand color",
+      "brandColorReset": "Reset to default"
     },
     "recurring": {
       "title": "Recurring posts",

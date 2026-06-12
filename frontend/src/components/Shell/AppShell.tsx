@@ -4,6 +4,15 @@ import { BottomNav, MobileDrawer } from './MobileNav'
 import { PullToRefresh } from '../ui/PullToRefresh'
 import type { AppSection, TeamRecord, UserRecord } from '../../types'
 
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'goloom.sidebar.collapsed.v1'
+
+function loadSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1'
+}
+
 interface AppShellProps {
   children: React.ReactNode
   section: AppSection
@@ -44,15 +53,26 @@ export function AppShell({
   reviewQueueOverdueCount = 0,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed)
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, next ? '1' : '0')
+      }
+      return next
+    })
+  }
 
   return (
-    <div 
-      className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'} ${isComposer ? 'app-shell--composer' : ''}`} 
+    <div
+      className={`app-shell ${showPreviewColumn ? 'app-shell--triple' : 'app-shell--double'} ${isComposer ? 'app-shell--composer' : ''} ${sidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''}`}
       data-theme={resolvedTheme}
     >
       <div className="mesh-bg" />
-      
-      <Sidebar 
+
+      <Sidebar
         currentSection={section}
         setSection={setSection}
         teams={teams}
@@ -60,8 +80,11 @@ export function AppShell({
         reviewQueueCount={reviewQueueCount}
         reviewQueueOverdueCount={reviewQueueOverdueCount}
         onSelectTeam={onSelectTeam}
+        user={user}
         onSignOut={onSignOut}
         openComposer={openComposer}
+        collapsed={sidebarCollapsed}
+        onToggleCollapsed={toggleSidebarCollapsed}
       />
 
       <PullToRefresh

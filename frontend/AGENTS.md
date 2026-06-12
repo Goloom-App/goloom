@@ -13,8 +13,10 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - Build output: `../internal/webui/dist` (critical cross-boundary contract)
 - API proxy: `vite.config.ts` proxies `/api` to `localhost:8080`
 - Entry: `index.html` → `src/main.tsx` → `src/App.tsx`
-- Domain types: `src/types.ts` (407 lines, single source of truth)
+- Domain types: `src/types.ts` (single source of truth)
 - API client: `src/api.ts`
+- Local-storage helpers: `src/appStorage.ts` (settings, last section/team keys)
+- Theming: CSS variables in `src/index.css`; the accent family derives from `--brand-primary` (team brand color, set inline on `<html>` by `App.tsx`; default purple fallback). Theme/breakpoint hooks in `src/hooks/useTheme.ts`
 - i18n: `src/i18n/` (i18next)
 - Components: `src/components/` (reusable UI)
 - Views: `src/views/` (route-level pages)

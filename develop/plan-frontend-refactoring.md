@@ -1,5 +1,7 @@
 # Frontend Refactoring & Modernization Plan (PWA 2026)
 
+> **Status (2026-06-12): implemented.** Business palettes (deep slate dark / crisp light), `--brand-primary` accent derivation, team brand color picker (persisted via `teams.brand_color`), collapsible sidebar (localStorage), user profile menu, calendar `minmax(0, 1fr)` grid fix, compact heading scale, PWA theme colors, and App.tsx modularization (`appStorage.ts`, `useTheme.ts`, `TeamSettingsView`, `MobilePreviewOverlay`). Covered by `e2e/shell-navigation.spec.ts`.
+
 ## Background & Motivation
 The current frontend works well mechanically (e.g., the Sidebar and Preview mode are effective), but the UI lacks consistency and feels outdated. Components are often built in isolation rather than reusing a core design system, leading to visual inconsistencies. The light and dark themes have suboptimal color palettes, the layout wastes space, and specific views (like the Calendar) have layout bugs. 
 

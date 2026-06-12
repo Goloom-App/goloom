@@ -9,10 +9,9 @@ import { buildMediaExcludePayload, defaultEditorDraft, toInputDateTime } from '.
 import { accountContentOverrideForSave, isAccountOverCharLimit } from './components/Composer/composerUtils'
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
+import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
-import { Sun, Moon, Edit, Trash2, X, Settings, Users, Bot, Activity } from 'lucide-react'
-import { Icon } from './icons'
-import { SectionCard, ToggleSwitch } from './components/ui'
+import { Sun, Moon, Edit, Trash2, X } from 'lucide-react'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
 import { DashboardView } from './views/dashboard/DashboardView'
@@ -25,6 +24,7 @@ import { AdminView } from './views/admin/AdminView'
 import { defaultAdminProviderDraft, type AdminProviderDraft } from './views/admin/adminTypes'
 import { MediaLibraryView } from './views/media/MediaLibraryView'
 import { SettingsView } from './views/settings/SettingsView'
+import { TeamSettingsView } from './views/teams/TeamSettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
 import { AIChatWidget } from './components/ai/AIChatWidget'
 import { BrandProfileView } from './views/ai/BrandProfileView'
@@ -33,6 +33,7 @@ import { CampaignFormatView } from './views/ai/CampaignFormatView'
 import { AutomationView } from './views/automation/AutomationView'
 import { ReviewQueueView } from './views/review/ReviewQueueView'
 import { useReviewQueueCount } from './hooks/useReviewQueue'
+import { useIsMobile, useResolvedTheme } from './hooks/useTheme'
 import {
   ApiError,
   createApiClient,
@@ -45,36 +46,24 @@ import {
   type BackendPostVersion,
   type BackendTeam,
 } from './api'
-import { initialSettings } from './data'
+import { loadInitialSection, loadInitialTeamId, loadStoredSettings, writeStoredSettings, LAST_SECTION_STORAGE_KEY, LAST_TEAM_STORAGE_KEY } from './appStorage'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { engagementForAccount } from './postMetrics'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
 import { setAppLanguage, type SupportedLanguage } from './i18n'
-import { isAppSection, sectionHeading } from './i18n/sections'
+import { sectionHeading } from './i18n/sections'
 import { translateApiError } from './i18n/translateApiError'
 import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, PostVersionRecord, ProviderInstanceRecord, RuntimeConfigRecord, SettingsState, TeamRecord, TeamRole, UserRecord } from './types'
 
-const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 /** Survives React Strict Mode remounts: hash is promoted here, then one reload applies the session. */
 const OIDC_PENDING_SESSION_KEY = 'goloom.oidc.pending_session_v1'
-const LAST_SECTION_STORAGE_KEY = 'goloom.last_section.v1'
-const LAST_TEAM_STORAGE_KEY = 'goloom.last_team.v1'
 
 const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics']
 
 function App() {
   const { t } = useTranslation()
   const [section, setSection] = useState<AppSection>(() => loadInitialSection())
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(max-width: 900px)').matches
-      : false,
-  )
-  const [systemIsDark, setSystemIsDark] = useState(() =>
-    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches
-      : true,
-  )
+  const isMobile = useIsMobile()
   const [currentDate] = useState<Date>(new Date())
   const [contentCalendarMonth, setContentCalendarMonth] = useState(() => startOfMonth(new Date()))
   const [calendarDragOverKey, setCalendarDragOverKey] = useState<string | null>(null)
@@ -147,8 +136,7 @@ function App() {
   const [showAdminProviderAdvanced, setShowAdminProviderAdvanced] = useState(false)
   const [accountDraft, setAccountDraft] = useState<AccountConnectDraft>(() => defaultAccountConnectDraft())
   const [mobilePreviewPostId, setMobilePreviewPostId] = useState<string | null>(null)
-  const [previewTouchStart, setPreviewTouchStart] = useState<number | null>(null)
-  const [previewTranslateY, setPreviewTranslateY] = useState(0)
+  const [teamBrandColor, setTeamBrandColor] = useState('')
 
   const api = useMemo(() => {
     const token = activeConnection.bearerToken.trim()
@@ -181,54 +169,7 @@ function App() {
     window.localStorage.setItem(LAST_TEAM_STORAGE_KEY, teamID)
   }, [selectedTeamId])
 
-  const resolvedTheme = useMemo((): 'dark' | 'light' => {
-    const scheme = settings.ui.colorScheme
-    if (scheme === 'dark') {
-      return 'dark'
-    }
-    if (scheme === 'light') {
-      return 'light'
-    }
-    return systemIsDark ? 'dark' : 'light'
-  }, [settings.ui.colorScheme, systemIsDark])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return
-    }
-    const mediaQuery = window.matchMedia('(max-width: 900px)')
-    const syncMobile = (event?: MediaQueryListEvent) => {
-      setIsMobile(event ? event.matches : mediaQuery.matches)
-    }
-    syncMobile()
-    mediaQuery.addEventListener('change', syncMobile)
-    return () => mediaQuery.removeEventListener('change', syncMobile)
-  }, [])
-
-  useEffect(() => {
-    if (typeof document === 'undefined') {
-      return
-    }
-    const metaTheme = document.querySelector('meta[name="theme-color"]')
-    if (metaTheme) {
-      metaTheme.setAttribute('content', resolvedTheme === 'dark' ? '#000000' : '#ffffff')
-    }
-    // Sync theme to document element so Radix portals (rendered to body) inherit CSS variables
-    document.documentElement.setAttribute('data-theme', resolvedTheme)
-  }, [resolvedTheme])
-
-  useEffect(() => {
-    if (settings.ui.colorScheme !== 'system') {
-      return
-    }
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const syncTheme = (event?: MediaQueryListEvent) => {
-      setSystemIsDark(event ? event.matches : mediaQuery.matches)
-    }
-    syncTheme()
-    mediaQuery.addEventListener('change', syncTheme)
-    return () => mediaQuery.removeEventListener('change', syncTheme)
-  }, [settings.ui.colorScheme])
+  const resolvedTheme = useResolvedTheme(settings.ui.colorScheme)
 
   const noticeKey = `${loading ? 'L' : ''}|${error ?? ''}|${statusMessage ?? ''}`
   useEffect(() => {
@@ -750,13 +691,28 @@ function App() {
       setTeamAiEnabled(false)
       setExternalPostMonitorEnabled(false)
       setMemberRoleEdits({})
+      setTeamBrandColor('')
       return
     }
     setTeamSettingsName(selectedTeam.name)
     setTeamSettingsDescription(selectedTeam.description ?? '')
     setTeamAiEnabled(selectedTeam.isAiEnabled ?? false)
     setMemberRoleEdits(Object.fromEntries(selectedTeam.members.map((member) => [member.userId, member.role])))
+    setTeamBrandColor(selectedTeam.brandColor ?? '')
   }, [selectedTeam])
+
+  // Apply the team brand color globally; CSS accent tones derive from --brand-primary.
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+    const color = (selectedTeam?.brandColor ?? '').trim()
+    if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+      document.documentElement.style.setProperty('--brand-primary', color)
+    } else {
+      document.documentElement.style.removeProperty('--brand-primary')
+    }
+  }, [selectedTeam?.brandColor])
 
   useEffect(() => {
     if (!api || !selectedTeam || myRoleInSelectedTeam !== 'owner') {
@@ -974,11 +930,6 @@ function App() {
     setStatusMessage(t('status.sessionSettingsApplied'))
   }
 
-  function directoryUserLabel(userId: string) {
-    const user = directoryUsers.find((u) => u.id === userId)
-    return user ? `${user.name} · ${user.email}` : userId
-  }
-
   async function handleToggleExternalPostMonitor(enabled: boolean) {
     if (!api || !selectedTeam || myRoleInSelectedTeam !== 'owner') {
       return
@@ -1043,6 +994,17 @@ function App() {
       })
       await loadDashboard({ silent: true })
     }, t('status.teamSettingsUpdated'))
+  }
+
+  async function handleSaveTeamBrandColor(color: string) {
+    if (!api || !selectedTeam || (!selectedTeam.isPersonal && myRoleInSelectedTeam !== 'owner')) {
+      return
+    }
+    await runAction(async () => {
+      // Name/description are resolved server-side from the current team when left empty.
+      await api.updateTeam(selectedTeam.id, { name: '', description: '', brand_color: color })
+      await loadDashboard({ silent: true })
+    }, t('status.brandColorUpdated'))
   }
 
   async function handleSaveAiServiceConfig() {
@@ -1717,131 +1679,23 @@ function App() {
           />
         ) : null}
 
-        {isMobile && mobilePreviewPostId && section !== 'composer' && (
-          <div
-            className="mobile-preview-overlay"
-            data-testid="mobile-preview-overlay"
-            style={{ opacity: Math.max(0, 1 - previewTranslateY / 300) }}
-            onClick={() => {
-              setMobilePreviewPostId(null)
-              setPreviewTranslateY(0)
-            }}
-          >
-            <div
-              className="mobile-preview-container glass-panel"
-              style={{
-                transform: `translateY(${previewTranslateY}px)`,
-                transition: previewTouchStart === null ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
-              }}
-              onClick={(e) => e.stopPropagation()}
-              onTouchStart={(e) => setPreviewTouchStart(e.touches[0].clientY)}
-              onTouchMove={(e) => {
-                if (previewTouchStart === null) return
-                const delta = e.touches[0].clientY - previewTouchStart
-                if (delta > 0) setPreviewTranslateY(delta)
-              }}
-              onTouchEnd={() => {
-                if (previewTranslateY > 120) {
-                  setMobilePreviewPostId(null)
-                }
-                setPreviewTouchStart(null)
-                setPreviewTranslateY(0)
-              }}
-            >
-              <header className="mobile-preview-header">
-                <div className="flex-row--center gap-3">
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--xs"
-                    onClick={() => {
-                      setMobilePreviewPostId(null)
-                      setPreviewTranslateY(0)
-                    }}
-                  >
-                    <X size={20} />
-                  </button>
-                  <h3 style={{ margin: 0 }}>{t('common.preview')}</h3>
-                </div>
-                <div className="flex-row--center gap-2">
-                  {(() => {
-                    const p = posts.find((p) => p.id === mobilePreviewPostId)
-                    if (!p) return null
-                    return (
-                      <>
-                        <button
-                          type="button"
-                          className="button button--secondary button--sm"
-                          style={{ color: 'var(--danger)' }}
-                          onClick={() => {
-                            if (window.confirm(t('common.confirmDeletePost'))) {
-                              const id = mobilePreviewPostId
-                              setMobilePreviewPostId(null)
-                              setPreviewTranslateY(0)
-                              void deletePost(id)
-                            }
-                          }}
-                        >
-                          <Icon name="trash" className="inline-icon" />
-                          <span className="desktop-only">{t('common.delete')}</span>
-                        </button>
-                        {p.status !== 'posted' && p.source !== 'imported' && (
-                          <button
-                            type="button"
-                            className="button button--secondary button--sm"
-                            data-testid="preview-edit-button"
-                            onClick={() => {
-                              const id = mobilePreviewPostId
-                              setMobilePreviewPostId(null)
-                              setPreviewTranslateY(0)
-                              void openEditor(id)
-                            }}
-                          >
-                            <Icon name="edit" className="inline-icon" />
-                            <span>{t('common.edit')}</span>
-                          </button>
-                        )}
-                        {p.status === 'posted' && (
-                          <button
-                            type="button"
-                            className="button button--secondary button--sm"
-                            onClick={() => {
-                              const id = mobilePreviewPostId
-                              setMobilePreviewPostId(null)
-                              setPreviewTranslateY(0)
-                              void duplicatePost(id)
-                            }}
-                          >
-                            <Icon name="plus" className="inline-icon" />
-                            <span>Re-use</span>
-                          </button>
-                        )}
-                      </>
-                    )
-                  })()}
-                </div>
-              </header>
-              <div className="mobile-preview-scrollable">
-                {(() => {
-                  const p = posts.find((p) => p.id === mobilePreviewPostId)
-                  if (!p) return null
-                  return sharedAccountLabels(p, accounts).map((account) => (
-                    <SocialPreview
-                      key={account.id}
-                      account={account}
-                      content={postVersions.find((v) => v.postId === p.id && v.accountId === account.id)?.content || p.content}
-                      scheduledAt={p.scheduledAt}
-                      theme={resolvedTheme}
-                      publishedPostUrl={p.status === 'posted' ? p.publishedLinks?.[account.id] : undefined}
-                      engagement={
-                        p.status === 'posted' ? engagementForAccount(previewPostMetrics, account.id) : null
-                      }
-                    />
-                  ))
-                })()}
-              </div>
-            </div>
-          </div>
-        )}
+        {isMobile && mobilePreviewPostId && section !== 'composer' && (() => {
+          const previewPost = posts.find((p) => p.id === mobilePreviewPostId)
+          if (!previewPost) return null
+          return (
+            <MobilePreviewOverlay
+              post={previewPost}
+              accounts={accounts}
+              postVersions={postVersions}
+              previewPostMetrics={previewPostMetrics}
+              theme={resolvedTheme}
+              onClose={() => setMobilePreviewPostId(null)}
+              onDelete={(id) => void deletePost(id)}
+              onEdit={(id) => void openEditor(id)}
+              onDuplicate={(id) => void duplicatePost(id)}
+            />
+          )
+        })()}
 
         {section === 'dashboard' && selectedTeam && api ? (
           <DashboardView
@@ -1961,310 +1815,44 @@ function App() {
         )}
 
         {section === 'teams' && selectedTeam && (
-          <div className="brand-wizard stack stack--lg">
-            <SectionCard
-              icon={<Settings size={18} />}
-              title={t('teams.settingsTitle')}
-              subtitle={t('teams.settingsHint', { teamName: selectedTeam.name })}
-            >
-              {selectedTeam.isPersonal ? (
-                <>
-                  <p className="hint">{t('teams.personalNoMembers')}</p>
-                  <p className="hint">{t('teams.personalWorkspaceHint')}</p>
-                </>
-              ) : myRoleInSelectedTeam !== 'owner' ? (
-                <p className="hint">{t('teams.personalWorkspaceHint')}</p>
-              ) : null}
-            </SectionCard>
-
-            {selectedTeam.isPersonal ? (
-              <>
-                <SectionCard
-                  icon={<Bot size={18} />}
-                  title={t('teams.aiAgentTitle')}
-                  subtitle={t('teams.aiAgentHint')}
-                >
-                  <ToggleSwitch
-                    checked={teamAiEnabled}
-                    onChange={setTeamAiEnabled}
-                    title={t('teams.aiFeaturesEnabled')}
-                    testId="team-ai-toggle"
-                  />
-                  {teamAiEnabled ? (
-                    <div className="stack stack--sm mt-1">
-                      <h4 className="subsection-title">{t('teams.aiProviderTitle')}</h4>
-                      <p className="hint">{t('teams.aiProviderHint')}</p>
-                      <label className="field">
-                        <span>{t('teams.aiProviderLabel')}</span>
-                        <select value={teamAiProvider} onChange={(event) => setTeamAiProvider(event.target.value)}>
-                          <option value="openai">OpenAI</option>
-                          <option value="anthropic">Anthropic</option>
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span>{t('teams.aiModelLabel')}</span>
-                        <input
-                          value={teamAiModel}
-                          onChange={(event) => setTeamAiModel(event.target.value)}
-                          placeholder={teamAiProvider === 'anthropic' ? 'claude-opus-4-8' : 'gpt-4o'}
-                        />
-                      </label>
-                      <label className="field">
-                        <span>{t('teams.aiApiKeyLabel')}</span>
-                        <input
-                          type="password"
-                          value={teamAiApiKey}
-                          onChange={(event) => setTeamAiApiKey(event.target.value)}
-                          placeholder={teamAiKeySet ? t('teams.aiApiKeyStored') : 'sk-…'}
-                          autoComplete="off"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>{t('teams.aiBaseUrlLabel')}</span>
-                        <input
-                          value={teamAiBaseUrl}
-                          onChange={(event) => setTeamAiBaseUrl(event.target.value)}
-                          placeholder={t('teams.aiBaseUrlPlaceholder')}
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  <div>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={() => void handleSavePersonalAiSettings()}
-                      disabled={syncing || (teamAiEnabled && !teamAiApiKey.trim() && !teamAiKeySet)}
-                    >
-                      {t('teams.saveChanges')}
-                    </button>
-                  </div>
-                </SectionCard>
-
-                <SectionCard
-                  icon={<Activity size={18} />}
-                  title={t('teams.externalPostMonitorTitle')}
-                  subtitle={t('teams.externalPostMonitorHint')}
-                >
-                  <ToggleSwitch
-                    checked={externalPostMonitorEnabled}
-                    onChange={(next) => void handleToggleExternalPostMonitor(next)}
-                    title={t('teams.externalPostMonitorLabel')}
-                    testId="team-external-monitor-toggle"
-                  />
-                  {externalPostMonitorEnabled && (
-                    <div>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => setImportOldPostsOpen(true)}
-                      >
-                        {t('teams.importOldPostsButton', 'Import old posts')}
-                      </button>
-                    </div>
-                  )}
-                </SectionCard>
-              </>
-            ) : myRoleInSelectedTeam === 'owner' ? (
-              <>
-                <SectionCard
-                  icon={<Settings size={18} />}
-                  title={t('common.general')}
-                >
-                  <label className="field">
-                    <span>{t('teams.teamName')}</span>
-                    <input value={teamSettingsName} onChange={(event) => setTeamSettingsName(event.target.value)} />
-                  </label>
-                  <label className="field">
-                    <span>{t('common.description')}</span>
-                    <textarea
-                      rows={3}
-                      value={teamSettingsDescription}
-                      onChange={(event) => setTeamSettingsDescription(event.target.value)}
-                      placeholder={t('teams.descriptionPlaceholder')}
-                    />
-                  </label>
-                  <div>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={() => void handleUpdateTeam()}
-                      disabled={syncing || !teamSettingsName.trim()}
-                    >
-                      {t('teams.saveChanges')}
-                    </button>
-                  </div>
-                </SectionCard>
-
-                <SectionCard
-                  icon={<Activity size={18} />}
-                  title={t('teams.externalPostMonitorTitle')}
-                  subtitle={t('teams.externalPostMonitorHint')}
-                >
-                  <ToggleSwitch
-                    checked={externalPostMonitorEnabled}
-                    onChange={(next) => void handleToggleExternalPostMonitor(next)}
-                    title={t('teams.externalPostMonitorLabel')}
-                    testId="team-external-monitor-toggle"
-                  />
-                  {externalPostMonitorEnabled && (
-                    <div>
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
-                        onClick={() => setImportOldPostsOpen(true)}
-                      >
-                        {t('teams.importOldPostsButton', 'Import old posts')}
-                      </button>
-                    </div>
-                  )}
-                </SectionCard>
-
-                <SectionCard
-                  icon={<Bot size={18} />}
-                  title={t('teams.aiAgentTitle')}
-                  subtitle={t('teams.aiAgentHint')}
-                >
-                  <ToggleSwitch
-                    checked={teamAiEnabled}
-                    onChange={setTeamAiEnabled}
-                    title={t('teams.aiFeaturesEnabled')}
-                    testId="team-ai-toggle"
-                  />
-
-                  {teamAiEnabled && (
-                    <div className="stack stack--sm mt-1">
-                      <h4 className="subsection-title">{t('teams.aiProviderTitle')}</h4>
-                      <p className="hint">{t('teams.aiProviderHint')}</p>
-                      <label className="field">
-                        <span>{t('teams.aiProviderLabel')}</span>
-                        <select value={teamAiProvider} onChange={(event) => setTeamAiProvider(event.target.value)}>
-                          <option value="openai">OpenAI</option>
-                          <option value="anthropic">Anthropic</option>
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span>{t('teams.aiModelLabel')}</span>
-                        <input
-                          value={teamAiModel}
-                          onChange={(event) => setTeamAiModel(event.target.value)}
-                          placeholder={teamAiProvider === 'anthropic' ? 'claude-opus-4-8' : 'gpt-4o'}
-                        />
-                      </label>
-                      <label className="field">
-                        <span>{t('teams.aiApiKeyLabel')}</span>
-                        <input
-                          type="password"
-                          value={teamAiApiKey}
-                          onChange={(event) => setTeamAiApiKey(event.target.value)}
-                          placeholder={teamAiKeySet ? t('teams.aiApiKeyStored') : 'sk-…'}
-                          autoComplete="off"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>{t('teams.aiBaseUrlLabel')}</span>
-                        <input
-                          value={teamAiBaseUrl}
-                          onChange={(event) => setTeamAiBaseUrl(event.target.value)}
-                          placeholder={t('teams.aiBaseUrlPlaceholder')}
-                        />
-                      </label>
-                      <div>
-                        <button
-                          type="button"
-                          className="btn btn--primary"
-                          onClick={() => void handleSaveAiServiceConfig()}
-                          disabled={syncing || (!teamAiApiKey.trim() && !teamAiKeySet)}
-                        >
-                          {t('teams.saveAiConfig')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </SectionCard>
-
-                <SectionCard
-                  icon={<Users size={18} />}
-                  title={t('common.members')}
-                >
-                  <div className="stack stack--sm">
-                    {selectedTeam.members.map((m) => (
-                      <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between">
-                        <div>
-                          <strong>{directoryUserLabel(m.userId)}</strong>
-                          <p className="eyebrow">{m.role}</p>
-                        </div>
-                        <div className="inline-cluster">
-                          <select
-                            className="select--sm"
-                            value={memberRoleEdits[m.userId] ?? m.role}
-                            onChange={(event) =>
-                              setMemberRoleEdits((current) => ({ ...current, [m.userId]: event.target.value as TeamRole }))
-                            }
-                          >
-                            <option value="owner">{t('roles.owner')}</option>
-                            <option value="editor">{t('roles.editor')}</option>
-                            <option value="viewer">{t('roles.viewer')}</option>
-                          </select>
-                          <button 
-                            className="btn btn--ghost btn--xs"
-                            onClick={() => void handleChangeTeamMemberRole(m.userId)}
-                            disabled={syncing || (memberRoleEdits[m.userId] ?? m.role) === m.role}
-                          >
-                            {t('common.apply')}
-                          </button>
-                          {m.userId !== principalUser?.id && (
-                            <button 
-                              className="btn btn--xs btn--danger-ghost"
-                              onClick={() => void handleRemoveTeamMember(m.userId)}
-                            >
-                              {t('common.remove')}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </SectionCard>
-
-                <SectionCard
-                  icon={<Users size={18} />}
-                  title={t('teams.addMember')}
-                >
-                  <div className="inline-cluster flex-wrap">
-                    <select className="grow" value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
-                      <option value="">{t('teams.selectUser')}</option>
-                      {directoryUsers
-                        .filter((u) => !selectedTeam.members.some((m) => m.userId === u.id))
-                        .map((u) => (
-                          <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-                        ))}
-                    </select>
-                    <button 
-                      className="btn btn--primary" 
-                      onClick={() => void handleAddTeamMember()} 
-                      disabled={syncing || !addMemberUserId}
-                    >
-                      {t('teams.addToTeam')}
-                    </button>
-                  </div>
-                </SectionCard>
-              </>
-            ) : (
-              <SectionCard
-                icon={<Users size={18} />}
-                title={t('common.members')}
-              >
-                <div className="stack stack--sm">
-                  {selectedTeam.members.map((m) => (
-                    <div key={m.userId} className="member-list-item">
-                      {directoryUserLabel(m.userId)} ({m.role})
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
-            )}
-          </div>
+          <TeamSettingsView
+            selectedTeam={selectedTeam}
+            myRoleInSelectedTeam={myRoleInSelectedTeam}
+            principalUser={principalUser}
+            directoryUsers={directoryUsers}
+            syncing={syncing}
+            teamSettingsName={teamSettingsName}
+            setTeamSettingsName={setTeamSettingsName}
+            teamSettingsDescription={teamSettingsDescription}
+            setTeamSettingsDescription={setTeamSettingsDescription}
+            teamAiEnabled={teamAiEnabled}
+            setTeamAiEnabled={setTeamAiEnabled}
+            teamAiProvider={teamAiProvider}
+            setTeamAiProvider={setTeamAiProvider}
+            teamAiModel={teamAiModel}
+            setTeamAiModel={setTeamAiModel}
+            teamAiApiKey={teamAiApiKey}
+            setTeamAiApiKey={setTeamAiApiKey}
+            teamAiBaseUrl={teamAiBaseUrl}
+            setTeamAiBaseUrl={setTeamAiBaseUrl}
+            teamAiKeySet={teamAiKeySet}
+            teamBrandColor={teamBrandColor}
+            setTeamBrandColor={setTeamBrandColor}
+            externalPostMonitorEnabled={externalPostMonitorEnabled}
+            onToggleExternalPostMonitor={(next) => void handleToggleExternalPostMonitor(next)}
+            onOpenImportOldPosts={() => setImportOldPostsOpen(true)}
+            memberRoleEdits={memberRoleEdits}
+            setMemberRoleEdits={setMemberRoleEdits}
+            addMemberUserId={addMemberUserId}
+            setAddMemberUserId={setAddMemberUserId}
+            onSavePersonalAiSettings={() => void handleSavePersonalAiSettings()}
+            onUpdateTeam={() => void handleUpdateTeam()}
+            onSaveAiServiceConfig={() => void handleSaveAiServiceConfig()}
+            onSaveBrandColor={(color) => void handleSaveTeamBrandColor(color)}
+            onAddTeamMember={() => void handleAddTeamMember()}
+            onRemoveTeamMember={(userId) => void handleRemoveTeamMember(userId)}
+            onChangeTeamMemberRole={(userId) => void handleChangeTeamMemberRole(userId)}
+          />
         )}
 
         {section === 'accounts' && (
@@ -2373,64 +1961,6 @@ function App() {
 
     </AppShell>
   )
-}
-
-function loadStoredSettings(): SettingsState {
-  if (typeof window === 'undefined') {
-    return initialSettings
-  }
-  const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
-  if (!raw) {
-    return initialSettings
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<SettingsState>
-    return {
-      ...initialSettings,
-      ...parsed,
-      ui: { ...initialSettings.ui, ...parsed.ui },
-      general: { ...initialSettings.general, ...parsed.general },
-      oidc: { ...initialSettings.oidc, ...parsed.oidc },
-      security: { ...initialSettings.security, ...parsed.security },
-      scheduler: { ...initialSettings.scheduler, ...parsed.scheduler },
-      providers: { ...initialSettings.providers, ...parsed.providers },
-    }
-  } catch {
-    return initialSettings
-  }
-}
-
-function writeStoredSettings(settings: SettingsState) {
-  if (typeof window === 'undefined') {
-    return
-  }
-  window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-}
-
-function loadInitialSection(): AppSection {
-  if (typeof window === 'undefined') {
-    return 'dashboard'
-  }
-  const sectionFromQuery = new URLSearchParams(window.location.search).get('section')?.trim() ?? ''
-  if (sectionFromQuery && isAppSection(sectionFromQuery)) {
-    return sectionFromQuery
-  }
-  const stored = window.localStorage.getItem(LAST_SECTION_STORAGE_KEY)?.trim() ?? ''
-  if (stored && isAppSection(stored)) {
-    return stored
-  }
-  return 'dashboard'
-}
-
-function loadInitialTeamId(): string {
-  if (typeof window === 'undefined') {
-    return ''
-  }
-  const teamFromQuery = new URLSearchParams(window.location.search).get('team')?.trim() ?? ''
-  if (teamFromQuery) {
-    return teamFromQuery
-  }
-  return window.localStorage.getItem(LAST_TEAM_STORAGE_KEY)?.trim() ?? ''
 }
 
 export default App

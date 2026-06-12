@@ -1052,6 +1052,10 @@ components:
           format: uuid
         scheduling_preferences:
           type: object
+        brand_color:
+          type: string
+          description: Team accent color as "#rrggbb"; empty means default accent.
+          example: "#7c3aed"
         created_at:
           type: string
           format: date-time
