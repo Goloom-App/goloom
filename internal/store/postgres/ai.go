@@ -938,7 +938,7 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 
 func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
 	const query = `
-		SELECT id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+		SELECT id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 		FROM teams
 		WHERE is_ai_enabled = true
 		ORDER BY name ASC

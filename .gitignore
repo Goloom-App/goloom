@@ -1,20 +1,110 @@
-/.direnv
-/.env
+# Go
 /bin
-/dist
+/goloom
+/server
 /coverage.out
+*.test
+
+# Go modules (keep go.mod and go.sum tracked)
+# go.work
+
+# Python / AI Service
+/ai-service/.venv
+/ai-service/venv
+/ai-service/__pycache__
+/ai-service/**/__pycache__
+/ai-service/.pytest_cache
+/ai-service/.mypy_cache
+/ai-service/.ruff_cache
+/ai-service/.pyright_cache
+/ai-service/ai_service.egg-info
+/ai-service/dist
+/ai-service/build
+/ai-service/*.pyc
+/ai-service/uv.lock
+
+# Node.js / Website
+/website/node_modules
+/website/dist
+/website/.astro
+/website/.turbo
+/website/test-results/
+/website/playwright-report/
+/website/*.log
+/website/pnpm-lock.yaml
+
+# Frontend (legacy)
 /frontend/node_modules
 /frontend/test-results/
 /frontend/playwright-report/
 /frontend/dist
-/.pnpm-store
-/data/
-/.e2e/
-/goloom
-/server
+
+# Database files
+/db/goloom.db
+/db/*.db
+/db/*.db-wal
+/db/*.db-shm
+/.e2e/*.db
+/.e2e/*.db-wal
+/.e2e/*.db-shm
+
+# Test results
 /test-results/
+/test-results/.last-run.json
+
+# Environment files
+/.env
+/.env.local
+/.env.*.local
+.env.example
+
+# Build outputs
+/dist
+/build
+*.exe
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+
+# CI/CD
+/.forgejo/workflows/*.yaml
+!/.forgejo/workflows/ci.yaml
+!/.forgejo/workflows/pages.yaml
+!/.forgejo/workflows/website-ci.yaml
+
+# Logs
+*.log
+/logs
+
+# Temporary files
+/tmp
+*.tmp
+
+# Opencode
+.opencode
+OpenCode.md
+headroom_memory.db
+
+# Nix
+.flake.lock
+result
+result-*
 
 # Keep internal/webui/dist/index.html tracked for go:embed; ignore Vite output
 /internal/webui/dist/assets/
 /internal/webui/dist/icons/
 /internal/webui/dist/*.svg
+
+# pnpm store
+.pnpm-store
+
+# Data directory
+/data/

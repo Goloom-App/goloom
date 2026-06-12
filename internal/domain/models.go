@@ -214,6 +214,7 @@ type Team struct {
 	IsAIEnabled       bool                      `json:"is_ai_enabled"`
 	PersonalForUserID string                    `json:"personal_for_user_id,omitempty"`
 	SchedulingPrefs   TeamSchedulingPreferences `json:"scheduling_preferences"`
+	BrandColor        string                    `json:"brand_color"`
 	CreatedAt         time.Time                 `json:"created_at"`
 }
 
@@ -929,6 +930,8 @@ type UpdateTeamInput struct {
 	Description           string                     `json:"description"`
 	SchedulingPreferences *TeamSchedulingPreferences `json:"scheduling_preferences,omitempty"`
 	IsAIEnabled           *bool                      `json:"is_ai_enabled,omitempty"`
+	// BrandColor is the team accent color as "#rrggbb"; empty string resets to the default accent.
+	BrandColor *string `json:"brand_color,omitempty"`
 }
 
 // AdminMetrics aggregates global counts for the admin dashboard.

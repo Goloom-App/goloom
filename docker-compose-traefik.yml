@@ -63,46 +63,6 @@ services:
       - traefik.http.routers.goloom.tls=${TRAEFIK_TLS:-true}
 
   db:
-        condition: service_healthy
-    environment:
-      APP_ENV: ${APP_ENV:-development}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOG_FORMAT: ${LOG_FORMAT:-json}
-      HTTP_ADDR: :8080
-      DATABASE_URL: postgres://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-postgres}@db:5432/${DATABASE_NAME:-goloom}?sslmode=disable
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://${HOST}}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://${HOST}}
-      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
-      SCHEDULER_POLL_INTERVAL: ${SCHEDULER_POLL_INTERVAL:-15s}
-      SCHEDULER_WORKERS: ${SCHEDULER_WORKERS:-4}
-      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@localhost}
-      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Local Administrator}
-      BOOTSTRAP_ADMIN_TOKEN: ${BOOTSTRAP_ADMIN_TOKEN:-change-this-bootstrap-token}
-      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
-      MASTODON_APP_NAME: ${MASTODON_APP_NAME:-goloom}
-      MASTODON_WEBSITE: ${MASTODON_WEBSITE:-}
-      MASTODON_DEFAULT_SCOPES: ${MASTODON_DEFAULT_SCOPES:-read,write}
-      MASTODON_REDIRECT_URI: ${MASTODON_REDIRECT_URI:-}
-    volumes:
-      - goloom_data:/app/data
-    networks:
-      - traefik
-      - backend
-    labels:
-      - traefik.enable=true
-      # When the container is on multiple networks, Traefik must use the one it shares with the proxy.
-      - traefik.docker.network=${TRAEFIK_NETWORK:-${FRONTEND_NETWORK:-proxy}}
-      - traefik.http.services.goloom.loadbalancer.server.port=8080
-      - traefik.http.routers.goloom.service=goloom
-      - traefik.http.routers.goloom.rule=Host(`${HOST}`)
-      - traefik.http.routers.goloom.entrypoints=${TRAEFIK_ENTRYPOINTS:-websecure}
-      - traefik.http.routers.goloom.tls=${TRAEFIK_TLS:-true}
-
-  db:
     image: postgres:16
     container_name: goloom-db
     restart: unless-stopped

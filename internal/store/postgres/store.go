@@ -273,7 +273,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	_ = isAdmin
 	query := `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 		from teams
 	`
 	args := []any{userID}
@@ -338,6 +338,11 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 }
 
 func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error) {
+	if input.BrandColor != nil {
+		if _, err := s.pool.Exec(ctx, `update teams set brand_color = $2 where id = $1`, teamID, *input.BrandColor); err != nil {
+			return domain.Team{}, err
+		}
+	}
 	if input.SchedulingPreferences != nil {
 		prefsJSON, err := domain.EncodeTeamSchedulingPrefsJSON(*input.SchedulingPreferences)
 		if err != nil {
@@ -348,7 +353,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 				update teams
 				set name = $2, description = $3, scheduling_prefs = $4, is_ai_enabled = $5
 				where id = $1
-				returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+				returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 			`
 			return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, prefsJSON, *input.IsAIEnabled))
 		}
@@ -356,7 +361,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 			update teams
 			set name = $2, description = $3, scheduling_prefs = $4
 			where id = $1
-			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 		`
 		return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, prefsJSON))
 	}
@@ -365,7 +370,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 			update teams
 			set name = $2, description = $3, is_ai_enabled = $4
 			where id = $1
-			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 		`
 		return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, *input.IsAIEnabled))
 	}
@@ -373,7 +378,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 		update teams
 		set name = $2, description = $3
 		where id = $1
-		returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+		returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 	`
 	return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description))
 }
@@ -384,6 +389,7 @@ func scanTeamRow(row interface {
 	var team domain.Team
 	var personal sql.NullString
 	var schedulingPrefs sql.NullString
+	var brandColor sql.NullString
 	err := row.Scan(
 		&team.ID,
 		&team.Name,
@@ -393,6 +399,7 @@ func scanTeamRow(row interface {
 		&team.IsAIEnabled,
 		&personal,
 		&schedulingPrefs,
+		&brandColor,
 	)
 	if err != nil {
 		return domain.Team{}, err
@@ -400,6 +407,7 @@ func scanTeamRow(row interface {
 	if personal.Valid {
 		team.PersonalForUserID = personal.String
 	}
+	team.BrandColor = brandColor.String
 	if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {
 		prefs, err := domain.ParseTeamSchedulingPrefsJSON(schedulingPrefs.String)
 		if err != nil {

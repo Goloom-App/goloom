@@ -471,6 +471,7 @@ create table if not exists job_locks (
 );
 
 alter table teams add column if not exists is_ai_enabled boolean not null default false;
+alter table teams add column if not exists brand_color text not null default '';
 alter table api_tokens add column if not exists scopes text not null default '';
 alter table api_tokens add column if not exists team_id uuid references teams(id) on delete cascade;
 

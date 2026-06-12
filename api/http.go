@@ -331,9 +331,13 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
+	if input.BrandColor != nil && !isValidBrandColor(*input.BrandColor) {
+		a.writeError(w, r, "invalid_brand_color", http.StatusBadRequest)
+		return
+	}
 
 	if team.IsPersonal {
-		if input.IsAIEnabled == nil {
+		if input.IsAIEnabled == nil && input.BrandColor == nil {
 			a.writeError(w, r, "personal_workspace_ai_only", http.StatusBadRequest)
 			return
 		}
@@ -341,6 +345,7 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 			Name:        team.Name,
 			Description: team.Description,
 			IsAIEnabled: input.IsAIEnabled,
+			BrandColor:  input.BrandColor,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -369,6 +374,22 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, updated)
+}
+
+// isValidBrandColor accepts "#rrggbb" or empty (reset to default accent).
+func isValidBrandColor(value string) bool {
+	if value == "" {
+		return true
+	}
+	if len(value) != 7 || value[0] != '#' {
+		return false
+	}
+	for _, c := range value[1:] {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {

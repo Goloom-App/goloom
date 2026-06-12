@@ -852,7 +852,7 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 
 func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 		from teams
 		where is_ai_enabled = 1
 		order by name asc`)

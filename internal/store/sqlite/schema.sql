@@ -15,6 +15,7 @@ create table if not exists teams (
     is_personal integer not null default 0,
     personal_for_user_id text references users(id) on delete cascade,
     is_ai_enabled integer not null default 0,
+    brand_color text not null default '',
     created_at text not null
 );
 

@@ -271,7 +271,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	_ = isAdmin
 	query := `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 		from teams
 	`
 	args := []any{userID}
@@ -321,6 +321,11 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 }
 
 func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error) {
+	if input.BrandColor != nil {
+		if _, err := s.db.ExecContext(ctx, `update teams set brand_color = ? where id = ?`, *input.BrandColor, teamID); err != nil {
+			return domain.Team{}, err
+		}
+	}
 	if input.SchedulingPreferences != nil {
 		prefsJSON, err := domain.EncodeTeamSchedulingPrefsJSON(*input.SchedulingPreferences)
 		if err != nil {
@@ -366,7 +371,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 		}
 	}
 	return queryTeam(ctx, s.db, `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs
+		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
 		from teams
 		where id = ?`,
 		teamID,
@@ -1267,14 +1272,16 @@ func scanTeam(scanner teamScanner) (domain.Team, error) {
 		isAIEnabled       int
 		personalForUserID sql.NullString
 		schedulingPrefs   sql.NullString
+		brandColor        sql.NullString
 		createdAt         string
 	)
-	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt, &isPersonal, &isAIEnabled, &personalForUserID, &schedulingPrefs); err != nil {
+	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt, &isPersonal, &isAIEnabled, &personalForUserID, &schedulingPrefs, &brandColor); err != nil {
 		return domain.Team{}, err
 	}
 	team.IsPersonal = isPersonal != 0
 	team.IsAIEnabled = isAIEnabled != 0
 	team.PersonalForUserID = personalForUserID.String
+	team.BrandColor = brandColor.String
 	if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {
 		prefs, err := domain.ParseTeamSchedulingPrefsJSON(schedulingPrefs.String)
 		if err != nil {
