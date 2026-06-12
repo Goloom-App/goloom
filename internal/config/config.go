@@ -50,6 +50,10 @@ type Config struct {
 	MastodonRedirectURI   string
 	MastodonWebsite       string
 	MastodonDefaultScopes []string
+
+	// MCP server configuration
+	MCPEnabled            bool
+	MCPRateLimitPerMinute int
 }
 
 func Load() (Config, error) {
@@ -83,6 +87,8 @@ func Load() (Config, error) {
 		MastodonRedirectURI:              "",
 		MastodonWebsite:                  getEnv("MASTODON_WEBSITE", ""),
 		MastodonDefaultScopes:            splitCSV(getEnv("MASTODON_DEFAULT_SCOPES", "read,write")),
+		MCPEnabled:                       parseBoolEnv("MCP_ENABLED", true),
+		MCPRateLimitPerMinute:            getInt("MCP_RATE_LIMIT_PER_MINUTE", 60),
 	}
 
 	cfg.MastodonRedirectURI = getEnv("MASTODON_REDIRECT_URI", strings.TrimRight(cfg.PublicBaseURL, "/")+"/v1/oauth/mastodon/callback")

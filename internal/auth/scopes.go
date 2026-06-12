@@ -51,6 +51,12 @@ func hasScope(scopes []string, required string) bool {
 	return slices.Contains(scopes, required)
 }
 
+// HasScope checks if the given scopes slice contains the required scope.
+// This is exported for use by other packages (e.g., MCP server).
+func HasScope(scopes []string, required string) bool {
+	return slices.Contains(scopes, required)
+}
+
 func writeError(w http.ResponseWriter, _ *http.Request, key string, status int) {
 	http.Error(w, key, status)
 }

@@ -17,6 +17,7 @@ import (
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/i18n"
 	"git.f4mily.net/goloom/internal/logging"
+	"git.f4mily.net/goloom/internal/mcp"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/scheduler"
 	"git.f4mily.net/goloom/internal/security"
@@ -146,6 +147,16 @@ func Run(ctx context.Context) error {
 	rootHandler.Handle("/v1/", apiChain)
 	// External clients often use /api/v1/... ; routes are registered as /v1/... on the inner mux.
 	rootHandler.Handle("/api/v1/", http.StripPrefix("/api", apiChain))
+
+	// MCP server (optional, enabled by default)
+	if cfg.MCPEnabled {
+		mcpHandler := mcp.NewHandler(logger, dataStore, authService, providers, cfg)
+		mcpLimiter := security.NewLimiter(cfg.MCPRateLimitPerMinute, cfg.MCPRateLimitPerMinute*3)
+		mcpChain := security.CORSMiddleware(cfg.AllowedOrigins)(mcpLimiter.Middleware(mcpHandler))
+		rootHandler.Handle("/mcp/", http.StripPrefix("/mcp", mcpChain))
+		logger.Info("mcp server enabled", "rate_limit_per_minute", cfg.MCPRateLimitPerMinute)
+	}
+
 	rootHandler.Handle("/", webui.Handler())
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
