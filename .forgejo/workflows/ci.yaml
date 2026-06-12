@@ -83,6 +83,10 @@ jobs:
           restore-keys: |
             forgejo-playwright-
 
+      - name: Go vet
+        if: matrix.suite == 'backend'
+        run: go vet ./...
+
       - name: Run Go tests
         if: matrix.suite == 'backend'
         run: go test -count=1 -v ./...
@@ -104,10 +108,11 @@ jobs:
           fi
           pnpm --version
 
-      - name: Frontend install and build
+      - name: Frontend install, lint and build
         if: matrix.suite == 'frontend'
         run: |
           pnpm --dir frontend install --frozen-lockfile
+          pnpm --dir frontend lint
           pnpm --dir frontend build
 
       - name: E2E — install frontend deps
@@ -124,10 +129,54 @@ jobs:
         if: matrix.suite == 'e2e'
         run: pnpm --dir frontend test:e2e
 
+  # The postgres store tests skip without TEST_POSTGRES_URL, so 'go test ./...'
+  # alone never exercises them — this job is the gate for the Postgres backend
+  # (fresh schema apply + full store suite against a real server).
+  test-postgres:
+    runs-on: docker
+    name: "Test Postgres Store"
+    container:
+      image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: goloom_test
+    steps:
+      - name: Install git and Node (for actions)
+        run: apk add --no-cache git nodejs tar zstd
+
+      - uses: actions/checkout@v6
+
+      - name: Go module and build cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: forgejo-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            forgejo-go-
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            nc -z postgres 5432 && exit 0
+            sleep 1
+          done
+          echo "postgres did not become ready" >&2
+          exit 1
+
+      - name: Run Postgres store tests
+        env:
+          TEST_POSTGRES_URL: postgres://postgres:test@postgres:5432/goloom_test?sslmode=disable
+        run: go test -count=1 -v ./internal/store/postgres/
+
   publish-image:
     runs-on: docker
     name: Build and Publish Docker Image
-    needs: [test]
+    needs: [test, test-postgres]
     if: github.event_name == 'push'
     container:
       image: docker:cli

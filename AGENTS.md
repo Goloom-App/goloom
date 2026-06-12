@@ -21,7 +21,8 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
 - `go build ./...`, `go vet ./...`, `go test ./...` must pass
 - `make test-postgres` must pass when the store layer changed
 - `pnpm --dir frontend build` (includes `tsc -b`) and `pnpm --dir frontend lint` must pass when the frontend changed
-- `make cover` reports total coverage — it must not drop through a change; raising it is part of the work (state: ~31 % total, 2026-06)
+- `make cover` reports total coverage — it must not drop through a change; raising it is part of the work (state: ~33 % total, 2026-06)
+- CI (`.forgejo/workflows/ci.yaml`) enforces all of the above on push/PR — including the Postgres store suite, which `go test ./...` alone skips — and gates the image publish on it
 
 ## Child DOX Index
 
