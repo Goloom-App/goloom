@@ -26,6 +26,8 @@ Single Go module (`go.mod` at root). Packages follow standard Go conventions.
 - SSE hub in `sse/hub.go` for real-time updates
 - New packages should be small and focused
 - Tests use standard `testing` package with table-driven patterns
+- Team role checks have no hierarchy: `UserHasAnyTeamRole` matches the stored role exactly. Always pass the complete allowed list — writes need `(RoleEditor, RoleOwner)`, reads `(RoleViewer, RoleEditor, RoleOwner)` — or owners get locked out
+- The first user in an empty database becomes admin (`UpsertOIDCUser`); test fixtures must burn that slot before creating regular test users
 
 ## Verification
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"git.f4mily.net/goloom/internal/domain"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ===== Campaigns =====
@@ -19,7 +19,7 @@ func (h *Handler) handleCreateCampaign(ctx context.Context, req *mcp.CallToolReq
 		return nil, CreateCampaignOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, CreateCampaignOutput{}, fmt.Errorf("forbidden")
 	}
@@ -50,7 +50,7 @@ func (h *Handler) handleGetCampaign(ctx context.Context, req *mcp.CallToolReques
 		return nil, GetCampaignOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, GetCampaignOutput{}, fmt.Errorf("forbidden")
 	}
@@ -78,7 +78,7 @@ func (h *Handler) handleCreateRecurring(ctx context.Context, req *mcp.CallToolRe
 		return nil, CreateRecurringOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, CreateRecurringOutput{}, fmt.Errorf("forbidden")
 	}
@@ -115,7 +115,7 @@ func (h *Handler) handleCreateRSSFeed(ctx context.Context, req *mcp.CallToolRequ
 		return nil, CreateRSSFeedOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, CreateRSSFeedOutput{}, fmt.Errorf("forbidden")
 	}
@@ -148,7 +148,7 @@ func (h *Handler) handleGetCalendar(ctx context.Context, req *mcp.CallToolReques
 		return nil, GetCalendarOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, GetCalendarOutput{}, fmt.Errorf("forbidden")
 	}
@@ -196,7 +196,7 @@ func (h *Handler) handleFindFreeSlot(ctx context.Context, req *mcp.CallToolReque
 		return nil, FindFreeSlotOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, FindFreeSlotOutput{}, fmt.Errorf("forbidden")
 	}
@@ -244,7 +244,7 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 		return nil, SchedulePostOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, SchedulePostOutput{}, fmt.Errorf("forbidden")
 	}
@@ -255,11 +255,11 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 	}
 
 	createInput := domain.CreatePostInput{
-		Title:                 input.Title,
-		Content:               input.Content,
-		ScheduledAt:           scheduledAt,
-		TargetAccounts:        input.TargetAccounts,
-		Visibility:            domain.NormalizePostVisibility(input.Visibility),
+		Title:                  input.Title,
+		Content:                input.Content,
+		ScheduledAt:            scheduledAt,
+		TargetAccounts:         input.TargetAccounts,
+		Visibility:             domain.NormalizePostVisibility(input.Visibility),
 		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts),
 	}
 
@@ -283,17 +283,17 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 		return nil, DraftPostOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, DraftPostOutput{}, fmt.Errorf("forbidden")
 	}
 
 	createInput := domain.CreatePostInput{
-		Title:                 input.Title,
-		Content:               input.Content,
-		TargetAccounts:        input.TargetAccounts,
-		Visibility:            domain.NormalizePostVisibility(input.Visibility),
-		Draft:                 true,
+		Title:                  input.Title,
+		Content:                input.Content,
+		TargetAccounts:         input.TargetAccounts,
+		Visibility:             domain.NormalizePostVisibility(input.Visibility),
+		Draft:                  true,
 		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts),
 	}
 
@@ -316,7 +316,7 @@ func (h *Handler) handleGetPosts(ctx context.Context, req *mcp.CallToolRequest, 
 		return nil, GetPostsOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, GetPostsOutput{}, fmt.Errorf("forbidden")
 	}
@@ -358,7 +358,7 @@ func (h *Handler) handleModifyPost(ctx context.Context, req *mcp.CallToolRequest
 		return nil, ModifyPostOutput{}, err
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, existing.TeamID, domain.RoleEditor)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, ModifyPostOutput{}, fmt.Errorf("forbidden")
 	}
@@ -410,7 +410,7 @@ func (h *Handler) handleDeletePost(ctx context.Context, req *mcp.CallToolRequest
 		return nil, DeletePostOutput{}, err
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, existing.TeamID, domain.RoleEditor)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, DeletePostOutput{}, fmt.Errorf("forbidden")
 	}
@@ -431,7 +431,7 @@ func (h *Handler) handleGetPlatforms(ctx context.Context, req *mcp.CallToolReque
 		return nil, GetPlatformsOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, GetPlatformsOutput{}, fmt.Errorf("forbidden")
 	}
@@ -489,7 +489,7 @@ func (h *Handler) handleGetBrandProfile(ctx context.Context, req *mcp.CallToolRe
 		return nil, BrandProfileOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, BrandProfileOutput{}, fmt.Errorf("forbidden")
 	}
@@ -524,7 +524,7 @@ func (h *Handler) handleSearchPosts(ctx context.Context, req *mcp.CallToolReques
 		return nil, SearchPostsOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, SearchPostsOutput{}, fmt.Errorf("forbidden")
 	}
@@ -588,7 +588,7 @@ func (h *Handler) handleGetAnalytics(ctx context.Context, req *mcp.CallToolReque
 		return nil, GetAnalyticsOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, GetAnalyticsOutput{}, fmt.Errorf("forbidden")
 	}
@@ -609,7 +609,7 @@ func (h *Handler) handleGetAnalytics(ctx context.Context, req *mcp.CallToolReque
 	var topPosts []PostSummary
 	for _, p := range analytics.TopPosts {
 		topPosts = append(topPosts, PostSummary{
-			ID:   p.PostID,
+			ID:    p.PostID,
 			Title: p.Title,
 		})
 	}
@@ -628,7 +628,7 @@ func (h *Handler) handleGetHashtagPerformance(ctx context.Context, req *mcp.Call
 		return nil, GetHashtagPerformanceOutput{}, fmt.Errorf("unauthorized")
 	}
 
-	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer)
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		return nil, GetHashtagPerformanceOutput{}, fmt.Errorf("forbidden")
 	}

@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/store"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Handler serves the MCP protocol over HTTP (SSE + JSON-RPC POST).

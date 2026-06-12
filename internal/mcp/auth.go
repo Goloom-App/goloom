@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"git.f4mily.net/goloom/internal/domain"
 )
 
 type contextKey string
@@ -20,11 +22,13 @@ func ExtractBearerToken(r *http.Request) string {
 }
 
 // PrincipalFromContext extracts the authenticated principal from context.
-func PrincipalFromContext(ctx context.Context) interface{} {
-	return ctx.Value(principalKey)
+func PrincipalFromContext(ctx context.Context) *domain.AuthenticatedPrincipal {
+	p, _ := ctx.Value(principalKey).(*domain.AuthenticatedPrincipal)
+	return p
 }
 
-// WithPrincipal stores the authenticated principal in context.
-func WithPrincipal(ctx context.Context, principal interface{}) context.Context {
-	return context.WithValue(ctx, principalKey, principal)
+// WithPrincipal stores the authenticated principal in context. It stores a
+// pointer so the tool handlers' principalFromContext assertion always matches.
+func WithPrincipal(ctx context.Context, principal domain.AuthenticatedPrincipal) context.Context {
+	return context.WithValue(ctx, principalKey, &principal)
 }
