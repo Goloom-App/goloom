@@ -50,7 +50,7 @@ func newEndpointFixture(t *testing.T) endpointFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "endpoints", nil, "", nil)
+	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "endpoints", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestAdminEndpointsForbiddenForNonAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bearer, _, err := f.store.CreateUserAPIToken(ctx, other.ID, "na", nil, "", nil)
+	bearer, _, err := f.store.CreateUserAPIToken(ctx, other.ID, "na", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,27 +337,91 @@ func TestAdminEndpointsForbiddenForNonAdmin(t *testing.T) {
 	requireStatus(t, rec, http.StatusForbidden)
 }
 
-func TestAIScopeGatesOnHTTPRoutes(t *testing.T) {
+func TestPostScopeAndTeamBindingEnforcement(t *testing.T) {
 	f := newEndpointFixture(t)
 	ctx := context.Background()
-	// Non-session API tokens need explicit AI scopes for the AI routes.
-	unscoped, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "unscoped", nil, "", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+f.team.ID+"/ai-context", nil)
-	req.Header.Set("Authorization", "Bearer "+unscoped)
-	rec := httptest.NewRecorder()
-	f.handler.ServeHTTP(rec, req)
-	requireStatus(t, rec, http.StatusForbidden)
 
-	scoped, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "scoped", nil, `["ai:read:context"]`, nil)
+	post := func(token string) int {
+		body, _ := json.Marshal(map[string]any{
+			"content":         "scoped post",
+			"scheduled_at":    time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339),
+			"target_accounts": []string{f.account.ID},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/v1/teams/"+f.team.ID+"/posts", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// read-only token may not schedule a post.
+	readOnly, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "read", nil, `["read"]`, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/v1/teams/"+f.team.ID+"/ai-context", nil)
-	req.Header.Set("Authorization", "Bearer "+scoped)
-	rec = httptest.NewRecorder()
-	f.handler.ServeHTTP(rec, req)
-	requireStatus(t, rec, http.StatusOK)
+	if code := post(readOnly); code != http.StatusForbidden {
+		t.Fatalf("read-only schedule: got %d, want 403", code)
+	}
+
+	// write:schedule token may schedule.
+	scheduler, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "sched", nil, `["write:schedule"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := post(scheduler); code != http.StatusCreated {
+		t.Fatalf("write:schedule schedule: got %d, want 201", code)
+	}
+
+	// A token bound to a different team is rejected even though the user owns f.team.
+	otherTeam, err := f.store.CreateTeam(ctx, f.user.ID, domain.CreateTeamInput{Name: "other-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "bound", nil, "", &otherTeam.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := post(bound); code != http.StatusForbidden {
+		t.Fatalf("team-bound token on foreign team: got %d, want 403", code)
+	}
+}
+
+func TestScopeGatesOnHTTPRoutes(t *testing.T) {
+	f := newEndpointFixture(t)
+	ctx := context.Background()
+	get := func(token string) int {
+		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+f.team.ID+"/ai-context", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// Unscoped tokens keep full access (backward compatible).
+	unscoped, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "unscoped", nil, "", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := get(unscoped); code != http.StatusOK {
+		t.Fatalf("unscoped: got %d, want 200", code)
+	}
+
+	// A read-scoped token may read AI context.
+	reader, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "reader", nil, `["read"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := get(reader); code != http.StatusOK {
+		t.Fatalf("reader: got %d, want 200", code)
+	}
+
+	// A write-only token cannot read.
+	writer, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "writer", nil, `["write:draft"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := get(writer); code != http.StatusForbidden {
+		t.Fatalf("writer: got %d, want 403", code)
+	}
 }

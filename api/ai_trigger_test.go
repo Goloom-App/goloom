@@ -67,7 +67,7 @@ func newAITriggerFixture(t *testing.T, runner aijobs.Runner, scopes ...string) a
 	if err != nil {
 		t.Fatal(err)
 	}
-	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "trigger-token", nil, string(rawScopes), nil)
+	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "trigger-token", nil, string(rawScopes), nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestAITrigger(t *testing.T) {
 	t.Run("Creates202WithJobID", func(t *testing.T) {
 		ctx := context.Background()
 		runner := &fakeRunner{result: json.RawMessage(`{"content":"hello"}`), ran: make(chan domain.AIJob, 1)}
-		fixture := newAITriggerFixture(t, runner, auth.ScopeAITriggerJobs)
+		fixture := newAITriggerFixture(t, runner, auth.ScopeWriteDraft)
 		upsertTestLLMConfig(t, fixture.store, fixture.team.ID)
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{
@@ -140,7 +140,7 @@ func TestAITrigger(t *testing.T) {
 
 	t.Run("Returns422WhenNoConfig", func(t *testing.T) {
 		ctx := context.Background()
-		fixture := newAITriggerFixture(t, &fakeRunner{}, auth.ScopeAITriggerJobs)
+		fixture := newAITriggerFixture(t, &fakeRunner{}, auth.ScopeWriteDraft)
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{
 			"type":   domain.AIJobTypeCampaignAutopilot,
@@ -257,7 +257,7 @@ func TestAITrigger(t *testing.T) {
 	t.Run("MarksJobFailedWhenProviderErrors", func(t *testing.T) {
 		ctx := context.Background()
 		runner := &fakeRunner{err: errors.New("llm api error: status 401")}
-		fixture := newAITriggerFixture(t, runner, auth.ScopeAITriggerJobs)
+		fixture := newAITriggerFixture(t, runner, auth.ScopeWriteDraft)
 		upsertTestLLMConfig(t, fixture.store, fixture.team.ID)
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{

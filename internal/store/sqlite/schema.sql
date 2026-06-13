@@ -51,6 +51,7 @@ create table if not exists api_tokens (
     last_used_at text,
     expires_at text,
     scopes text not null default '',
+    description text not null default '',
     team_id text references teams(id) on delete cascade,
     created_at text not null
 );

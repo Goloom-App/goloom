@@ -76,8 +76,8 @@ func TestAIContext(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		scopes, _ := json.Marshal([]string{auth.ScopeAIReadContext})
-		bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "ctx-token", nil, string(scopes), nil)
+		scopes, _ := json.Marshal([]string{auth.ScopeRead})
+		bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "ctx-token", nil, string(scopes), nil, "")
 		if err != nil {
 			t.Fatal(err)
 		}

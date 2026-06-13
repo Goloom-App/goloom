@@ -56,4 +56,5 @@ func TestSchemaAITables(t *testing.T) {
 	assertColumnExists("teams", "is_ai_enabled")
 	assertColumnExists("api_tokens", "scopes")
 	assertColumnExists("api_tokens", "team_id")
+	assertColumnExists("api_tokens", "description")
 }

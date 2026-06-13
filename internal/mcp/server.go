@@ -76,13 +76,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. Check AI scope
-	if principal.Kind != "oidc" {
-		if !auth.HasScope(principal.Scopes, auth.ScopeAIReadContext) &&
-			!auth.HasScope(principal.Scopes, auth.ScopeAIWriteDrafts) {
-			http.Error(w, "scope ai:read:context or ai:write:drafts required", http.StatusForbidden)
-			return
-		}
+	// 3. Require at least read access. Unscoped tokens (and browser sessions)
+	// pass; per-tool write/delete scopes are checked inside the tool handlers.
+	if !auth.PrincipalAllows(principal, auth.ScopeRead) {
+		http.Error(w, "scope read required", http.StatusForbidden)
+		return
 	}
 
 	// 4. Store principal in request context for tool handlers

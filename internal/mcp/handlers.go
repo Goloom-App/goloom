@@ -7,9 +7,19 @@ import (
 	"strings"
 	"time"
 
+	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// requireScope enforces a token scope for a write/delete MCP tool. Read tools
+// rely on the connection-level gate. Unscoped tokens and browser sessions pass.
+func requireScope(principal *domain.AuthenticatedPrincipal, scope string) error {
+	if !auth.PrincipalAllows(*principal, scope) {
+		return fmt.Errorf("forbidden: scope %q required", scope)
+	}
+	return nil
+}
 
 // ===== Campaigns =====
 
@@ -17,6 +27,9 @@ func (h *Handler) handleCreateCampaign(ctx context.Context, req *mcp.CallToolReq
 	principal := principalFromContext(ctx)
 	if principal == nil {
 		return nil, CreateCampaignOutput{}, fmt.Errorf("unauthorized")
+	}
+	if err := requireScope(principal, auth.ScopeWrite); err != nil {
+		return nil, CreateCampaignOutput{}, err
 	}
 
 	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
@@ -77,6 +90,9 @@ func (h *Handler) handleCreateRecurring(ctx context.Context, req *mcp.CallToolRe
 	if principal == nil {
 		return nil, CreateRecurringOutput{}, fmt.Errorf("unauthorized")
 	}
+	if err := requireScope(principal, auth.ScopeWrite); err != nil {
+		return nil, CreateRecurringOutput{}, err
+	}
 
 	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
@@ -113,6 +129,9 @@ func (h *Handler) handleCreateRSSFeed(ctx context.Context, req *mcp.CallToolRequ
 	principal := principalFromContext(ctx)
 	if principal == nil {
 		return nil, CreateRSSFeedOutput{}, fmt.Errorf("unauthorized")
+	}
+	if err := requireScope(principal, auth.ScopeWrite); err != nil {
+		return nil, CreateRSSFeedOutput{}, err
 	}
 
 	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
@@ -243,6 +262,9 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 	if principal == nil {
 		return nil, SchedulePostOutput{}, fmt.Errorf("unauthorized")
 	}
+	if err := requireScope(principal, auth.ScopeWriteSchedule); err != nil {
+		return nil, SchedulePostOutput{}, err
+	}
 
 	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
@@ -281,6 +303,9 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 	principal := principalFromContext(ctx)
 	if principal == nil {
 		return nil, DraftPostOutput{}, fmt.Errorf("unauthorized")
+	}
+	if err := requireScope(principal, auth.ScopeWriteDraft); err != nil {
+		return nil, DraftPostOutput{}, err
 	}
 
 	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleEditor, domain.RoleOwner)
@@ -351,6 +376,9 @@ func (h *Handler) handleModifyPost(ctx context.Context, req *mcp.CallToolRequest
 	if principal == nil {
 		return nil, ModifyPostOutput{}, fmt.Errorf("unauthorized")
 	}
+	if err := requireScope(principal, auth.ScopeWrite); err != nil {
+		return nil, ModifyPostOutput{}, err
+	}
 
 	// Get existing post
 	existing, err := h.store.GetScheduledPostByID(ctx, input.PostID)
@@ -402,6 +430,9 @@ func (h *Handler) handleDeletePost(ctx context.Context, req *mcp.CallToolRequest
 	principal := principalFromContext(ctx)
 	if principal == nil {
 		return nil, DeletePostOutput{}, fmt.Errorf("unauthorized")
+	}
+	if err := requireScope(principal, auth.ScopeDelete); err != nil {
+		return nil, DeletePostOutput{}, err
 	}
 
 	// Get existing post

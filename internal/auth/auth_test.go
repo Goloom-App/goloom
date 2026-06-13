@@ -247,10 +247,10 @@ func TestCurrentPrincipal(t *testing.T) {
 	}
 }
 
-func TestRequireScope(t *testing.T) {
+func TestRequireTokenScope(t *testing.T) {
 	f := newAuthFixture(t)
 	u := f.user(t)
-	handler := auth.RequireScope(auth.ScopeAIChat)(okHandler(t, nil))
+	handler := auth.RequireTokenScope(auth.ScopeWrite)(okHandler(t, nil))
 
 	serveAs := func(p *domain.AuthenticatedPrincipal) int {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -265,26 +265,19 @@ func TestRequireScope(t *testing.T) {
 	if code := serveAs(nil); code != http.StatusUnauthorized {
 		t.Fatalf("no principal: got %d, want 401", code)
 	}
-	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token"}); code != http.StatusForbidden {
-		t.Fatalf("token without scope: got %d, want 403", code)
+	// Unscoped token: full access (backward compatible).
+	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token"}); code != http.StatusOK {
+		t.Fatalf("unscoped token: got %d, want 200", code)
 	}
-	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token", Scopes: []string{auth.ScopeAIChat}}); code != http.StatusOK {
+	// Scoped token lacking the required scope is rejected.
+	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token", Scopes: []string{auth.ScopeRead}}); code != http.StatusForbidden {
+		t.Fatalf("read-only token: got %d, want 403", code)
+	}
+	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token", Scopes: []string{auth.ScopeWrite}}); code != http.StatusOK {
 		t.Fatalf("token with scope: got %d, want 200", code)
 	}
 	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "oidc"}); code != http.StatusOK {
 		t.Fatalf("oidc principals bypass scopes: got %d, want 200", code)
-	}
-}
-
-func TestHasScope(t *testing.T) {
-	if !auth.HasScope([]string{"a", "b"}, "b") {
-		t.Fatal("expected scope match")
-	}
-	if auth.HasScope([]string{"a"}, "b") {
-		t.Fatal("unexpected scope match")
-	}
-	if auth.HasScope(nil, "a") {
-		t.Fatal("nil scopes must not match")
 	}
 }
 

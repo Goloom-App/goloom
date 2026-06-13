@@ -899,14 +899,16 @@ func APITokenExpired(expiresAt *time.Time, now time.Time) bool {
 }
 
 type APIToken struct {
-	ID         string     `json:"id"`
-	UserID     string     `json:"user_id"`
-	Name       string     `json:"name"`
-	TokenHash  string     `json:"-"`
-	TeamID     *string    `json:"team_id,omitempty"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID          string     `json:"id"`
+	UserID      string     `json:"user_id"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	TokenHash   string     `json:"-"`
+	TeamID      *string    `json:"team_id,omitempty"`
+	Scopes      []string   `json:"scopes,omitempty"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type AuthenticatedPrincipal struct {

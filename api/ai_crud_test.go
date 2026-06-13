@@ -95,7 +95,7 @@ func seedAICRUDTeam(t *testing.T, aiEnabled bool) aiCRUDFixture {
 			t.Fatal(err)
 		}
 	}
-	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "test-token", nil, "", nil)
+	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "test-token", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

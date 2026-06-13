@@ -42,7 +42,7 @@ func TestSSEEndpoint(t *testing.T) {
 	if _, err := store.UpdateTeam(ctx, team.ID, domain.UpdateTeamInput{Name: team.Name, IsAIEnabled: &enabled}); err != nil {
 		t.Fatal(err)
 	}
-	bearer, _, err := store.CreateUserAPIToken(ctx, user.ID, "sse-token", nil, "", nil)
+	bearer, _, err := store.CreateUserAPIToken(ctx, user.ID, "sse-token", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

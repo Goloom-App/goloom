@@ -51,7 +51,7 @@ func seedValidateE2E(t *testing.T, s *sqlitestore.Store) (bearer, teamID, bsID, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "e2e-val-token", nil, "", nil)
+	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "e2e-val-token", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
