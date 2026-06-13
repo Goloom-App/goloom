@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,7 +22,18 @@ const (
 	DefaultAnthropicModel = "claude-opus-4-8"
 
 	defaultMaxTokens = 2048
-	requestTimeout   = 120 * time.Second
+	// maxTokenBudget caps the growth of escalateBudget. Reasoning models can burn
+	// the initial budget on hidden tokens and truncate, so callers retry with more
+	// room — but not without bound.
+	maxTokenBudget = 8192
+	// truncationsBeforeRaise is how many times a model must truncate before its
+	// learned *starting* budget is nudged up. One truncation is treated as a
+	// fluke ("einmal ist keinmal"); only a recurring pattern adapts the default.
+	truncationsBeforeRaise = 3
+	// tokenBudgetStep raises the learned starting budget gently, one step at a
+	// time, rather than doubling it on a pattern.
+	tokenBudgetStep = 1024
+	requestTimeout  = 120 * time.Second
 )
 
 var ErrNotConfigured = errors.New("llm provider not configured")
@@ -31,6 +43,68 @@ var ErrNotConfigured = errors.New("llm provider not configured")
 // invalid JSON, so callers should treat this as a distinct failure instead of a
 // generic parse error.
 var ErrResponseTruncated = errors.New("llm response truncated at token limit")
+
+// escalateBudget doubles a token budget for a truncation retry, capped at
+// maxTokenBudget.
+func escalateBudget(current int) int {
+	next := current * 2
+	if next > maxTokenBudget {
+		return maxTokenBudget
+	}
+	return next
+}
+
+// budgetMemory remembers, per model, the starting token budget that has been
+// working. A model that *repeatedly* truncates (e.g. a reasoning model burning
+// the budget on hidden tokens) gets a slightly larger starting budget so the
+// system stops paying for a truncated attempt plus an escalate-retry on every
+// job. A single truncation is ignored as a fluke, and the starting budget only
+// creeps up one step at a time. Process-local: it re-learns after a restart.
+type budgetMemory struct {
+	mu     sync.Mutex
+	start  map[string]int
+	truncs map[string]int
+}
+
+func newBudgetMemory() *budgetMemory {
+	return &budgetMemory{start: map[string]int{}, truncs: map[string]int{}}
+}
+
+// starting returns the budget to begin with for model.
+func (b *budgetMemory) starting(model string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if v := b.start[model]; v > defaultMaxTokens {
+		return v
+	}
+	return defaultMaxTokens
+}
+
+// learnTruncation records one truncation for model. Only once a model has
+// truncated truncationsBeforeRaise times does its starting budget creep up by a
+// single tokenBudgetStep (capped at maxTokenBudget); the counter then resets so
+// the next raise again needs a fresh run of truncations.
+func (b *budgetMemory) learnTruncation(model string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.truncs[model]++
+	if b.truncs[model] < truncationsBeforeRaise {
+		return
+	}
+	b.truncs[model] = 0
+	current := b.start[model]
+	if current < defaultMaxTokens {
+		current = defaultMaxTokens
+	}
+	if next := current + tokenBudgetStep; next <= maxTokenBudget {
+		b.start[model] = next
+	} else {
+		b.start[model] = maxTokenBudget
+	}
+}
+
+// modelBudgets is the process-wide learned budget shared across jobs.
+var modelBudgets = newBudgetMemory()
 
 // Settings carries the per-team LLM credentials resolved from the store.
 type Settings struct {
@@ -99,6 +173,9 @@ type Response struct {
 // Client is a minimal provider-neutral LLM client.
 type Client interface {
 	Complete(ctx context.Context, req Request) (Response, error)
+	// Model reports the resolved model name, used to key the learned token
+	// budget so a model that often truncates is started with more room.
+	Model() string
 }
 
 // NewClient builds a client for the configured provider.

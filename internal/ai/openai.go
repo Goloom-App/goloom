@@ -40,6 +40,8 @@ type openAIToolCall struct {
 	} `json:"function"`
 }
 
+func (c *openAIClient) Model() string { return c.settings.ResolvedModel() }
+
 func (c *openAIClient) Complete(ctx context.Context, req Request) (Response, error) {
 	messages := make([]openAIMessage, 0, len(req.Messages)+1)
 	if strings.TrimSpace(req.System) != "" {

@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -367,9 +368,19 @@ type generateAttempt struct {
 func generateWithRetries(ctx context.Context, client Client, attempt generateAttempt) (parsedVoiceResult, error) {
 	currentPrompt := attempt.prompt
 	lastError := "invalid multi-account output"
+	model := client.Model()
+	maxTokens := modelBudgets.starting(model)
 	for try := 0; try <= voiceEngineMaxRetries; try++ {
-		content, err := GenerateJSON(ctx, client, attempt.systemPrompt, currentPrompt, 0.7, defaultMaxTokens)
+		content, err := GenerateJSON(ctx, client, attempt.systemPrompt, currentPrompt, 0.7, maxTokens)
 		if err != nil {
+			// Truncation means the model needs more room, not a different prompt:
+			// note it for the per-model memory and double the budget to recover
+			// this job now (cross-job learning is gentle; in-job recovery is not).
+			if errors.Is(err, ErrResponseTruncated) && try < voiceEngineMaxRetries {
+				modelBudgets.learnTruncation(model)
+				maxTokens = escalateBudget(maxTokens)
+				continue
+			}
 			return parsedVoiceResult{}, err
 		}
 		result, parseErr := parseVoiceResult(content, attempt.includeTitle, attempt.refineMode)

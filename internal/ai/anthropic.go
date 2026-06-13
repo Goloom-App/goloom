@@ -29,6 +29,8 @@ type anthropicMessage struct {
 	Content []anthropicContentBlock `json:"content"`
 }
 
+func (c *anthropicClient) Model() string { return c.settings.ResolvedModel() }
+
 func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, error) {
 	messages := make([]anthropicMessage, 0, len(req.Messages))
 	for _, m := range req.Messages {

@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -42,10 +43,20 @@ func runCampaignAutopilot(ctx context.Context, client Client, job domain.AIJob, 
 	basePrompt := buildGenerationPrompt(aiContext, campaignPromptParams(p, campaignFormat, renderedTemplate, requiredHashtags, suggestedScheduledAt), platform)
 
 	prompt := basePrompt
+	model := client.Model()
+	maxTokens := modelBudgets.starting(model)
 	var lastErr error
 	for try := 0; try <= campaignMaxRetries; try++ {
-		content, err := GenerateJSON(ctx, client, systemPrompt, prompt, 0.7, defaultMaxTokens)
+		content, err := GenerateJSON(ctx, client, systemPrompt, prompt, 0.7, maxTokens)
 		if err != nil {
+			// Truncation needs a bigger budget, not a reworded prompt: note it for
+			// the per-model memory and double the budget to recover this job now.
+			if errors.Is(err, ErrResponseTruncated) && try < campaignMaxRetries {
+				modelBudgets.learnTruncation(model)
+				maxTokens = escalateBudget(maxTokens)
+				lastErr = err
+				continue
+			}
 			return nil, err
 		}
 		result, err := validateCampaignResult(content, requiredHashtags, constraints.charLimit, suggestedScheduledAt)
