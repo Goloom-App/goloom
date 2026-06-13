@@ -377,7 +377,9 @@
       "insightEngagementWith": "Avg engagement with hashtags",
       "insightEngagementWithout": "Avg engagement without hashtags",
       "showAllAccounts": "Show all",
-      "selectAccountHint": "Tap an account to filter"
+      "selectAccountHint": "Tap an account to filter",
+      "accountsSelected": "{{count}} accounts selected",
+      "resetAccounts": "Reset"
     },
     "accounts": {
       "connectedTitle": "Connected accounts",

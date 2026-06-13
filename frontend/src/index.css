@@ -353,6 +353,18 @@ body,
   box-shadow: 0 0 0 1px var(--accent);
 }
 
+/* Cards left out of an active subset are dimmed so it is obvious which accounts
+   are currently being viewed. Hover still lifts them, inviting re-selection. */
+.account-stat-card--dimmed {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.account-stat-card--dimmed:hover {
+  opacity: 0.7;
+  filter: grayscale(0.3);
+}
+
 .analytics-filter-pill {
   display: flex;
   align-items: center;

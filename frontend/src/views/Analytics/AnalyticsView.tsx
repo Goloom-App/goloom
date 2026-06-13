@@ -18,6 +18,15 @@ import type {
 import type { AccountRecord } from '../../types'
 import { accountConnectionStatus } from '../../mappers'
 import { aggregatePostMetrics, engagementForAccount } from '../../postMetrics'
+import {
+  type AccountSelection,
+  activeAccountIds,
+  aggregateGrowthSeries,
+  aggregateHeatmapBuckets,
+  isAccountActive,
+  isAllSelected,
+  toggleAccount,
+} from './accountSelection'
 
 function metricLabel(metric: string, t: (key: string) => string): string {
   if (metric === 'likes') return t('analytics.metricLikes')
@@ -173,7 +182,7 @@ export function AnalyticsView({
   const [posts, setPosts] = useState<BackendPostAnalyticsListRow[]>([])
   const [series, setSeries] = useState<BackendMetricHistoryPoint[]>([])
   const [chartMetric, setChartMetric] = useState<string>('')
-  const [growthAccountId, setGrowthAccountId] = useState<string>('all')
+  const [accountSelection, setAccountSelection] = useState<AccountSelection>([])
   const [accountGrowthSeries, setAccountGrowthSeries] = useState<BackendAccountGrowthPoint[]>([])
   const [accountLatestGrowth, setAccountLatestGrowth] = useState<Record<string, BackendAccountGrowthPoint>>({})
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
@@ -202,6 +211,10 @@ export function AnalyticsView({
 
   const viewGapStyle = { display: 'flex', flexDirection: 'column' as const, gap: 'var(--space-8)' }
   const metrics = summary?.metrics ?? []
+
+  const allAccountIds = useMemo(() => accounts.map((a) => a.id), [accounts])
+  const activeIds = useMemo(() => activeAccountIds(accountSelection, allAccountIds), [accountSelection, allAccountIds])
+  const showAll = isAllSelected(accountSelection)
 
   const load = useCallback(async () => {
     if (!teamId) {
@@ -266,21 +279,38 @@ export function AnalyticsView({
       return
     }
     let cancelled = false
-    void fetchAccountGrowth(growthAccountId || 'all', { days: 30 })
-      .then((res) => {
-        if (!cancelled) {
-          setAccountGrowthSeries(res.series ?? [])
+    const run = async () => {
+      try {
+        if (showAll) {
+          const res = await fetchAccountGrowth('all', { days: 30 })
+          if (!cancelled) {
+            setAccountGrowthSeries(res.series ?? [])
+          }
+          return
         }
-      })
-      .catch(() => {
+        // A subset has no single backend endpoint, so fetch each selected
+        // account and sum the series client-side.
+        const seriesByAccount = await Promise.all(
+          activeIds.map((id) =>
+            fetchAccountGrowth(id, { days: 30 })
+              .then((res) => res.series ?? [])
+              .catch(() => []),
+          ),
+        )
+        if (!cancelled) {
+          setAccountGrowthSeries(aggregateGrowthSeries(seriesByAccount))
+        }
+      } catch {
         if (!cancelled) {
           setAccountGrowthSeries([])
         }
-      })
+      }
+    }
+    void run()
     return () => {
       cancelled = true
     }
-  }, [fetchAccountGrowth, growthAccountId, teamId])
+  }, [fetchAccountGrowth, showAll, activeIds, teamId])
 
   useEffect(() => {
     if (!teamId || activeTab !== 'accounts' || accounts.length === 0) {
@@ -324,21 +354,36 @@ export function AnalyticsView({
       return
     }
     let cancelled = false
-    void fetcher({ days: 90, account: growthAccountId || 'all' })
-      .then((res) => {
-        if (!cancelled) {
-          setHeatmapBuckets(res.buckets ?? [])
+    const run = async () => {
+      try {
+        if (showAll) {
+          const res = await fetcher({ days: 90, account: 'all' })
+          if (!cancelled) {
+            setHeatmapBuckets(res.buckets ?? [])
+          }
+          return
         }
-      })
-      .catch(() => {
+        const bucketsByAccount = await Promise.all(
+          activeIds.map((id) =>
+            fetcher({ days: 90, account: id })
+              .then((res) => res.buckets ?? [])
+              .catch(() => []),
+          ),
+        )
+        if (!cancelled) {
+          setHeatmapBuckets(aggregateHeatmapBuckets(bucketsByAccount))
+        }
+      } catch {
         if (!cancelled) {
           setHeatmapBuckets([])
         }
-      })
+      }
+    }
+    void run()
     return () => {
       cancelled = true
     }
-  }, [activeTab, growthAccountId, hasHeatmap, teamId])
+  }, [activeTab, showAll, activeIds, hasHeatmap, teamId])
 
   useEffect(() => {
     if (!teamId || !hasHashtags || activeTab !== 'hashtags') {
@@ -598,15 +643,19 @@ export function AnalyticsView({
             {accounts.map(acc => {
               const status = accountConnectionStatus(acc)
               const latestGrowth = accountLatestGrowth[acc.id]
-              const selected = growthAccountId === acc.id
+              const active = isAccountActive(accountSelection, acc.id)
+              // Highlight only explicit picks; in the "all" default no card stands
+              // out. Cards left out of an active subset are dimmed ("deactivated").
+              const highlighted = !showAll && active
+              const dimmed = !showAll && !active
 
               return (
                 <button
                   key={acc.id}
                   type="button"
-                  className={`glass-panel account-stat-card account-stat-card--selectable ${selected ? 'account-stat-card--selected' : ''}`}
-                  aria-pressed={selected}
-                  onClick={() => setGrowthAccountId((current) => (current === acc.id ? 'all' : acc.id))}
+                  className={`glass-panel account-stat-card account-stat-card--selectable ${highlighted ? 'account-stat-card--selected' : ''} ${dimmed ? 'account-stat-card--dimmed' : ''}`}
+                  aria-pressed={active}
+                  onClick={() => setAccountSelection((current) => toggleAccount(current, acc.id, allAccountIds))}
                 >
                   <div className="account-stat-card__header">
                     <DestinationAvatar account={acc} />
@@ -653,16 +702,18 @@ export function AnalyticsView({
               <h3 className="subsection-title">{t('analytics.accountGrowth')}</h3>
               <div className="analytics-filter-pill">
                 <span className="hint">
-                  {growthAccountId === 'all'
+                  {showAll
                     ? t('common.allAccounts')
-                    : (accounts.find((a) => a.id === growthAccountId)?.name ?? t('common.allAccounts'))}
+                    : activeIds.length === 1
+                      ? (accounts.find((a) => a.id === activeIds[0])?.name ?? t('common.allAccounts'))
+                      : t('analytics.accountsSelected', { count: activeIds.length })}
                 </span>
-                {growthAccountId !== 'all' ? (
-                  <button type="button" className="analytics-filter-pill__reset" onClick={() => setGrowthAccountId('all')}>
-                    {t('analytics.showAllAccounts')}
-                  </button>
-                ) : (
+                {showAll ? (
                   <span className="hint text-xs">{t('analytics.selectAccountHint')}</span>
+                ) : (
+                  <button type="button" className="analytics-filter-pill__reset" onClick={() => setAccountSelection([])}>
+                    {t('analytics.resetAccounts')}
+                  </button>
                 )}
               </div>
             </div>
