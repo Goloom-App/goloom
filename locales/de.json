@@ -375,7 +375,9 @@
       "insightAvgPerPost": "Ø Hashtags pro Beitrag",
       "insightPostsWithTags": "Beiträge mit Hashtags",
       "insightEngagementWith": "Ø Interaktionen mit Hashtags",
-      "insightEngagementWithout": "Ø Interaktionen ohne Hashtags"
+      "insightEngagementWithout": "Ø Interaktionen ohne Hashtags",
+      "showAllAccounts": "Alle anzeigen",
+      "selectAccountHint": "Konto antippen zum Filtern"
     },
     "accounts": {
       "connectedTitle": "Verbundene Konten",

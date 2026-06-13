@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
@@ -41,12 +42,19 @@ func (s *Store) GetTeamEngagementHourHistogram(ctx context.Context, teamID strin
 	return out, rows.Err()
 }
 
-// GetTeamEngagementHeatmap aggregates post_metrics sums by UTC weekday (0=Sunday) and hour.
-func (s *Store) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int) ([]domain.EngagementHeatmapBucket, error) {
+// GetTeamEngagementHeatmap aggregates post_metrics sums by UTC weekday (0=Sunday)
+// and hour, optionally restricted to one account.
+func (s *Store) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int, accountID string) ([]domain.EngagementHeatmapBucket, error) {
 	if days <= 0 {
 		days = 90
 	}
 	sinceStr := formatTime(time.Now().UTC().AddDate(0, 0, -days))
+	accountFilter := ""
+	args := []any{teamID, sinceStr}
+	if id := strings.TrimSpace(accountID); id != "" && id != "all" {
+		args = append(args, id)
+		accountFilter = " and pm.account_id = ?"
+	}
 	rows, err := s.db.QueryContext(ctx, `
 		select cast(strftime('%w', sp.scheduled_at) as integer) as wd,
 		       cast(substr(sp.scheduled_at, 12, 2) as integer) as hr,
@@ -55,10 +63,10 @@ func (s *Store) GetTeamEngagementHeatmap(ctx context.Context, teamID string, day
 		join post_metrics pm on pm.post_id = sp.id
 		where sp.team_id = ?
 		  and sp.status = 'posted'
-		  and sp.scheduled_at >= ?
+		  and sp.scheduled_at >= ?`+accountFilter+`
 		group by wd, hr
 		order by wd, hr`,
-		teamID, sinceStr,
+		args...,
 	)
 	if err != nil {
 		return nil, err

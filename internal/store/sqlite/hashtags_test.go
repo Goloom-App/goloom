@@ -176,7 +176,7 @@ func TestGetTeamEngagementHeatmap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	buckets, err := s.GetTeamEngagementHeatmap(ctx, team.ID, 90)
+	buckets, err := s.GetTeamEngagementHeatmap(ctx, team.ID, 90, "")
 	if err != nil {
 		t.Fatal(err)
 	}

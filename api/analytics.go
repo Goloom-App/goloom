@@ -134,12 +134,13 @@ func (a *API) handleTeamEngagementHeatmap(w http.ResponseWriter, r *http.Request
 			days = n
 		}
 	}
-	items, err := a.store.GetTeamEngagementHeatmap(r.Context(), r.PathValue("teamID"), days)
+	accountID := strings.TrimSpace(r.URL.Query().Get("account"))
+	items, err := a.store.GetTeamEngagementHeatmap(r.Context(), r.PathValue("teamID"), days, accountID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"days": days, "buckets": sliceOrEmpty(items)})
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"days": days, "account": accountID, "buckets": sliceOrEmpty(items)})
 }
 
 func (a *API) handleTeamAnalytics(w http.ResponseWriter, r *http.Request) {

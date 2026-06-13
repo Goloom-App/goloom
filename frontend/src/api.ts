@@ -967,11 +967,18 @@ export function createApiClient(options: ApiClientOptions) {
         },
       )
     },
-    getTeamEngagementHeatmap(teamID: string, opts?: { days?: number }) {
-      const q = opts?.days != null && opts.days > 0 ? `?days=${encodeURIComponent(String(opts.days))}` : ''
-      return request<{ days: number; buckets: BackendEngagementHeatmapBucket[] }>(
+    getTeamEngagementHeatmap(teamID: string, opts?: { days?: number; account?: string }) {
+      const params = new URLSearchParams()
+      if (opts?.days != null && opts.days > 0) {
+        params.set('days', String(opts.days))
+      }
+      if (opts?.account && opts.account !== 'all') {
+        params.set('account', opts.account)
+      }
+      const suffix = params.toString()
+      return request<{ days: number; account: string; buckets: BackendEngagementHeatmapBucket[] }>(
         options,
-        `/v1/teams/${teamID}/analytics/engagement-heatmap${q}`,
+        `/v1/teams/${teamID}/analytics/engagement-heatmap${suffix ? `?${suffix}` : ''}`,
         {
           headers: buildHeaders(options.token, false),
         },

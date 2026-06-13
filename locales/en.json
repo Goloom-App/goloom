@@ -375,7 +375,9 @@
       "insightAvgPerPost": "Avg hashtags per post",
       "insightPostsWithTags": "Posts with hashtags",
       "insightEngagementWith": "Avg engagement with hashtags",
-      "insightEngagementWithout": "Avg engagement without hashtags"
+      "insightEngagementWithout": "Avg engagement without hashtags",
+      "showAllAccounts": "Show all",
+      "selectAccountHint": "Tap an account to filter"
     },
     "accounts": {
       "connectedTitle": "Connected accounts",

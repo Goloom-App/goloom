@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { format, parseISO } from 'date-fns'
 import { translateApiError } from '../../i18n/translateApiError'
@@ -165,7 +165,7 @@ export function AnalyticsView({
   fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
   fetchPostMetrics?: (postId: string) => Promise<{ items: BackendPostMetric[] }>
   fetchHashtags?: (opts?: { days?: number; provider?: string; limit?: number }) => Promise<{ items: BackendHashtagPerformance[]; insights?: BackendHashtagInsights }>
-  fetchHeatmap?: (opts?: { days?: number }) => Promise<{ buckets: BackendEngagementHeatmapBucket[] }>
+  fetchHeatmap?: (opts?: { days?: number; account?: string }) => Promise<{ buckets: BackendEngagementHeatmapBucket[] }>
 }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'posts' | 'hashtags'>('overview')
@@ -185,6 +185,18 @@ export function AnalyticsView({
   const [hashtagProvider, setHashtagProvider] = useState<string>('all')
   const [hashtagDays, setHashtagDays] = useState<number>(90)
   const [hashtagsLoading, setHashtagsLoading] = useState(false)
+
+  // The fetch props are recreated on every parent render (the dashboard polls
+  // every ~15s); effects read them through refs so data only reloads when
+  // team/tab/filter actually change, not on each poll-driven re-render.
+  const fetchHashtagsRef = useRef(fetchHashtags)
+  const fetchHeatmapRef = useRef(fetchHeatmap)
+  useEffect(() => {
+    fetchHashtagsRef.current = fetchHashtags
+    fetchHeatmapRef.current = fetchHeatmap
+  })
+  const hasHashtags = Boolean(fetchHashtags)
+  const hasHeatmap = Boolean(fetchHeatmap)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -304,12 +316,15 @@ export function AnalyticsView({
   }, [accounts, activeTab, fetchAccountGrowth, teamId])
 
   useEffect(() => {
-    if (!teamId || !fetchHeatmap) {
-      setHeatmapBuckets([])
+    if (!teamId || !hasHeatmap || activeTab !== 'accounts') {
+      return
+    }
+    const fetcher = fetchHeatmapRef.current
+    if (!fetcher) {
       return
     }
     let cancelled = false
-    void fetchHeatmap({ days: 90 })
+    void fetcher({ days: 90, account: growthAccountId || 'all' })
       .then((res) => {
         if (!cancelled) {
           setHeatmapBuckets(res.buckets ?? [])
@@ -323,15 +338,21 @@ export function AnalyticsView({
     return () => {
       cancelled = true
     }
-  }, [fetchHeatmap, teamId])
+  }, [activeTab, growthAccountId, hasHeatmap, teamId])
 
   useEffect(() => {
-    if (!teamId || !fetchHashtags || activeTab !== 'hashtags') {
+    if (!teamId || !hasHashtags || activeTab !== 'hashtags') {
+      return
+    }
+    const fetcher = fetchHashtagsRef.current
+    if (!fetcher) {
       return
     }
     let cancelled = false
-    setHashtagsLoading(true)
-    void fetchHashtags({ days: hashtagDays, provider: hashtagProvider === 'all' ? undefined : hashtagProvider, limit: 50 })
+    // Keep the previous rows visible during a refresh; only show the loading
+    // hint on the very first load so the list doesn't flicker.
+    setHashtagsLoading((wasLoading) => (hashtags.length === 0 ? true : wasLoading))
+    void fetcher({ days: hashtagDays, provider: hashtagProvider === 'all' ? undefined : hashtagProvider, limit: 50 })
       .then((res) => {
         if (!cancelled) {
           setHashtags(res.items ?? [])
@@ -352,7 +373,10 @@ export function AnalyticsView({
     return () => {
       cancelled = true
     }
-  }, [activeTab, fetchHashtags, hashtagDays, hashtagProvider, teamId])
+    // hashtags.length is intentionally excluded: it is only read to decide the
+    // loading hint and must not retrigger the fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, hasHashtags, hashtagDays, hashtagProvider, teamId])
 
   const hashtagProviders = useMemo(() => {
     const seen = new Set<string>()
@@ -570,38 +594,20 @@ export function AnalyticsView({
 
       {summary && activeTab === 'accounts' && (
         <div className="analytics-accounts-view" style={viewGapStyle}>
-          <section className="glass-panel analytics-card-chart">
-            <div className="analytics-chart-panel__head">
-              <h3 className="subsection-title">{t('analytics.accountGrowth')}</h3>
-              <select className="select-sm" value={growthAccountId} onChange={(e) => setGrowthAccountId(e.target.value)}>
-                <option value="all">{t('common.allAccounts')}</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.username})</option>
-                ))}
-              </select>
-            </div>
-            <div className="analytics-chart-wrap">
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart data={growthData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} minTickGap={20} />
-                  <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} width={35} />
-                  <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
-                  <Line name={t('analytics.followers')} type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
-                  <Line name={t('analytics.following')} type="monotone" dataKey="following" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" dot={false} />
-                  <Line name={t('analytics.networkSize')} type="monotone" dataKey="networkSize" stroke="var(--accent)" strokeWidth={1} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
           <div className="analytics-accounts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--space-6)' }}>
             {accounts.map(acc => {
               const status = accountConnectionStatus(acc)
               const latestGrowth = accountLatestGrowth[acc.id]
-              
+              const selected = growthAccountId === acc.id
+
               return (
-                <section key={acc.id} className="glass-panel account-stat-card">
+                <button
+                  key={acc.id}
+                  type="button"
+                  className={`glass-panel account-stat-card account-stat-card--selectable ${selected ? 'account-stat-card--selected' : ''}`}
+                  aria-pressed={selected}
+                  onClick={() => setGrowthAccountId((current) => (current === acc.id ? 'all' : acc.id))}
+                >
                   <div className="account-stat-card__header">
                     <DestinationAvatar account={acc} />
                     <div className="account-stat-card__identity">
@@ -612,7 +618,7 @@ export function AnalyticsView({
                       {status === 'active' ? t('common.active') : t('common.reauth')}
                     </span>
                   </div>
-                  
+
                   <div className="account-stat-card__metrics">
                     <div className="account-stat-card__metric">
                       <span className="account-stat-card__metric-value">
@@ -637,10 +643,43 @@ export function AnalyticsView({
                   <div className="account-stat-card__footer">
                     <span className="hint mono text-xs">{acc.provider} · {acc.instance.replace('https://', '')}</span>
                   </div>
-                </section>
+                </button>
               )
             })}
           </div>
+
+          <section className="glass-panel analytics-card-chart">
+            <div className="analytics-chart-panel__head">
+              <h3 className="subsection-title">{t('analytics.accountGrowth')}</h3>
+              <div className="analytics-filter-pill">
+                <span className="hint">
+                  {growthAccountId === 'all'
+                    ? t('common.allAccounts')
+                    : (accounts.find((a) => a.id === growthAccountId)?.name ?? t('common.allAccounts'))}
+                </span>
+                {growthAccountId !== 'all' ? (
+                  <button type="button" className="analytics-filter-pill__reset" onClick={() => setGrowthAccountId('all')}>
+                    {t('analytics.showAllAccounts')}
+                  </button>
+                ) : (
+                  <span className="hint text-xs">{t('analytics.selectAccountHint')}</span>
+                )}
+              </div>
+            </div>
+            <div className="analytics-chart-wrap">
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={growthData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="date" tick={{ fill: 'var(--text-soft)', fontSize: 10 }} minTickGap={20} />
+                  <YAxis tick={{ fill: 'var(--text-soft)', fontSize: 12 }} width={35} />
+                  <Tooltip contentStyle={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 8 }} />
+                  <Line name={t('analytics.followers')} type="monotone" dataKey="followers" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  <Line name={t('analytics.following')} type="monotone" dataKey="following" stroke="#8b5cf6" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+                  <Line name={t('analytics.networkSize')} type="monotone" dataKey="networkSize" stroke="var(--accent)" strokeWidth={1} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
 
           {fetchHeatmap ? <ActivityHeatmapPanel buckets={heatmapBuckets} /> : null}
         </div>

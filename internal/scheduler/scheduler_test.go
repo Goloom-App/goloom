@@ -654,7 +654,7 @@ func (m *mockStore) GetTeamEngagementHourHistogram(ctx context.Context, teamID s
 	return nil, nil
 }
 
-func (m *mockStore) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int) ([]domain.EngagementHeatmapBucket, error) {
+func (m *mockStore) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int, accountID string) ([]domain.EngagementHeatmapBucket, error) {
 	return nil, nil
 }
 

@@ -340,6 +340,40 @@ body,
   border-color: var(--border-strong);
 }
 
+.account-stat-card--selectable {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.account-stat-card--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.analytics-filter-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.analytics-filter-pill__reset {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.analytics-filter-pill__reset:hover {
+  background: var(--surface-hover);
+  border-color: var(--accent);
+}
+
 .account-stat-card__header {
   display: flex;
   align-items: center;
