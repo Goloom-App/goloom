@@ -805,6 +805,13 @@ func (m *mockStore) ListLogEntries(ctx context.Context, filter domain.LogFilter)
 func (m *mockStore) CountLogEntries(ctx context.Context, filter domain.LogFilter) (int, error) {
 	return 0, nil
 }
+func (m *mockStore) InsertAuditEvent(ctx context.Context, e domain.AuditEvent) error { return nil }
+func (m *mockStore) ListAuditEvents(ctx context.Context, filter domain.AuditFilter) ([]domain.AuditEvent, error) {
+	return nil, nil
+}
+func (m *mockStore) CountAuditEvents(ctx context.Context, filter domain.AuditFilter) (int, error) {
+	return 0, nil
+}
 func (m *mockStore) ArchiveLogEntry(ctx context.Context, id string) error   { return nil }
 func (m *mockStore) UnarchiveLogEntry(ctx context.Context, id string) error { return nil }
 func (m *mockStore) DeleteLogEntry(ctx context.Context, id string) error    { return nil }

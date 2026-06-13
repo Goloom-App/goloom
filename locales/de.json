@@ -659,6 +659,35 @@
         "noScheduledWorkspace": "Keine geplanten Beiträge in diesem Arbeitsbereich. Erstellen Sie einen Beitrag im Zeitplan oder Editor."
       }
     },
+    "audit": {
+      "title": "Auditlog",
+      "hint": "Wer — ein Mitglied oder ein API-Key — was in diesem Team getan hat.",
+      "empty": "Noch keine Aktivität aufgezeichnet.",
+      "filterAction": "Nach Aktion filtern",
+      "allActions": "Alle Aktionen",
+      "colTime": "Zeit",
+      "colActor": "Akteur",
+      "colAction": "Aktion",
+      "colDetails": "Details",
+      "member": "Mitglied",
+      "viaApiKey": "API-Key: {{name}}",
+      "unknownActor": "Unbekannt",
+      "actions": {
+        "post_create": "Beitrag erstellt",
+        "post_update": "Beitrag geändert",
+        "post_delete": "Beitrag gelöscht",
+        "post_cancel": "Beitrag abgebrochen",
+        "account_connect": "Konto verbunden",
+        "account_disconnect": "Konto getrennt",
+        "account_update": "Konto geändert",
+        "member_add": "Mitglied hinzugefügt",
+        "member_remove": "Mitglied entfernt",
+        "team_update": "Team-Einstellungen geändert",
+        "ai_config_update": "AI-Konfiguration geändert",
+        "brand_profile_update": "Markenprofil aktualisiert",
+        "api_token_create": "API-Key erstellt"
+      }
+    },
     "admin": {
       "pageTitle": "Administration",
       "pageSubtitle": "Status der Installation, Konfiguration, Provider und Nutzerverzeichnis.",

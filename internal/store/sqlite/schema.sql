@@ -397,6 +397,24 @@ create table if not exists log_entries (
     archived_at text
 );
 
+create table if not exists audit_events (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    actor_user_id text not null default '',
+    actor_name text not null default '',
+    actor_email text not null default '',
+    actor_kind text not null default '',
+    token_id text,
+    token_name text,
+    action text not null,
+    target_type text not null default '',
+    target_id text,
+    summary text not null default '',
+    metadata_json text not null default '{}',
+    created_at text not null
+);
+create index if not exists idx_audit_events_team on audit_events(team_id, created_at desc);
+
 create table if not exists job_locks (
     lock_id text primary key,
     locked_at text not null,

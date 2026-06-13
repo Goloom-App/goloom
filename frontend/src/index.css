@@ -1759,6 +1759,14 @@ select {
   border-color: transparent;
 }
 
+/* Audit log actor cell: stack the name above the member/API-key badge. */
+.audit-actor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
 /* ==========================================================================
    Skeleton Loading
    ========================================================================== */

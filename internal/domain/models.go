@@ -913,6 +913,10 @@ type AuthenticatedPrincipal struct {
 	Kind        string   `json:"kind"`
 	Scopes      []string `json:"scopes,omitempty"`
 	TokenTeamID *string  `json:"token_team_id,omitempty"`
+	// TokenID/TokenName identify the API key used for the request. Set only for
+	// Kind=="api_token" (a tool/automation); nil for human browser sessions.
+	TokenID   *string `json:"token_id,omitempty"`
+	TokenName *string `json:"token_name,omitempty"`
 }
 
 type CreateAccountInput struct {
@@ -1216,4 +1220,42 @@ type LogFilter struct {
 	After     *time.Time
 	Limit     int
 	Offset    int
+}
+
+// Audit actor kinds distinguish a human acting through the web app from an
+// automation acting through an API key/tool.
+const (
+	AuditActorHuman = "oidc"
+	AuditActorToken = "api_token"
+)
+
+// AuditEvent is a team-scoped record of a user/tool action, so a team can trace
+// who (member or API key) caused a change. Actor name/email are denormalized
+// snapshots so entries remain readable after a user is removed.
+type AuditEvent struct {
+	ID          string            `json:"id"`
+	TeamID      string            `json:"team_id"`
+	ActorUserID string            `json:"actor_user_id"`
+	ActorName   string            `json:"actor_name"`
+	ActorEmail  string            `json:"actor_email"`
+	ActorKind   string            `json:"actor_kind"` // AuditActorHuman | AuditActorToken
+	TokenID     *string           `json:"token_id,omitempty"`
+	TokenName   *string           `json:"token_name,omitempty"`
+	Action      string            `json:"action"`      // e.g. "post.create"
+	TargetType  string            `json:"target_type"` // e.g. "post"
+	TargetID    *string           `json:"target_id,omitempty"`
+	Summary     string            `json:"summary,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
+}
+
+// AuditFilter specifies pagination and filtering for listing audit events.
+type AuditFilter struct {
+	TeamID      string
+	ActorUserID string
+	Action      string
+	Before      *time.Time
+	After       *time.Time
+	Limit       int
+	Offset      int
 }

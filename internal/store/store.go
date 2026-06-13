@@ -210,6 +210,10 @@ type Store interface {
 	UnarchiveLogEntry(ctx context.Context, id string) error
 	DeleteLogEntry(ctx context.Context, id string) error
 	DeleteLogEntriesBefore(ctx context.Context, before time.Time) (int64, error)
+
+	InsertAuditEvent(ctx context.Context, e domain.AuditEvent) error
+	ListAuditEvents(ctx context.Context, filter domain.AuditFilter) ([]domain.AuditEvent, error)
+	CountAuditEvents(ctx context.Context, filter domain.AuditFilter) (int, error)
 }
 
 // LogStore is the subset of Store needed for persisting and querying log entries.
@@ -220,6 +224,13 @@ type LogStore interface {
 	UnarchiveLogEntry(ctx context.Context, id string) error
 	DeleteLogEntry(ctx context.Context, id string) error
 	DeleteLogEntriesBefore(ctx context.Context, before time.Time) (int64, error)
+}
+
+// AuditStore is the subset of Store needed to record and read team audit events.
+type AuditStore interface {
+	InsertAuditEvent(ctx context.Context, e domain.AuditEvent) error
+	ListAuditEvents(ctx context.Context, filter domain.AuditFilter) ([]domain.AuditEvent, error)
+	CountAuditEvents(ctx context.Context, filter domain.AuditFilter) (int, error)
 }
 
 func Open(ctx context.Context, databaseURL string, encrypter *security.Encrypter) (Store, error) {

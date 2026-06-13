@@ -190,8 +190,9 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	var rawScopes string
 	var teamID sql.NullString
 	var tokenName sql.NullString
+	var tokenID string
 	row := s.db.QueryRowContext(ctx, `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at, t.scopes, t.team_id, t.name
+		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at, t.scopes, t.team_id, t.name, t.id
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = ?
@@ -208,12 +209,23 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		&rawScopes,
 		&teamID,
 		&tokenName,
+		&tokenID,
 	)
 	if tokenName.Valid && tokenName.String == domain.WebSessionAPITokenName {
 		principal.Kind = "oidc"
 	}
 	if err != nil {
 		return domain.AuthenticatedPrincipal{}, err
+	}
+	// Attribute API-key (tool) requests to the specific token; web sessions
+	// (Kind "oidc") stay unattributed since they are a human in the browser.
+	if principal.Kind == domain.AuditActorToken {
+		tid := tokenID
+		principal.TokenID = &tid
+		if tokenName.Valid {
+			name := tokenName.String
+			principal.TokenName = &name
+		}
 	}
 	principal.User.CreatedAt = mustParseTime(createdAt)
 	principal.Scopes, err = parseTokenScopes(rawScopes)

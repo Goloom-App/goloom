@@ -659,6 +659,35 @@
         "noScheduledWorkspace": "No scheduled posts for this workspace. Create a post from the schedule view or the composer."
       }
     },
+    "audit": {
+      "title": "Audit log",
+      "hint": "Who — a member or an API key — did what in this team.",
+      "empty": "No activity recorded yet.",
+      "filterAction": "Filter by action",
+      "allActions": "All actions",
+      "colTime": "Time",
+      "colActor": "Actor",
+      "colAction": "Action",
+      "colDetails": "Details",
+      "member": "Member",
+      "viaApiKey": "API key: {{name}}",
+      "unknownActor": "Unknown",
+      "actions": {
+        "post_create": "Post created",
+        "post_update": "Post updated",
+        "post_delete": "Post deleted",
+        "post_cancel": "Post cancelled",
+        "account_connect": "Account connected",
+        "account_disconnect": "Account disconnected",
+        "account_update": "Account updated",
+        "member_add": "Member added",
+        "member_remove": "Member removed",
+        "team_update": "Team settings changed",
+        "ai_config_update": "AI configuration changed",
+        "brand_profile_update": "Brand profile updated",
+        "api_token_create": "API key created"
+      }
+    },
     "admin": {
       "pageTitle": "Administration",
       "pageSubtitle": "Deployment status, configuration, providers, and user directory.",

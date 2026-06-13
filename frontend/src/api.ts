@@ -280,6 +280,23 @@ export interface BackendLogEntry {
   archived_at?: string
 }
 
+export interface BackendAuditEvent {
+  id: string
+  team_id: string
+  actor_user_id: string
+  actor_name: string
+  actor_email: string
+  actor_kind: string
+  token_id?: string
+  token_name?: string
+  action: string
+  target_type: string
+  target_id?: string
+  summary?: string
+  metadata?: Record<string, string>
+  created_at: string
+}
+
 export interface BackendAdminMetrics {
   users_count: number
   teams_count: number
@@ -1104,6 +1121,17 @@ export function createApiClient(options: ApiClientOptions) {
       if (params?.offset != null) search.set('offset', String(params.offset))
       const q = search.toString()
       return request<{ entries: BackendLogEntry[]; total: number; components?: string[] }>(options, `/v1/admin/logs${q ? `?${q}` : ''}`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listTeamAuditLog(teamId: string, params?: { actor?: string; action?: string; limit?: number; offset?: number }) {
+      const search = new URLSearchParams()
+      if (params?.actor) search.set('actor', params.actor)
+      if (params?.action) search.set('action', params.action)
+      if (params?.limit != null) search.set('limit', String(params.limit))
+      if (params?.offset != null) search.set('offset', String(params.offset))
+      const q = search.toString()
+      return request<{ entries: BackendAuditEvent[]; total: number }>(options, `/v1/teams/${teamId}/audit-log${q ? `?${q}` : ''}`, {
         headers: buildHeaders(options.token, false),
       })
     },

@@ -1828,6 +1828,7 @@ function App() {
 
         {section === 'teams' && selectedTeam && (
           <TeamSettingsView
+            api={api}
             selectedTeam={selectedTeam}
             myRoleInSelectedTeam={myRoleInSelectedTeam}
             principalUser={principalUser}

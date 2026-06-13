@@ -118,6 +118,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListTeamMembers))))
 	mux.Handle("POST /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleAddTeamMember))))
 	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
+	mux.Handle("GET /v1/teams/{teamID}/audit-log", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamAuditLog))))
 	mux.Handle("POST /v1/teams/{teamID}/invitations", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleCreateTeamInvitation))))
 	mux.Handle("POST /v1/invitations/accept", a.auth.RequireAuth(http.HandlerFunc(a.handleAcceptTeamInvitation)))
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAccounts))))
@@ -376,6 +377,7 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, team.ID, "team.update", "team", &team.ID, "Updated team settings")
 	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -625,6 +627,8 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	memberID := input.UserID
+	a.recordAudit(r, r.PathValue("teamID"), "member.add", "member", &memberID, "Added member with role "+string(input.Role))
 	auth.WriteJSON(w, http.StatusCreated, membership)
 }
 
@@ -642,6 +646,8 @@ func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	memberID := r.PathValue("userID")
+	a.recordAudit(r, r.PathValue("teamID"), "member.remove", "member", &memberID, "Removed member")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -688,6 +694,7 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.syncAccountMetricsNow(r.Context(), account, connectedAccount)
+	a.recordAudit(r, r.PathValue("teamID"), "account.connect", "account", &account.ID, "Connected "+account.Provider+" account "+account.Username)
 	auth.WriteJSON(w, http.StatusCreated, account)
 }
 
@@ -726,6 +733,7 @@ func (a *API) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, teamID, "account.update", "account", &accountID, "Updated account "+updated.Username)
 	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -749,6 +757,8 @@ func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	accountID := acc.ID
+	a.recordAudit(r, acc.TeamID, "account.disconnect", "account", &accountID, "Disconnected "+acc.Provider+" account "+acc.Username)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -838,6 +848,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, effectiveTeam, "post.create", "post", &post.ID, "Created post: "+auditTitle(post.Title))
 	auth.WriteJSON(w, http.StatusCreated, post)
 }
 
@@ -898,6 +909,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, existing.TeamID, "post.update", "post", &post.ID, "Updated post: "+auditTitle(post.Title))
 	auth.WriteJSON(w, http.StatusOK, post)
 }
 
@@ -922,6 +934,8 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	postID := r.PathValue("postID")
+	a.recordAudit(r, post.TeamID, "post.delete", "post", &postID, "Deleted post: "+auditTitle(post.Title))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -958,6 +972,8 @@ func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	postID := r.PathValue("postID")
+	a.recordAudit(r, post.TeamID, "post.cancel", "post", &postID, "Cancelled post: "+auditTitle(post.Title))
 	w.WriteHeader(http.StatusNoContent)
 }
 

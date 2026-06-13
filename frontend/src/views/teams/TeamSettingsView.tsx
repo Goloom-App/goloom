@@ -3,9 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { Activity, Bot, Palette, Settings, Users } from 'lucide-react'
 
 import { SectionCard, ToggleSwitch } from '../../components/ui'
+import type { createApiClient } from '../../api'
 import type { TeamRecord, TeamRole, UserRecord } from '../../types'
+import { TeamAuditLogSection } from './TeamAuditLogSection'
 
 interface TeamSettingsViewProps {
+  api: ReturnType<typeof createApiClient> | null
   selectedTeam: TeamRecord
   myRoleInSelectedTeam: TeamRole | null
   principalUser: UserRecord | null
@@ -319,6 +322,8 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
               </button>
             </div>
           </SectionCard>
+
+          <TeamAuditLogSection api={props.api} teamId={selectedTeam.id} />
         </>
       ) : (
         <SectionCard icon={<Users size={18} />} title={t('common.members')}>

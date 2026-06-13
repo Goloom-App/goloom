@@ -71,10 +71,17 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		}
 		encodedScopes = string(raw)
 	}
-	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires, encodedScopes, normalizeOptionalStringPtr(input.TeamID))
+	tokenTeamID := normalizeOptionalStringPtr(input.TeamID)
+	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires, encodedScopes, tokenTeamID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	// Team-scoped keys are audited under their team so owners can see when a new
+	// tool/automation key was minted for the team.
+	if tokenTeamID != nil {
+		tokenID := meta.ID
+		a.recordAudit(r, *tokenTeamID, "api_token.create", "api_token", &tokenID, "Created API key: "+input.Name)
 	}
 	auth.WriteJSON(w, http.StatusCreated, map[string]any{
 		"token":     plaintext,

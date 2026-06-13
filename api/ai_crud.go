@@ -31,6 +31,7 @@ func (a *API) handleUpsertTeamProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, opErr.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, teamID, "brand_profile.update", "brand_profile", nil, "Updated brand profile")
 	auth.WriteJSON(w, http.StatusOK, profile)
 }
 
@@ -314,6 +315,8 @@ func (a *API) handleUpsertAIServiceConfig(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Never include the API key in the audit summary.
+	a.recordAudit(r, teamID, "ai_config.update", "ai_config", nil, "Updated AI provider configuration ("+provider+")")
 	auth.WriteJSON(w, http.StatusOK, cfg)
 }
 
