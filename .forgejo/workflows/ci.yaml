@@ -136,7 +136,7 @@ jobs:
     runs-on: docker
     name: "Test Postgres Store"
     container:
-      image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
+      image: ghcr.io/psarossy/golang:1.26.3-alpine3.22
     services:
       postgres:
         image: postgres:16-alpine
