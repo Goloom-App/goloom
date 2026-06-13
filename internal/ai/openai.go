@@ -18,6 +18,9 @@ type openAIClient struct {
 	// (o-series, gpt-5, …) require "max_completion_tokens" instead. Caching the
 	// switch avoids a wasted round-trip on every subsequent call.
 	completionTokens atomic.Bool
+	// dropTemperature is set once the API rejects a custom temperature; the same
+	// newer models only accept the default value, so we stop sending it.
+	dropTemperature atomic.Bool
 }
 
 type openAIMessage struct {
@@ -62,12 +65,33 @@ func (c *openAIClient) Complete(ctx context.Context, req Request) (Response, err
 		maxTokens = defaultMaxTokens
 	}
 
-	out, err := c.send(ctx, messages, req, maxTokens, c.tokenParam())
-	if err != nil && tokenParamRejected(err) && c.completionTokens.CompareAndSwap(false, true) {
-		// The model rejected "max_tokens"; retry once with the parameter it wants.
-		out, err = c.send(ctx, messages, req, maxTokens, tokenParamCompletion)
+	// Newer models reject two request params that older ones accept: the
+	// "max_tokens" name (wants "max_completion_tokens") and any non-default
+	// temperature. Each rejection is a 400 we can correct and retry, caching the
+	// fix so later calls don't pay the round-trip. At most one correction per
+	// rejected param, so the loop is bounded.
+	var out Response
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		out, err = c.send(ctx, messages, req, maxTokens)
+		if err == nil || !c.applyCorrection(err) {
+			break
+		}
 	}
 	return out, err
+}
+
+// applyCorrection inspects a failed request and, if it is a known correctable
+// rejection that has not been corrected yet, flips the corresponding flag and
+// reports true so the caller retries.
+func (c *openAIClient) applyCorrection(err error) bool {
+	if tokenParamRejected(err) && c.completionTokens.CompareAndSwap(false, true) {
+		return true
+	}
+	if temperatureRejected(err) && c.dropTemperature.CompareAndSwap(false, true) {
+		return true
+	}
+	return false
 }
 
 const (
@@ -92,13 +116,23 @@ func tokenParamRejected(err error) bool {
 	return strings.Contains(apiErr.body, tokenParamCompletion)
 }
 
-func (c *openAIClient) send(ctx context.Context, messages []openAIMessage, req Request, maxTokens int, tokenParam string) (Response, error) {
-	payload := map[string]any{
-		"model":    c.settings.ResolvedModel(),
-		"messages": messages,
-		tokenParam: maxTokens,
+// temperatureRejected reports whether err is a 400 rejecting a non-default
+// temperature value (newer models only accept the default).
+func temperatureRejected(err error) bool {
+	var apiErr *apiError
+	if !errors.As(err, &apiErr) || apiErr.status != http.StatusBadRequest {
+		return false
 	}
-	if req.Temperature != nil {
+	return strings.Contains(apiErr.body, "temperature") && strings.Contains(apiErr.body, "unsupported_value")
+}
+
+func (c *openAIClient) send(ctx context.Context, messages []openAIMessage, req Request, maxTokens int) (Response, error) {
+	payload := map[string]any{
+		"model":        c.settings.ResolvedModel(),
+		"messages":     messages,
+		c.tokenParam(): maxTokens,
+	}
+	if req.Temperature != nil && !c.dropTemperature.Load() {
 		payload["temperature"] = *req.Temperature
 	}
 	if len(req.Tools) > 0 {

@@ -234,6 +234,61 @@ func TestOpenAIRetriesWithCompletionTokens(t *testing.T) {
 	}
 }
 
+func TestOpenAIRecoversFromTokenAndTemperatureRejections(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		bodies = append(bodies, body)
+		switch {
+		case strings.Contains(body, "\"max_tokens\""):
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.","type":"invalid_request_error","param":"max_tokens","code":"unsupported_parameter"}}`)
+		case strings.Contains(body, "\"temperature\""):
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"error":{"message":"Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported.","type":"invalid_request_error","param":"temperature","code":"unsupported_value"}}`)
+		default:
+			io.WriteString(w, `{"model":"gpt-5","choices":[{"message":{"role":"assistant","content":"hi"}}]}`)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Settings{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: "k", BaseURL: server.URL}, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	temp := 0.7
+	resp, err := client.Complete(context.Background(), Request{
+		Messages:    []Message{{Role: RoleUser, Content: "hi"}},
+		Temperature: &temp,
+	})
+	if err != nil {
+		t.Fatalf("expected recovery, got error: %v", err)
+	}
+	if resp.Content != "hi" {
+		t.Fatalf("content = %q, want hi", resp.Content)
+	}
+	// max_tokens rejection, then temperature rejection, then success.
+	if len(bodies) != 3 {
+		t.Fatalf("expected 3 requests (two corrections), got %d", len(bodies))
+	}
+	if !strings.Contains(bodies[2], "max_completion_tokens") || strings.Contains(bodies[2], "\"temperature\"") {
+		t.Fatalf("final request should use max_completion_tokens and omit temperature, got: %s", bodies[2])
+	}
+
+	// Subsequent calls reuse both cached fixes — straight to success.
+	if _, err := client.Complete(context.Background(), Request{
+		Messages:    []Message{{Role: RoleUser, Content: "again"}},
+		Temperature: &temp,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(bodies) != 4 {
+		t.Fatalf("cached call should issue exactly one request, total want 4, got %d", len(bodies))
+	}
+}
+
 func TestExtractJSONObjectWithFences(t *testing.T) {
 	payload, err := extractJSONObject("```json\n{\"content\": \"hi\"}\n```")
 	if err != nil {
