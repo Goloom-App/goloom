@@ -153,7 +153,7 @@ export interface TeamRecord {
   brandColor?: string
 }
 
-export interface Team extends TeamRecord {}
+export type Team = TeamRecord
 
 export interface TeamProfile {
   id: string

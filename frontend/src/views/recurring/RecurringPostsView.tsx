@@ -12,9 +12,15 @@ import { Segmented, ToggleSwitch } from '../../components/ui'
 import { useAIJobStream } from '../../hooks/useSSE'
 import { translateApiError } from '../../i18n/translateApiError'
 import type { AccountRecord, AutomationOutputMode } from '../../types'
-import { RecurrenceForm, recurrenceStateToJSON, parseRecurrenceJSON, type RecurrenceState } from './RecurrenceForm'
-import { OccurrencePreview, computeOccurrences } from './OccurrencePreview'
-import { formatRecurrenceSummary } from './recurrenceUtils'
+import { RecurrenceForm } from './RecurrenceForm'
+import { OccurrencePreview } from './OccurrencePreview'
+import {
+  computeOccurrences,
+  formatRecurrenceSummary,
+  parseRecurrenceJSON,
+  recurrenceStateToJSON,
+  type RecurrenceState,
+} from './recurrenceUtils'
 
 type Api = ReturnType<typeof createApiClient>
 

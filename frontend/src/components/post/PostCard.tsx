@@ -24,12 +24,12 @@ export function PostCard({
 }) {
   const { t } = useTranslation()
   const [swipeX, setSwipeX] = useState(0)
+  const [isSwiping, setIsSwiping] = useState(false)
   const touchStart = useRef<number | null>(null)
-  const isSwiping = useRef(false)
 
   const onTouchStart = (e: TouchEvent) => {
     touchStart.current = e.touches[0].clientX
-    isSwiping.current = true
+    setIsSwiping(true)
   }
 
   const onTouchMove = (e: TouchEvent) => {
@@ -48,7 +48,7 @@ export function PostCard({
     }
     setSwipeX(0)
     touchStart.current = null
-    isSwiping.current = false
+    setIsSwiping(false)
   }
 
   return (
@@ -77,7 +77,7 @@ export function PostCard({
         data-testid="post-card"
         style={{
           transform: `translateX(${swipeX}px)`,
-          transition: isSwiping.current ? 'none' : 'transform 0.3s var(--ease-out)',
+          transition: isSwiping ? 'none' : 'transform 0.3s var(--ease-out)',
           position: 'relative',
           zIndex: 1,
         }}

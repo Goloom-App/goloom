@@ -2,77 +2,9 @@ import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   DEFAULT_ORDINAL_OCCURRENCE,
-  normalizeOrdinalOccurrences,
   type OrdinalOccurrence,
+  type RecurrenceState,
 } from './recurrenceUtils'
-
-export type RecurrenceKind = 'weekly' | 'monthly_dom' | 'monthly_anchor_offset' | 'monthly_ordinal_weekday'
-
-export interface RecurrenceState {
-  kind: RecurrenceKind
-  weekdays: number[]
-  hour: number
-  minute: number
-  timezone: string
-  dayOfMonth: number
-  anchorDay: number
-  offsetDays: number
-  ordinalOccurrences: OrdinalOccurrence[]
-}
-
-export const DEFAULT_RECURRENCE: RecurrenceState = {
-  kind: 'weekly',
-  weekdays: [1],
-  hour: 9,
-  minute: 0,
-  timezone: 'UTC',
-  dayOfMonth: 15,
-  anchorDay: 15,
-  offsetDays: -3,
-  ordinalOccurrences: [{ ...DEFAULT_ORDINAL_OCCURRENCE }],
-}
-
-export function recurrenceStateToJSON(state: RecurrenceState): string {
-  const obj: Record<string, unknown> = {
-    kind: state.kind,
-    hour: state.hour,
-    minute: state.minute,
-    timezone: state.timezone,
-  }
-  if (state.kind === 'weekly') {
-    obj.weekdays = state.weekdays
-  } else if (state.kind === 'monthly_dom') {
-    obj.day_of_month = state.dayOfMonth
-  } else if (state.kind === 'monthly_anchor_offset') {
-    obj.anchor_day = state.anchorDay
-    obj.offset_days = state.offsetDays
-  } else if (state.kind === 'monthly_ordinal_weekday') {
-    obj.occurrences = state.ordinalOccurrences.map((occ) => ({
-      ordinal: occ.ordinal,
-      weekday: occ.weekday,
-    }))
-  }
-  return JSON.stringify(obj, null, 2)
-}
-
-export function parseRecurrenceJSON(raw: string): RecurrenceState {
-  try {
-    const obj = JSON.parse(raw) as Record<string, unknown>
-    return {
-      kind: (obj.kind as RecurrenceKind) || 'weekly',
-      weekdays: Array.isArray(obj.weekdays) ? obj.weekdays.filter((value): value is number => typeof value === 'number') : [1],
-      hour: typeof obj.hour === 'number' ? obj.hour : 9,
-      minute: typeof obj.minute === 'number' ? obj.minute : 0,
-      timezone: typeof obj.timezone === 'string' && obj.timezone ? obj.timezone : 'UTC',
-      dayOfMonth: typeof obj.day_of_month === 'number' ? obj.day_of_month : 15,
-      anchorDay: typeof obj.anchor_day === 'number' ? obj.anchor_day : 15,
-      offsetDays: typeof obj.offset_days === 'number' ? obj.offset_days : -3,
-      ordinalOccurrences: normalizeOrdinalOccurrences(obj),
-    }
-  } catch {
-    return { ...DEFAULT_RECURRENCE }
-  }
-}
 
 const COMMON_TZ = [
   'UTC',
@@ -192,7 +124,7 @@ export function RecurrenceForm({
               role="radio"
               aria-checked={state.kind === kind}
             >
-              {t(key as any)}
+              {t(key as 'recurring.kindWeekly')}
             </button>
           ))}
       </fieldset>
