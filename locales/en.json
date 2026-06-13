@@ -685,7 +685,8 @@
         "team_update": "Team settings changed",
         "ai_config_update": "AI configuration changed",
         "brand_profile_update": "Brand profile updated",
-        "api_token_create": "API key created"
+        "api_token_create": "API key created",
+        "api_token_revoke": "API key revoked"
       }
     },
     "admin": {

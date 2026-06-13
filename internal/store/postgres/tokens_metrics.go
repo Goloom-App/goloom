@@ -108,6 +108,7 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 		ID:        id,
 		UserID:    userID,
 		Name:      name,
+		TeamID:    teamID,
 		ExpiresAt: &storedExpires,
 		CreatedAt: createdAt,
 	}, nil
@@ -154,7 +155,7 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		select id, user_id, name, last_used_at, expires_at, created_at
+		select id, user_id, name, team_id, last_used_at, expires_at, created_at
 		from api_tokens
 		where user_id = $1
 		order by created_at desc`,
@@ -168,11 +169,13 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	var out []domain.APIToken
 	for rows.Next() {
 		var t domain.APIToken
+		var teamID *string
 		var lastUsed, expires *time.Time
 		var created time.Time
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &lastUsed, &expires, &created); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &teamID, &lastUsed, &expires, &created); err != nil {
 			return nil, err
 		}
+		t.TeamID = teamID
 		t.LastUsedAt = lastUsed
 		t.ExpiresAt = expires
 		t.CreatedAt = created

@@ -68,3 +68,25 @@ func TestTeamAuditLogEndpoint(t *testing.T) {
 		t.Fatalf("viewer audit-log access = %d, want 403", rec2.Code)
 	}
 }
+
+func TestTeamAuditLogTokenLifecycle(t *testing.T) {
+	f := newEndpointFixture(t)
+
+	// Mint a team-scoped API key, then revoke it.
+	rec := f.do(t, http.MethodPost, "/v1/me/api-tokens", map[string]any{"name": "team-bot", "team_id": f.team.ID})
+	requireStatus(t, rec, http.StatusCreated)
+	created := decodeJSON[struct {
+		APIToken domain.APIToken `json:"api_token"`
+	}](t, rec)
+	requireStatus(t, f.do(t, http.MethodDelete, "/v1/me/api-tokens/"+created.APIToken.ID, nil), http.StatusNoContent)
+
+	// The revoke must appear in the team audit log.
+	rec = f.do(t, http.MethodGet, "/v1/teams/"+f.team.ID+"/audit-log?action=api_token.revoke", nil)
+	requireStatus(t, rec, http.StatusOK)
+	resp := decodeJSON[struct {
+		Entries []domain.AuditEvent `json:"entries"`
+	}](t, rec)
+	if len(resp.Entries) == 0 || resp.Entries[0].Action != "api_token.revoke" {
+		t.Fatalf("expected api_token.revoke audit event, got %+v", resp.Entries)
+	}
+}

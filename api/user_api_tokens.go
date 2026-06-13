@@ -129,14 +129,31 @@ func (a *API) handleRevokeMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
-	err = a.store.RevokeUserAPIToken(r.Context(), principal.User.ID, r.PathValue("tokenID"))
-	if err != nil {
+	tokenID := r.PathValue("tokenID")
+
+	// Look the token up before revoking so a team-scoped key can be audited
+	// under its team (best-effort; never blocks the revoke).
+	var revoked *domain.APIToken
+	if tokens, listErr := a.store.ListUserAPITokens(r.Context(), principal.User.ID); listErr == nil {
+		for i := range tokens {
+			if tokens[i].ID == tokenID {
+				revoked = &tokens[i]
+				break
+			}
+		}
+	}
+
+	if err := a.store.RevokeUserAPIToken(r.Context(), principal.User.ID, tokenID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			a.writeError(w, r, "token_not_found", http.StatusNotFound)
 			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if revoked != nil && revoked.TeamID != nil {
+		id := revoked.ID
+		a.recordAudit(r, *revoked.TeamID, "api_token.revoke", "api_token", &id, "Revoked API key: "+revoked.Name)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

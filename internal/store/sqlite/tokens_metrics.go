@@ -110,6 +110,7 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 		ID:        id,
 		UserID:    userID,
 		Name:      name,
+		TeamID:    teamID,
 		ExpiresAt: &expParsed,
 		CreatedAt: created,
 	}, nil
@@ -160,7 +161,7 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		select id, user_id, name, last_used_at, expires_at, created_at
+		select id, user_id, name, team_id, last_used_at, expires_at, created_at
 		from api_tokens
 		where user_id = ?
 		order by created_at desc`,
@@ -174,10 +175,14 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	var out []domain.APIToken
 	for rows.Next() {
 		var t domain.APIToken
-		var lastUsed, expires sql.NullString
+		var teamID, lastUsed, expires sql.NullString
 		var created string
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &lastUsed, &expires, &created); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &teamID, &lastUsed, &expires, &created); err != nil {
 			return nil, err
+		}
+		if teamID.Valid && teamID.String != "" {
+			tid := teamID.String
+			t.TeamID = &tid
 		}
 		if lastUsed.Valid && lastUsed.String != "" {
 			parsed := mustParseTime(lastUsed.String)
