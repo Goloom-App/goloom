@@ -122,6 +122,7 @@ func Run(ctx context.Context) error {
 	)
 
 	jobManager := aijobs.NewManager(dataStore, nil)
+	jobManager.SetLogger(logger)
 
 	schedulerService := scheduler.New(
 		logger,

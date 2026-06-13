@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,7 @@ type Completer interface {
 type Manager struct {
 	store  storepkg.Store
 	runner Runner
+	logger *slog.Logger
 
 	mu        sync.RWMutex
 	completer Completer
@@ -54,6 +56,20 @@ func NewManager(store storepkg.Store, runner Runner) *Manager {
 		store:  store,
 		runner: runner,
 	}
+}
+
+// SetLogger registers the structured logger used to record AI job activity.
+// Called once at startup before any job runs; without it, the manager logs
+// nothing and AI activity never reaches the persisted log.
+func (m *Manager) SetLogger(logger *slog.Logger) {
+	m.logger = logger
+}
+
+func (m *Manager) log() *slog.Logger {
+	if m.logger != nil {
+		return m.logger
+	}
+	return slog.New(slog.DiscardHandler)
 }
 
 // SetCompleter registers the completion handler. Without one, the manager
@@ -109,6 +125,10 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 func (m *Manager) execute(job domain.AIJob, config domain.AIServiceConfig, aiContext domain.AIContext) {
 	defer m.wg.Done()
 
+	log := m.log().With("job_id", job.ID, "job_type", string(job.Type), "team_id", job.TeamID)
+	started := time.Now()
+	log.Info("ai job started")
+
 	ctx, cancel := context.WithTimeout(context.Background(), jobExecutionTimeout)
 	defer cancel()
 
@@ -119,6 +139,9 @@ func (m *Manager) execute(job domain.AIJob, config domain.AIServiceConfig, aiCon
 		status = domain.AIJobStatusFailed
 		errorMessage = err.Error()
 		result = nil
+		log.Error("ai job failed", "duration_ms", time.Since(started).Milliseconds(), "error", errorMessage)
+	} else {
+		log.Info("ai job completed", "duration_ms", time.Since(started).Milliseconds())
 	}
 
 	if completer := m.getCompleter(); completer != nil {

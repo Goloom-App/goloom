@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sync"
 	"testing"
 
@@ -13,6 +14,45 @@ import (
 	"git.f4mily.net/goloom/internal/store/sqlite"
 	"github.com/google/uuid"
 )
+
+// captureHandler records emitted log records for assertions.
+type captureHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (h *captureHandler) Enabled(context.Context, slog.Level) bool { return true }
+func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, r.Clone())
+	return nil
+}
+func (h *captureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *captureHandler) WithGroup(string) slog.Handler      { return h }
+
+func (h *captureHandler) find(message string) (slog.Record, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, r := range h.records {
+		if r.Message == message {
+			return r, true
+		}
+	}
+	return slog.Record{}, false
+}
+
+func attrValue(r slog.Record, key string) string {
+	var out string
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == key {
+			out = a.Value.String()
+			return false
+		}
+		return true
+	})
+	return out
+}
 
 type fakeRunner struct {
 	result json.RawMessage
@@ -173,6 +213,36 @@ func TestSubmitJobPersistsFailure(t *testing.T) {
 	}
 	if len(stored.Result) != 0 {
 		t.Fatalf("failed job must not keep a result, got %s", stored.Result)
+	}
+}
+
+func TestSubmitJobLogsLifecycle(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+
+	handler := &captureHandler{}
+	manager := aijobs.NewManager(s, &fakeRunner{err: errors.New("llm exploded")})
+	manager.SetLogger(slog.New(handler))
+
+	if _, err := manager.SubmitJob(ctx, domain.AIJob{
+		TeamID:       team.ID,
+		AuthorUserID: user.ID,
+		Type:         domain.AIJobTypeVoiceEngine,
+	}); err != nil {
+		t.Fatalf("SubmitJob: %v", err)
+	}
+	manager.Wait()
+
+	if _, ok := handler.find("ai job started"); !ok {
+		t.Fatal("expected an 'ai job started' log entry")
+	}
+	failed, ok := handler.find("ai job failed")
+	if !ok {
+		t.Fatal("expected an 'ai job failed' log entry")
+	}
+	if got := attrValue(failed, "error"); got != "llm exploded" {
+		t.Fatalf("failed log error attr = %q, want 'llm exploded'", got)
 	}
 }
 

@@ -54,6 +54,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 	}
 	if jobManager == nil {
 		jobManager = aijobs.NewManager(store, nil)
+		jobManager.SetLogger(logger)
 	}
 	if hub == nil {
 		hub = sse.NewHub()
