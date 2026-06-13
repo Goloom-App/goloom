@@ -1,22 +1,26 @@
 ---
-import LandingLayout from '../components/landing/LandingLayout.astro';
+import LandingLayout from '../layouts/LandingLayout.astro';
+import Header from '../components/landing/Header.astro';
 import Hero from '../components/landing/Hero.astro';
-import ValueProposition from '../components/landing/ValueProposition.astro';
+import ValueProps from '../components/landing/ValueProps.astro';
 import FeatureGrid from '../components/landing/FeatureGrid.astro';
 import ScreenshotShowcase from '../components/landing/ScreenshotShowcase.astro';
 import ProviderLogos from '../components/landing/ProviderLogos.astro';
 import ArchitectureTeaser from '../components/landing/ArchitectureTeaser.astro';
-import CTASection from '../components/landing/CTASection.astro';
+import CTA from '../components/landing/CTA.astro';
+import SiteFooter from '../components/landing/SiteFooter.astro';
 ---
 
 <LandingLayout>
+	<Header />
 	<main>
 		<Hero />
-		<ValueProposition />
+		<ValueProps />
 		<FeatureGrid />
 		<ScreenshotShowcase />
 		<ProviderLogos />
 		<ArchitectureTeaser />
-		<CTASection />
+		<CTA />
 	</main>
+	<SiteFooter />
 </LandingLayout>

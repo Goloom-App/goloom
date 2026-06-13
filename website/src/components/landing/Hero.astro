@@ -1,36 +1,43 @@
 ---
-const repoUrl = 'https://git.f4mily.net/goloom';
-const dockerOneLiner =
-	'docker run --rm -p 8080:8080 -v "$(pwd)/data:/app/data" goloom';
+const repo = 'https://git.f4mily.net/goloom';
 ---
 
-<section class="hero landing-section landing-section--tight-top">
-	<div class="landing-container hero__inner">
-		<img
-			class="hero__logo"
-			src="/favicon.svg"
-			alt="goloom logo"
-			width="72"
-			height="72"
-		/>
-		<h1 class="hero__title">goloom</h1>
-		<p class="hero__tagline">
-			Lightweight social planning for teams and AI agents. Schedule posts,
-			manage accounts, and automate your federated social workflow — all from
-			one self-hosted binary.
-		</p>
-		<div class="hero__actions">
-			<a class="btn btn--primary" href="/docs/">Documentation</a>
-			<a
-				class="btn btn--secondary"
-				href={repoUrl}
-				target="_blank"
-				rel="noopener noreferrer">View source</a
-			>
+<section class="lp-hero">
+	<div class="lp-container lp-hero__grid">
+		<div>
+			<span class="lp-pill">
+				<span class="dot"></span>
+				Single binary · SQLite by default · API-first
+			</span>
+			<h1>
+				Plan. Post.<br />
+				<span class="grad-text">Automate.</span>
+			</h1>
+			<p class="lp-hero__sub">
+				goloom is a lightweight, self-hosted social planning app in one Go binary.
+				Schedule posts across Mastodon, Friendica and Bluesky, collaborate as a team,
+				and let AI agents drive it through a clean REST API.
+			</p>
+			<div class="lp-cta-row">
+				<a class="glow-btn" href="/getting-started/installation/">Get started</a>
+				<a class="ghost-btn" href={repo}>View source</a>
+			</div>
 		</div>
-		<div class="hero__docker">
-			<span class="hero__docker-label">Quick start with Docker</span>
-			<code>{dockerOneLiner}</code>
+
+		<div class="glass lp-terminal">
+			<div class="lp-terminal__bar">
+				<span></span><span></span><span></span>
+				<span class="t-title">goloom — quickstart</span>
+			</div>
+			<pre><code><span class="c-comment"># Run the whole app — UI + API — in one container</span>
+<span class="c-prompt">$</span> docker run --rm <span class="c-flag">-p</span> 8080:8080 \
+    <span class="c-flag">-e</span> ENCRYPTION_KEY=$(openssl rand -hex 32) \
+    <span class="c-flag">-e</span> BOOTSTRAP_ADMIN_TOKEN=change-me \
+    <span class="c-flag">-v</span> "$(pwd)/data:/app/data" \
+    goloom
+
+<span class="c-comment"># Open the UI</span>
+<span class="c-prompt">$</span> open http://localhost:8080</code></pre>
 		</div>
 	</div>
 </section>

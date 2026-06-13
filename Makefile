@@ -1,6 +1,6 @@
 APP_NAME := goloom
 
-.PHONY: fmt tidy build test test-postgres cover run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-install website-dev website-build website-screenshots
+.PHONY: fmt tidy build test test-postgres cover run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-spec website-install website-dev website-build website-screenshots
 
 fmt:
 	go fmt ./...
@@ -60,14 +60,24 @@ frontend-e2e:
 docs-api-lint:
 	pnpm --package=@redocly/cli dlx redocly lint docs/api/openapi.yaml
 
+# Vendor the Redoc standalone bundle into the website's public dir at build time
+# so the /api/ page renders the reference fully same-origin (no runtime CDN).
+REDOC_VERSION := v2.5.3
 docs-api-build:
-	mkdir -p docs/api/dist
-	pnpm --package=@redocly/cli dlx redocly build-docs docs/api/openapi.yaml -o docs/api/dist/index.html
+	mkdir -p website/public/api
+	curl -fsSL https://cdn.redocly.com/redoc/$(REDOC_VERSION)/bundles/redoc.standalone.js \
+		-o website/public/api/redoc.standalone.js
+
+# Copy the OpenAPI spec into the website's public dir so it is downloadable at
+# /openapi.yaml.
+website-spec:
+	mkdir -p website/public
+	cp docs/api/openapi.yaml website/public/openapi.yaml
 
 website-install:
 	pnpm --dir website install
 
-website-dev:
+website-dev: website-spec docs-api-build
 	pnpm --dir website dev
 
 website-screenshots: frontend-build
@@ -76,8 +86,6 @@ website-screenshots: frontend-build
 	pnpm --dir frontend exec playwright install chromium
 	pnpm --dir frontend exec playwright test e2e/website-screenshots.spec.ts
 
-website-build: docs-api-build
+website-build: website-spec docs-api-build
 	pnpm --dir website install --frozen-lockfile
 	pnpm --dir website build
-	mkdir -p website/dist/docs/api-reference
-	cp docs/api/dist/index.html website/dist/docs/api-reference/index.html

@@ -1,0 +1,77 @@
+---
+// API reference rendered with Redoc. Both the OpenAPI spec (/openapi.yaml) and
+// the Redoc bundle (/api/redoc.standalone.js) are vendored into public/ by
+// `make website-spec` and `make docs-api-build`, so nothing is fetched from a
+// CDN at runtime.
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<title>goloom — API reference</title>
+		<meta name="description" content="OpenAPI reference for the goloom REST API." />
+		<style>
+			body {
+				margin: 0;
+				background: #ffffff;
+			}
+			.api-topbar {
+				position: sticky;
+				top: 0;
+				z-index: 100;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 1rem;
+				padding: 0.7rem 1.1rem;
+				background: #0a0a0f;
+				border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+				font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+				color: #f4f4f8;
+			}
+			.api-topbar a {
+				color: #c2c4cf;
+				text-decoration: none;
+				font-size: 0.92rem;
+			}
+			.api-topbar a:hover {
+				color: #fff;
+			}
+			.api-brand {
+				display: inline-flex;
+				align-items: center;
+				gap: 0.55rem;
+				font-weight: 700;
+				color: #fff;
+			}
+			.api-brand img {
+				width: 24px;
+				height: 24px;
+			}
+			.api-links {
+				display: flex;
+				gap: 1.3rem;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="api-topbar">
+			<a class="api-brand" href="/">
+				<img src="/favicon.svg" alt="" width="24" height="24" />
+				goloom
+			</a>
+			<nav class="api-links">
+				<a href="/getting-started/installation/">Docs</a>
+				<a href="/guides/mcp/">MCP</a>
+				<a href="/openapi.yaml">openapi.yaml</a>
+				<a href="https://git.f4mily.net/goloom">Forgejo</a>
+			</nav>
+		</div>
+
+		<redoc spec-url="/openapi.yaml"></redoc>
+		<script is:inline src="/api/redoc.standalone.js"></script>
+	</body>
+</html>

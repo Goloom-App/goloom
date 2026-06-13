@@ -1,0 +1,20 @@
+---
+const repo = 'https://git.f4mily.net/goloom';
+const year = new Date().getFullYear();
+---
+
+<footer class="lp-footer">
+	<div class="lp-container lp-footer__inner">
+		<div class="lp-brand" style="font-size:1rem;">
+			<img src="/favicon.svg" alt="" width="22" height="22" />
+			<span>goloom</span>
+		</div>
+		<nav class="lp-nav__links" style="display:flex;gap:1.4rem;flex-wrap:wrap;">
+			<a href="/getting-started/installation/">Docs</a>
+			<a href="/api/">API</a>
+			<a href="#features">Features</a>
+			<a href={repo}>Source</a>
+		</nav>
+		<span>© {year} goloom · Self-hosted social planning</span>
+	</div>
+</footer>

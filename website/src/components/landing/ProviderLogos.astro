@@ -6,27 +6,19 @@ const providers = [
 ];
 ---
 
-<section class="landing-section">
-	<div class="landing-container">
-		<div class="landing-section__header">
-			<p class="landing-section__eyebrow">Integrations</p>
-			<h2 class="landing-section__title">Supported platforms</h2>
-			<p class="landing-section__subtitle">
-				Connect accounts across the fediverse and beyond — with more providers
-				on the roadmap.
-			</p>
+<section class="lp-section" id="providers" style="padding-block: clamp(2rem, 5vw, 3.5rem);">
+	<div class="lp-container">
+		<div class="lp-section__head" style="margin-bottom: 2rem;">
+			<span class="lp-eyebrow">Connect your accounts</span>
+			<h2>Publish across the fediverse</h2>
 		</div>
-		<div class="provider-grid">
-			{
-				providers.map((provider) => (
-					<div class="provider-item">
-						<div class="provider-item__icon">
-							<img src={provider.icon} alt="" width="40" height="40" />
-						</div>
-						<span class="provider-item__name">{provider.name}</span>
-					</div>
-				))
-			}
+		<div class="lp-providers">
+			{providers.map((p) => (
+				<span class="glass lp-provider">
+					<img src={p.icon} alt="" width="26" height="26" />
+					{p.name}
+				</span>
+			))}
 		</div>
 	</div>
 </section>

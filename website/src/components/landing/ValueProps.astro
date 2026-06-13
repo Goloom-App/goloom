@@ -1,0 +1,38 @@
+---
+const pillars = [
+	{
+		icon: '📦',
+		title: 'One binary, low ops',
+		body: 'UI and API ship in a single Go process. SQLite by default — no external database to run. PostgreSQL when you need to scale.',
+	},
+	{
+		icon: '🌐',
+		title: 'Fediverse-native',
+		body: 'First-class support for Mastodon, Friendica and Bluesky, with OAuth onboarding and per-platform publishing and metrics.',
+	},
+	{
+		icon: '🤖',
+		title: 'Built for AI agents',
+		body: 'A stable, team-scoped REST API with bearer-token auth and a validation endpoint — designed for agent workflows like OpenClaw.',
+	},
+	{
+		icon: '👥',
+		title: 'Team-first',
+		body: 'Team workspaces with owner / editor / viewer roles, a review queue for approvals, and a per-team audit log for accountability.',
+	},
+];
+---
+
+<section class="lp-section" id="why">
+	<div class="lp-container">
+		<div class="lp-pillars">
+			{pillars.map((p) => (
+				<article class="glass lp-pillar">
+					<span class="lp-ico">{p.icon}</span>
+					<h3>{p.title}</h3>
+					<p>{p.body}</p>
+				</article>
+			))}
+		</div>
+	</div>
+</section>

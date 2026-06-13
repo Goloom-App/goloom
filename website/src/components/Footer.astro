@@ -1,80 +1,29 @@
 ---
-import type { Props } from '@astrojs/starlight/props';
-
-import EditLink from 'virtual:starlight/components/EditLink';
-import LastUpdated from 'virtual:starlight/components/LastUpdated';
-import Pagination from 'virtual:starlight/components/Pagination';
-import config from 'virtual:starlight/user-config';
-import { Icon } from '@astrojs/starlight/components';
-import RawSourceLink from './RawSourceLink.astro';
-
-const rawBase =
-	'https://git.f4mily.net/goloom/raw/branch/main/website/src/content/docs';
-
-/** @type {string | undefined} */
-let rawHref: string | undefined;
-
-const filePath = Astro.props.entry?.filePath;
-if (filePath) {
-	const docsPrefix = 'src/content/docs/';
-	const relative = filePath.includes(docsPrefix)
-		? filePath.slice(filePath.indexOf(docsPrefix) + docsPrefix.length)
-		: filePath;
-	rawHref = `${rawBase}/${relative}`;
-} else {
-	const slug = Astro.props.id?.replace(/\/$/, '') ?? '';
-	const ext = slug === '' || slug === 'index' ? '.mdx' : '.md';
-	const path = slug === '' || slug === 'index' ? 'index.mdx' : `${slug}${ext}`;
-	rawHref = `${rawBase}/${path}`;
-}
+import Default from '@astrojs/starlight/components/Footer.astro';
+const repo = 'https://git.f4mily.net/goloom';
+const year = new Date().getFullYear();
 ---
 
-<footer class="sl-flex">
-	<div class="meta sl-flex">
-		<EditLink {...Astro.props} />
-		<LastUpdated {...Astro.props} />
-		{rawHref ? <RawSourceLink href={rawHref} /> : null}
-	</div>
-	<Pagination {...Astro.props} />
+<Default><slot /></Default>
 
-	{
-		config.credits && (
-			<a class="kudos sl-flex" href="https://starlight.astro.build">
-				<Icon name={'starlight'} /> {Astro.locals.t('builtWithStarlight.label')}
-			</a>
-		)
-	}
-</footer>
+<div class="goloom-docs-footer">
+	<a href="/">← Back to goloom.dev</a>
+	<span>© {year} goloom · <a href={repo}>Source</a> · <a href="/api/">API reference</a></span>
+</div>
 
 <style>
-	footer {
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-	.meta {
-		gap: 0.75rem 3rem;
-		justify-content: space-between;
+	.goloom-docs-footer {
+		margin-top: 1.5rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--sl-color-hairline-shade);
+		display: flex;
 		flex-wrap: wrap;
-		margin-top: 3rem;
-		font-size: var(--sl-text-sm);
-		color: var(--sl-color-gray-3);
-	}
-	.meta > :global(p:only-child) {
-		margin-inline-start: auto;
-	}
-
-	.kudos {
-		align-items: center;
-		gap: 0.5em;
-		margin: 1.5rem auto;
+		gap: 0.5rem 1rem;
+		justify-content: space-between;
 		font-size: var(--sl-text-xs);
-		text-decoration: none;
 		color: var(--sl-color-gray-3);
 	}
-	.kudos :global(svg) {
-		color: var(--sl-color-orange);
-	}
-	.kudos:hover {
-		color: var(--sl-color-white);
+	.goloom-docs-footer a {
+		color: var(--sl-color-gray-2);
 	}
 </style>

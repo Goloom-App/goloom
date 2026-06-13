@@ -1,47 +1,49 @@
 ---
-const coreNodes = [
-	{
-		label: 'Go binary',
-		desc: 'API · scheduler · embedded UI',
-	},
-	{
-		label: 'SQLite / PostgreSQL',
-		desc: 'Your choice of database backend',
-	},
+const points = [
+	['Single Go binary', 'UI and API in one process — deploy as a container or a static binary.'],
+	['Built-in MCP server', 'A Model Context Protocol server is bundled and on by default, so agents drive goloom with natural-language tools.'],
+	['REST API', 'Stable, team-scoped resources under /v1 (and /api/v1) with bearer-token auth and a validate-before-schedule endpoint.'],
+	['SQLite or PostgreSQL', 'Zero-config by default; switch to Postgres for larger deployments.'],
+	['Docker & Kubernetes', 'Run it anywhere — from a homelab box to a CNPG-backed cluster.'],
 ];
 ---
 
-<section class="landing-section">
-	<div class="landing-container">
-		<div class="landing-section__header">
-			<p class="landing-section__eyebrow">Architecture</p>
-			<h2 class="landing-section__title">Simple by design</h2>
-			<p class="landing-section__subtitle">
-				No Kubernetes required. One process handles the core — add the AI service
-				only when you need voice and campaign automation.
+<section class="lp-section" id="architecture">
+	<div class="lp-container lp-arch">
+		<div>
+			<span class="lp-eyebrow">Architecture & API</span>
+			<h2 style="font-size:clamp(1.7rem,4vw,2.6rem);letter-spacing:-0.03em;margin:0 0 0.6rem;">
+				API-first, ops-light
+			</h2>
+			<p style="color:var(--sl-color-gray-2);line-height:1.6;margin:0;">
+				goloom is designed to be driven by humans and machines alike. Everything in the UI
+				is a documented API call away.
 			</p>
+			<ul>
+				{points.map(([t, d]) => (
+					<li><span><strong>{t}.</strong> {d}</span></li>
+				))}
+			</ul>
+			<div class="lp-cta-row" style="margin-top:1.6rem;">
+				<a class="glow-btn" href="/api/">Explore the API</a>
+				<a class="ghost-btn" href="/guides/mcp/">MCP for agents</a>
+			</div>
 		</div>
-		<div class="architecture glass-panel">
-			<div class="architecture__flow">
-				<div class="architecture__node glass-panel">
-					<p class="architecture__node-label">{coreNodes[0].label}</p>
-					<p class="architecture__node-desc">{coreNodes[0].desc}</p>
-				</div>
-				<span class="architecture__arrow" aria-hidden="true">→</span>
-				<div class="architecture__node glass-panel">
-					<p class="architecture__node-label">{coreNodes[1].label}</p>
-					<p class="architecture__node-desc">{coreNodes[1].desc}</p>
-				</div>
+
+		<div class="glass lp-terminal">
+			<div class="lp-terminal__bar">
+				<span></span><span></span><span></span>
+				<span class="t-title">curl</span>
 			</div>
-			<div class="architecture__optional">
-				<span class="architecture__optional-label">Optional</span>
-				<div class="architecture__node glass-panel">
-					<p class="architecture__node-label">AI service</p>
-					<p class="architecture__node-desc">
-						Python worker for voice profiles, drafts, and campaign automation
-					</p>
-				</div>
-			</div>
+			<pre><code><span class="c-comment"># Validate a post before scheduling it</span>
+<span class="c-prompt">$</span> curl <span class="c-flag">-X</span> POST \
+    <span class="c-flag">-H</span> "Authorization: Bearer $TOKEN" \
+    https://goloom.example/v1/teams/$TEAM/posts/validate \
+    <span class="c-flag">-d</span> '&#123;"body":"Hello fediverse 👋"&#125;'
+
+<span class="c-comment"># …or let an AI agent drive it via the</span>
+<span class="c-comment"># built-in MCP server:</span>
+<span class="c-prompt">→</span> https://goloom.example<span class="c-flag">/mcp/</span></code></pre>
 		</div>
 	</div>
 </section>

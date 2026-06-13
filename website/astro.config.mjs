@@ -10,38 +10,44 @@ export default defineConfig({
 			tagline: 'Lightweight social planning for teams and AI agents',
 			logo: {
 				src: './public/favicon.svg',
+				alt: 'goloom',
 			},
-			social: {
-				gitlab: 'https://git.f4mily.net/goloom',
-			},
+			social: [
+				{
+					icon: 'gitlab',
+					label: 'Forgejo',
+					href: 'https://git.f4mily.net/goloom',
+				},
+			],
 			editLink: {
-				baseUrl:
-					'https://git.f4mily.net/goloom/edit/main/website/src/content/docs/',
+				baseUrl: 'https://git.f4mily.net/goloom/_edit/main/website/src/content/docs/',
 			},
-			customCss: ['./src/styles/custom.css'],
+			customCss: ['./src/styles/theme.css'],
 			components: {
 				Footer: './src/components/Footer.astro',
 			},
 			sidebar: [
 				{
 					label: 'Getting Started',
-					autogenerate: { directory: 'docs/getting-started' },
+					items: [{ autogenerate: { directory: 'getting-started' } }],
 				},
 				{
 					label: 'Guides',
-					autogenerate: { directory: 'docs/guides' },
-				},
-				{
-					label: 'API',
-					link: '/docs/api/',
+					items: [{ autogenerate: { directory: 'guides' } }],
 				},
 				{
 					label: 'Administration',
-					autogenerate: { directory: 'docs/admin' },
+					items: [{ autogenerate: { directory: 'admin' } }],
 				},
 				{
 					label: 'Migrations',
-					autogenerate: { directory: 'docs/migrations' },
+					items: [{ autogenerate: { directory: 'migrations' } }],
+				},
+				{
+					label: 'API Reference',
+					link: '/api/',
+					attrs: { target: '_self' },
+					badge: { text: 'OpenAPI', variant: 'tip' },
 				},
 			],
 		}),
