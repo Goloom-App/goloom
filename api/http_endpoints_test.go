@@ -361,3 +361,29 @@ func TestAIScopeGatesOnHTTPRoutes(t *testing.T) {
 	f.handler.ServeHTTP(rec, req)
 	requireStatus(t, rec, http.StatusOK)
 }
+
+func TestTeamMediaRename(t *testing.T) {
+	f := newEndpointFixture(t)
+	ctx := context.Background()
+	created, err := f.store.CreateMediaItem(ctx, domain.MediaItem{
+		TeamID: f.team.ID, Sha256: "ren-" + uuid.NewString(), Filename: "old.png", MimeType: "image/png", SizeBytes: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := f.do(t, http.MethodPatch, "/v1/teams/"+f.team.ID+"/media/"+created.ID, map[string]any{"filename": "renamed.png"})
+	requireStatus(t, rec, http.StatusOK)
+	item := decodeJSON[domain.MediaItem](t, rec)
+	if item.Filename != "renamed.png" {
+		t.Fatalf("filename = %q, want renamed.png", item.Filename)
+	}
+
+	// Empty filename is rejected.
+	rec = f.do(t, http.MethodPatch, "/v1/teams/"+f.team.ID+"/media/"+created.ID, map[string]any{"filename": "  "})
+	requireStatus(t, rec, http.StatusBadRequest)
+
+	// Unknown media id is a 404.
+	rec = f.do(t, http.MethodPatch, "/v1/teams/"+f.team.ID+"/media/"+uuid.NewString(), map[string]any{"filename": "x.png"})
+	requireStatus(t, rec, http.StatusNotFound)
+}

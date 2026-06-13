@@ -843,7 +843,14 @@
       "attachedMediaAria": "Attached media",
       "addSelectedToPost": "Add selected to post ({{count}})",
       "noFilesInLibrary": "No files in the library yet. Upload one above.",
-      "libraryItemsPickerAria": "Library items"
+      "libraryItemsPickerAria": "Library items",
+      "searchPlaceholder": "Search by file name…",
+      "noSearchResults": "No media matches \"{{query}}\".",
+      "rename": "Rename",
+      "renameTitle": "File name",
+      "openPreview": "Open preview",
+      "previous": "Previous",
+      "next": "Next"
     },
     "composer": {
       "scheduledAt": "Scheduled at",

@@ -292,6 +292,27 @@ func TestPostgres_ScheduledPosts_and_due(t *testing.T) {
 	}
 }
 
+func TestPostgres_UpdateMediaItemFilename(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "medren-"+uuid.NewString(), "medren@pg.test", "Medren")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "medren-" + uuid.NewString()})
+	created, err := s.CreateMediaItem(ctx, domain.MediaItem{
+		TeamID: team.ID, Sha256: "ren-" + uuid.NewString(), Filename: "old.png", MimeType: "image/png", SizeBytes: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := s.UpdateMediaItemFilename(ctx, team.ID, created.ID, "new-name.png")
+	if err != nil || updated.Filename != "new-name.png" {
+		t.Fatalf("rename: %+v err=%v", updated, err)
+	}
+	if _, err := s.UpdateMediaItemFilename(ctx, uuid.NewString(), created.ID, "x.png"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("rename across teams: want pgx.ErrNoRows, got %v", err)
+	}
+}
+
 func TestPostgres_GetProviderInstanceByID_notFound(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)

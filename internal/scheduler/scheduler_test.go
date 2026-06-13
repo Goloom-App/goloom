@@ -640,6 +640,9 @@ func (m *mockStore) ListTeamMedia(ctx context.Context, teamID string) ([]domain.
 	return nil, nil
 }
 
+func (m *mockStore) UpdateMediaItemFilename(ctx context.Context, teamID, mediaID, filename string) (domain.MediaItem, error) {
+	return domain.MediaItem{}, nil
+}
 func (m *mockStore) DeleteMediaItem(ctx context.Context, teamID, mediaID string) error { return nil }
 
 func (m *mockStore) GetMediaProviderMapping(ctx context.Context, mediaID, accountID string) (domain.MediaProviderMapping, error) {
