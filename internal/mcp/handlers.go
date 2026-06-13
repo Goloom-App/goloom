@@ -659,3 +659,56 @@ func (h *Handler) handleGetHashtagPerformance(ctx context.Context, req *mcp.Call
 	}
 	return nil, out, nil
 }
+
+// ===== Get Analytics Timeslots =====
+
+func (h *Handler) handleGetAnalyticsTimeslots(ctx context.Context, req *mcp.CallToolRequest, input GetAnalyticsTimeslotsInput) (*mcp.CallToolResult, GetAnalyticsTimeslotsOutput, error) {
+	principal := principalFromContext(ctx)
+	if principal == nil {
+		return nil, GetAnalyticsTimeslotsOutput{}, fmt.Errorf("unauthorized")
+	}
+
+	allowed, err := h.auth.PrincipalHasTeamAccess(ctx, *principal, input.TeamID, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
+	if err != nil || !allowed {
+		return nil, GetAnalyticsTimeslotsOutput{}, fmt.Errorf("forbidden")
+	}
+
+	loc := time.UTC
+	if tz := strings.TrimSpace(input.Timezone); tz != "" {
+		parsed, err := time.LoadLocation(tz)
+		if err != nil {
+			return nil, GetAnalyticsTimeslotsOutput{}, fmt.Errorf("invalid timezone %q: %w", tz, err)
+		}
+		loc = parsed
+	}
+
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	posts, err := h.store.ListTeamPostEngagement(ctx, input.TeamID, input.Days, input.Provider)
+	if err != nil {
+		return nil, GetAnalyticsTimeslotsOutput{}, err
+	}
+
+	slots := domain.AggregateTimeslots(posts, loc, limit)
+	out := GetAnalyticsTimeslotsOutput{
+		Timezone:  loc.String(),
+		Timeslots: make([]TimeslotValue, 0, len(slots)),
+	}
+	for _, slot := range slots {
+		out.Timeslots = append(out.Timeslots, TimeslotValue{
+			Weekday:         slot.Weekday.String(),
+			Hour:            slot.Hour,
+			Posts:           slot.Posts,
+			TotalEngagement: slot.TotalEngagement,
+			AvgEngagement:   slot.AvgEngagement,
+			Score:           slot.Score,
+		})
+	}
+	return nil, out, nil
+}
