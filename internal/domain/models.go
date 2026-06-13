@@ -227,11 +227,11 @@ type BrandIdentity struct {
 }
 
 type BrandLanguageDNA struct {
-	SentenceStyle     string   `json:"sentence_style"`
-	PreferredWords    []string `json:"preferred_words"`
-	SignaturePhrases  []string `json:"signature_phrases,omitempty"`
-	HumorStyle        string   `json:"humor_style"`
-	AntiAIOverride    bool     `json:"anti_ai_override,omitempty"`
+	SentenceStyle    string   `json:"sentence_style"`
+	PreferredWords   []string `json:"preferred_words"`
+	SignaturePhrases []string `json:"signature_phrases,omitempty"`
+	HumorStyle       string   `json:"humor_style"`
+	AntiAIOverride   bool     `json:"anti_ai_override,omitempty"`
 }
 
 type BrandReachStrategy struct {
@@ -483,7 +483,7 @@ type AIChatMentionType string
 const (
 	AIChatMentionTypeCampaign  AIChatMentionType = "campaign"
 	AIChatMentionTypeRecurring AIChatMentionType = "recurring"
-	AIChatMentionTypeRSS        AIChatMentionType = "rss"
+	AIChatMentionTypeRSS       AIChatMentionType = "rss"
 )
 
 type AIChatMention struct {
@@ -596,34 +596,34 @@ type ScheduledPost struct {
 
 // PostTemplate drives recurring scheduled posts (stored in post_templates).
 type PostTemplate struct {
-	ID                     string              `json:"id"`
-	TeamID                 string              `json:"team_id"`
-	AuthorUserID           string              `json:"author_user_id"`
-	Title                  string              `json:"title"`
-	Content                string              `json:"content"`
-	RecurrenceJSON         string              `json:"recurrence_json"`
-	Visibility             string              `json:"visibility"`
-	MediaIDs               []string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs       []string            `json:"target_account_ids"`
-	Enabled                bool                `json:"enabled"`
-	AiEnhanceEnabled       bool                `json:"ai_enhance_enabled"`
-	AiEnhanceAnnouncement  bool                `json:"ai_enhance_announcement,omitempty"`
-	OutputMode             AutomationOutputMode `json:"output_mode"`
-	PromptHint             string              `json:"prompt_hint"`
-	TitleHint              string              `json:"title_hint"`
-	Tonality               string              `json:"tonality"`
-	MaterializeHorizonDays int                 `json:"materialize_horizon_days,omitempty"`
-	NextMaterializeAt            *time.Time          `json:"next_materialize_at,omitempty"`
-	CounterNext                  int                 `json:"counter_next"`
-	AnnouncementEnabled          bool                `json:"announcement_enabled"`
-	AnnouncementTitle            string              `json:"announcement_title,omitempty"`
-	AnnouncementContent          string              `json:"announcement_content,omitempty"`
-	AnnouncementDaysBefore       int                 `json:"announcement_days_before,omitempty"`
-	AnnouncementCounterNext      int                 `json:"announcement_counter_next,omitempty"`
-	AnnouncementTargetAccountIDs []string            `json:"announcement_target_account_ids,omitempty"`
-	CreatedAt                    time.Time           `json:"created_at"`
-	UpdatedAt                    time.Time           `json:"updated_at"`
+	ID                           string               `json:"id"`
+	TeamID                       string               `json:"team_id"`
+	AuthorUserID                 string               `json:"author_user_id"`
+	Title                        string               `json:"title"`
+	Content                      string               `json:"content"`
+	RecurrenceJSON               string               `json:"recurrence_json"`
+	Visibility                   string               `json:"visibility"`
+	MediaIDs                     []string             `json:"media_ids,omitempty"`
+	MediaExcludeByAccount        map[string][]string  `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs             []string             `json:"target_account_ids"`
+	Enabled                      bool                 `json:"enabled"`
+	AiEnhanceEnabled             bool                 `json:"ai_enhance_enabled"`
+	AiEnhanceAnnouncement        bool                 `json:"ai_enhance_announcement,omitempty"`
+	OutputMode                   AutomationOutputMode `json:"output_mode"`
+	PromptHint                   string               `json:"prompt_hint"`
+	TitleHint                    string               `json:"title_hint"`
+	Tonality                     string               `json:"tonality"`
+	MaterializeHorizonDays       int                  `json:"materialize_horizon_days,omitempty"`
+	NextMaterializeAt            *time.Time           `json:"next_materialize_at,omitempty"`
+	CounterNext                  int                  `json:"counter_next"`
+	AnnouncementEnabled          bool                 `json:"announcement_enabled"`
+	AnnouncementTitle            string               `json:"announcement_title,omitempty"`
+	AnnouncementContent          string               `json:"announcement_content,omitempty"`
+	AnnouncementDaysBefore       int                  `json:"announcement_days_before,omitempty"`
+	AnnouncementCounterNext      int                  `json:"announcement_counter_next,omitempty"`
+	AnnouncementTargetAccountIDs []string             `json:"announcement_target_account_ids,omitempty"`
+	CreatedAt                    time.Time            `json:"created_at"`
+	UpdatedAt                    time.Time            `json:"updated_at"`
 }
 
 // PostTemplateLinkedPost is a scheduled post created from a recurring template.
@@ -642,54 +642,54 @@ type PostTemplateRegenerateResult struct {
 }
 
 type CreatePostTemplateInput struct {
-	Title                  string              `json:"title"`
-	Content                string              `json:"content"`
-	RecurrenceJSON         string              `json:"recurrence_json"`
-	Visibility             string              `json:"visibility,omitempty"`
-	MediaIDs               []string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount  map[string][]string `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs       []string            `json:"target_account_ids"`
-	Enabled                *bool               `json:"enabled,omitempty"`
-	AiEnhanceEnabled       *bool               `json:"ai_enhance_enabled,omitempty"`
-	AiEnhanceAnnouncement  *bool               `json:"ai_enhance_announcement,omitempty"`
-	OutputMode             AutomationOutputMode `json:"output_mode,omitempty"`
-	PromptHint             string              `json:"prompt_hint,omitempty"`
-	TitleHint              string              `json:"title_hint,omitempty"`
-	Tonality                     string              `json:"tonality,omitempty"`
-	MaterializeHorizonDays       *int                `json:"materialize_horizon_days,omitempty"`
-	AnnouncesTemplateID          *string             `json:"announces_template_id,omitempty"` // deprecated: ignored on write
-	AnnouncementEnabled          *bool               `json:"announcement_enabled,omitempty"`
-	AnnouncementTitle            string              `json:"announcement_title,omitempty"`
-	AnnouncementContent          string              `json:"announcement_content,omitempty"`
-	AnnouncementDaysBefore       *int                `json:"announcement_days_before,omitempty"`
-	AnnouncementCounterNext      *int                `json:"announcement_counter_next,omitempty"`
-	AnnouncementTargetAccountIDs []string            `json:"announcement_target_account_ids,omitempty"`
-	CounterNext                  *int                `json:"counter_next,omitempty"`
+	Title                        string               `json:"title"`
+	Content                      string               `json:"content"`
+	RecurrenceJSON               string               `json:"recurrence_json"`
+	Visibility                   string               `json:"visibility,omitempty"`
+	MediaIDs                     []string             `json:"media_ids,omitempty"`
+	MediaExcludeByAccount        map[string][]string  `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs             []string             `json:"target_account_ids"`
+	Enabled                      *bool                `json:"enabled,omitempty"`
+	AiEnhanceEnabled             *bool                `json:"ai_enhance_enabled,omitempty"`
+	AiEnhanceAnnouncement        *bool                `json:"ai_enhance_announcement,omitempty"`
+	OutputMode                   AutomationOutputMode `json:"output_mode,omitempty"`
+	PromptHint                   string               `json:"prompt_hint,omitempty"`
+	TitleHint                    string               `json:"title_hint,omitempty"`
+	Tonality                     string               `json:"tonality,omitempty"`
+	MaterializeHorizonDays       *int                 `json:"materialize_horizon_days,omitempty"`
+	AnnouncesTemplateID          *string              `json:"announces_template_id,omitempty"` // deprecated: ignored on write
+	AnnouncementEnabled          *bool                `json:"announcement_enabled,omitempty"`
+	AnnouncementTitle            string               `json:"announcement_title,omitempty"`
+	AnnouncementContent          string               `json:"announcement_content,omitempty"`
+	AnnouncementDaysBefore       *int                 `json:"announcement_days_before,omitempty"`
+	AnnouncementCounterNext      *int                 `json:"announcement_counter_next,omitempty"`
+	AnnouncementTargetAccountIDs []string             `json:"announcement_target_account_ids,omitempty"`
+	CounterNext                  *int                 `json:"counter_next,omitempty"`
 }
 
 type UpdatePostTemplateInput struct {
-	Title                  *string              `json:"title,omitempty"`
-	Content                *string              `json:"content,omitempty"`
-	RecurrenceJSON         *string              `json:"recurrence_json,omitempty"`
-	Visibility             *string              `json:"visibility,omitempty"`
-	MediaIDs               *[]string            `json:"media_ids,omitempty"`
-	MediaExcludeByAccount  map[string][]string  `json:"media_exclude_by_account,omitempty"`
-	TargetAccountIDs       *[]string            `json:"target_account_ids,omitempty"`
-	Enabled                *bool                `json:"enabled,omitempty"`
-	AiEnhanceEnabled       *bool                `json:"ai_enhance_enabled,omitempty"`
-	AiEnhanceAnnouncement  *bool                `json:"ai_enhance_announcement,omitempty"`
-	OutputMode             *AutomationOutputMode `json:"output_mode,omitempty"`
-	PromptHint             *string              `json:"prompt_hint,omitempty"`
-	TitleHint              *string              `json:"title_hint,omitempty"`
-	Tonality                     *string              `json:"tonality,omitempty"`
-	MaterializeHorizonDays       *int                 `json:"materialize_horizon_days,omitempty"`
-	AnnouncementEnabled          *bool                `json:"announcement_enabled,omitempty"`
-	AnnouncementTitle            *string              `json:"announcement_title,omitempty"`
-	AnnouncementContent          *string              `json:"announcement_content,omitempty"`
-	AnnouncementDaysBefore       *int                 `json:"announcement_days_before,omitempty"`
-	AnnouncementCounterNext      *int                 `json:"announcement_counter_next,omitempty"`
-	AnnouncementTargetAccountIDs *[]string            `json:"announcement_target_account_ids,omitempty"`
-	CounterNext                  *int                 `json:"counter_next,omitempty"`
+	Title                        *string               `json:"title,omitempty"`
+	Content                      *string               `json:"content,omitempty"`
+	RecurrenceJSON               *string               `json:"recurrence_json,omitempty"`
+	Visibility                   *string               `json:"visibility,omitempty"`
+	MediaIDs                     *[]string             `json:"media_ids,omitempty"`
+	MediaExcludeByAccount        map[string][]string   `json:"media_exclude_by_account,omitempty"`
+	TargetAccountIDs             *[]string             `json:"target_account_ids,omitempty"`
+	Enabled                      *bool                 `json:"enabled,omitempty"`
+	AiEnhanceEnabled             *bool                 `json:"ai_enhance_enabled,omitempty"`
+	AiEnhanceAnnouncement        *bool                 `json:"ai_enhance_announcement,omitempty"`
+	OutputMode                   *AutomationOutputMode `json:"output_mode,omitempty"`
+	PromptHint                   *string               `json:"prompt_hint,omitempty"`
+	TitleHint                    *string               `json:"title_hint,omitempty"`
+	Tonality                     *string               `json:"tonality,omitempty"`
+	MaterializeHorizonDays       *int                  `json:"materialize_horizon_days,omitempty"`
+	AnnouncementEnabled          *bool                 `json:"announcement_enabled,omitempty"`
+	AnnouncementTitle            *string               `json:"announcement_title,omitempty"`
+	AnnouncementContent          *string               `json:"announcement_content,omitempty"`
+	AnnouncementDaysBefore       *int                  `json:"announcement_days_before,omitempty"`
+	AnnouncementCounterNext      *int                  `json:"announcement_counter_next,omitempty"`
+	AnnouncementTargetAccountIDs *[]string             `json:"announcement_target_account_ids,omitempty"`
+	CounterNext                  *int                  `json:"counter_next,omitempty"`
 }
 
 // ResolveAutomationPostTitle prefers an AI-generated title when present.
@@ -1044,13 +1044,13 @@ type CreatePostInput struct {
 	// UseVersions allows per-account content overrides to bypass global character limit validation.
 	UseVersions bool `json:"use_versions,omitempty"`
 	// Internal-only (workers): optional author override and template lineage for dynamic variables.
-	AuthorUserID    *string    `json:"-"`
-	PostTemplateID  *string    `json:"-"`
-	TemplateCounter *int       `json:"-"`
+	AuthorUserID         *string    `json:"-"`
+	PostTemplateID       *string    `json:"-"`
+	TemplateCounter      *int       `json:"-"`
 	TemplateOccurrenceAt *time.Time `json:"-"`
 	TemplatePostRole     string     `json:"-"`
-	Source          PostSource `json:"-"`
-	RSSFeedID       *string    `json:"-"`
+	Source               PostSource `json:"-"`
+	RSSFeedID            *string    `json:"-"`
 }
 
 func (in CreatePostInput) EffectiveContent(accountID string) string {
@@ -1199,17 +1199,21 @@ type LogEntry struct {
 	Attributes map[string]string `json:"attributes"`
 	SourceFile string            `json:"source_file,omitempty"`
 	SourceLine int               `json:"source_line,omitempty"`
-	CreatedAt  time.Time         `json:"created_at"`
-	ArchivedAt *time.Time        `json:"archived_at,omitempty"`
+	// Component is derived from SourceFile (ai, mcp, automation, …) so the admin
+	// log view can group/filter by the area of the codebase that emitted it.
+	Component  string     `json:"component,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 }
 
 // LogFilter specifies pagination and filtering for listing log entries.
 type LogFilter struct {
-	Level    string
-	Search   string
-	Archived *bool // nil = all, true = archived, false = unarchived
-	Before   *time.Time
-	After    *time.Time
-	Limit    int
-	Offset   int
+	Level     string
+	Search    string
+	Component string // one of LogComponents(); empty = all
+	Archived  *bool  // nil = all, true = archived, false = unarchived
+	Before    *time.Time
+	After     *time.Time
+	Limit     int
+	Offset    int
 }

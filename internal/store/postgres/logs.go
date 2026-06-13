@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
@@ -82,8 +83,23 @@ func buildLogWhere(f domain.LogFilter) (string, []any) {
 		args = append(args, f.Level)
 	}
 	if f.Search != "" {
-		clauses = append(clauses, fmt.Sprintf("(message ilike $%d or attributes_json::text ilike $%d)", len(args)+1, len(args)+2))
+		// Both LIKEs reuse the same placeholder, so only one arg is appended.
+		clauses = append(clauses, fmt.Sprintf("(message ilike $%d or attributes_json::text ilike $%d)", len(args)+1, len(args)+1))
 		args = append(args, "%"+f.Search+"%")
+	}
+	if f.Component != "" {
+		if frags, negate := domain.LogComponentFilter(f.Component); len(frags) > 0 {
+			ors := make([]string, 0, len(frags))
+			for _, fr := range frags {
+				ors = append(ors, fmt.Sprintf("source_file ilike $%d", len(args)+1))
+				args = append(args, "%"+fr+"%")
+			}
+			clause := "(" + strings.Join(ors, " or ") + ")"
+			if negate {
+				clause = "not " + clause
+			}
+			clauses = append(clauses, clause)
+		}
 	}
 	if f.Archived != nil {
 		if *f.Archived {
@@ -136,6 +152,7 @@ func scanLogEntries(rows pgx.Rows) ([]domain.LogEntry, error) {
 		if e.Attributes == nil {
 			e.Attributes = make(map[string]string)
 		}
+		e.Component = domain.LogComponentFromSource(e.SourceFile)
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()

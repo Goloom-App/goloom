@@ -275,6 +275,7 @@ export interface BackendLogEntry {
   attributes: Record<string, string>
   source_file?: string
   source_line?: number
+  component?: string
   created_at: string
   archived_at?: string
 }
@@ -1091,17 +1092,18 @@ export function createApiClient(options: ApiClientOptions) {
         },
       )
     },
-    listLogEntries(params?: { level?: string; search?: string; archived?: boolean; before?: string; after?: string; limit?: number; offset?: number }) {
+    listLogEntries(params?: { level?: string; search?: string; component?: string; archived?: boolean; before?: string; after?: string; limit?: number; offset?: number }) {
       const search = new URLSearchParams()
       if (params?.level) search.set('level', params.level)
       if (params?.search) search.set('search', params.search)
+      if (params?.component) search.set('component', params.component)
       if (params?.archived != null) search.set('archived', String(params.archived))
       if (params?.before) search.set('before', params.before)
       if (params?.after) search.set('after', params.after)
       if (params?.limit != null) search.set('limit', String(params.limit))
       if (params?.offset != null) search.set('offset', String(params.offset))
       const q = search.toString()
-      return request<{ entries: BackendLogEntry[]; total: number }>(options, `/v1/admin/logs${q ? `?${q}` : ''}`, {
+      return request<{ entries: BackendLogEntry[]; total: number; components?: string[] }>(options, `/v1/admin/logs${q ? `?${q}` : ''}`, {
         headers: buildHeaders(options.token, false),
       })
     },

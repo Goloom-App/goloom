@@ -1729,6 +1729,36 @@ select {
   border: 1px solid var(--border);
 }
 
+/* Log component badges: neutral by default, subtle accents for the key areas.
+   Mixed-case reads better for labels like "Automation"/"Provider". */
+.badge--component {
+  background: var(--surface-muted);
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.badge--component-ai {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+.badge--component-mcp {
+  background: var(--info-soft);
+  color: var(--info);
+  border-color: transparent;
+}
+.badge--component-automation {
+  background: var(--success-soft);
+  color: var(--success);
+  border-color: transparent;
+}
+.badge--component-provider {
+  background: var(--warning-soft);
+  color: var(--warning);
+  border-color: transparent;
+}
+
 /* ==========================================================================
    Skeleton Loading
    ========================================================================== */
@@ -4451,6 +4481,106 @@ select {
 .admin-section__badge {
   font-size: 0.75rem;
   white-space: nowrap;
+}
+
+.admin-section__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.admin-section__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+}
+.admin-section__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Health banner: instance status at a glance, above the detailed metrics. */
+.admin-health {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border-left: 3px solid var(--success);
+}
+.admin-health--attention {
+  border-left-color: var(--warning);
+}
+.admin-health__primary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 12rem;
+}
+.admin-health__headline {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+.admin-health__pulse {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 18%, transparent);
+}
+.admin-health--attention .admin-health__pulse {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 18%, transparent);
+}
+.admin-health__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-left: auto;
+}
+.admin-health__signal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+/* Proportional post-pipeline bar. */
+.admin-pipeline {
+  margin: 0 0 var(--space-4);
+}
+.admin-pipeline__bar {
+  display: flex;
+  height: 10px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+.admin-pipeline__seg {
+  height: 100%;
+}
+.admin-pipeline__seg--draft {
+  background: var(--text-dim);
+}
+.admin-pipeline__seg--pending {
+  background: var(--info);
+}
+.admin-pipeline__seg--processing {
+  background: var(--accent);
+}
+.admin-pipeline__seg--posted {
+  background: var(--success);
+}
+.admin-pipeline__seg--failed {
+  background: var(--danger);
+}
+.admin-pipeline__seg--cancelled {
+  background: var(--border);
 }
 
 .admin-head-stats {

@@ -9,6 +9,21 @@ type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
 
 const LOG_LEVELS: LogLevel[] = ['DEBUG', 'INFO', 'WARN', 'ERROR']
 
+// Display labels for the technical component buckets derived server-side from
+// the log's source file (see domain.LogComponentFromSource).
+const COMPONENT_LABELS: Record<string, string> = {
+  ai: 'AI',
+  mcp: 'MCP',
+  automation: 'Automation',
+  provider: 'Provider',
+  api: 'API',
+  system: 'System',
+}
+
+function componentLabel(component: string): string {
+  return COMPONENT_LABELS[component] ?? component
+}
+
 function levelClass(level: string): string {
   switch (level) {
     case 'ERROR':
@@ -29,6 +44,8 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
   const [loading, setLoading] = useState(true)
   const [levelFilter, setLevelFilter] = useState('')
   const [searchFilter, setSearchFilter] = useState('')
+  const [componentFilter, setComponentFilter] = useState('')
+  const [availableComponents, setAvailableComponents] = useState<string[]>([])
   const [showArchived, setShowArchived] = useState(false)
   const [offset, setOffset] = useState(0)
   const limit = 50
@@ -40,6 +57,7 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
       const res = await api.listLogEntries({
         level: levelFilter || undefined,
         search: searchFilter || undefined,
+        component: componentFilter || undefined,
         archived: showArchived || undefined,
         limit,
         offset,
@@ -48,12 +66,15 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
       // render never crashes on entries.length / entries.map (blank screen).
       setEntries(res.entries ?? [])
       setTotal(res.total ?? 0)
+      if (res.components) {
+        setAvailableComponents(res.components)
+      }
     } catch {
       // ignore
     } finally {
       setLoading(false)
     }
-  }, [api, levelFilter, searchFilter, showArchived, offset])
+  }, [api, levelFilter, searchFilter, componentFilter, showArchived, offset])
 
   useEffect(() => {
     void load()
@@ -128,6 +149,20 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
             ))}
           </select>
 
+          <select
+            className="input input--sm"
+            value={componentFilter}
+            onChange={(e) => { setComponentFilter(e.target.value); setOffset(0) }}
+            aria-label={t('admin.logComponentFilter')}
+          >
+            <option value="">{t('admin.logAllComponents')}</option>
+            {availableComponents.map((c) => (
+              <option key={c} value={c}>
+                {componentLabel(c)}
+              </option>
+            ))}
+          </select>
+
           <input
             className="input input--sm"
             type="text"
@@ -163,6 +198,7 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
                 <thead>
                   <tr>
                     <th>{t('admin.logLevel')}</th>
+                    <th>{t('admin.logComponent')}</th>
                     <th>{t('admin.logTime')}</th>
                     <th>{t('admin.logMessage')}</th>
                     <th>{t('admin.logSource')}</th>
@@ -174,6 +210,13 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
                     <tr key={e.id} className={e.archived_at ? 'opacity-50' : ''}>
                       <td>
                         <span className={levelClass(e.level)}>{e.level}</span>
+                      </td>
+                      <td>
+                        {e.component ? (
+                          <span className={`badge badge--component badge--component-${e.component}`}>
+                            {componentLabel(e.component)}
+                          </span>
+                        ) : null}
                       </td>
                       <td className="text-nowrap text-sm">
                         {new Date(e.created_at).toLocaleString()}

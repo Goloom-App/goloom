@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
@@ -83,7 +84,13 @@ func buildLogWhere(f domain.LogFilter) (string, []any) {
 	}
 	if f.Search != "" {
 		clauses = append(clauses, "(message like ? or attributes_json like ?)")
-		args = append(args, "%"+f.Search+"%")
+		args = append(args, "%"+f.Search+"%", "%"+f.Search+"%")
+	}
+	if f.Component != "" {
+		if clause, cargs := logComponentClause(f.Component); clause != "" {
+			clauses = append(clauses, clause)
+			args = append(args, cargs...)
+		}
 	}
 	if f.Archived != nil {
 		if *f.Archived {
@@ -121,16 +128,39 @@ func filterLimit(limit int) int {
 	return limit
 }
 
+// logComponentClause builds a source_file LIKE filter for a component, matching
+// the same fragments LogComponentFromSource uses. Returns "" when the component
+// imposes no constraint.
+func logComponentClause(component string) (string, []any) {
+	frags, negate := domain.LogComponentFilter(component)
+	if len(frags) == 0 {
+		return "", nil
+	}
+	ors := make([]string, 0, len(frags))
+	args := make([]any, 0, len(frags))
+	for _, fr := range frags {
+		ors = append(ors, "source_file like ?")
+		args = append(args, "%"+fr+"%")
+	}
+	clause := "(" + strings.Join(ors, " or ") + ")"
+	if negate {
+		clause = "not " + clause
+	}
+	return clause, args
+}
+
 func scanLogEntries(rows *sql.Rows) ([]domain.LogEntry, error) {
 	entries := make([]domain.LogEntry, 0)
 	for rows.Next() {
 		var e domain.LogEntry
 		var attrsJSON string
+		var createdAt string
 		var archivedAt sql.NullString
 		if err := rows.Scan(&e.ID, &e.Level, &e.Message, &attrsJSON, &e.SourceFile, &e.SourceLine,
-			&e.CreatedAt, &archivedAt); err != nil {
+			&createdAt, &archivedAt); err != nil {
 			return nil, err
 		}
+		e.CreatedAt, _ = parseTime(createdAt)
 		if attrsJSON != "" && attrsJSON != "{}" {
 			_ = json.Unmarshal([]byte(attrsJSON), &e.Attributes)
 		}
@@ -143,6 +173,7 @@ func scanLogEntries(rows *sql.Rows) ([]domain.LogEntry, error) {
 				e.ArchivedAt = &t
 			}
 		}
+		e.Component = domain.LogComponentFromSource(e.SourceFile)
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()

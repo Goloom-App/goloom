@@ -13,8 +13,9 @@ import (
 func (a *API) handleListLogEntries(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	filter := domain.LogFilter{
-		Level:  strings.TrimSpace(q.Get("level")),
-		Search: strings.TrimSpace(q.Get("search")),
+		Level:     strings.TrimSpace(q.Get("level")),
+		Search:    strings.TrimSpace(q.Get("search")),
+		Component: strings.TrimSpace(q.Get("component")),
 	}
 
 	if raw := strings.TrimSpace(q.Get("archived")); raw != "" {
@@ -53,8 +54,9 @@ func (a *API) handleListLogEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, map[string]any{
-		"entries": entries,
-		"total":   total,
+		"entries":    entries,
+		"total":      total,
+		"components": domain.LogComponents(),
 	})
 }
 
