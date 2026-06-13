@@ -123,12 +123,24 @@ func Generate(ctx context.Context, client Client, system, prompt string, tempera
 	return resp.Content, nil
 }
 
+// apiError carries the HTTP status and body of a failed LLM API call so callers
+// can inspect it (e.g. to retry with a different parameter). Its Error string is
+// unchanged from the previous inline format.
+type apiError struct {
+	status int
+	body   string
+}
+
+func (e *apiError) Error() string {
+	return fmt.Sprintf("llm api error: status %d: %s", e.status, e.body)
+}
+
 func decodeBody(resp *http.Response, into any) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var buf [2048]byte
 		n, _ := resp.Body.Read(buf[:])
-		return fmt.Errorf("llm api error: status %d: %s", resp.StatusCode, strings.TrimSpace(string(buf[:n])))
+		return &apiError{status: resp.StatusCode, body: strings.TrimSpace(string(buf[:n]))}
 	}
 	return json.NewDecoder(resp.Body).Decode(into)
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Bot, Loader2, Send, Sparkles, X } from 'lucide-react'
 import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, createApiClient } from '../../api'
@@ -308,7 +309,10 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
     }
   }
 
-  return (
+  // Portal to <body> so the floating widget escapes the .app-main stacking
+  // context (position: relative; z-index: 0). Rendered inline, its z-index is
+  // capped at app-main's level and the preview-column avatar paints over it.
+  return createPortal(
     <>
       <button
         type="button"
@@ -458,7 +462,8 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
           </footer>
         </section>
       )}
-    </>
+    </>,
+    document.body,
   )
 }
 

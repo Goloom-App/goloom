@@ -11,7 +11,7 @@ import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
 import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
-import { Sun, Moon, Edit, Trash2, X } from 'lucide-react'
+import { Sun, Moon, Edit, Trash2, Copy, X } from 'lucide-react'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
 import { DashboardView } from './views/dashboard/DashboardView'
@@ -1548,10 +1548,7 @@ function App() {
                     {selectedPost ? selectedPost.title || t('common.untitledPost') : t('preview.noPostSelected')}
                   </h3>
                 </div>
-                {selectedPost &&
-                (selectedPost.status === 'scheduled' || selectedPost.status === 'draft') &&
-                selectedPost.source !== 'imported' &&
-                canEditScheduledPosts ? (
+                {selectedPost && canEditScheduledPosts ? (
                   <div className="preview-header__actions flex-row--center gap-2">
                     <button
                       type="button"
@@ -1567,15 +1564,28 @@ function App() {
                       <Trash2 size={16} />
                       <span>{t('common.delete')}</span>
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost preview-header__edit"
-                      data-testid="preview-edit-button"
-                      onClick={() => void openEditor(selectedPost.id)}
-                    >
-                      <Edit size={16} />
-                      <span>{t('common.edit')}</span>
-                    </button>
+                    {/* Archived posts can't be edited in place; offer a repost (duplicate to draft). */}
+                    {selectedPost.status === 'posted' ? (
+                      <button
+                        type="button"
+                        className="btn btn--ghost preview-header__edit"
+                        data-testid="preview-duplicate-button"
+                        onClick={() => void duplicatePost(selectedPost.id)}
+                      >
+                        <Copy size={16} />
+                        <span>{t('common.duplicate')}</span>
+                      </button>
+                    ) : selectedPost.source !== 'imported' ? (
+                      <button
+                        type="button"
+                        className="btn btn--ghost preview-header__edit"
+                        data-testid="preview-edit-button"
+                        onClick={() => void openEditor(selectedPost.id)}
+                      >
+                        <Edit size={16} />
+                        <span>{t('common.edit')}</span>
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

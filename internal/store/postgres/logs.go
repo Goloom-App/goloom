@@ -122,7 +122,7 @@ func filterLimit(limit int) int {
 }
 
 func scanLogEntries(rows pgx.Rows) ([]domain.LogEntry, error) {
-	var entries []domain.LogEntry
+	entries := make([]domain.LogEntry, 0)
 	for rows.Next() {
 		var e domain.LogEntry
 		var attrsJSON []byte

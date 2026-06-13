@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import type { BackendTeam } from '../../api'
 
@@ -11,9 +11,16 @@ export function AdminAITab({
   loading: boolean
   onLoad: () => void | Promise<void>
 }) {
+  // onLoad is recreated on every parent render, so depending on it here would
+  // re-fire the fetch forever (endless "Loading...", flickering list). Keep the
+  // latest onLoad in a ref and trigger the fetch only once, when the tab mounts.
+  const onLoadRef = useRef(onLoad)
   useEffect(() => {
-    void onLoad()
+    onLoadRef.current = onLoad
   }, [onLoad])
+  useEffect(() => {
+    void onLoadRef.current()
+  }, [])
 
   return (
     <div className="admin-tab-panel stack stack--lg">

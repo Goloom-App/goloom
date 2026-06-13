@@ -3,6 +3,9 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -182,6 +185,52 @@ func TestNextCampaignSlotSkipsOccupiedWeekday(t *testing.T) {
 	}
 	if slot.Weekday() != time.Tuesday {
 		t.Fatalf("slot weekday = %s, want Tuesday", slot.Weekday())
+	}
+}
+
+func TestOpenAIRetriesWithCompletionTokens(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body := string(raw)
+		bodies = append(bodies, body)
+		if strings.Contains(body, "\"max_tokens\"") {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.","type":"invalid_request_error","param":"max_tokens","code":"unsupported_parameter"}}`)
+			return
+		}
+		io.WriteString(w, `{"model":"gpt-5","choices":[{"message":{"role":"assistant","content":"hello"}}]}`)
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Settings{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: "k", BaseURL: server.URL}, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := client.Complete(context.Background(), Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("expected recovery, got error: %v", err)
+	}
+	if resp.Content != "hello" {
+		t.Fatalf("content = %q, want hello", resp.Content)
+	}
+	if len(bodies) != 2 {
+		t.Fatalf("expected 2 requests (initial + retry), got %d", len(bodies))
+	}
+	if !strings.Contains(bodies[1], "max_completion_tokens") {
+		t.Fatalf("retry should use max_completion_tokens, got: %s", bodies[1])
+	}
+
+	// A second completion must go straight to max_completion_tokens (cached).
+	if _, err := client.Complete(context.Background(), Request{Messages: []Message{{Role: RoleUser, Content: "again"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(bodies) != 3 {
+		t.Fatalf("expected cached param on 2nd call (3 requests total), got %d", len(bodies))
+	}
+	if strings.Contains(bodies[2], "\"max_tokens\"") {
+		t.Fatalf("cached call should not send max_tokens, got: %s", bodies[2])
 	}
 }
 

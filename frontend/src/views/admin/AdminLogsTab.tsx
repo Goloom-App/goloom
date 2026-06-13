@@ -44,8 +44,10 @@ export function AdminLogsTab({ api }: { api: ReturnType<typeof import('../../api
         limit,
         offset,
       })
-      setEntries(res.entries)
-      setTotal(res.total)
+      // The API returns null (not []) when no rows match; coalesce so the
+      // render never crashes on entries.length / entries.map (blank screen).
+      setEntries(res.entries ?? [])
+      setTotal(res.total ?? 0)
     } catch {
       // ignore
     } finally {
