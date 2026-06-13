@@ -41,17 +41,27 @@ func runCampaignAutopilot(ctx context.Context, client Client, job domain.AIJob, 
 	systemPrompt := BuildSystemPrompt(aiContext)
 	basePrompt := buildGenerationPrompt(aiContext, campaignPromptParams(p, campaignFormat, renderedTemplate, requiredHashtags, suggestedScheduledAt), platform)
 
-	content, err := Generate(ctx, client, systemPrompt, basePrompt, 0.7, 1000)
-	if err != nil {
-		return nil, err
+	prompt := basePrompt
+	var lastErr error
+	for try := 0; try <= campaignMaxRetries; try++ {
+		content, err := GenerateJSON(ctx, client, systemPrompt, prompt, 0.7, defaultMaxTokens)
+		if err != nil {
+			return nil, err
+		}
+		result, err := validateCampaignResult(content, requiredHashtags, constraints.charLimit, suggestedScheduledAt)
+		if err == nil {
+			return json.Marshal(result)
+		}
+		// The reply parsed or validated badly; re-prompt with the concrete defect
+		// instead of failing the whole job on a single noisy response.
+		lastErr = err
+		prompt = basePrompt + "\n\nYour previous answer could not be used: " + err.Error() +
+			". Respond with ONLY a valid JSON object with the keys \"content\" and \"hashtags\" — no prose, no markdown, no code fences."
 	}
-
-	result, err := validateCampaignResult(content, requiredHashtags, constraints.charLimit, suggestedScheduledAt)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(result)
+	return nil, lastErr
 }
+
+const campaignMaxRetries = 2
 
 func findCampaignFormat(aiContext domain.AIContext, campaignFormatID string) (*domain.CampaignFormat, error) {
 	for _, item := range aiContext.CampaignFormats {

@@ -80,6 +80,7 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 		payload["system"] = req.System
 	}
 	// Sampling parameters are not sent: recent Anthropic models reject them.
+	prefilledJSON := false
 	if len(req.Tools) > 0 {
 		tools := make([]map[string]any, 0, len(req.Tools))
 		for _, tool := range req.Tools {
@@ -90,6 +91,17 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 			})
 		}
 		payload["tools"] = tools
+	} else if req.JSON {
+		// Anthropic has no JSON response mode, so we prefill the assistant turn
+		// with an opening brace. The model then continues from "{", which both
+		// suppresses prose and guarantees the reply starts a JSON object. The
+		// brace is stitched back on below since the API omits the prefill.
+		messages = append(messages, anthropicMessage{
+			Role:    "assistant",
+			Content: []anthropicContentBlock{{Type: "text", Text: "{"}},
+		})
+		payload["messages"] = messages
+		prefilledJSON = true
 	}
 
 	body, err := json.Marshal(payload)
@@ -120,6 +132,10 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 	if data.StopReason == "refusal" {
 		return Response{}, fmt.Errorf("anthropic declined the request (stop_reason refusal)")
 	}
+	// "max_tokens" means the answer was cut off; the partial text is not usable.
+	if data.StopReason == "max_tokens" {
+		return Response{}, ErrResponseTruncated
+	}
 
 	out := Response{Model: data.Model}
 	var texts []string
@@ -132,6 +148,10 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 		}
 	}
 	out.Content = strings.TrimSpace(strings.Join(texts, "\n"))
+	if prefilledJSON {
+		// Re-attach the prefilled opening brace the API stripped from the reply.
+		out.Content = "{" + out.Content
+	}
 	return out, nil
 }
 

@@ -20,11 +20,17 @@ const (
 	DefaultOpenAIModel    = "gpt-4o"
 	DefaultAnthropicModel = "claude-opus-4-8"
 
-	defaultMaxTokens = 1500
+	defaultMaxTokens = 2048
 	requestTimeout   = 120 * time.Second
 )
 
 var ErrNotConfigured = errors.New("llm provider not configured")
+
+// ErrResponseTruncated indicates the model stopped because it hit the token
+// limit rather than finishing its answer. The partial body is almost always
+// invalid JSON, so callers should treat this as a distinct failure instead of a
+// generic parse error.
+var ErrResponseTruncated = errors.New("llm response truncated at token limit")
 
 // Settings carries the per-team LLM credentials resolved from the store.
 type Settings struct {
@@ -78,6 +84,10 @@ type Request struct {
 	Tools       []Tool
 	Temperature *float64
 	MaxTokens   int
+	// JSON asks the provider to emit a single valid JSON object. OpenAI enforces
+	// this via response_format; Anthropic, which has no equivalent, is steered by
+	// prefilling the assistant turn with an opening brace.
+	JSON bool
 }
 
 type Response struct {
@@ -111,11 +121,23 @@ func NewClient(settings Settings, httpClient *http.Client) (Client, error) {
 
 // Generate is a convenience wrapper for single-prompt completions.
 func Generate(ctx context.Context, client Client, system, prompt string, temperature float64, maxTokens int) (string, error) {
+	return generate(ctx, client, system, prompt, temperature, maxTokens, false)
+}
+
+// GenerateJSON is like Generate but asks the provider to return a single valid
+// JSON object (see Request.JSON). Use it for every prompt whose reply is parsed
+// as JSON.
+func GenerateJSON(ctx context.Context, client Client, system, prompt string, temperature float64, maxTokens int) (string, error) {
+	return generate(ctx, client, system, prompt, temperature, maxTokens, true)
+}
+
+func generate(ctx context.Context, client Client, system, prompt string, temperature float64, maxTokens int, asJSON bool) (string, error) {
 	resp, err := client.Complete(ctx, Request{
 		System:      system,
 		Messages:    []Message{{Role: RoleUser, Content: prompt}},
 		Temperature: &temperature,
 		MaxTokens:   maxTokens,
+		JSON:        asJSON,
 	})
 	if err != nil {
 		return "", err
