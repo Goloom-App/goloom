@@ -368,7 +368,7 @@ func generateWithRetries(ctx context.Context, client Client, attempt generateAtt
 	currentPrompt := attempt.prompt
 	lastError := "invalid multi-account output"
 	for try := 0; try <= voiceEngineMaxRetries; try++ {
-		content, err := Generate(ctx, client, attempt.systemPrompt, currentPrompt, 0.7, 1500)
+		content, err := GenerateJSON(ctx, client, attempt.systemPrompt, currentPrompt, 0.7, defaultMaxTokens)
 		if err != nil {
 			return parsedVoiceResult{}, err
 		}

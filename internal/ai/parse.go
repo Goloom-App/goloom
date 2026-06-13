@@ -25,14 +25,53 @@ func extractJSONObject(raw string) (map[string]any, error) {
 		return payload, nil
 	}
 
-	start := strings.Index(cleaned, "{")
-	end := strings.LastIndex(cleaned, "}")
-	if start != -1 && end > start {
-		if err := json.Unmarshal([]byte(cleaned[start:end+1]), &payload); err == nil {
+	// Isolate the first balanced { ... } object so prose on either side — even
+	// prose that itself contains braces — does not derail parsing.
+	if obj := firstJSONObject(cleaned); obj != "" {
+		if err := json.Unmarshal([]byte(obj), &payload); err == nil {
 			return payload, nil
 		}
 	}
 	return nil, fmt.Errorf("LLM response was not valid JSON")
+}
+
+// firstJSONObject returns the substring spanning the first top-level JSON object
+// in s by tracking brace depth while ignoring braces inside string literals. It
+// returns "" if no balanced object is present (e.g. the text was truncated).
+func firstJSONObject(s string) string {
+	start := strings.IndexByte(s, '{')
+	if start == -1 {
+		return ""
+	}
+	depth := 0
+	inString := false
+	escaped := false
+	for i := start; i < len(s); i++ {
+		ch := s[i]
+		if inString {
+			switch {
+			case escaped:
+				escaped = false
+			case ch == '\\':
+				escaped = true
+			case ch == '"':
+				inString = false
+			}
+			continue
+		}
+		switch ch {
+		case '"':
+			inString = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
+		}
+	}
+	return ""
 }
 
 func payloadString(payload map[string]any, key string) string {
