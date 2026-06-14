@@ -377,7 +377,9 @@
       "insightEngagementWith": "Ø Interaktionen mit Hashtags",
       "insightEngagementWithout": "Ø Interaktionen ohne Hashtags",
       "showAllAccounts": "Alle anzeigen",
-      "selectAccountHint": "Konto antippen zum Filtern"
+      "selectAccountHint": "Konto antippen zum Filtern",
+      "accountsSelected": "{{count}} Konten ausgewählt",
+      "resetAccounts": "Zurücksetzen"
     },
     "accounts": {
       "connectedTitle": "Verbundene Konten",
