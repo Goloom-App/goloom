@@ -8,21 +8,6 @@
 # Go modules (keep go.mod and go.sum tracked)
 # go.work
 
-# Python / AI Service
-/ai-service/.venv
-/ai-service/venv
-/ai-service/__pycache__
-/ai-service/**/__pycache__
-/ai-service/.pytest_cache
-/ai-service/.mypy_cache
-/ai-service/.ruff_cache
-/ai-service/.pyright_cache
-/ai-service/ai_service.egg-info
-/ai-service/dist
-/ai-service/build
-/ai-service/*.pyc
-/ai-service/uv.lock
-
 # Node.js / Website
 /website/node_modules
 /website/dist
