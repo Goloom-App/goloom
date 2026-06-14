@@ -413,6 +413,56 @@ func TestMastodonProvider_RefreshAccessToken(t *testing.T) {
 	}
 }
 
+func TestCheckInstanceHealth(t *testing.T) {
+	ctx := WithOutboundInstancePolicy(context.Background(), OutboundPolicy{AllowPrivateLAN: true})
+
+	t.Run("mastodon ok", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/v1/instance" {
+				t.Errorf("unexpected path %s", r.URL.Path)
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		h := CheckInstanceHealth(ctx, "mastodon", server.URL)
+		if !h.Healthy || h.Status != InstanceHealthOK {
+			t.Fatalf("got %+v, want healthy ok", h)
+		}
+	})
+
+	t.Run("bluesky uses xrpc describe", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/xrpc/com.atproto.server.describeServer" {
+				t.Errorf("unexpected path %s", r.URL.Path)
+			}
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		h := CheckInstanceHealth(ctx, "bluesky", server.URL)
+		if !h.Healthy {
+			t.Fatalf("got %+v, want healthy", h)
+		}
+	})
+
+	t.Run("server error is unhealthy", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+		h := CheckInstanceHealth(ctx, "mastodon", server.URL)
+		if h.Healthy || h.Status != InstanceHealthError {
+			t.Fatalf("got %+v, want error", h)
+		}
+	})
+
+	t.Run("invalid url", func(t *testing.T) {
+		h := CheckInstanceHealth(ctx, "mastodon", "   ")
+		if h.Healthy || h.Status != InstanceHealthInvalidURL {
+			t.Fatalf("got %+v, want invalid_url", h)
+		}
+	})
+}
+
 func TestPixelfedProvider_Capabilities(t *testing.T) {
 	p := NewPixelfedProvider(MastodonRegistrationConfig{})
 	if p.Name() != "pixelfed" {

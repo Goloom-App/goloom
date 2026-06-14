@@ -1,12 +1,40 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { createApiClient } from '../../api'
 import { Icon } from '../../icons'
 import type { AccountRecord, ProviderInstanceRecord, ProviderName } from '../../types'
 import type { AdminProviderDraft } from './adminTypes'
 import { defaultAdminProviderDraft } from './adminTypes'
 
+type Api = ReturnType<typeof createApiClient>
+
+/** Providers that register an OAuth app on the instance (Mastodon-compatible flow). */
+function providerUsesOAuthApp(provider: ProviderName): boolean {
+  return provider === 'mastodon' || provider === 'pixelfed'
+}
+
+function instanceUrlPlaceholder(provider: ProviderName): string {
+  switch (provider) {
+    case 'mastodon':
+      return 'https://mastodon.social'
+    case 'pixelfed':
+      return 'https://pixelfed.social'
+    case 'bluesky':
+      return 'https://bsky.social'
+    case 'friendica':
+      return 'https://friendica.example'
+  }
+}
+
+type HealthState =
+  | { state: 'loading' }
+  | { state: 'done'; healthy: boolean; status: string; detail?: string }
+  | { state: 'failed' }
+
 export function AdminProvidersTab({
+  api,
   providerInstances,
   accounts,
   adminProviderDraft,
@@ -19,6 +47,7 @@ export function AdminProvidersTab({
   onSaveAdminProvider,
   onDeleteProviderInstance,
 }: {
+  api: Api | null
   providerInstances: ProviderInstanceRecord[]
   accounts: AccountRecord[]
   adminProviderDraft: AdminProviderDraft
@@ -32,6 +61,37 @@ export function AdminProvidersTab({
   onDeleteProviderInstance: (instanceId: string) => void | Promise<void>
 }) {
   const { t } = useTranslation()
+  const isOAuthProvider = providerUsesOAuthApp(adminProviderDraft.provider)
+
+  const [health, setHealth] = useState<Record<string, HealthState>>({})
+
+  const checkHealth = useCallback(
+    async (instanceId: string) => {
+      if (!api) {
+        return
+      }
+      setHealth((cur) => ({ ...cur, [instanceId]: { state: 'loading' } }))
+      try {
+        const res = await api.providerInstanceHealth(instanceId)
+        setHealth((cur) => ({ ...cur, [instanceId]: { state: 'done', ...res } }))
+      } catch {
+        setHealth((cur) => ({ ...cur, [instanceId]: { state: 'failed' } }))
+      }
+    },
+    [api],
+  )
+
+  // Probe every registered instance once on load (and when the set changes).
+  const instanceIds = providerInstances.map((p) => p.id).join(',')
+  useEffect(() => {
+    if (!api) {
+      return
+    }
+    for (const p of providerInstances) {
+      void checkHealth(p.id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, instanceIds, checkHealth])
 
   return (
     <div className="admin-tab-panel stack stack--lg">
@@ -96,10 +156,21 @@ export function AdminProvidersTab({
               <input
                 value={adminProviderDraft.instanceUrl}
                 onChange={(event) => setAdminProviderDraft((c) => ({ ...c, instanceUrl: event.target.value }))}
-                placeholder={t('admin.placeholderMastodon')}
+                placeholder={instanceUrlPlaceholder(adminProviderDraft.provider)}
               />
             </label>
           </div>
+
+          {isOAuthProvider ? (
+            <p className="admin-callout admin-callout--info">
+              <Icon name="settings" className="inline-icon" aria-hidden />
+              <span>
+                {t('admin.oauthAutoDiscoverHint', {
+                  provider: providerLabel(adminProviderDraft.provider, t),
+                })}
+              </span>
+            </p>
+          ) : null}
 
           <details
             className="advanced-config admin-provider-form__advanced"
@@ -107,44 +178,52 @@ export function AdminProvidersTab({
             onToggle={(event) => setShowAdminProviderAdvanced(event.currentTarget.open)}
           >
             <summary className="advanced-config__summary">{t('admin.advancedConfig')}</summary>
-            <p className="hint mt-1">{t('admin.advancedConfigHint')}</p>
-            <div className="admin-provider-form__grid">
-              <label className="field">
-                <span>{t('admin.clientId')}</span>
-                <input
-                  value={adminProviderDraft.clientId}
-                  onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientId: event.target.value }))}
-                  placeholder={t('admin.placeholderClientId')}
-                />
-              </label>
-              <label className="field">
-                <span>{t('admin.clientSecret')}</span>
-                <input
-                  type="password"
-                  value={adminProviderDraft.clientSecret}
-                  onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientSecret: event.target.value }))}
-                  placeholder={t('admin.placeholderKeepSecret')}
-                />
-              </label>
-              <label className="field admin-provider-form__full">
-                <span>{t('admin.scopes')}</span>
-                <input value={adminProviderDraft.scopes} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, scopes: event.target.value }))} />
-              </label>
-              <label className="field admin-provider-form__full">
-                <span>{t('admin.authorizationEndpoint')}</span>
-                <input
-                  value={adminProviderDraft.authorizationEndpoint}
-                  onChange={(event) => setAdminProviderDraft((c) => ({ ...c, authorizationEndpoint: event.target.value }))}
-                />
-              </label>
-              <label className="field admin-provider-form__full">
-                <span>{t('admin.tokenEndpoint')}</span>
-                <input
-                  value={adminProviderDraft.tokenEndpoint}
-                  onChange={(event) => setAdminProviderDraft((c) => ({ ...c, tokenEndpoint: event.target.value }))}
-                />
-              </label>
-            </div>
+            {isOAuthProvider ? (
+              <>
+                <p className="hint mt-1">{t('admin.advancedConfigHint')}</p>
+                <div className="admin-provider-form__grid">
+                  <label className="field">
+                    <span>{t('admin.clientId')}</span>
+                    <input
+                      value={adminProviderDraft.clientId}
+                      onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientId: event.target.value }))}
+                      placeholder={t('admin.placeholderClientIdOptional')}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>{t('admin.clientSecret')}</span>
+                    <input
+                      type="password"
+                      value={adminProviderDraft.clientSecret}
+                      onChange={(event) => setAdminProviderDraft((c) => ({ ...c, clientSecret: event.target.value }))}
+                      placeholder={t('admin.placeholderKeepSecret')}
+                    />
+                  </label>
+                  <label className="field admin-provider-form__full">
+                    <span>{t('admin.scopes')}</span>
+                    <input value={adminProviderDraft.scopes} onChange={(event) => setAdminProviderDraft((c) => ({ ...c, scopes: event.target.value }))} />
+                  </label>
+                  <label className="field admin-provider-form__full">
+                    <span>{t('admin.authorizationEndpoint')}</span>
+                    <input
+                      value={adminProviderDraft.authorizationEndpoint}
+                      onChange={(event) => setAdminProviderDraft((c) => ({ ...c, authorizationEndpoint: event.target.value }))}
+                    />
+                  </label>
+                  <label className="field admin-provider-form__full">
+                    <span>{t('admin.tokenEndpoint')}</span>
+                    <input
+                      value={adminProviderDraft.tokenEndpoint}
+                      onChange={(event) => setAdminProviderDraft((c) => ({ ...c, tokenEndpoint: event.target.value }))}
+                    />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <p className="hint mt-1">
+                {t('admin.advancedConfigNotNeeded', { provider: providerLabel(adminProviderDraft.provider, t) })}
+              </p>
+            )}
           </details>
 
           <button type="button" className="button button--primary" onClick={() => void onSaveAdminProvider()} disabled={syncing}>
@@ -164,12 +243,14 @@ export function AdminProvidersTab({
             {providerInstances.map((p) => {
               const onboarded = accounts.filter((a) => a.providerInstanceId === p.id).length
               const isEditing = editingProviderId === p.id
+              const h = health[p.id]
               return (
                 <li key={p.id} className={`admin-provider-card ${isEditing ? 'admin-provider-card--active' : ''}`}>
                   <div className="admin-provider-card__main">
                     <div className="admin-provider-card__title-row">
                       <strong>{p.name}</strong>
                       <span className="admin-provider-card__provider">{p.provider}</span>
+                      <HealthBadge health={h} t={t} onRecheck={() => void checkHealth(p.id)} />
                     </div>
                     <code className="inline-code admin-provider-card__url">{p.instanceUrl}</code>
                     <p className="hint admin-provider-card__meta">
@@ -223,5 +304,58 @@ export function AdminProvidersTab({
         )}
       </section>
     </div>
+  )
+}
+
+function providerLabel(provider: ProviderName, t: (key: string) => string): string {
+  switch (provider) {
+    case 'mastodon':
+      return t('accounts.providerMastodon')
+    case 'pixelfed':
+      return t('accounts.providerPixelfed')
+    case 'friendica':
+      return t('accounts.providerFriendica')
+    case 'bluesky':
+      return t('accounts.providerBluesky')
+  }
+}
+
+function HealthBadge({
+  health,
+  t,
+  onRecheck,
+}: {
+  health: HealthState | undefined
+  t: (key: string) => string
+  onRecheck: () => void
+}) {
+  if (!health || health.state === 'loading') {
+    return (
+      <span className="admin-instance-health admin-instance-health--checking" title={t('admin.healthChecking')}>
+        <span className="admin-instance-health__dot" />
+        {t('admin.healthChecking')}
+      </span>
+    )
+  }
+  if (health.state === 'failed') {
+    return (
+      <button type="button" className="admin-instance-health admin-instance-health--unknown" onClick={onRecheck} title={t('admin.healthRecheck')}>
+        <span className="admin-instance-health__dot" />
+        {t('admin.healthUnknown')}
+      </button>
+    )
+  }
+  const cls = health.healthy ? 'admin-instance-health--ok' : 'admin-instance-health--down'
+  const label = health.healthy ? t('admin.healthOk') : t('admin.healthDown')
+  return (
+    <button
+      type="button"
+      className={`admin-instance-health ${cls}`}
+      onClick={onRecheck}
+      title={health.detail ? `${label} · ${health.detail}` : t('admin.healthRecheck')}
+    >
+      <span className="admin-instance-health__dot" />
+      {label}
+    </button>
   )
 }

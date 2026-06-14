@@ -5280,6 +5280,84 @@ select {
   background: var(--surface-raised);
 }
 
+/* Highlighted callout for the OAuth auto-discover note (Mastodon/Pixelfed). */
+.admin-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.admin-callout--info {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  color: var(--text);
+}
+
+.admin-callout .inline-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--accent);
+}
+
+/* Per-instance reachability badge in the registered-instances list. */
+.admin-instance-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+button.admin-instance-health {
+  cursor: pointer;
+}
+
+.admin-instance-health__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+
+.admin-instance-health--ok {
+  color: var(--success, #1fc77a);
+  border-color: color-mix(in srgb, var(--success, #1fc77a) 40%, transparent);
+}
+.admin-instance-health--ok .admin-instance-health__dot {
+  background: var(--success, #1fc77a);
+}
+
+.admin-instance-health--down {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.admin-instance-health--down .admin-instance-health__dot {
+  background: var(--danger);
+}
+
+.admin-instance-health--checking .admin-instance-health__dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
 .admin-provider-card__url {
   display: block;
   margin-top: var(--space-2);
