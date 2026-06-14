@@ -34,8 +34,10 @@ function formatSparkDate(date: string): string {
   }
 }
 
-function formatSparkValue(value: number, mode: 'total' | 'delta'): string {
-  if (mode === 'delta' && value > 0) {
+type SparkValueMode = 'total' | 'delta' | 'balance'
+
+function formatSparkValue(value: number, mode: SparkValueMode): string {
+  if ((mode === 'delta' || mode === 'balance') && value > 0) {
     return `+${value.toLocaleString()}`
   }
   return value.toLocaleString()
@@ -58,13 +60,18 @@ function MetricSparkline({
   loading: boolean
   loadingLabel: string
   emptyLabel: string
-  valueMode?: 'total' | 'delta'
+  valueMode?: SparkValueMode
 }) {
   const data = useMemo(() => points, [points])
-  const lastValue = useMemo(() => {
+  // 'balance' shows the net change across the whole window (last − first), so a
+  // rising follower count reads as growth even when today's delta happens to be 0.
+  const headlineValue = useMemo(() => {
     if (data.length === 0) return null
+    if (valueMode === 'balance') {
+      return data[data.length - 1].value - data[0].value
+    }
     return data[data.length - 1].value
-  }, [data])
+  }, [data, valueMode])
 
   return (
     <div className="dashboard-spark">
@@ -73,21 +80,21 @@ function MetricSparkline({
           <span className="dashboard-spark__title">{title}</span>
           <span className="dashboard-spark__subtitle">{subtitle}</span>
         </div>
-        {lastValue !== null && !loading && (
+        {headlineValue !== null && (
           <div
             className="dashboard-spark__value"
             style={
-              valueMode === 'delta'
-                ? { color: lastValue < 0 ? '#ef4444' : lastValue > 0 ? '#22c55e' : 'inherit' }
+              valueMode === 'delta' || valueMode === 'balance'
+                ? { color: headlineValue < 0 ? '#ef4444' : headlineValue > 0 ? '#22c55e' : 'inherit' }
                 : undefined
             }
           >
-            {formatSparkValue(lastValue, valueMode)}
+            {formatSparkValue(headlineValue, valueMode)}
           </div>
         )}
       </div>
       <div className="dashboard-spark__chart">
-        {loading ? (
+        {loading && data.length === 0 ? (
           <p className="hint dashboard-spark__placeholder">{loadingLabel}</p>
         ) : data.length === 0 ? (
           <p className="hint dashboard-spark__placeholder">{emptyLabel}</p>
@@ -184,12 +191,12 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      const network = toDailyDeltas(
-        (growthResult.series ?? []).map((p: BackendAccountGrowthPoint) => ({
-          date: p.date,
-          value: p.followers + p.following,
-        })),
-      )
+      // Plot the cumulative network size so the trend line rises with new
+      // followers; the headline ('balance' mode) shows the net change over the window.
+      const network = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint) => ({
+        date: p.date,
+        value: p.followers + p.following,
+      }))
       setNetworkSeries(network)
 
       const next: Record<string, SparkPoint[]> = {}
@@ -246,6 +253,7 @@ export function DashboardView({
           title={t('dashboard.networkTrend')}
           color="#38bdf8"
           points={networkSeries}
+          valueMode="balance"
           {...sparkProps}
         />
         {ENGAGEMENT_METRICS.map((m) => (
