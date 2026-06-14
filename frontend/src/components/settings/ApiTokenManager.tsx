@@ -5,7 +5,7 @@ import { format, isValid, parseISO } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 
 import type { BackendAPIToken } from '../../api'
-import { apiTokenDisplayName, isApiTokenExpired } from '../../views/settings/apiTokens'
+import { apiTokenDisplayName, isApiTokenExpired, WEB_SESSION_API_TOKEN_NAME } from '../../views/settings/apiTokens'
 
 // Scopes are grouped so the modal reads as read / write / delete families. The
 // keys match the backend scope vocabulary (internal/auth/scopes.go).
@@ -39,6 +39,7 @@ export function ApiTokenManager({
   tokens,
   loading,
   syncing,
+  currentTokenId,
   createToken,
   removeToken,
 }: {
@@ -46,6 +47,7 @@ export function ApiTokenManager({
   tokens: BackendAPIToken[]
   loading: boolean
   syncing: boolean
+  currentTokenId?: string | null
   createToken: (payload: CreateApiTokenPayload) => Promise<string>
   removeToken: (tokenID: string, expired: boolean) => Promise<void>
 }) {
@@ -151,11 +153,16 @@ export function ApiTokenManager({
         <tbody>
           {tokens.map((token) => {
             const expired = isApiTokenExpired(token)
+            const isWebSession = token.name === WEB_SESSION_API_TOKEN_NAME
             const label = apiTokenDisplayName(token.name)
+            const isCurrent = Boolean(currentTokenId) && token.id === currentTokenId
             return (
               <tr key={token.id}>
                 <td>
-                  <div className="post-table-title">{label}</div>
+                  <div className="post-table-title" title={isWebSession ? t('settings.webSessionTooltip') : undefined}>
+                    {label}
+                    {isCurrent ? <span className="badge badge--accent" style={{ marginLeft: 'var(--space-2)' }}>{t('settings.thisBrowser')}</span> : null}
+                  </div>
                   {token.description ? <div className="hint text-xs">{token.description}</div> : null}
                 </td>
                 <td>

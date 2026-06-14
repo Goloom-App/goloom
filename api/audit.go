@@ -27,12 +27,17 @@ func (a *API) recordAudit(r *http.Request, teamID, action, targetType string, ta
 		ActorName:   principal.User.Name,
 		ActorEmail:  principal.User.Email,
 		ActorKind:   principal.Kind,
-		TokenID:     principal.TokenID,
-		TokenName:   principal.TokenName,
 		Action:      action,
 		TargetType:  targetType,
 		TargetID:    targetID,
 		Summary:     summary,
+	}
+	// Only attribute the action to a token when it is a tool/API key. A browser
+	// session also carries a TokenID (so the UI can spot its own session), but it
+	// is a human actor and must stay unattributed in the audit log.
+	if principal.Kind == domain.AuditActorToken {
+		event.TokenID = principal.TokenID
+		event.TokenName = principal.TokenName
 	}
 	if err := a.store.InsertAuditEvent(r.Context(), event); err != nil {
 		a.log.Error("audit event insert failed", "team_id", teamID, "action", action, "error", err)

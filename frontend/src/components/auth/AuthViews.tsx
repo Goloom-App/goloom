@@ -32,20 +32,24 @@ export function AuthPanel({
   authTokenDraft,
   authError,
   authSubmitting,
+  recoveryMode,
   onViewChange,
   onTokenChange,
   onSubmit,
   onStartOIDCLogin,
+  onUseRecovery,
 }: {
   view: 'bootstrap' | 'login'
   authStatus: AuthStatusRecord | null
   authTokenDraft: string
   authError: string | null
   authSubmitting: boolean
+  recoveryMode: boolean
   onViewChange: (view: 'bootstrap' | 'login') => void
   onTokenChange: (value: string) => void
   onSubmit: (mode: 'bootstrap' | 'login') => void
   onStartOIDCLogin: () => void
+  onUseRecovery: () => void
 }) {
   const { t } = useTranslation()
   const initial = Boolean(authStatus?.initialSetupRequired)
@@ -65,6 +69,40 @@ export function AuthPanel({
     return (
       <div className="auth-panel">
         <p className="hint auth-panel__solo">{t('auth.connecting')}</p>
+      </div>
+    )
+  }
+
+  // OIDC-first: when OIDC is configured this is the primary (and auto-started)
+  // path. The token/bootstrap form only appears for first-start, OIDC-less
+  // deployments, or when explicitly opened via the recovery fallback URL.
+  if (authStatus.oidcOAuthEnabled && !initial && !recoveryMode) {
+    return (
+      <div className="auth-panel">
+        <div className="auth-panel__content">
+          <div className="auth-panel__header auth-panel__header--solo">
+            <div>
+              <p className="eyebrow">{t('auth.signIn')}</p>
+              <h2>{t('auth.signIn')}</h2>
+              <p className="hint">{t('auth.signInHintOidc')}</p>
+            </div>
+          </div>
+          <div className="auth-form">
+            <div className="inline-cluster">
+              <button type="button" className="button button--prominent" onClick={onStartOIDCLogin} disabled={authSubmitting}>
+                {authSubmitting ? t('auth.redirecting') : t('auth.continueOidc')}
+              </button>
+            </div>
+            {authError ? (
+              <div className="status-banner">
+                <span className="status-banner__error">{authError}</span>
+              </div>
+            ) : null}
+            <button type="button" className="auth-recovery-link" onClick={onUseRecovery}>
+              {t('auth.useRecoveryToken')}
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
@@ -107,7 +145,7 @@ export function AuthPanel({
 
         {authStatus.hasUsers || authStatus.oidcOAuthEnabled || initial ? (
           <div className="auth-form">
-            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? (
+            {authStatus.oidcOAuthEnabled && !recoveryMode && (initial || !isBootstrap) ? (
               <div className="inline-cluster">
                 <button type="button" className="button button--prominent" onClick={onStartOIDCLogin} disabled={authSubmitting}>
                   {authSubmitting ? t('auth.redirecting') : t('auth.continueOidc')}
@@ -115,7 +153,7 @@ export function AuthPanel({
               </div>
             ) : null}
 
-            {authStatus.oidcOAuthEnabled && (initial || !isBootstrap) ? <p className="hint auth-form__divider-label">{t('auth.orUseToken')}</p> : null}
+            {authStatus.oidcOAuthEnabled && !recoveryMode && (initial || !isBootstrap) ? <p className="hint auth-form__divider-label">{t('auth.orUseToken')}</p> : null}
 
             <label className="field">
               <span>{tokenLabel}</span>

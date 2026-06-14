@@ -192,15 +192,14 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	if err != nil {
 		return domain.AuthenticatedPrincipal{}, err
 	}
-	// Attribute API-key (tool) requests to the specific token; web sessions
-	// (Kind "oidc") stay unattributed since they are a human in the browser.
-	if principal.Kind == domain.AuditActorToken {
-		tid := tokenID
-		principal.TokenID = &tid
-		if tokenName.Valid {
-			name := tokenName.String
-			principal.TokenName = &name
-		}
+	// The authenticating token id is always set so the web UI can identify its
+	// own session in the token list. Only tool tokens are *attributed* by name;
+	// a browser session stays a human actor in audits (see recordAudit).
+	tid := tokenID
+	principal.TokenID = &tid
+	if principal.Kind == domain.AuditActorToken && tokenName.Valid {
+		name := tokenName.String
+		principal.TokenName = &name
 	}
 	principal.Scopes, err = parseTokenScopes(rawScopes)
 	if err != nil {

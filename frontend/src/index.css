@@ -2738,6 +2738,21 @@ select {
   margin-top: var(--space-6);
 }
 
+.auth-recovery-link {
+  align-self: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.auth-recovery-link:hover {
+  color: var(--text);
+}
+
 .auth-form__divider-label {
   text-align: center;
   position: relative;
