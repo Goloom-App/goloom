@@ -292,6 +292,74 @@ func TestPostgres_ScheduledPosts_and_due(t *testing.T) {
 	}
 }
 
+func TestPostgres_ListTeamPostEngagement(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "pe-"+uuid.NewString(), "pe@pg.test", "PE")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "pe-" + uuid.NewString()})
+	masto, err := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://m", Username: "m", AccessToken: "t",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bsky, err := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "bluesky", AuthType: domain.AccountAuthTypeAppPassword,
+		InstanceURL: "https://b", Username: "b", AccessToken: "t",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := domain.AuthenticatedPrincipal{User: u}
+
+	newPosted := func(at time.Time, acc domain.SocialAccount, likes int64) {
+		post, err := s.CreateScheduledPost(ctx, team.ID, principal, domain.CreatePostInput{
+			Content: "x", ScheduledAt: at, TargetAccounts: []string{acc.ID},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": likes}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	mon := time.Date(2026, 6, 8, 10, 0, 0, 0, time.UTC)
+	newPosted(mon, masto, 12)
+	newPosted(mon.AddDate(0, 0, 1), bsky, 5)
+
+	all, err := s.ListTeamPostEngagement(ctx, team.ID, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("got %d rows, want 2: %#v", len(all), all)
+	}
+
+	masts, err := s.ListTeamPostEngagement(ctx, team.ID, 0, "mastodon")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(masts) != 1 || masts[0].Engagement != 12 {
+		t.Fatalf("mastodon rows = %#v, want one row of 12", masts)
+	}
+	if got := masts[0].ScheduledAt.UTC(); !got.Equal(mon) {
+		t.Fatalf("scheduled_at = %v, want %v", got, mon)
+	}
+
+	none, err := s.ListTeamPostEngagement(ctx, team.ID, 0, "friendica")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none) != 0 {
+		t.Fatalf("friendica rows = %#v, want none", none)
+	}
+}
+
 func TestPostgres_GetProviderInstanceByID_notFound(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)

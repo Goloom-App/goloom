@@ -95,4 +95,9 @@ func (h *Handler) registerTools(server *mcp.Server) {
 		Name:        "get_hashtag_performance",
 		Description: "Get the team's best-performing hashtags from published post analytics (uses, engagement, smoothed score), optionally filtered by platform and time window",
 	}, h.handleGetHashtagPerformance)
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_analytics_timeslots",
+		Description: "Find the best times to post: ranks weekday/hour slots by historical engagement from published posts. Returns post count, total and average engagement, and a smoothed score per slot. Supports an IANA timezone (e.g. Europe/Berlin) and optional platform/time-window filters.",
+	}, h.handleGetAnalyticsTimeslots)
 }

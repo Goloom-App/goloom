@@ -30,6 +30,7 @@ type Store interface {
 	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
 	GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error)
 	GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int, accountID string) ([]domain.EngagementHeatmapBucket, error)
+	ListTeamPostEngagement(ctx context.Context, teamID string, days int, provider string) ([]domain.PostEngagement, error)
 
 	// Hashtag analytics
 	ReplacePostHashtags(ctx context.Context, postID, accountID string, tags []hashtag.Tag) error
