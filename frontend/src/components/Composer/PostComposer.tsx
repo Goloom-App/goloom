@@ -234,7 +234,42 @@ export function PostComposer({
     }))
   }
 
-  const destinationsBar = (
+  const destinationTitle = (account: AccountRecord, over?: boolean) =>
+    over
+      ? t('composer.exceedsLimit', {
+          name: account.name,
+          len: accountLimitStatus[account.id]!.len,
+          max: accountLimitStatus[account.id]!.max,
+        })
+      : `${account.name} · ${account.provider}`
+
+  const destinationsBar = isMobile ? (
+    <section className="composer-destination-strip" aria-label={t('composer.postDestinationsAria')}>
+      {teamAccounts.length === 0 ? (
+        <p className="hint">{t('composer.noAccountsWorkspace')}</p>
+      ) : (
+        <div className="composer-destination-strip__row" role="group">
+          {teamAccounts.map((account) => {
+            const selected = draft.targetAccountIds.includes(account.id)
+            const over = accountLimitStatus[account.id]?.over
+            return (
+              <button
+                key={account.id}
+                type="button"
+                data-testid="composer-destination-toggle"
+                className={`composer-destination-pic ${selected ? 'composer-destination-pic--selected' : ''} ${over ? 'composer-destination-pic--over-limit' : ''}`}
+                aria-pressed={selected}
+                title={destinationTitle(account, over)}
+                onClick={() => toggleDestination(account.id)}
+              >
+                <DestinationAvatar account={account} error={over} />
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  ) : (
     <section className="composer-destinations-bar" aria-label={t('composer.postDestinationsAria')}>
       <div className="composer-destinations-bar__head">
         <p className="eyebrow">{t('eyebrow.destinations')}</p>
@@ -258,15 +293,7 @@ export function PostComposer({
                 data-testid="composer-destination-toggle"
                 className={`composer-destination-chip ${selected ? 'composer-destination-chip--selected' : ''} ${over ? 'composer-destination-chip--over-limit' : ''}`}
                 aria-pressed={selected}
-                title={
-                  over
-                    ? t('composer.exceedsLimit', {
-                        name: account.name,
-                        len: accountLimitStatus[account.id]!.len,
-                        max: accountLimitStatus[account.id]!.max,
-                      })
-                    : `${account.name} · ${account.provider}`
-                }
+                title={destinationTitle(account, over)}
                 onClick={() => toggleDestination(account.id)}
               >
                 <DestinationAvatar account={account} compact error={over} />
@@ -341,8 +368,10 @@ export function PostComposer({
                   onClick={() => setActiveTab(account.id)}
                   title={status?.over ? t('composer.exceedsLimit', { name: account.name, len: status.len, max: status.max }) : account.name}
                 >
-                  <DestinationAvatar account={account} compact error={status?.over} />
-                  <span className="composer-tab__label">{account.username.replace(/^@/, '').slice(0, 12)}</span>
+                  {/* On mobile the destination icons already sit in the strip above, so the
+                      override tabs stay text-only to avoid showing the same icon list twice. */}
+                  {!isMobile ? <DestinationAvatar account={account} compact error={status?.over} /> : null}
+                  <span className="composer-tab__label">@{account.username.replace(/^@/, '').slice(0, 12)}</span>
                 </button>
               )
             })}
@@ -535,15 +564,21 @@ export function PostComposer({
             <button type="button" className="btn btn--ghost btn--xs" onClick={onClose} aria-label={t('composer.closeComposer')}>
               <Icon name="close" className="inline-icon" />
             </button>
-            <div>
+            <div className="composer-mobile-header__title">
               <p className="eyebrow">{t('eyebrow.composer')}</p>
               <h2 data-testid="composer-title">{mode === 'edit' ? t('composer.editPost') : t('composer.createPost')}</h2>
             </div>
+            <button
+              type="button"
+              className="composer-mobile-toggle"
+              onClick={() => setMobilePanel(mobilePanel === 'edit' ? 'preview' : 'edit')}
+              title={mobilePanel === 'edit' ? t('composer.mobilePreview') : t('composer.mobileEdit')}
+              aria-label={mobilePanel === 'edit' ? t('composer.mobilePreview') : t('composer.mobileEdit')}
+              aria-pressed={mobilePanel === 'preview'}
+            >
+              <Icon name={mobilePanel === 'edit' ? 'eye' : 'edit'} className="inline-icon" />
+            </button>
           </header>
-          <div className="composer-mobile-tabs" role="tablist" aria-label={t('composer.mobilePanelAria')}>
-            <button type="button" role="tab" aria-selected={mobilePanel === 'edit'} className={`composer-mobile-tab ${mobilePanel === 'edit' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('edit')}>{t('composer.mobileEdit')}</button>
-            <button type="button" role="tab" aria-selected={mobilePanel === 'preview'} className={`composer-mobile-tab ${mobilePanel === 'preview' ? 'composer-mobile-tab--active' : ''}`} onClick={() => setMobilePanel('preview')}>{t('composer.mobilePreview')}</button>
-          </div>
           {mobilePanel === 'edit' ? (
             <div className="composer-mobile-edit-scroll">
               {destinationsBar}
