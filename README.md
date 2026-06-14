@@ -11,9 +11,11 @@ Plan posts across Mastodon, Bluesky and Friendica from a single Go binary — no
 <!-- Build & tech -->
 [![CI/CD](https://git.f4mily.net/kreativmonkey/goloon/actions/workflows/ci.yaml/badge.svg?branch=main)](https://git.f4mily.net/kreativmonkey/goloon/actions)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go&logoColor=white)](go.mod)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat&logo=typescript&logoColor=white)](frontend)
 [![Single binary](https://img.shields.io/badge/deploy-single%20binary-7c3aed?style=flat)](#deployment-options)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-22c55e?style=flat)](#docker)
 [![API-first](https://img.shields.io/badge/API-first-0ea5e9?style=flat&logo=openapiinitiative&logoColor=white)](#api-documentation)
+[![E2E: Playwright](https://img.shields.io/badge/E2E-Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)](frontend/playwright.config.ts)
 
 <!-- Repository activity -->
 [![Last commit](https://img.shields.io/gitea/last-commit/kreativmonkey/goloon?gitea_url=https%3A%2F%2Fgit.f4mily.net&style=flat)](https://git.f4mily.net/kreativmonkey/goloon/commits/branch/main)
