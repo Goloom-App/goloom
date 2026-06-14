@@ -565,13 +565,44 @@ body,
 
 .composer-mobile-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
 
+.composer-mobile-header__title {
+  flex: 1;
+  min-width: 0;
+}
+
 .composer-mobile-header h2 {
   margin: 0;
+}
+
+/* Edit/preview toggle: eye icon while editing (go to preview), pencil while
+   previewing (go back to edit). Native long-press shows the title tooltip. */
+.composer-mobile-toggle {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.composer-mobile-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+.composer-mobile-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .composer-main--mobile {
@@ -585,8 +616,56 @@ body,
   gap: var(--space-3);
 }
 
-.composer-main--mobile > .composer-mobile-tabs {
+/* Mobile destinations: a slim, horizontally scrollable strip of platform icons
+   (no card, heading or labels) so it no longer dominates the top of the screen. */
+.composer-destination-strip {
   flex-shrink: 0;
+}
+
+.composer-destination-strip__row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-3);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 0 var(--space-1);
+  scroll-snap-type: x proximity;
+}
+
+.composer-destination-pic {
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  padding: 3px;
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity var(--transition-fast), border-color var(--transition-fast);
+  touch-action: manipulation;
+}
+
+.composer-destination-pic--selected {
+  opacity: 1;
+  border-color: var(--accent);
+}
+
+.composer-destination-pic--over-limit {
+  opacity: 1;
+  border-color: var(--danger);
+}
+
+/* Larger avatars on the mobile strip so the platform badge is easy to read. */
+.composer-destination-pic .destination-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 1rem;
+}
+
+.composer-destination-pic .destination-avatar__badge {
+  width: 20px;
+  height: 20px;
+  padding: 3px;
 }
 
 .composer-mobile-edit-scroll {
@@ -2291,33 +2370,6 @@ select {
 .composer-destination-toggle--selected.composer-destination-toggle--over-limit {
   border-color: var(--danger);
   box-shadow: 0 0 0 3px var(--danger-soft);
-}
-
-.composer-mobile-tabs {
-  display: flex;
-  gap: var(--space-2);
-  background: var(--surface-muted);
-  padding: var(--space-1);
-  border-radius: var(--radius-md);
-}
-
-.composer-mobile-tab {
-  flex: 1;
-  padding: 0.5rem;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
-  color: var(--text-soft);
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.composer-mobile-tab--active {
-  background: var(--surface-raised);
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
 }
 
 .composer-mobile-panel--hidden {
