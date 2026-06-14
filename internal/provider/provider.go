@@ -76,6 +76,12 @@ type OAuthTokenRefresher interface {
 	RefreshAccessToken(ctx context.Context, instance domain.ProviderInstance, clientSecret, refreshToken string) (accessToken, newRefreshToken string, expiresAt *time.Time, err error)
 }
 
+// OAuthTokenRevoker invalidates an OAuth token at the provider (Mastodon-compatible /oauth/revoke),
+// so that disconnecting an account also tears down its authorization on the remote instance.
+type OAuthTokenRevoker interface {
+	RevokeAccessToken(ctx context.Context, instance domain.ProviderInstance, clientSecret, accessToken string) error
+}
+
 // SocialMediaProvider is implemented by each supported network integration.
 type SocialMediaProvider interface {
 	Name() string

@@ -342,6 +342,37 @@ func (p *MastodonProvider) RefreshAccessToken(ctx context.Context, instance doma
 	return strings.TrimSpace(tokenResponse.AccessToken), newRT, accessExpires, nil
 }
 
+// RevokeAccessToken invalidates an OAuth access token on the Mastodon instance via /oauth/revoke.
+func (p *MastodonProvider) RevokeAccessToken(ctx context.Context, instance domain.ProviderInstance, clientSecret, accessToken string) error {
+	revokeEndpoint := strings.TrimRight(instance.InstanceURL, "/") + "/oauth/revoke"
+	bodyValues := url.Values{}
+	bodyValues.Set("client_id", strings.TrimSpace(instance.ClientID))
+	bodyValues.Set("client_secret", strings.TrimSpace(clientSecret))
+	bodyValues.Set("token", strings.TrimSpace(accessToken))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, revokeEndpoint, strings.NewReader(bodyValues.Encode()))
+	if err != nil {
+		return fmt.Errorf("build mastodon revoke request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := defaultHTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("mastodon token revoke: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		msg := strings.TrimSpace(string(errBody))
+		if msg == "" {
+			return fmt.Errorf("mastodon token revoke failed with status %d", resp.StatusCode)
+		}
+		return fmt.Errorf("mastodon token revoke failed with status %d: %s", resp.StatusCode, msg)
+	}
+	return nil
+}
+
 func (p *MastodonProvider) connectAccountWithToken(ctx context.Context, normalizedURL, providerInstanceID, accessToken, refreshToken string) (domain.ConnectedAccount, error) {
 	resp, err := doJSONRequest(ctx, http.MethodGet, normalizedURL+"/api/v1/accounts/verify_credentials", accessToken, nil)
 	if err != nil {

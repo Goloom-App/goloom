@@ -773,6 +773,9 @@ func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
+	// Best-effort: revoke the OAuth authorization on the remote instance before we
+	// forget the token locally. Never blocks disconnecting the account.
+	a.revokeProviderToken(r.Context(), acc)
 	if err := a.store.DeleteSocialAccount(r.Context(), acc.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -780,6 +783,49 @@ func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	accountID := acc.ID
 	a.recordAudit(r, acc.TeamID, "account.disconnect", "account", &accountID, "Disconnected "+acc.Provider+" account "+acc.Username)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// revokeProviderToken best-effort revokes an account's OAuth token at the provider so
+// the authorization is torn down remotely, not just forgotten locally. Any failure is
+// logged and swallowed: it must never block account deletion.
+func (a *API) revokeProviderToken(ctx context.Context, acc domain.SocialAccount) {
+	if acc.AuthType != domain.AccountAuthTypeOAuthToken || strings.TrimSpace(acc.ProviderInstanceID) == "" {
+		return
+	}
+	providerImpl, ok := a.providers.Get(acc.Provider)
+	if !ok {
+		return
+	}
+	revoker, ok := providerImpl.(provider.OAuthTokenRevoker)
+	if !ok {
+		return
+	}
+	logFailure := func(err error) {
+		if a.log != nil {
+			a.log.Warn("provider token revoke failed", "account_id", acc.ID, "provider", acc.Provider, "error", err)
+		}
+	}
+	instance, err := a.store.GetProviderInstanceByID(ctx, acc.ProviderInstanceID)
+	if err != nil {
+		logFailure(err)
+		return
+	}
+	clientSecret, err := a.store.DecryptProviderInstanceClientSecret(instance)
+	if err != nil {
+		logFailure(err)
+		return
+	}
+	token, err := a.store.DecryptAccessToken(acc)
+	if err != nil {
+		logFailure(err)
+		return
+	}
+	if strings.TrimSpace(token) == "" {
+		return
+	}
+	if err := revoker.RevokeAccessToken(a.providerContext(ctx), instance, clientSecret, token); err != nil {
+		logFailure(err)
+	}
 }
 
 func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request) {
