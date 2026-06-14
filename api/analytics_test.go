@@ -49,7 +49,7 @@ func seedTeamWithPostedMetrics(t *testing.T, s *sqlitestore.Store) (bearer strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "integration", nil, "", nil)
+	plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "integration", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestAPI_TeamAnalytics_and_PostAnalytics(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "empty-metrics", nil, "", nil)
+		plain, _, err := s.CreateUserAPIToken(ctx, u.ID, "empty-metrics", nil, "", nil, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -324,7 +324,7 @@ func TestAPI_TeamAnalytics_forbiddenOtherTeam(t *testing.T) {
 	if _, err := s.CreateTeam(ctx, other.ID, domain.CreateTeamInput{Name: "other-" + uuid.NewString(), Description: ""}); err != nil {
 		t.Fatal(err)
 	}
-	otherToken, _, err := s.CreateUserAPIToken(ctx, other.ID, "t2", nil, "", nil)
+	otherToken, _, err := s.CreateUserAPIToken(ctx, other.ID, "t2", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

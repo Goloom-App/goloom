@@ -608,7 +608,7 @@ func (m *mockStore) RepairFuturePostedPosts(ctx context.Context) (int64, error) 
 	return 0, nil
 }
 
-func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (string, domain.APIToken, error) {
+func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
 

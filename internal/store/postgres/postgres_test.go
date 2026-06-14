@@ -292,6 +292,46 @@ func TestPostgres_ScheduledPosts_and_due(t *testing.T) {
 	}
 }
 
+func TestPostgres_APIToken_ScopesDescriptionTeam(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "tok-"+uuid.NewString(), "tok@pg.test", "Tok")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "tok-" + uuid.NewString()})
+
+	plain, meta, err := s.CreateUserAPIToken(ctx, u.ID, "scoped-pg", nil, `["read","write:draft"]`, &team.ID, "CI bot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Description != "CI bot" || len(meta.Scopes) != 2 {
+		t.Fatalf("create meta=%#v", meta)
+	}
+
+	principal, err := s.LookupAPIToken(ctx, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(principal.Scopes) != 2 || principal.TokenTeamID == nil || *principal.TokenTeamID != team.ID {
+		t.Fatalf("principal=%#v", principal)
+	}
+
+	tokens, err := s.ListUserAPITokens(ctx, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ok bool
+	for _, tk := range tokens {
+		if tk.Name == "scoped-pg" {
+			ok = true
+			if tk.Description != "CI bot" || len(tk.Scopes) != 2 || tk.TeamID == nil || *tk.TeamID != team.ID {
+				t.Fatalf("listed token=%#v", tk)
+			}
+		}
+	}
+	if !ok {
+		t.Fatal("token not listed")
+	}
+}
+
 func TestPostgres_ListTeamPostEngagement(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)

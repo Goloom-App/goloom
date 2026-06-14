@@ -78,11 +78,12 @@ func (s *Store) RepairFuturePostedPosts(ctx context.Context) (int64, error) {
 	return res.RowsAffected()
 }
 
-func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (string, domain.APIToken, error) {
+func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (string, domain.APIToken, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", domain.APIToken{}, errors.New("name is required")
 	}
+	description = strings.TrimSpace(description)
 	exp := expiresAt
 	if exp == nil {
 		t := time.Now().UTC().AddDate(0, 0, 90)
@@ -97,22 +98,25 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 	id := uuid.NewString()
 	now := nowString()
 	_, err = s.db.ExecContext(ctx, `
-		insert into api_tokens (id, user_id, name, token_hash, expires_at, scopes, team_id, created_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, userID, name, hash, expiresStr, scopes, teamID, now,
+		insert into api_tokens (id, user_id, name, token_hash, expires_at, scopes, description, team_id, created_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, userID, name, hash, expiresStr, scopes, description, teamID, now,
 	)
 	if err != nil {
 		return "", domain.APIToken{}, err
 	}
 	created := mustParseTime(now)
 	expParsed := mustParseTime(expiresStr)
+	parsedScopes, _ := parseTokenScopes(scopes)
 	return plaintext, domain.APIToken{
-		ID:        id,
-		UserID:    userID,
-		Name:      name,
-		TeamID:    teamID,
-		ExpiresAt: &expParsed,
-		CreatedAt: created,
+		ID:          id,
+		UserID:      userID,
+		Name:        name,
+		Description: description,
+		TeamID:      teamID,
+		Scopes:      parsedScopes,
+		ExpiresAt:   &expParsed,
+		CreatedAt:   created,
 	}, nil
 }
 
@@ -144,7 +148,7 @@ func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl ti
 		ttl = 12 * time.Hour
 	}
 	expires := time.Now().UTC().Add(ttl)
-	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires, "", nil)
+	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires, "", nil, "")
 }
 
 func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {
@@ -161,7 +165,7 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
-		select id, user_id, name, team_id, last_used_at, expires_at, created_at
+		select id, user_id, name, description, scopes, team_id, last_used_at, expires_at, created_at
 		from api_tokens
 		where user_id = ?
 		order by created_at desc`,
@@ -176,9 +180,13 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	for rows.Next() {
 		var t domain.APIToken
 		var teamID, lastUsed, expires sql.NullString
-		var created string
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &teamID, &lastUsed, &expires, &created); err != nil {
+		var description, scopes, created string
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &description, &scopes, &teamID, &lastUsed, &expires, &created); err != nil {
 			return nil, err
+		}
+		t.Description = description
+		if parsed, perr := parseTokenScopes(scopes); perr == nil {
+			t.Scopes = parsed
 		}
 		if teamID.Valid && teamID.String != "" {
 			tid := teamID.String

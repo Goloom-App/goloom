@@ -70,7 +70,7 @@ func newMCPFixture(t *testing.T) mcpFixture {
 
 // apiToken creates a personal API token with the given scopes.
 func (f mcpFixture) apiToken(t *testing.T, scopes string) string {
-	token, _, err := f.store.CreateUserAPIToken(context.Background(), f.user.ID, "mcp-test", nil, scopes, nil)
+	token, _, err := f.store.CreateUserAPIToken(context.Background(), f.user.ID, "mcp-test", nil, scopes, nil, "")
 	if err != nil {
 		t.Fatalf("CreateUserAPIToken: %v", err)
 	}
@@ -115,16 +115,21 @@ func TestServeHTTPAuthGate(t *testing.T) {
 	if code := call(func(r *http.Request) { r.Header.Set("Authorization", "Bearer nope") }); code != http.StatusUnauthorized {
 		t.Fatalf("invalid token: got %d, want 401", code)
 	}
-	// API tokens without AI scopes must be rejected for MCP.
-	unscoped := f.apiToken(t, "")
-	if code := call(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+unscoped) }); code != http.StatusForbidden {
-		t.Fatalf("token without ai scope: got %d, want 403", code)
+	// A scoped token lacking read is rejected at the MCP gate.
+	noRead := f.apiToken(t, `["write:draft"]`)
+	if code := call(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+noRead) }); code != http.StatusForbidden {
+		t.Fatalf("token without read scope: got %d, want 403", code)
 	}
-	// A token with an AI scope passes the gate (whatever the MCP transport
-	// answers, it must not be the auth layer's 401/403).
-	scoped := f.apiToken(t, `["ai:read:context"]`)
+	// Unscoped tokens have full access and pass the gate.
+	unscoped := f.apiToken(t, "")
+	if code := call(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+unscoped) }); code == http.StatusUnauthorized || code == http.StatusForbidden {
+		t.Fatalf("unscoped token must pass the auth gate, got %d", code)
+	}
+	// A token with read passes the gate (whatever the MCP transport answers, it
+	// must not be the auth layer's 401/403).
+	scoped := f.apiToken(t, `["read"]`)
 	if code := call(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+scoped) }); code == http.StatusUnauthorized || code == http.StatusForbidden {
-		t.Fatalf("token with ai scope must pass the auth gate, got %d", code)
+		t.Fatalf("token with read scope must pass the auth gate, got %d", code)
 	}
 }
 
@@ -133,7 +138,7 @@ func TestServeHTTPAuthGate(t *testing.T) {
 // every tool handler). If they disagree, all MCP tools fail "unauthorized".
 func TestPrincipalRoundTripsIntoToolHandlers(t *testing.T) {
 	f := newMCPFixture(t)
-	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["ai:read:context","ai:write:drafts"]`))
+	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["read","write"]`))
 	if err != nil {
 		t.Fatalf("LookupAPIToken: %v", err)
 	}
@@ -168,7 +173,7 @@ func TestToolHandlersRejectMissingPrincipal(t *testing.T) {
 
 func TestDraftAndModifyPostHandlers(t *testing.T) {
 	f := newMCPFixture(t)
-	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["ai:read:context","ai:write:drafts"]`))
+	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["read","write"]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +223,7 @@ func TestDraftAndModifyPostHandlers(t *testing.T) {
 
 func TestGetCalendarHandler(t *testing.T) {
 	f := newMCPFixture(t)
-	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["ai:read:context","ai:write:drafts"]`))
+	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["read","write"]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +291,7 @@ func TestFindNextFreeSlot(t *testing.T) {
 
 func TestCampaignHandlers(t *testing.T) {
 	f := newMCPFixture(t)
-	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["ai:write:drafts"]`))
+	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["write","delete"]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +323,7 @@ func TestCampaignHandlers(t *testing.T) {
 
 func TestScheduleGetAndDeletePostHandlers(t *testing.T) {
 	f := newMCPFixture(t)
-	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["ai:write:drafts"]`))
+	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["write","delete"]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +371,7 @@ func TestScheduleGetAndDeletePostHandlers(t *testing.T) {
 
 func TestGetPlatformsHandler(t *testing.T) {
 	f := newMCPFixture(t)
-	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["ai:read:context"]`))
+	principal, err := f.store.LookupAPIToken(context.Background(), f.apiToken(t, `["read"]`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +392,7 @@ func TestForbiddenForOutsider(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := f.store.CreateUserAPIToken(context.Background(), outsider.ID, "out", nil, `["ai:write:drafts"]`, nil)
+	token, _, err := f.store.CreateUserAPIToken(context.Background(), outsider.ID, "out", nil, `["write","delete"]`, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

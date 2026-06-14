@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { addDays, addHours, format, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
+import { addHours, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
 
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
@@ -104,7 +104,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null)
-  const [newApiTokenExpiresYmd, setNewApiTokenExpiresYmd] = useState(() => format(addDays(new Date(), 90), 'yyyy-MM-dd'))
   const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
   const [providerInstances, setProviderInstances] = useState<ProviderInstanceRecord[]>([])
   const [adminMetrics, setAdminMetrics] = useState<BackendAdminMetrics | null>(null)
@@ -114,13 +113,10 @@ function App() {
   const [adminSyncLoading, setAdminSyncLoading] = useState(false)
   const [apiTokens, setApiTokens] = useState<BackendAPIToken[]>([])
   const [apiTokensLoading, setApiTokensLoading] = useState(false)
-  const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
   const [teamSettingsName, setTeamSettingsName] = useState('')
   const [teamSettingsDescription, setTeamSettingsDescription] = useState('')
   const [addMemberUserId, setAddMemberUserId] = useState('')
   const [memberRoleEdits, setMemberRoleEdits] = useState<Record<string, TeamRole>>({})
-  const [newApiTokenName, setNewApiTokenName] = useState('')
-  const [newApiTokenScopes, setNewApiTokenScopes] = useState<string[]>([])
   const [teamAiEnabled, setTeamAiEnabled] = useState(false)
   const [externalPostMonitorEnabled, setExternalPostMonitorEnabled] = useState(false)
   const [importOldPostsOpen, setImportOldPostsOpen] = useState(false)
@@ -1302,29 +1298,21 @@ function App() {
     }
   }
 
-  async function handleCreateApiToken() {
-    if (!api || !newApiTokenName.trim()) {
-      return
+  async function handleCreateApiToken(payload: {
+    name: string
+    description?: string
+    expires_at?: string
+    scopes?: string[]
+    team_id?: string
+  }): Promise<string> {
+    if (!api) {
+      throw new Error(t('common.actionFailed'))
     }
-    const expEnd = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`)
-    if (!newApiTokenExpiresYmd.trim() || Number.isNaN(expEnd.getTime()) || expEnd.getTime() <= Date.now()) {
-      setError(t('settings.expiryHint'))
-      return
-    }
-    await runAction(async () => {
-      const expiresAt = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`).toISOString()
-      const res = await api.createMyApiToken({
-        name: newApiTokenName.trim(),
-        expires_at: expiresAt,
-        scopes: newApiTokenScopes.length > 0 ? newApiTokenScopes : undefined,
-      })
-      setNewTokenPlaintext(res.token)
-      setNewApiTokenName('')
-      setNewApiTokenScopes([])
-      setNewApiTokenExpiresYmd(format(addDays(new Date(), 90), 'yyyy-MM-dd'))
-      const list = await api.listMyApiTokens()
-      setApiTokens(list.items ?? [])
-    }, t('status.apiTokenCreated'))
+    const res = await api.createMyApiToken(payload)
+    const list = await api.listMyApiTokens()
+    setApiTokens(list.items ?? [])
+    setStatusMessage(t('status.apiTokenCreated'))
+    return res.token
   }
 
   async function handleRemoveApiToken(tokenID: string, expired: boolean) {
@@ -1895,15 +1883,8 @@ function App() {
             loadDashboard={loadDashboard}
             apiPresent={Boolean(api)}
             syncing={syncing}
-            newTokenPlaintext={newTokenPlaintext}
-            setNewTokenPlaintext={setNewTokenPlaintext}
-            newApiTokenName={newApiTokenName}
-            setNewApiTokenName={setNewApiTokenName}
-            newApiTokenExpiresYmd={newApiTokenExpiresYmd}
-            setNewApiTokenExpiresYmd={setNewApiTokenExpiresYmd}
-            newApiTokenScopes={newApiTokenScopes}
-            setNewApiTokenScopes={setNewApiTokenScopes}
-            onCreateApiToken={handleCreateApiToken}
+            teams={teams.map((team) => ({ id: team.id, name: team.name }))}
+            createApiToken={handleCreateApiToken}
             onRemoveApiToken={handleRemoveApiToken}
             apiTokens={apiTokens}
             apiTokensLoading={apiTokensLoading}
