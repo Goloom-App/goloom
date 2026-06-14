@@ -756,6 +756,23 @@ function App() {
     [teamPosts],
   )
 
+  // Stable chart fetchers: inline arrows would change identity on every render and
+  // make DashboardView refetch + flicker on each parent re-render (e.g. the poll).
+  const fetchDashboardSeries = useCallback(
+    (metric: string) =>
+      api && selectedTeamId
+        ? api.getTeamAnalyticsChart(selectedTeamId, { metric, days: 7 })
+        : Promise.resolve({ metric, days: 7, series: [] }),
+    [api, selectedTeamId],
+  )
+  const fetchDashboardGrowth = useCallback(
+    (accountID: string, opts?: { days?: number }) =>
+      api && selectedTeamId
+        ? api.getTeamAccountGrowth(selectedTeamId, accountID, opts)
+        : Promise.resolve({ days: opts?.days ?? 7, account: accountID, series: [] }),
+    [api, selectedTeamId],
+  )
+
   const contentCalendarCells = useMemo(
     () => calendarCellsForMonth(contentCalendarMonth, plannedPostsForContentCalendar),
     [contentCalendarMonth, plannedPostsForContentCalendar],
@@ -1813,8 +1830,8 @@ function App() {
             teamName={selectedTeam.name}
             upcomingPosts={dashboardUpcomingPosts}
             accounts={teamAccounts}
-            fetchSeries={(metric) => api.getTeamAnalyticsChart(selectedTeam.id, { metric, days: 7 })}
-            fetchGrowth={(accountID, opts) => api.getTeamAccountGrowth(selectedTeam.id, accountID, opts)}
+            fetchSeries={fetchDashboardSeries}
+            fetchGrowth={fetchDashboardGrowth}
             onOpenPreview={openPostPreview}
             onEditPost={openEditor}
             onOpenSchedule={() => setSection('calendar')}
