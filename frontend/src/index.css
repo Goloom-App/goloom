@@ -353,6 +353,18 @@ body,
   box-shadow: 0 0 0 1px var(--accent);
 }
 
+/* Cards left out of an active subset are dimmed so it is obvious which accounts
+   are currently being viewed. Hover still lifts them, inviting re-selection. */
+.account-stat-card--dimmed {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.account-stat-card--dimmed:hover {
+  opacity: 0.7;
+  filter: grayscale(0.3);
+}
+
 .analytics-filter-pill {
   display: flex;
   align-items: center;
@@ -4148,6 +4160,46 @@ select {
   background: var(--surface);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  color: inherit;
+}
+
+.token-reveal__value:hover {
+  border-color: var(--accent);
+}
+
+.token-scope-group {
+  margin-top: var(--space-3);
+}
+
+.token-scope-group__title {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-bottom: var(--space-2);
+}
+
+.token-scope-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.token-scope-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }
 
 /* ==========================================================================

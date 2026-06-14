@@ -313,6 +313,7 @@ export interface BackendAPIToken {
   id: string
   user_id: string
   name: string
+  description?: string
   last_used_at?: string
   expires_at?: string
   created_at: string
@@ -651,7 +652,7 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
-    createMyApiToken(payload: { name: string; expires_at?: string; scopes?: string[]; team_id?: string }) {
+    createMyApiToken(payload: { name: string; description?: string; expires_at?: string; scopes?: string[]; team_id?: string }) {
       return request<{ token: string; api_token: BackendAPIToken }>(options, '/v1/me/api-tokens', {
         method: 'POST',
         headers: buildHeaders(options.token),

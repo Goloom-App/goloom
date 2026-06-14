@@ -41,8 +41,8 @@ func TestAIDraft(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		scopes, _ := json.Marshal([]string{auth.ScopeAIWriteDrafts})
-		bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "draft-token", nil, string(scopes), nil)
+		scopes, _ := json.Marshal([]string{auth.ScopeWriteDraft})
+		bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "draft-token", nil, string(scopes), nil, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,8 +108,8 @@ func TestAIDraft(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		scopes, _ := json.Marshal([]string{auth.ScopeAIWriteDrafts})
-		bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "draft-token-auto", nil, string(scopes), nil)
+		scopes, _ := json.Marshal([]string{auth.ScopeWriteDraft})
+		bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "draft-token-auto", nil, string(scopes), nil, "")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -40,6 +40,8 @@ type openAIToolCall struct {
 	} `json:"function"`
 }
 
+func (c *openAIClient) Model() string { return c.settings.ResolvedModel() }
+
 func (c *openAIClient) Complete(ctx context.Context, req Request) (Response, error) {
 	messages := make([]openAIMessage, 0, len(req.Messages)+1)
 	if strings.TrimSpace(req.System) != "" {
@@ -148,6 +150,10 @@ func (c *openAIClient) send(ctx context.Context, messages []openAIMessage, req R
 			})
 		}
 		payload["tools"] = tools
+	} else if req.JSON {
+		// Constrain the model to a syntactically valid JSON object. Only valid
+		// without tools, since the two response modes are mutually exclusive.
+		payload["response_format"] = map[string]any{"type": "json_object"}
 	}
 
 	body, err := json.Marshal(payload)
@@ -169,7 +175,8 @@ func (c *openAIClient) send(ctx context.Context, messages []openAIMessage, req R
 	var data struct {
 		Model   string `json:"model"`
 		Choices []struct {
-			Message openAIMessage `json:"message"`
+			FinishReason string        `json:"finish_reason"`
+			Message      openAIMessage `json:"message"`
 		} `json:"choices"`
 	}
 	if err := decodeBody(httpResp, &data); err != nil {
@@ -177,6 +184,11 @@ func (c *openAIClient) send(ctx context.Context, messages []openAIMessage, req R
 	}
 	if len(data.Choices) == 0 {
 		return Response{}, fmt.Errorf("openai response missing choices")
+	}
+	// A "length" finish means the model ran out of room mid-answer; the body is
+	// almost certainly invalid JSON, so fail loudly rather than parse garbage.
+	if data.Choices[0].FinishReason == "length" {
+		return Response{}, ErrResponseTruncated
 	}
 
 	out := Response{Content: strings.TrimSpace(data.Choices[0].Message.Content), Model: data.Model}

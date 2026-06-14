@@ -30,6 +30,7 @@ type Store interface {
 	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
 	GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error)
 	GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int, accountID string) ([]domain.EngagementHeatmapBucket, error)
+	ListTeamPostEngagement(ctx context.Context, teamID string, days int, provider string) ([]domain.PostEngagement, error)
 
 	// Hashtag analytics
 	ReplacePostHashtags(ctx context.Context, postID, accountID string, tags []hashtag.Tag) error
@@ -199,7 +200,7 @@ type Store interface {
 	AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error)
 	FillAccountSyncTimestamps(ctx context.Context, accounts []domain.SocialAccount) error
 	RepairFuturePostedPosts(ctx context.Context) (int64, error)
-	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (plaintext string, meta domain.APIToken, err error)
+	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (plaintext string, meta domain.APIToken, err error)
 	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error

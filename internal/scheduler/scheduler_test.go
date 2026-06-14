@@ -608,7 +608,7 @@ func (m *mockStore) RepairFuturePostedPosts(ctx context.Context) (int64, error) 
 	return 0, nil
 }
 
-func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (string, domain.APIToken, error) {
+func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
 
@@ -658,6 +658,10 @@ func (m *mockStore) GetTeamEngagementHourHistogram(ctx context.Context, teamID s
 }
 
 func (m *mockStore) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int, accountID string) ([]domain.EngagementHeatmapBucket, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ListTeamPostEngagement(ctx context.Context, teamID string, days int, provider string) ([]domain.PostEngagement, error) {
 	return nil, nil
 }
 

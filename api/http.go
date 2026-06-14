@@ -121,10 +121,10 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/audit-log", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamAuditLog))))
 	mux.Handle("POST /v1/teams/{teamID}/invitations", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleCreateTeamInvitation))))
 	mux.Handle("POST /v1/invitations/accept", a.auth.RequireAuth(http.HandlerFunc(a.handleAcceptTeamInvitation)))
-	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAccounts))))
+	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListAccounts)))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/oauth/mastodon/start", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleStartMastodonOAuth))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAccount))))
-	mux.Handle("GET /v1/teams/{teamID}/media", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaList))))
+	mux.Handle("GET /v1/teams/{teamID}/media", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamMediaList)))))
 	mux.Handle("POST /v1/teams/{teamID}/media", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaUploadToLibrary))))
 	mux.Handle("PATCH /v1/teams/{teamID}/media/{mediaID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaRename))))
 	mux.Handle("DELETE /v1/teams/{teamID}/media/{mediaID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaDelete))))
@@ -132,26 +132,26 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("POST /v1/teams/{teamID}/accounts/{accountID}/migrate", a.auth.RequireAuth(http.HandlerFunc(a.handleMigrateAccount)))
 	mux.Handle("PATCH /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(http.HandlerFunc(a.handleUpdateAccount)))
 	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeleteAccount)))
-	mux.Handle("GET /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPosts))))
-	mux.Handle("GET /v1/teams/{teamID}/review-queue", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListReviewQueue))))
+	mux.Handle("GET /v1/teams/{teamID}/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListPosts)))))
+	mux.Handle("GET /v1/teams/{teamID}/review-queue", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListReviewQueue)))))
 	mux.Handle("POST /v1/teams/{teamID}/posts", a.auth.RequireAuth(http.HandlerFunc(a.handleCreatePost)))
 	mux.Handle("POST /v1/teams/{teamID}/posts/validate", a.auth.RequireAuth(http.HandlerFunc(a.handleValidatePost)))
-	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleGetPost)))
+	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleGetPost))))
 	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleUpdatePost)))
 	mux.Handle("DELETE /v1/teams/{teamID}/posts/{postID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeletePost)))
 	mux.Handle("POST /v1/teams/{teamID}/posts/{postID}/cancel", a.auth.RequireAuth(http.HandlerFunc(a.handleCancelPost)))
-	mux.Handle("GET /v1/teams/{teamID}/analytics/summary", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalyticsSummary))))
-	mux.Handle("GET /v1/teams/{teamID}/analytics/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalyticsPosts))))
-	mux.Handle("GET /v1/teams/{teamID}/analytics/chart", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalyticsChart))))
-	mux.Handle("GET /v1/teams/{teamID}/analytics/account/{accountID}/growth", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAccountGrowth))))
-	mux.Handle("GET /v1/teams/{teamID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamAnalytics))))
-	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePostAnalytics))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/summary", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAnalyticsSummary)))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAnalyticsPosts)))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/chart", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAnalyticsChart)))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/account/{accountID}/growth", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAccountGrowth)))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAnalytics)))))
+	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/analytics", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handlePostAnalytics)))))
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostVersions))))
 	mux.Handle("GET /v1/teams/{teamID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAllTeamPostVersions))))
 	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}/versions", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePatchPostVersions))))
-	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-hours", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamEngagementHourHistogram))))
-	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-heatmap", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamEngagementHeatmap))))
-	mux.Handle("GET /v1/teams/{teamID}/analytics/hashtags", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamHashtagAnalytics))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-hours", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamEngagementHourHistogram)))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-heatmap", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamEngagementHeatmap)))))
+	mux.Handle("GET /v1/teams/{teamID}/analytics/hashtags", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamHashtagAnalytics)))))
 	mux.Handle("GET /v1/teams/{teamID}/external-post-monitor", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetExternalPostMonitor))))
 	mux.Handle("PUT /v1/teams/{teamID}/external-post-monitor", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpsertExternalPostMonitor))))
 	mux.Handle("POST /v1/teams/{teamID}/import-old-posts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleImportOldPosts))))
@@ -184,13 +184,13 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("DELETE /v1/teams/{teamID}/rss-feeds/{feedID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteRSSFeed))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-service-config", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIServiceConfig)))))
 	mux.Handle("PUT /v1/teams/{teamID}/ai-service-config", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpsertAIServiceConfig)))))
-	mux.Handle("GET /v1/teams/{teamID}/ai-context", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIReadContext)(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIContext))))))
-	mux.Handle("POST /v1/teams/{teamID}/posts/draft", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIWriteDrafts)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAIDraft))))))
-	mux.Handle("POST /v1/teams/{teamID}/ai-trigger", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAITriggerJobs)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAITrigger))))))
-	mux.Handle("POST /v1/teams/{teamID}/ai/chat", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAIChat)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIChat))))))
+	mux.Handle("GET /v1/teams/{teamID}/ai-context", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeRead)(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIContext))))))
+	mux.Handle("POST /v1/teams/{teamID}/posts/draft", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAIDraft))))))
+	mux.Handle("POST /v1/teams/{teamID}/ai-trigger", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAITrigger))))))
+	mux.Handle("POST /v1/teams/{teamID}/ai/chat", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeRead)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIChat))))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAIJobs)))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/{jobID}", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIJob)))))
-	mux.Handle("POST /v1/teams/{teamID}/ai-jobs/{jobID}/cancel", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireScope(auth.ScopeAITriggerJobs)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCancelAIJob))))))
+	mux.Handle("POST /v1/teams/{teamID}/ai-jobs/{jobID}/cancel", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCancelAIJob))))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/stream", a.auth.AcceptQueryToken("token")(a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIJobStream))))))
 	mux.Handle("GET /v1/admin/ai-enabled-teams", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminListAIEnabledTeams))))
 
@@ -800,6 +800,22 @@ func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, posts[0])
 }
 
+// postWriteScope/postDeleteScope map a post's status onto the token scope a
+// mutation requires: drafts use the :draft variant, everything else :schedule.
+func postWriteScope(status domain.PostStatus) string {
+	if status == domain.PostStatusDraft {
+		return auth.ScopeWriteDraft
+	}
+	return auth.ScopeWriteSchedule
+}
+
+func postDeleteScope(status domain.PostStatus) string {
+	if status == domain.PostStatusDraft {
+		return auth.ScopeDeleteDraft
+	}
+	return auth.ScopeDeleteSchedule
+}
+
 func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	principal, err := a.auth.CurrentPrincipal(r)
 	if err != nil {
@@ -821,6 +837,16 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
 	if input.ScheduledAt.IsZero() {
 		input.ScheduledAt = time.Now().UTC()
+	}
+
+	// A draft needs write:draft; anything that schedules needs write:schedule.
+	writeScope := auth.ScopeWriteSchedule
+	if input.Draft {
+		writeScope = auth.ScopeWriteDraft
+	}
+	if !auth.PrincipalAllows(principal, writeScope) {
+		a.writeError(w, r, "scope_required", http.StatusForbidden)
+		return
 	}
 
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
@@ -866,6 +892,10 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing.Source == domain.PostSourceImported {
 		a.writeError(w, r, "imported_post_read_only", http.StatusForbidden)
+		return
+	}
+	if !auth.PrincipalAllows(principal, postWriteScope(existing.Status)) {
+		a.writeError(w, r, "scope_required", http.StatusForbidden)
 		return
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
@@ -925,6 +955,10 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	if !auth.PrincipalAllows(principal, postDeleteScope(post.Status)) {
+		a.writeError(w, r, "scope_required", http.StatusForbidden)
+		return
+	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		a.writeError(w, r, "forbidden", http.StatusForbidden)
@@ -962,6 +996,10 @@ func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 	post, err := a.store.GetScheduledPostByID(r.Context(), r.PathValue("postID"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if !auth.PrincipalAllows(principal, postWriteScope(post.Status)) {
+		a.writeError(w, r, "scope_required", http.StatusForbidden)
 		return
 	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, post.TeamID, domain.RoleEditor, domain.RoleOwner)

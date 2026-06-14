@@ -51,6 +51,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table post_templates add column title_hint text not null default ''`,
 		`alter table api_tokens add column scopes text not null default ''`,
 		`alter table api_tokens add column team_id text references teams(id) on delete cascade`,
+		`alter table api_tokens add column description text not null default ''`,
 		`alter table scheduled_posts add column source text not null default 'scheduled'`,
 		`alter table scheduled_post_targets add column remote_post_id text`,
 		`alter table rss_feed_configs add column prompt_hint text not null default ''`,

@@ -90,7 +90,7 @@ func TestSQLite_LookupAPIToken_Attribution(t *testing.T) {
 	}
 
 	// A named API key is attributed to the token (tool).
-	plain, meta, err := s.CreateUserAPIToken(ctx, user.ID, "mybot", nil, "", nil)
+	plain, meta, err := s.CreateUserAPIToken(ctx, user.ID, "mybot", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

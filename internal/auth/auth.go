@@ -145,6 +145,13 @@ func (s *Service) AcceptQueryToken(param string) func(http.Handler) http.Handler
 // global administrators may use any team (recovery / OIDC-linked data); otherwise
 // a team_memberships role is required.
 func (s *Service) PrincipalHasTeamAccess(ctx context.Context, principal domain.AuthenticatedPrincipal, teamID string, roles ...domain.TeamRole) (bool, error) {
+	// A team-bound API token may only ever touch its own team — the token itself
+	// is the limit, so this applies even to administrators.
+	if principal.TokenTeamID != nil {
+		if bound := strings.TrimSpace(*principal.TokenTeamID); bound != "" && bound != teamID {
+			return false, nil
+		}
+	}
 	if principal.User.IsAdmin {
 		return true, nil
 	}
