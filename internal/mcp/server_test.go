@@ -411,3 +411,63 @@ func TestForbiddenForOutsider(t *testing.T) {
 		t.Fatal("outsider must not read a foreign calendar")
 	}
 }
+
+func TestGetAnalyticsTimeslotsHandler(t *testing.T) {
+	f := newMCPFixture(t)
+	ctx := context.Background()
+	principal, err := f.store.LookupAPIToken(ctx, f.apiToken(t, `["ai:read:context"]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Two posts in the same Monday 10:00 UTC slot, plus engagement metrics.
+	mon := time.Date(2026, 6, 8, 10, 0, 0, 0, time.UTC)
+	for i, likes := range []int64{8, 4} {
+		post, err := f.store.CreateScheduledPost(ctx, f.team.ID, principal, domain.CreatePostInput{
+			Content: "x", ScheduledAt: mon.Add(time.Duration(i) * time.Minute), TargetAccounts: []string{f.account.ID},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f.store.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.store.UpsertPostMetrics(ctx, post.ID, f.account.ID, map[string]int64{"likes": likes}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	toolCtx := WithPrincipal(ctx, principal)
+	_, out, err := f.handler.handleGetAnalyticsTimeslots(toolCtx, nil, GetAnalyticsTimeslotsInput{TeamID: f.team.ID})
+	if err != nil {
+		t.Fatalf("handleGetAnalyticsTimeslots: %v", err)
+	}
+	if out.Timezone != "UTC" {
+		t.Fatalf("timezone = %q, want UTC", out.Timezone)
+	}
+	if len(out.Timeslots) != 1 {
+		t.Fatalf("got %d timeslots, want 1: %#v", len(out.Timeslots), out.Timeslots)
+	}
+	slot := out.Timeslots[0]
+	if slot.Weekday != "Monday" || slot.Hour != 10 || slot.Posts != 2 || slot.TotalEngagement != 12 || slot.AvgEngagement != 6 {
+		t.Fatalf("slot = %#v", slot)
+	}
+
+	// Timezone shifts the bucket: Monday 10:00 UTC is 12:00 in Berlin (CEST).
+	_, berlin, err := f.handler.handleGetAnalyticsTimeslots(toolCtx, nil, GetAnalyticsTimeslotsInput{
+		TeamID: f.team.ID, Timezone: "Europe/Berlin",
+	})
+	if err != nil {
+		t.Fatalf("handleGetAnalyticsTimeslots berlin: %v", err)
+	}
+	if len(berlin.Timeslots) != 1 || berlin.Timeslots[0].Hour != 12 {
+		t.Fatalf("berlin slot = %#v, want hour 12", berlin.Timeslots)
+	}
+
+	// An invalid timezone is a user error, not a silent fallback.
+	if _, _, err := f.handler.handleGetAnalyticsTimeslots(toolCtx, nil, GetAnalyticsTimeslotsInput{
+		TeamID: f.team.ID, Timezone: "Mars/Olympus",
+	}); err == nil {
+		t.Fatal("invalid timezone must error")
+	}
+}

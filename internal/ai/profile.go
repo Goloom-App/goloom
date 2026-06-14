@@ -29,7 +29,7 @@ func runProfileAnalysis(ctx context.Context, client Client, job domain.AIJob, ai
 	}
 
 	prompt := buildAnalysisPrompt(BuildSystemPrompt(aiContext), teamName, recentPosts)
-	content, err := Generate(ctx, client, "You are a brand voice analyst. Extract the team's writing style from their recent posts.", prompt, 0.7, defaultMaxTokens)
+	content, err := GenerateJSON(ctx, client, "You are a brand voice analyst. Extract the team's writing style from their recent posts.", prompt, 0.7, defaultMaxTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func runProfileAssistant(ctx context.Context, client Client, job domain.AIJob, a
 	}
 	systemPrompt := "You are a senior social media strategist. You write brand profiles " +
 		"that sound like the actual person or team, not like AI marketing copy."
-	content, err := Generate(ctx, client, systemPrompt, prompt, 0.6, 1200)
+	content, err := GenerateJSON(ctx, client, systemPrompt, prompt, 0.6, defaultMaxTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func runProfileAssistant(ctx context.Context, client Client, job domain.AIJob, a
 // runVibePreview summarizes the configured brand voice in one or two sentences.
 func runVibePreview(ctx context.Context, client Client, job domain.AIJob, aiContext domain.AIContext, p params) (json.RawMessage, error) {
 	prompt := buildVibePreviewPrompt(aiContext)
-	content, err := Generate(ctx, client, "You summarize brand voice profiles concisely.", prompt, 0.5, 300)
+	content, err := GenerateJSON(ctx, client, "You summarize brand voice profiles concisely.", prompt, 0.5, 600)
 	if err != nil {
 		return nil, err
 	}

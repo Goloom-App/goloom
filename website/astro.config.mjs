@@ -11,9 +11,13 @@ export default defineConfig({
 			logo: {
 				src: './public/favicon.svg',
 			},
-			social: {
-				gitlab: 'https://git.f4mily.net/goloom',
-			},
+			social: [
+				{
+					icon: 'gitlab',
+					label: 'GitLab',
+					href: 'https://git.f4mily.net/goloom',
+				},
+			],
 			editLink: {
 				baseUrl:
 					'https://git.f4mily.net/goloom/edit/main/website/src/content/docs/',
@@ -25,11 +29,11 @@ export default defineConfig({
 			sidebar: [
 				{
 					label: 'Getting Started',
-					autogenerate: { directory: 'docs/getting-started' },
+					items: [{ autogenerate: { directory: 'docs/getting-started' } }],
 				},
 				{
 					label: 'Guides',
-					autogenerate: { directory: 'docs/guides' },
+					items: [{ autogenerate: { directory: 'docs/guides' } }],
 				},
 				{
 					label: 'API',
@@ -37,11 +41,11 @@ export default defineConfig({
 				},
 				{
 					label: 'Administration',
-					autogenerate: { directory: 'docs/admin' },
+					items: [{ autogenerate: { directory: 'docs/admin' } }],
 				},
 				{
 					label: 'Migrations',
-					autogenerate: { directory: 'docs/migrations' },
+					items: [{ autogenerate: { directory: 'docs/migrations' } }],
 				},
 			],
 		}),

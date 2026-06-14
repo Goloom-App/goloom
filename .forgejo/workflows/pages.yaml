@@ -54,7 +54,7 @@ jobs:
         run: make website-build
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: website/dist
 
@@ -68,4 +68,4 @@ jobs:
     steps:
       - name: Deploy to Forgejo Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

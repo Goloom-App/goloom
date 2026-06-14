@@ -62,6 +62,8 @@ type scriptedClient struct {
 	requests  []Request
 }
 
+func (c *scriptedClient) Model() string { return "scripted" }
+
 func (c *scriptedClient) Complete(_ context.Context, req Request) (Response, error) {
 	c.requests = append(c.requests, req)
 	resp := c.responses[0]

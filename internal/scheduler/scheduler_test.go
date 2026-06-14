@@ -658,6 +658,10 @@ func (m *mockStore) GetTeamEngagementHeatmap(ctx context.Context, teamID string,
 	return nil, nil
 }
 
+func (m *mockStore) ListTeamPostEngagement(ctx context.Context, teamID string, days int, provider string) ([]domain.PostEngagement, error) {
+	return nil, nil
+}
+
 func (m *mockStore) ReplacePostHashtags(ctx context.Context, postID, accountID string, tags []hashtag.Tag) error {
 	return nil
 }
