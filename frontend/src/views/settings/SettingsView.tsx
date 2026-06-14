@@ -20,6 +20,8 @@ export function SettingsView({
   onRemoveApiToken,
   apiTokens,
   apiTokensLoading,
+  currentTokenId,
+  showBrowserSession,
 }: {
   settings: SettingsState
   setSettings: Dispatch<SetStateAction<SettingsState>>
@@ -33,6 +35,9 @@ export function SettingsView({
   onRemoveApiToken: (tokenID: string, expired: boolean) => Promise<void>
   apiTokens: BackendAPIToken[]
   apiTokensLoading: boolean
+  currentTokenId: string | null
+  // The backend-override panel is a dev/admin debug tool, hidden in production.
+  showBrowserSession: boolean
 }) {
   const { t: tr } = useTranslation()
 
@@ -61,36 +66,40 @@ export function SettingsView({
         </SettingsCard>
       </div>
 
-      <div className="glass-panel">
-        <SettingsCard title={tr('settings.browserSession')}>
-          <label className="field">
-            <span>{tr('settings.apiBaseUrl')}</span>
-            <input value={settings.general.apiBaseUrl} onChange={(event) => updateAPIBaseURL(event.target.value)} />
-          </label>
-          <label className="field">
-            <span>{tr('settings.bearerToken')}</span>
-            <input
-              type="password"
-              value={settings.general.bearerToken}
-              onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, bearerToken: event.target.value } }))}
-            />
-          </label>
-          <div className="inline-cluster mt-1">
-            <button type="button" className="button button--primary" onClick={connectBackend}>
-              {tr('settings.applySession')}
-            </button>
-            <button type="button" className="button button--secondary" onClick={() => void loadDashboard()} disabled={!apiPresent || syncing}>
-              {tr('settings.refreshData')}
-            </button>
-          </div>
-        </SettingsCard>
-      </div>
+      {showBrowserSession ? (
+        <div className="glass-panel">
+          <SettingsCard title={tr('settings.browserSession')}>
+            <p className="hint">{tr('settings.browserSessionDevHint')}</p>
+            <label className="field">
+              <span>{tr('settings.apiBaseUrl')}</span>
+              <input value={settings.general.apiBaseUrl} onChange={(event) => updateAPIBaseURL(event.target.value)} />
+            </label>
+            <label className="field">
+              <span>{tr('settings.bearerToken')}</span>
+              <input
+                type="password"
+                value={settings.general.bearerToken}
+                onChange={(event) => setSettings((current) => ({ ...current, general: { ...current.general, bearerToken: event.target.value } }))}
+              />
+            </label>
+            <div className="inline-cluster mt-1">
+              <button type="button" className="button button--primary" onClick={connectBackend}>
+                {tr('settings.applySession')}
+              </button>
+              <button type="button" className="button button--secondary" onClick={() => void loadDashboard()} disabled={!apiPresent || syncing}>
+                {tr('settings.refreshData')}
+              </button>
+            </div>
+          </SettingsCard>
+        </div>
+      ) : null}
 
       <ApiTokenManager
         teams={teams}
         tokens={apiTokens}
         loading={apiTokensLoading}
         syncing={syncing}
+        currentTokenId={currentTokenId}
         createToken={createApiToken}
         removeToken={onRemoveApiToken}
       />

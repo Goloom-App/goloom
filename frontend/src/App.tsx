@@ -57,6 +57,12 @@ import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, PostVersi
 
 /** Survives React Strict Mode remounts: hash is promoted here, then one reload applies the session. */
 const OIDC_PENDING_SESSION_KEY = 'goloom.oidc.pending_session_v1'
+// Set right before an automatic OIDC redirect; prevents a redirect loop if the
+// IdP bounces back unauthenticated. Cleared once a session is established.
+const OIDC_AUTO_ATTEMPTED_KEY = 'goloom.oidc.auto_attempted'
+// Set on explicit sign-out so the login screen stays put instead of bouncing
+// straight back into the IdP. Cleared once a session is established.
+const OIDC_SUPPRESS_AUTO_KEY = 'goloom.oidc.suppress_auto'
 
 const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics']
 
@@ -84,8 +90,19 @@ function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatusRecord | null>(null)
   const [authStatusLoading, setAuthStatusLoading] = useState(true)
   const [authView, setAuthView] = useState<'bootstrap' | 'login'>('login')
+  // Recovery mode (token/bootstrap sign-in) is reached via the ?login=recovery
+  // fallback URL; it also suppresses the automatic OIDC redirect.
+  const [recoveryMode, setRecoveryMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    return new URLSearchParams(window.location.search).get('login') === 'recovery'
+  })
   const [authTokenDraft, setAuthTokenDraft] = useState(() => loadStoredSettings().general.bearerToken)
   const [principalUser, setPrincipalUser] = useState<UserRecord | null>(null)
+  // Token id of the current request principal (from /v1/me). For a browser
+  // session this lets the token list mark "this browser".
+  const [currentTokenId, setCurrentTokenId] = useState<string | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -290,6 +307,7 @@ function App() {
         }))
         setAuthTokenDraft(token)
         setPrincipalUser(toUserRecord(meResponse.user))
+        setCurrentTokenId(meResponse.token_id ?? null)
         setStatusMessage(t('auth.signedInOidc'))
       } catch (cause) {
         if (cause instanceof ApiError && cause.status === 401) {
@@ -334,7 +352,47 @@ function App() {
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
     window.location.reload()
   }, [])
+  // OIDC-first: when OIDC is configured and the user is not signed in, start the
+  // login automatically. Guards prevent a redirect loop (auto_attempted) and a
+  // bounce right after an explicit sign-out (suppress_auto); the ?login=recovery
+  // fallback and first-start/token-only setups always show the form instead.
+  useEffect(() => {
+    if (authStatusLoading || !authStatus) {
+      return
+    }
+    if (activeConnection.bearerToken.trim()) {
+      return
+    }
+    if (!authStatus.oidcOAuthEnabled || authStatus.initialSetupRequired || recoveryMode || authError) {
+      return
+    }
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      if (sessionStorage.getItem(OIDC_SUPPRESS_AUTO_KEY) || sessionStorage.getItem(OIDC_AUTO_ATTEMPTED_KEY)) {
+        return
+      }
+      sessionStorage.setItem(OIDC_AUTO_ATTEMPTED_KEY, '1')
+    }
+    void startOIDCLogin()
+    // startOIDCLogin is a stable function declaration; deps cover the gating state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus, authStatusLoading, activeConnection.bearerToken, recoveryMode, authError])
+
+  const enterRecoveryMode = useCallback(() => {
+    setRecoveryMode(true)
+    setAuthError(null)
+    if (typeof window !== 'undefined') {
+      const url = `${window.location.pathname}?login=recovery${window.location.hash}`
+      window.history.replaceState({}, document.title, url)
+    }
+  }, [])
+
   const clearAuthenticatedState = useCallback((message?: string) => {
+    // Stay on the login screen after an explicit sign-out instead of bouncing
+    // straight back into the IdP.
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem(OIDC_SUPPRESS_AUTO_KEY, '1')
+      sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+    }
     setActiveConnection((current) => ({ ...current, bearerToken: '' }))
     setSettings((current) => ({
       ...current,
@@ -342,6 +400,7 @@ function App() {
     }))
     setAuthTokenDraft('')
     setPrincipalUser(null)
+    setCurrentTokenId(null)
     setTeams([])
     setAccounts([])
     setPosts([])
@@ -376,6 +435,7 @@ function App() {
         general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
       }))
       setPrincipalUser(toUserRecord(meResponse.user))
+      setCurrentTokenId(meResponse.token_id ?? null)
       setStatusMessage(mode === 'bootstrap' ? t('status.bootstrapAdminSignedIn') : t('status.signedIn'))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
@@ -425,6 +485,12 @@ function App() {
     try {
       const meResponse = await api.me()
       setPrincipalUser(toUserRecord(meResponse.user))
+      setCurrentTokenId(meResponse.token_id ?? null)
+      // Session established: reset the OIDC auto-login guards.
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+        sessionStorage.removeItem(OIDC_SUPPRESS_AUTO_KEY)
+      }
 
       const [usersResponse, teamsResponse, providerInstancesResponse] = await Promise.all([
         api.listUsers(),
@@ -1469,10 +1535,12 @@ function App() {
           authTokenDraft={authTokenDraft}
           authError={authError}
           authSubmitting={true}
+          recoveryMode={recoveryMode}
           onViewChange={setAuthView}
           onTokenChange={setAuthTokenDraft}
           onSubmit={() => undefined}
           onStartOIDCLogin={() => undefined}
+          onUseRecovery={enterRecoveryMode}
         />
       </AuthShell>
     )
@@ -1487,10 +1555,12 @@ function App() {
           authTokenDraft={authTokenDraft}
           authError={authError}
           authSubmitting={authSubmitting}
+          recoveryMode={recoveryMode}
           onViewChange={setAuthView}
           onTokenChange={setAuthTokenDraft}
           onSubmit={(mode) => void authenticateWithToken(mode)}
           onStartOIDCLogin={() => void startOIDCLogin()}
+          onUseRecovery={enterRecoveryMode}
         />
       </AuthShell>
     )
@@ -1888,6 +1958,8 @@ function App() {
             onRemoveApiToken={handleRemoveApiToken}
             apiTokens={apiTokens}
             apiTokensLoading={apiTokensLoading}
+            currentTokenId={currentTokenId}
+            showBrowserSession={authStatus?.appEnv === 'development' && principalUser?.globalRole === 'admin'}
           />
         )}
 

@@ -577,7 +577,7 @@ export function createApiClient(options: ApiClientOptions) {
       return t ? `Bearer ${t}` : ''
     },
     me() {
-      return request<{ user: BackendUser; kind: string }>(options, '/v1/me', {
+      return request<{ user: BackendUser; kind: string; token_id?: string }>(options, '/v1/me', {
         headers: buildHeaders(options.token, false),
       })
     },
