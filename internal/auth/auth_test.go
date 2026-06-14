@@ -55,6 +55,56 @@ func (f authFixture) sessionToken(t *testing.T, userID string) string {
 	return token
 }
 
+func TestRequireAuthCookieAndCSRF(t *testing.T) {
+	f := newAuthFixture(t)
+	u := f.user(t)
+	sessionTok := f.sessionToken(t, u.ID)
+	// A regular API token for the bearer-bypass check.
+	apiTok, _, err := f.store.CreateUserAPIToken(context.Background(), u.ID, "bot", nil, "", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := f.service.RequireAuth(okHandler(t, nil))
+	call := func(method string, mutate func(*http.Request)) int {
+		req := httptest.NewRequest(method, "/", nil)
+		mutate(req)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// GET via session cookie authenticates.
+	if code := call(http.MethodGet, func(r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sessionTok})
+	}); code != http.StatusOK {
+		t.Fatalf("cookie GET: got %d, want 200", code)
+	}
+
+	// Cookie POST without the CSRF token is rejected.
+	if code := call(http.MethodPost, func(r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sessionTok})
+	}); code != http.StatusForbidden {
+		t.Fatalf("cookie POST without CSRF: got %d, want 403", code)
+	}
+
+	// Cookie POST with matching double-submit token passes.
+	if code := call(http.MethodPost, func(r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sessionTok})
+		r.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "csrf-1"})
+		r.Header.Set(auth.CSRFHeaderName, "csrf-1")
+	}); code != http.StatusOK {
+		t.Fatalf("cookie POST with CSRF: got %d, want 200", code)
+	}
+
+	// Bearer (API token) POST is exempt from CSRF — must keep working for MCP/tools.
+	if code := call(http.MethodPost, func(r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+apiTok)
+	}); code != http.StatusOK {
+		t.Fatalf("bearer POST (no CSRF) must pass: got %d, want 200", code)
+	}
+}
+
 func (f authFixture) user(t *testing.T) domain.User {
 	t.Helper()
 	u, err := f.store.UpsertOIDCUser(context.Background(), "auth-"+uuid.NewString(), "auth@test", "Auth")

@@ -16,7 +16,7 @@ test('settings shows the dev browser-session panel and marks the current token',
   // dev + admin → backend-override panel present.
   await expect(page.getByText('Browser session')).toBeVisible()
 
-  // The token this browser authenticates with is flagged in the token list.
-  const tokenRow = page.locator('.data-table tr', { hasText: 'Bootstrap admin token' })
+  // The current browser session (cookie-based __web_session) is flagged.
+  const tokenRow = page.locator('.data-table tr', { hasText: 'Web session' })
   await expect(tokenRow.getByText('this browser')).toBeVisible({ timeout: 15_000 })
 })

@@ -22,8 +22,20 @@ var schemaSQL string
 const sqliteTimeLayout = "2006-01-02T15:04:05.000000000Z07:00"
 
 type Store struct {
-	db        *sql.DB
-	encrypter *security.Encrypter
+	db         *sql.DB
+	encrypter  *security.Encrypter
+	sessionTTL time.Duration
+}
+
+// SetSessionTTL sets the rolling idle lifetime applied to web sessions.
+func (s *Store) SetSessionTTL(d time.Duration) { s.sessionTTL = d }
+
+// webSessionTTL returns the configured session TTL, defaulting to 12h.
+func (s *Store) webSessionTTL() time.Duration {
+	if s.sessionTTL <= 0 {
+		return 12 * time.Hour
+	}
+	return s.sessionTTL
 }
 
 func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter) (*Store, error) {
@@ -235,7 +247,7 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		principal.TokenTeamID = &teamID.String
 	}
 
-	rollingExpiry := formatTime(time.Now().UTC().Add(12 * time.Hour))
+	rollingExpiry := formatTime(time.Now().UTC().Add(s.webSessionTTL()))
 	_, _ = s.db.ExecContext(ctx, `
 		update api_tokens
 		set last_used_at = ?,

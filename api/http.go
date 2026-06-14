@@ -84,6 +84,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.HandleFunc("GET /v1/auth/status", a.handleAuthStatus)
 	mux.HandleFunc("POST /v1/auth/oidc/start", a.handleStartOIDCLogin)
 	mux.HandleFunc("GET /v1/oauth/oidc/callback", a.handleOIDCLoginCallback)
+	mux.HandleFunc("POST /v1/auth/session/token", a.handleCreateSessionFromToken)
+	mux.Handle("POST /v1/auth/logout", a.auth.RequireAuth(http.HandlerFunc(a.handleLogout)))
 	mux.HandleFunc("GET /v1/oauth/mastodon/callback", a.handleMastodonOAuthCallback)
 
 	mux.Handle("GET /v1/me", a.auth.RequireAuth(http.HandlerFunc(a.handleMe)))

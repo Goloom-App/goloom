@@ -615,6 +615,7 @@ func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string,
 func (m *mockStore) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
+func (m *mockStore) SetSessionTTL(d time.Duration) {}
 
 func (m *mockStore) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {
 	return nil, nil

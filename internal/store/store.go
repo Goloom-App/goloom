@@ -202,6 +202,8 @@ type Store interface {
 	RepairFuturePostedPosts(ctx context.Context) (int64, error)
 	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (plaintext string, meta domain.APIToken, err error)
 	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)
+	// SetSessionTTL configures the rolling idle lifetime applied to web sessions.
+	SetSessionTTL(d time.Duration)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error
 

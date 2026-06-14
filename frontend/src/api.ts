@@ -534,9 +534,28 @@ function buildHeaders(token: string, withJSON = true) {
   return headers
 }
 
+function readCookie(name: string): string {
+  if (typeof document === 'undefined') {
+    return ''
+  }
+  const match = document.cookie.split('; ').find((row) => row.startsWith(`${name}=`))
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : ''
+}
+
 async function request<T>(options: ApiClientOptions, path: string, init?: RequestInit): Promise<T> {
   const baseUrl = options.baseUrl.trim().replace(/\/$/, '')
-  const response = await fetch(baseUrl ? `${baseUrl}${path}` : path, init)
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const headers = new Headers(init?.headers)
+  // CSRF double-submit token for cookie-authenticated, state-changing requests.
+  // Bearer (API token) requests don't carry the cookie, so this is harmless there.
+  if (method !== 'GET' && method !== 'HEAD') {
+    const csrf = readCookie('goloom_csrf')
+    if (csrf) {
+      headers.set('X-CSRF-Token', csrf)
+    }
+  }
+  // Send the session cookie on same-origin requests (the production norm).
+  const response = await fetch(baseUrl ? `${baseUrl}${path}` : path, { ...init, headers, credentials: 'same-origin' })
   if (!response.ok) {
     let message = await response.text()
     if (response.status === 429) {
@@ -578,6 +597,20 @@ export function createApiClient(options: ApiClientOptions) {
     },
     me() {
       return request<{ user: BackendUser; kind: string; token_id?: string }>(options, '/v1/me', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    // Exchange a bearer token (bootstrap/recovery or API token) for a cookie session.
+    sessionFromToken(token: string) {
+      return request<{ user: BackendUser }>(options, '/v1/auth/session/token', {
+        method: 'POST',
+        headers: buildHeaders('', true),
+        body: JSON.stringify({ token }),
+      })
+    },
+    logout() {
+      return request<void>(options, '/v1/auth/logout', {
+        method: 'POST',
         headers: buildHeaders(options.token, false),
       })
     },
