@@ -117,6 +117,7 @@ export function AdminView({
 
         {activeTab === 'providers' ? (
           <AdminProvidersTab
+            api={api}
             providerInstances={providerInstances}
             accounts={accounts}
             adminProviderDraft={adminProviderDraft}

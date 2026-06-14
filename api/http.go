@@ -121,6 +121,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("POST /v1/admin/provider-instances", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleCreateProviderInstance))))
 	mux.Handle("PUT /v1/admin/provider-instances/{instanceID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateProviderInstance))))
 	mux.Handle("DELETE /v1/admin/provider-instances/{instanceID}", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleDeleteProviderInstance))))
+	mux.Handle("GET /v1/admin/provider-instances/{instanceID}/health", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleProviderInstanceHealth))))
 	mux.Handle("GET /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListTeamMembers))))
 	mux.Handle("POST /v1/teams/{teamID}/members", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleAddTeamMember))))
 	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
@@ -481,6 +482,18 @@ func (a *API) handleGetProviderInstance(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, instance)
+}
+
+// handleProviderInstanceHealth runs an on-demand reachability probe so admins can see
+// whether a registered instance is currently up.
+func (a *API) handleProviderInstanceHealth(w http.ResponseWriter, r *http.Request) {
+	instance, err := a.store.GetProviderInstanceByID(r.Context(), r.PathValue("instanceID"))
+	if err != nil {
+		a.writeError(w, r, "provider_instance_not_found", http.StatusNotFound)
+		return
+	}
+	health := provider.CheckInstanceHealth(a.providerContext(r.Context()), instance.Provider, instance.InstanceURL)
+	auth.WriteJSON(w, http.StatusOK, health)
 }
 
 func (a *API) handleCreateProviderInstance(w http.ResponseWriter, r *http.Request) {

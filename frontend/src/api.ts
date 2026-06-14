@@ -745,6 +745,13 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    providerInstanceHealth(instanceID: string) {
+      return request<{ healthy: boolean; status: string; detail?: string }>(
+        options,
+        `/v1/admin/provider-instances/${instanceID}/health`,
+        { headers: buildHeaders(options.token, false) },
+      )
+    },
     listTeamMembers(teamID: string) {
       return request<{ items: BackendMembership[] }>(options, `/v1/teams/${teamID}/members`, {
         headers: buildHeaders(options.token, false),
