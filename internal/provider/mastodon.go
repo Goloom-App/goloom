@@ -64,15 +64,17 @@ type MastodonRegistrationConfig struct {
 	DefaultScopes []string
 }
 
-// MastodonProvider implements SocialMediaProvider for Mastodon.
+// MastodonProvider implements SocialMediaProvider for Mastodon and Mastodon-compatible
+// OAuth networks (e.g. Pixelfed) that share the /api/v1 status & OAuth app endpoints.
 type MastodonProvider struct {
-	defaultChars int
-	mediaTypes   []string
-	registration MastodonRegistrationConfig
+	name          string
+	defaultChars  int
+	mediaTypes    []string
+	requiresMedia bool
+	registration  MastodonRegistrationConfig
 }
 
-// NewMastodonProvider returns a Mastodon integration with optional app registration defaults.
-func NewMastodonProvider(cfg MastodonRegistrationConfig) SocialMediaProvider {
+func normalizeMastodonRegistration(cfg MastodonRegistrationConfig) MastodonRegistrationConfig {
 	if strings.TrimSpace(cfg.AppName) == "" {
 		cfg.AppName = "goloom"
 	}
@@ -82,19 +84,40 @@ func NewMastodonProvider(cfg MastodonRegistrationConfig) SocialMediaProvider {
 	if len(cfg.DefaultScopes) == 0 {
 		cfg.DefaultScopes = []string{"read", "write"}
 	}
+	return cfg
+}
+
+// NewMastodonProvider returns a Mastodon integration with optional app registration defaults.
+func NewMastodonProvider(cfg MastodonRegistrationConfig) SocialMediaProvider {
 	return &MastodonProvider{
+		name:         "mastodon",
 		defaultChars: 500,
 		mediaTypes:   []string{"image/jpeg", "image/png", "video/mp4"},
-		registration: cfg,
+		registration: normalizeMastodonRegistration(cfg),
+	}
+}
+
+// NewPixelfedProvider returns a Pixelfed integration. Pixelfed speaks the Mastodon API
+// (OAuth app registration, /api/v1/statuses, media upload), but rejects text-only posts,
+// so RequiresMedia is set and the default caption limit is higher.
+func NewPixelfedProvider(cfg MastodonRegistrationConfig) SocialMediaProvider {
+	return &MastodonProvider{
+		name:          "pixelfed",
+		defaultChars:  2000,
+		mediaTypes:    []string{"image/jpeg", "image/png", "image/gif", "video/mp4"},
+		requiresMedia: true,
+		registration:  normalizeMastodonRegistration(cfg),
 	}
 }
 
 func (p *MastodonProvider) Name() string {
-	return "mastodon"
+	return p.name
 }
 
 func (p *MastodonProvider) Capabilities(_ context.Context, account domain.SocialAccount) (Capabilities, error) {
-	return capabilitiesForAccount(account, p.defaultChars, p.mediaTypes), nil
+	caps := capabilitiesForAccount(account, p.defaultChars, p.mediaTypes)
+	caps.RequiresMedia = p.requiresMedia
+	return caps, nil
 }
 
 func (p *MastodonProvider) PrepareProviderInstance(ctx context.Context, input domain.CreateProviderInstanceInput) (domain.PreparedProviderInstance, error) {

@@ -413,6 +413,34 @@ func TestMastodonProvider_RefreshAccessToken(t *testing.T) {
 	}
 }
 
+func TestPixelfedProvider_Capabilities(t *testing.T) {
+	p := NewPixelfedProvider(MastodonRegistrationConfig{})
+	if p.Name() != "pixelfed" {
+		t.Fatalf("expected name pixelfed, got %q", p.Name())
+	}
+	caps, err := p.Capabilities(context.Background(), domain.SocialAccount{})
+	if err != nil {
+		t.Fatalf("Capabilities: %v", err)
+	}
+	if !caps.RequiresMedia {
+		t.Error("expected RequiresMedia=true for pixelfed")
+	}
+	if caps.MaxChars != 2000 {
+		t.Errorf("expected default MaxChars 2000, got %d", caps.MaxChars)
+	}
+}
+
+func TestMastodonProvider_Capabilities_noRequiredMedia(t *testing.T) {
+	p := NewMastodonProvider(MastodonRegistrationConfig{})
+	caps, err := p.Capabilities(context.Background(), domain.SocialAccount{})
+	if err != nil {
+		t.Fatalf("Capabilities: %v", err)
+	}
+	if caps.RequiresMedia {
+		t.Error("expected RequiresMedia=false for mastodon")
+	}
+}
+
 func TestBlueskyProvider_GetMetrics_invalidPublishedURL(t *testing.T) {
 	p := NewBlueskyProvider()
 	account := domain.SocialAccount{

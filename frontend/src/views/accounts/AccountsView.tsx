@@ -253,6 +253,7 @@ export function AccountsView({
                     }}
                   >
                     <option value="mastodon">{t('accounts.providerMastodon')}</option>
+                    <option value="pixelfed">{t('accounts.providerPixelfed')}</option>
                     <option value="friendica">{t('accounts.providerFriendica')}</option>
                     <option value="bluesky">{t('accounts.providerBluesky')}</option>
                   </select>
@@ -288,7 +289,7 @@ export function AccountsView({
                   </label>
                 ) : null}
 
-                {accountDraft.provider === 'mastodon' ? (
+                {accountDraft.provider === 'mastodon' || accountDraft.provider === 'pixelfed' ? (
                   <>
                     <div className="flex-row--wrap" style={{ marginTop: '0.5rem' }}>
                       <button
@@ -301,6 +302,7 @@ export function AccountsView({
                       </button>
                     </div>
                     <p className="hint">{t('accounts.mastodonOAuthHint')}</p>
+                    {accountDraft.provider === 'pixelfed' ? <p className="hint">{t('accounts.pixelfedMediaHint')}</p> : null}
                     <label className="field">
                       <span>{t('accounts.accessTokenManual')}</span>
                       <input

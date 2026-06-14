@@ -49,7 +49,14 @@ export function colorForProvider(provider: ProviderName) {
       return '#1FC77A'
     case 'mastodon':
       return '#8B5CF6'
+    case 'pixelfed':
+      return '#F76C5E'
   }
+}
+
+/** Providers that reject text-only posts and require at least one media attachment. */
+export function providerRequiresMedia(provider: ProviderName) {
+  return provider === 'pixelfed'
 }
 
 export function maxCharsForProvider(provider: ProviderName) {
@@ -60,6 +67,8 @@ export function maxCharsForProvider(provider: ProviderName) {
       return 5000
     case 'mastodon':
       return 500
+    case 'pixelfed':
+      return 2000
   }
 }
 

@@ -19,6 +19,26 @@ import (
 
 const mastodonOAuthStateTTL = 10 * time.Minute
 
+// mastodonOAuthProviders are providers that authenticate via the Mastodon OAuth app flow
+// and share the /v1/oauth/mastodon/callback redirect (Pixelfed is Mastodon API-compatible).
+var mastodonOAuthProviders = map[string]bool{
+	"mastodon": true,
+	"pixelfed": true,
+}
+
+func isMastodonCompatibleOAuthProvider(name string) bool {
+	return mastodonOAuthProviders[strings.ToLower(strings.TrimSpace(name))]
+}
+
+// titleCaseProvider upper-cases the first letter of an ASCII provider name (e.g. "pixelfed" -> "Pixelfed").
+func titleCaseProvider(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return name
+	}
+	return strings.ToUpper(name[:1]) + name[1:]
+}
+
 type startMastodonOAuthRequest struct {
 	ProviderInstanceID string `json:"provider_instance_id"`
 	ReturnTo           string `json:"return_to"`
@@ -56,7 +76,7 @@ func (a *API) handleStartMastodonOAuth(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "provider_instance_id_invalid", http.StatusBadRequest)
 		return
 	}
-	if instance.Provider != "mastodon" {
+	if !isMastodonCompatibleOAuthProvider(instance.Provider) {
 		a.writeError(w, r, "provider_instance_must_be_mastodon", http.StatusBadRequest)
 		return
 	}
@@ -80,7 +100,7 @@ func (a *API) handleStartMastodonOAuth(w http.ResponseWriter, r *http.Request) {
 
 	state, err := a.signMastodonOAuthState(mastodonOAuthState{
 		Version:            1,
-		Provider:           "mastodon",
+		Provider:           instance.Provider,
 		UserID:             principal.User.ID,
 		TeamID:             r.PathValue("teamID"),
 		ProviderInstanceID: instance.ID,
@@ -139,7 +159,7 @@ func (a *API) handleMastodonOAuthCallback(w http.ResponseWriter, r *http.Request
 		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, "provider instance is no longer available")
 		return
 	}
-	if instance.Provider != "mastodon" {
+	if !isMastodonCompatibleOAuthProvider(instance.Provider) {
 		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, "provider instance no longer supports mastodon oauth")
 		return
 	}
@@ -173,11 +193,11 @@ func (a *API) handleMastodonOAuthCallback(w http.ResponseWriter, r *http.Request
 
 	account, err := a.store.CreateAccount(r.Context(), state.TeamID, accountInput)
 	if err != nil {
-		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, "failed to save mastodon account")
+		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, "failed to save account")
 		return
 	}
 
-	message := fmt.Sprintf("Connected Mastodon account %s", account.Username)
+	message := fmt.Sprintf("Connected %s account %s", titleCaseProvider(state.Provider), account.Username)
 	a.redirectOAuthResult(w, r, state.ReturnTo, "success", state.Provider, message)
 }
 
@@ -289,7 +309,7 @@ func (a *API) parseMastodonOAuthState(raw string) (mastodonOAuthState, error) {
 	if state.Version != 1 {
 		return mastodonOAuthState{}, errors.New("unsupported oauth state version")
 	}
-	if state.Provider != "mastodon" {
+	if !isMastodonCompatibleOAuthProvider(state.Provider) {
 		return mastodonOAuthState{}, errors.New("unexpected oauth provider")
 	}
 	if state.UserID == "" || state.TeamID == "" || state.ProviderInstanceID == "" || state.ReturnTo == "" {

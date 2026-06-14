@@ -119,6 +119,14 @@ func Run(ctx context.Context) error {
 			Website:       cfg.MastodonWebsite,
 			DefaultScopes: cfg.MastodonDefaultScopes,
 		}),
+		// Pixelfed speaks the Mastodon OAuth/API, so it reuses the shared Mastodon
+		// app-registration config and OAuth callback route.
+		provider.NewPixelfedProvider(provider.MastodonRegistrationConfig{
+			AppName:       cfg.MastodonAppName,
+			RedirectURI:   cfg.MastodonRedirectURI,
+			Website:       cfg.MastodonWebsite,
+			DefaultScopes: cfg.MastodonDefaultScopes,
+		}),
 	)
 
 	jobManager := aijobs.NewManager(dataStore, nil)

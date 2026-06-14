@@ -86,6 +86,7 @@ func validateE2EHandler(t *testing.T, s *sqlitestore.Store) http.Handler {
 		provider.NewBlueskyProvider(),
 		provider.NewFriendicaProvider(),
 		provider.NewMastodonProvider(provider.MastodonRegistrationConfig{}),
+		provider.NewPixelfedProvider(provider.MastodonRegistrationConfig{}),
 	)
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
 	catalog, err := i18n.Load()
@@ -275,6 +276,76 @@ func TestValidateE2E_CrossPost_DifferentLimits(t *testing.T) {
 	})
 }
 
+func TestValidateE2E_Pixelfed_RequiresMedia(t *testing.T) {
+	s := newValidateE2EStore(t)
+	token, teamID, _, _ := seedValidateE2E(t, s)
+	pixelAcc, err := s.CreateAccount(context.Background(), teamID, domain.ConnectedAccount{
+		Provider: "pixelfed", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://pixel.example", Username: "e2e-pixel", AccessToken: "tok",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := validateE2EHandler(t, s)
+
+	post := func(t *testing.T, mediaIDs []string) validationResponseJSON {
+		t.Helper()
+		payload := map[string]any{
+			"content":         "a nice caption",
+			"scheduled_at":    time.Now().UTC().Format(time.RFC3339),
+			"target_accounts": []string{pixelAcc.ID},
+		}
+		if len(mediaIDs) > 0 {
+			payload["media_ids"] = mediaIDs
+		}
+		body, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/teams/"+teamID+"/posts/validate", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
+		}
+		var resp validationResponseJSON
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	t.Run("text-only post is invalid for pixelfed", func(t *testing.T) {
+		resp := post(t, nil)
+		if resp.Valid {
+			t.Error("overall valid = true, want false (pixelfed requires media)")
+		}
+		d := findDestJSON(resp.Destinations, pixelAcc.ID)
+		if d == nil {
+			t.Fatal("pixelfed destination missing")
+		}
+		if d.Valid || !d.RequiresMedia || !d.MissingMedia {
+			t.Errorf("pixelfed dest = %+v, want valid=false requiresMedia=true missingMedia=true", d)
+		}
+	})
+
+	t.Run("post with media is valid for pixelfed", func(t *testing.T) {
+		resp := post(t, []string{"media-123"})
+		if !resp.Valid {
+			t.Error("overall valid = false, want true (media attached)")
+		}
+		d := findDestJSON(resp.Destinations, pixelAcc.ID)
+		if d == nil {
+			t.Fatal("pixelfed destination missing")
+		}
+		if !d.Valid || !d.RequiresMedia || d.MissingMedia {
+			t.Errorf("pixelfed dest = %+v, want valid=true requiresMedia=true missingMedia=false", d)
+		}
+	})
+}
+
 // validationResponseJSON mirrors the backend's validationResponse for JSON decoding.
 type validationResponseJSON struct {
 	MaxChars      int                   `json:"max_chars"`
@@ -284,11 +355,13 @@ type validationResponseJSON struct {
 }
 
 type destinationInfoJSON struct {
-	AccountID string `json:"account_id"`
-	Provider  string `json:"provider"`
-	MaxChars  int    `json:"max_chars"`
-	Length    int    `json:"length"`
-	Valid     bool   `json:"valid"`
+	AccountID     string `json:"account_id"`
+	Provider      string `json:"provider"`
+	MaxChars      int    `json:"max_chars"`
+	Length        int    `json:"length"`
+	Valid         bool   `json:"valid"`
+	RequiresMedia bool   `json:"requires_media"`
+	MissingMedia  bool   `json:"missing_media"`
 }
 
 func findDestJSON(dests []destinationInfoJSON, accountID string) *destinationInfoJSON {

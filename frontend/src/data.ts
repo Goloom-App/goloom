@@ -204,6 +204,11 @@ export const initialSettings: SettingsState = {
       defaultMaxChars: 500,
       mediaUploads: true,
     },
+    pixelfed: {
+      enabled: true,
+      defaultMaxChars: 2000,
+      mediaUploads: true,
+    },
   },
 }
 

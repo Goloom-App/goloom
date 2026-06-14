@@ -15,6 +15,7 @@ import {
   effectiveBody,
   accountContentOverrideForSave,
   isAnyTargetAccountOverCharLimit,
+  accountsMissingRequiredMedia,
 } from './composerUtils'
 import type { EditorDraftState } from './types'
 import { ComposerAIAssist } from './ComposerAIAssist'
@@ -161,6 +162,11 @@ export function PostComposer({
     [draft, teamAccounts],
   )
 
+  const missingMediaAccounts = useMemo(
+    () => accountsMissingRequiredMedia(draft, teamAccounts),
+    [draft, teamAccounts],
+  )
+
   const accountLimitStatus = useMemo(() => {
     const status: Record<string, { len: number; max: number; over: boolean }> = {}
     for (const id of draft.targetAccountIds) {
@@ -220,25 +226,40 @@ export function PostComposer({
     })
   }
 
-  const destinationsPanel = isMobile ? (
-    <section className="composer-destinations-mobile" aria-label={t('composer.postDestinationsAria')}>
-      <p className="eyebrow">{t('eyebrow.destinations')}</p>
-      <p className="hint composer-destinations-mobile__hint">{t('composer.destinationsHint')}</p>
+  const allSelected = teamAccounts.length > 0 && draft.targetAccountIds.length === teamAccounts.length
+  const toggleAllDestinations = () => {
+    setDraft((current) => ({
+      ...current,
+      targetAccountIds: allSelected ? [] : teamAccounts.map((account) => account.id),
+    }))
+  }
+
+  const destinationsBar = (
+    <section className="composer-destinations-bar" aria-label={t('composer.postDestinationsAria')}>
+      <div className="composer-destinations-bar__head">
+        <p className="eyebrow">{t('eyebrow.destinations')}</p>
+        {teamAccounts.length > 1 ? (
+          <button type="button" className="composer-destinations-bar__all" onClick={toggleAllDestinations}>
+            {allSelected ? t('composer.clearAll') : t('composer.selectAll')}
+          </button>
+        ) : null}
+      </div>
       {teamAccounts.length === 0 ? (
         <p className="hint">{t('composer.noAccountsWorkspace')}</p>
       ) : (
-        <div className="composer-destination-row composer-destination-row--mobile" role="group">
+        <div className="composer-destination-row composer-destination-row--bar" role="group">
           {teamAccounts.map((account) => {
             const selected = draft.targetAccountIds.includes(account.id)
+            const over = accountLimitStatus[account.id]?.over
             return (
               <button
                 key={account.id}
                 type="button"
                 data-testid="composer-destination-toggle"
-                className={`composer-destination-mobile ${selected ? 'composer-destination-mobile--selected' : ''} ${accountLimitStatus[account.id]?.over ? 'composer-destination-mobile--over-limit' : ''}`}
+                className={`composer-destination-chip ${selected ? 'composer-destination-chip--selected' : ''} ${over ? 'composer-destination-chip--over-limit' : ''}`}
                 aria-pressed={selected}
                 title={
-                  accountLimitStatus[account.id]?.over
+                  over
                     ? t('composer.exceedsLimit', {
                         name: account.name,
                         len: accountLimitStatus[account.id]!.len,
@@ -248,9 +269,9 @@ export function PostComposer({
                 }
                 onClick={() => toggleDestination(account.id)}
               >
-                <DestinationAvatar account={account} error={accountLimitStatus[account.id]?.over} />
-                <span className="composer-destination-mobile__label">
-                  {account.username.replace(/^@/, '').slice(0, 14)}
+                <DestinationAvatar account={account} compact error={over} />
+                <span className="composer-destination-chip__label">
+                  {account.username.replace(/^@/, '').slice(0, 16)}
                 </span>
               </button>
             )
@@ -258,36 +279,6 @@ export function PostComposer({
         </div>
       )}
     </section>
-  ) : (
-    <aside className="composer-sidebar composer-sidebar--destinations">
-      <p className="eyebrow">{t('eyebrow.destinations')}</p>
-      <div className="composer-destination-row" role="group" aria-label={t('composer.postDestinationsAria')}>
-        {teamAccounts.map((account) => {
-          const selected = draft.targetAccountIds.includes(account.id)
-          return (
-            <button
-              key={account.id}
-              type="button"
-              className={`composer-destination-toggle ${selected ? 'composer-destination-toggle--selected' : ''} ${accountLimitStatus[account.id]?.over ? 'composer-destination-toggle--over-limit' : ''}`}
-              aria-pressed={selected}
-              title={
-                accountLimitStatus[account.id]?.over
-                  ? t('composer.exceedsLimit', {
-                      name: account.name,
-                      len: accountLimitStatus[account.id]!.len,
-                      max: accountLimitStatus[account.id]!.max,
-                    })
-                  : `${account.name} · ${account.provider}`
-              }
-              onClick={() => toggleDestination(account.id)}
-            >
-              <DestinationAvatar account={account} error={accountLimitStatus[account.id]?.over} />
-            </button>
-          )
-        })}
-      </div>
-      {teamAccounts.length === 0 ? <p className="hint">{t('composer.noAccountsWorkspace')}</p> : null}
-    </aside>
   )
 
   const previewsPanel = !previewColumnExternal || isMobile ? (
@@ -496,11 +487,19 @@ export function PostComposer({
             />
           ) : null}
 
+          {missingMediaAccounts.length > 0 ? (
+            <p className="hint composer-requires-media-hint">
+              {t('composer.requiresMediaHint', {
+                names: missingMediaAccounts.map((a) => a.name).join(', '),
+              })}
+            </p>
+          ) : null}
+
           <footer className="composer-footer-actions">
             <button
               type="button"
               className="button button--primary"
-              disabled={syncing || draft.targetAccountIds.length === 0 || overAnyLimit}
+              disabled={syncing || draft.targetAccountIds.length === 0 || overAnyLimit || missingMediaAccounts.length > 0}
               onClick={() => void onSaveInternal()}
             >
               <Icon name="calendar" className="inline-icon" />
@@ -518,9 +517,9 @@ export function PostComposer({
 
   const inner = (
     <div className={`composer-container composer-container--enhanced ${previewsPanel ? 'composer-container--three-col' : 'composer-container--two-col'}`} onClick={(event) => event.stopPropagation()}>
-      {destinationsPanel}
       <div className="composer-main">
         {composerHeader}
+        {destinationsBar}
         {editingContent}
       </div>
       {previewsPanel}
@@ -547,7 +546,7 @@ export function PostComposer({
           </div>
           {mobilePanel === 'edit' ? (
             <div className="composer-mobile-edit-scroll">
-              {destinationsPanel}
+              {destinationsBar}
               {editingContent}
             </div>
           ) : (
