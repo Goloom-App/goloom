@@ -985,6 +985,8 @@
       "draftCreated": "Draft created",
       "draftUpdated": "Draft updated",
       "composerContextAttached": "Composer draft attached",
+      "composerContextWithTargets": "Composer · {{targets}}",
+      "composerContextDetach": "Detach the composer draft",
       "applyToComposer": "Apply in composer",
       "openInComposer": "Open in Composer",
       "toolRunning": "Running: {{tool}}",
