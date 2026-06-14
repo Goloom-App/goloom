@@ -62,6 +62,7 @@ export function AdminProvidersTab({
                 }}
               >
                 <option value="mastodon">{t('accounts.providerMastodon')}</option>
+                <option value="pixelfed">{t('accounts.providerPixelfed')}</option>
                 <option value="friendica">{t('accounts.providerFriendica')}</option>
                 <option value="bluesky">{t('accounts.providerBluesky')}</option>
               </select>

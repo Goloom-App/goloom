@@ -86,7 +86,7 @@ create table if not exists api_tokens (
 
 create table if not exists provider_instances (
     id uuid primary key default gen_random_uuid(),
-    provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    provider text not null check (provider <> ''),
     name text not null,
     instance_url text not null,
     client_id text not null default '',
@@ -104,7 +104,7 @@ create table if not exists social_accounts (
     id uuid primary key default gen_random_uuid(),
     team_id uuid not null references teams(id) on delete cascade,
     name text not null default '',
-    provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    provider text not null check (provider <> ''),
     auth_type text not null default 'oauth_token' check (auth_type in ('oauth_token', 'app_password')),
     provider_instance_id uuid references provider_instances(id) on delete set null,
     instance_url text not null,
@@ -116,6 +116,18 @@ create table if not exists social_accounts (
     max_chars_override integer,
     created_at timestamptz not null default now()
 );
+
+-- Relax the provider CHECK constraints so new Mastodon-compatible providers (e.g. pixelfed)
+-- are accepted; the application's provider registry is the source of truth for valid names.
+alter table if exists provider_instances
+    drop constraint if exists provider_instances_provider_check;
+alter table if exists provider_instances
+    add constraint provider_instances_provider_check check (provider <> '');
+
+alter table if exists social_accounts
+    drop constraint if exists social_accounts_provider_check;
+alter table if exists social_accounts
+    add constraint social_accounts_provider_check check (provider <> '');
 
 alter table if exists social_accounts
     add column if not exists auth_type text default 'oauth_token';
