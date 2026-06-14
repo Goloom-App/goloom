@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -136,7 +137,15 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 
 		principal, err := s.authenticate(r.Context(), token)
 		if err != nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			// Only a genuine "no such token/session" (ErrNoRows) means the caller is
+			// unauthenticated. A transient backend failure (DB contention, context
+			// cancellation, connection loss) must surface as 500 — returning 401 here
+			// would make the web UI treat a hiccup as an expired session and log out.
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+			} else {
+				http.Error(w, "authentication unavailable", http.StatusInternalServerError)
+			}
 			return
 		}
 
