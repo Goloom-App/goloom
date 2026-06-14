@@ -1,37 +1,87 @@
 ---
 title: First login
-description: Bootstrap your first admin, then create API tokens and rotate the bootstrap secret.
+description: Bootstrap your first admin, sign in with OIDC or the recovery URL, and create scoped API tokens.
 sidebar:
   order: 3
 ---
 
 When goloom starts for the first time it has no users. You create the first
 admin using the **bootstrap token** you set in
-[configuration](/getting-started/configuration/).
+[configuration](/getting-started/configuration/). After that, day-to-day sign-in
+is via **OpenID Connect (OIDC)**, with the token form kept as a recovery path.
 
 ## 1. Open the app
 
 Navigate to your instance (for local runs, <http://localhost:8080>).
 
-## 2. Bootstrap with the admin token
+## 2. Bootstrap the first admin
 
-In the **Settings** screen, provide the value of `BOOTSTRAP_ADMIN_TOKEN`. This
-grants you initial admin access so you can create your first team and connect
-accounts.
+On first start the login screen shows an **administrator token** field. Paste the
+value of `BOOTSTRAP_ADMIN_TOKEN`. This grants initial admin access so you can
+create your first team and connect accounts.
 
-## 3. Create normal API tokens
+## 3. Sign in with OIDC
 
-Once you're in, create regular **API tokens** for day-to-day use and for any AI
-agents that will talk to the API. Tokens are stored as hashes — copy a token
-when it is shown, because it cannot be retrieved again.
+Once OIDC is configured (`OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, …), it becomes the
+primary sign-in method:
 
-Use a token as a bearer credential:
+- Opening the app **starts the OIDC flow automatically** and redirects you to
+  your identity provider.
+- After an explicit **Sign out** you land back on the login screen (it does *not*
+  bounce straight back to the IdP), so you can switch accounts or reach recovery.
+
+### Recovery URL
+
+The token / bootstrap form lives behind a dedicated fallback URL — handy when
+OIDC is misconfigured or you need the bootstrap admin:
+
+```
+https://your-goloom-host/?login=recovery
+```
+
+The login screen also links to it ("Sign in with a recovery token"). Deployments
+**without** OIDC always show the token form directly.
+
+## 4. Create scoped API tokens
+
+Use **Settings → API tokens → + New Token** for automation and AI agents. The
+modal lets you set:
+
+- **Name** and an optional **description**.
+- **Team** — restrict the token to a single team, or grant access to all teams
+  you belong to.
+- **Scopes** — leave empty for full access, or restrict to specific actions:
+
+  | Scope | Allows |
+  | --- | --- |
+  | `read` | Read posts, calendar, analytics, media, accounts, AI context |
+  | `write` | Any create/update (superset of the two below) |
+  | `write:draft` | Create/update drafts only |
+  | `write:schedule` | Create/update scheduled posts only |
+  | `delete` | Any delete (superset of the two below) |
+  | `delete:draft` | Delete drafts only |
+  | `delete:schedule` | Delete scheduled posts only |
+
+- **Expiry** date.
+
+The token is shown **once** in a dialog — click it to copy. It cannot be
+retrieved later. Use it as a bearer credential:
 
 ```http
 Authorization: Bearer <api-token>
 ```
 
-## 4. Rotate the bootstrap secret
+:::note
+The old AI-specific scopes (`ai:read:context`, `ai:write:drafts`, …) were
+removed. Re-create any existing AI/automation tokens with the scopes above —
+`read` plus the relevant `write:*` are enough for an agent. See the
+[MCP guide](/guides/mcp/).
+:::
+
+Your current browser sign-in appears in the token list marked **"this browser"**;
+it is created automatically and rolls over after 12 h of inactivity.
+
+## 5. Rotate the bootstrap secret
 
 After your admin and tokens exist, **rotate `BOOTSTRAP_ADMIN_TOKEN`** (or remove
 it) so it can no longer be used to gain admin access.

@@ -45,13 +45,22 @@ The MCP endpoint uses the same **bearer tokens** as the REST API:
 Authorization: Bearer <api-token>
 ```
 
-API tokens must carry one of the AI scopes:
+A token with **no scopes** has full access. To restrict an agent, grant scopes
+(see [first login](/getting-started/first-login/)):
 
-- `ai:read:context` — read teams, posts, calendar, analytics and brand profile.
-- `ai:write:drafts` — additionally draft, schedule and modify posts.
+- `read` — required to open the MCP connection and use any read tool (teams,
+  posts, calendar, analytics, brand profile).
+- `write:draft` / `write:schedule` / `write` — needed for `draft_post` /
+  `schedule_post` / the campaign- and feed-creating tools.
+- `delete` — needed for `delete_post`.
 
-Create a scoped API token from **Settings** (see [first login](/getting-started/first-login/)).
-Grant only the scopes an agent actually needs.
+You can also bind a token to a **single team**. Grant only what an agent needs —
+for example `read` + `write:draft` for an agent that only prepares drafts.
+
+:::note
+The previous AI-specific scopes (`ai:read:context`, `ai:write:drafts`, …) were
+removed; re-create existing agent tokens with the scopes above.
+:::
 
 ## Connecting a client
 
@@ -93,10 +102,12 @@ like this:
 | `create_rss_feed` | Create an RSS feed automation with a content template. |
 | `get_analytics` | Engagement analytics (likes, reposts, followers) for a team or posts. |
 | `get_hashtag_performance` | Best-performing hashtags from published-post analytics. |
+| `get_analytics_timeslots` | Best times to post: weekday/hour slots ranked by historical engagement, in a chosen timezone. |
 
 ## Working safely with agents
 
-- Scope tokens tightly (`ai:read:context` only, when an agent should not write).
+- Scope tokens tightly (`read` only, when an agent should not write) and bind
+  them to a single team where possible.
 - Route agent output through the [review queue](/guides/review-queue/) so a human
   approves before anything publishes.
 - Every action is recorded in the team [audit log](/admin/administration/),

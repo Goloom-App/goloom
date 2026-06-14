@@ -17,6 +17,21 @@ a separate tool.
 Metrics are normalized across providers where possible (Mastodon and
 Friendica expose Mastodon-compatible metrics; Bluesky provides its own).
 
+## Filtering by account
+
+On the **Accounts** tab the account cards act as a filter. By default every
+account is included. The first click filters down to that one account; further
+clicks add or remove accounts, and a **Reset** button returns to "all".
+Deselected accounts are dimmed so it's clear which ones the growth chart and
+engagement heatmap currently show.
+
+## Best time to post
+
+The engagement heatmap highlights the weekday/hour buckets where your published
+posts performed best. AI agents can request the same signal through the
+[`get_analytics_timeslots`](/guides/mcp/) MCP tool, which ranks slots by
+historical engagement in a chosen timezone.
+
 ## Over the API
 
 Analytics are available under the team-scoped analytics endpoints:
