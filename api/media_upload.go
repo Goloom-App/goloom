@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -85,6 +86,41 @@ func (a *API) handleTeamMediaUploadToLibrary(w http.ResponseWriter, r *http.Requ
 	}
 
 	auth.WriteJSON(w, http.StatusCreated, created)
+}
+
+func (a *API) handleTeamMediaRename(w http.ResponseWriter, r *http.Request) {
+	teamID := r.PathValue("teamID")
+	mediaID := r.PathValue("mediaID")
+
+	var input struct {
+		Filename string `json:"filename"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+		return
+	}
+	filename := strings.TrimSpace(input.Filename)
+	if filename == "" {
+		a.writeError(w, r, "filename_required", http.StatusBadRequest)
+		return
+	}
+	if len([]rune(filename)) > 255 {
+		a.writeError(w, r, "filename_too_long", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := a.store.GetMediaItemByID(r.Context(), teamID, mediaID); err != nil {
+		a.writeError(w, r, "not_found", http.StatusNotFound)
+		return
+	}
+
+	updated, err := a.store.UpdateMediaItemFilename(r.Context(), teamID, mediaID, filename)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	a.recordAudit(r, teamID, "media.rename", "media", &mediaID, "Renamed media to "+filename)
+	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
 func (a *API) handleTeamMediaDelete(w http.ResponseWriter, r *http.Request) {

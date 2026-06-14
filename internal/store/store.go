@@ -189,6 +189,7 @@ type Store interface {
 	FindMediaItemByTeamSHA256(ctx context.Context, teamID, sha256 string) (item domain.MediaItem, ok bool, err error)
 	GetMediaItemByID(ctx context.Context, teamID, mediaID string) (domain.MediaItem, error)
 	ListTeamMedia(ctx context.Context, teamID string) ([]domain.MediaItem, error)
+	UpdateMediaItemFilename(ctx context.Context, teamID, mediaID, filename string) (domain.MediaItem, error)
 	DeleteMediaItem(ctx context.Context, teamID, mediaID string) error
 	GetMediaProviderMapping(ctx context.Context, mediaID, accountID string) (domain.MediaProviderMapping, error)
 	UpsertMediaProviderMapping(ctx context.Context, mapping domain.MediaProviderMapping) error

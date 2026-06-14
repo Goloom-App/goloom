@@ -126,6 +126,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("POST /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAccount))))
 	mux.Handle("GET /v1/teams/{teamID}/media", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamMediaList)))))
 	mux.Handle("POST /v1/teams/{teamID}/media", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaUploadToLibrary))))
+	mux.Handle("PATCH /v1/teams/{teamID}/media/{mediaID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaRename))))
 	mux.Handle("DELETE /v1/teams/{teamID}/media/{mediaID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaDelete))))
 	mux.Handle("GET /v1/teams/{teamID}/media/{mediaID}/preview", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaPreview))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/{accountID}/migrate", a.auth.RequireAuth(http.HandlerFunc(a.handleMigrateAccount)))

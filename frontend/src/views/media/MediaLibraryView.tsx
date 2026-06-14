@@ -70,6 +70,19 @@ export function MediaLibraryView({
     [api, loadMedia, teamId, onError, t],
   )
 
+  const onRename = useCallback(
+    async (mediaId: string, filename: string) => {
+      try {
+        await api.renameTeamMedia(teamId, mediaId, filename)
+        await loadMedia()
+      } catch (e) {
+        const raw = e instanceof Error ? e.message : t('common.actionFailed')
+        onError(translateApiError(raw, t))
+      }
+    },
+    [api, loadMedia, teamId, onError, t],
+  )
+
   return (
     <div className="media-library-view glass-panel">
       {loading && entries.length === 0 ? <p className="hint">{t('common.loadingMedia')}</p> : null}
@@ -79,6 +92,7 @@ export function MediaLibraryView({
         entries={entries}
         onUpload={onUpload}
         onDelete={onDelete}
+        onRename={onRename}
         uploading={uploading}
         api={api}
       />

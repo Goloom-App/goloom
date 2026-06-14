@@ -93,6 +93,19 @@ func (s *Store) ListTeamMedia(ctx context.Context, teamID string) ([]domain.Medi
 	return items, nil
 }
 
+func (s *Store) UpdateMediaItemFilename(ctx context.Context, teamID, mediaID, filename string) (domain.MediaItem, error) {
+	res, err := s.db.ExecContext(ctx,
+		`update media_items set filename = ? where id = ? and team_id = ?`,
+		filename, mediaID, teamID)
+	if err != nil {
+		return domain.MediaItem{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.MediaItem{}, sql.ErrNoRows
+	}
+	return s.GetMediaItemByID(ctx, teamID, mediaID)
+}
+
 func (s *Store) DeleteMediaItem(ctx context.Context, teamID, mediaID string) error {
 	_, err := s.db.ExecContext(ctx, `delete from media_items where id = ? and team_id = ?`, mediaID, teamID)
 	return err

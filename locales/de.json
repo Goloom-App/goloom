@@ -837,7 +837,14 @@
       "attachedMediaAria": "Angehängte Medien",
       "addSelectedToPost": "Auswahl zum Beitrag hinzufügen ({{count}})",
       "noFilesInLibrary": "Noch keine Dateien in der Bibliothek. Laden Sie oben eine hoch.",
-      "libraryItemsPickerAria": "Bibliothekseinträge"
+      "libraryItemsPickerAria": "Bibliothekseinträge",
+      "searchPlaceholder": "Nach Dateiname suchen…",
+      "noSearchResults": "Keine Medien passen zu „{{query}}\".",
+      "rename": "Umbenennen",
+      "renameTitle": "Dateiname",
+      "openPreview": "Vorschau öffnen",
+      "previous": "Zurück",
+      "next": "Weiter"
     },
     "composer": {
       "scheduledAt": "Geplant für",

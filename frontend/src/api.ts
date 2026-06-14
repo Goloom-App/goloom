@@ -876,6 +876,13 @@ export function createApiClient(options: ApiClientOptions) {
         body: form,
       })
     },
+    renameTeamMedia(teamID: string, mediaID: string, filename: string) {
+      return request<BackendMediaItem>(options, `/v1/teams/${teamID}/media/${mediaID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify({ filename }),
+      })
+    },
     deleteTeamMedia(teamID: string, mediaID: string) {
       return request<void>(options, `/v1/teams/${teamID}/media/${mediaID}`, {
         method: 'DELETE',

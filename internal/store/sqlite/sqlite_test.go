@@ -612,3 +612,33 @@ func TestSQLite_MediaFindByTeamSHA256(t *testing.T) {
 		t.Fatal("duplicate team_id+sha256 should violate unique index")
 	}
 }
+
+func TestSQLite_UpdateMediaItemFilename(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "medren", "medren@x", "Medren")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "medren-" + uuid.NewString()})
+	created, err := s.CreateMediaItem(ctx, domain.MediaItem{
+		TeamID: team.ID, Sha256: "ren123", Filename: "old.png", MimeType: "image/png", SizeBytes: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := s.UpdateMediaItemFilename(ctx, team.ID, created.ID, "new-name.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Filename != "new-name.png" {
+		t.Fatalf("filename = %q, want new-name.png", updated.Filename)
+	}
+	got, _ := s.GetMediaItemByID(ctx, team.ID, created.ID)
+	if got.Filename != "new-name.png" {
+		t.Fatalf("persisted filename = %q", got.Filename)
+	}
+
+	// A foreign team / unknown id must not match.
+	if _, err := s.UpdateMediaItemFilename(ctx, "other-team", created.ID, "x.png"); err == nil {
+		t.Fatal("rename across teams must fail")
+	}
+}
