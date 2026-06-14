@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"sort"
 	"strings"
 
 	localesbundle "git.f4mily.net/goloom/locales"
@@ -13,8 +14,25 @@ import (
 // DefaultLanguage is used when Accept-Language is missing or unsupported.
 const DefaultLanguage = "en"
 
-// SupportedLanguages lists locale files shipped with the binary.
-var SupportedLanguages = []string{"en", "de"}
+// SupportedLanguages lists locale files shipped with the binary. It is derived
+// from the embedded locale files, so dropping in a new locales/<code>.json is
+// enough — no code change needed to serve a new language.
+var SupportedLanguages = discoverLanguages(localesbundle.FS)
+
+// discoverLanguages returns the sorted locale codes for every <code>.json in
+// fsys, falling back to just the default language if none are present.
+func discoverLanguages(fsys fs.FS) []string {
+	matches, err := fs.Glob(fsys, "*.json")
+	if err != nil || len(matches) == 0 {
+		return []string{DefaultLanguage}
+	}
+	langs := make([]string, 0, len(matches))
+	for _, name := range matches {
+		langs = append(langs, strings.TrimSuffix(name, ".json"))
+	}
+	sort.Strings(langs)
+	return langs
+}
 
 type localeFile struct {
 	API map[string]string `json:"api"`

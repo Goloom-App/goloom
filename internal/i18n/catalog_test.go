@@ -1,6 +1,45 @@
 package i18n
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+	"testing/fstest"
+)
+
+func TestDiscoverLanguagesFromFS(t *testing.T) {
+	fsys := fstest.MapFS{
+		"en.json":   {Data: []byte(`{"api":{}}`)},
+		"de.json":   {Data: []byte(`{"api":{}}`)},
+		"fr.json":   {Data: []byte(`{"api":{}}`)},
+		"README.md": {Data: []byte("ignore me")},
+	}
+	got := discoverLanguages(fsys)
+	want := []string{"de", "en", "fr"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("discoverLanguages = %v, want %v (sorted, .json only)", got, want)
+	}
+}
+
+func TestDiscoverLanguagesFallsBackToDefault(t *testing.T) {
+	got := discoverLanguages(fstest.MapFS{})
+	if len(got) != 1 || got[0] != DefaultLanguage {
+		t.Fatalf("empty FS should fall back to [%q], got %v", DefaultLanguage, got)
+	}
+}
+
+func TestSupportedLanguagesDerivedFromBundle(t *testing.T) {
+	has := func(code string) bool {
+		for _, l := range SupportedLanguages {
+			if l == code {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("en") || !has("de") {
+		t.Fatalf("SupportedLanguages should be derived from the bundle and include en+de, got %v", SupportedLanguages)
+	}
+}
 
 func TestMatchLanguage(t *testing.T) {
 	tests := []struct {
