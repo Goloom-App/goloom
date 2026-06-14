@@ -20,6 +20,7 @@ import {
 import type { EditorDraftState } from './types'
 import { ComposerAIAssist } from './ComposerAIAssist'
 import { HashtagSuggestions } from './HashtagSuggestions'
+import { clearComposerChatContext, syncComposerChatContext } from '../ai/composerChatBridge'
 
 type Api = ReturnType<typeof createApiClient>
 
@@ -183,6 +184,30 @@ export function PostComposer({
   }, [draft, teamAccounts])
 
   const minMaxChars = useMemo(() => maxCharsForAccounts(selectedAccounts), [selectedAccounts])
+
+  // Keep the AI chat in sync with the open composer (text + selected destinations)
+  // so the user can ask "rework this for Bluesky" without re-pasting anything.
+  useEffect(() => {
+    if (!open || !isAiEnabled) {
+      return
+    }
+    syncComposerChatContext({
+      content: effectiveBody(draft, activeTab === 'default' ? null : activeTab),
+      title: draft.title,
+      targets: selectedAccounts.map((account) => ({ name: account.name, provider: account.provider })),
+    })
+  }, [open, isAiEnabled, draft, activeTab, selectedAccounts])
+
+  // Detach the composer context from the chat once the composer is closed.
+  useEffect(() => {
+    if (!isAiEnabled) {
+      return
+    }
+    if (!open) {
+      clearComposerChatContext()
+    }
+    return () => clearComposerChatContext()
+  }, [open, isAiEnabled])
 
   if (!open) {
     return null
@@ -433,6 +458,7 @@ export function PostComposer({
               draft={draft}
               setDraft={setDraft}
               activeTab={activeTab}
+              teamAccounts={teamAccounts}
             />
           ) : null}
 

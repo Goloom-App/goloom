@@ -6732,6 +6732,18 @@ button.admin-instance-health {
   }
 }
 
+/* On phones the floating drawer becomes a near-fullscreen sheet so the chat,
+   the composer-context chip and the @-suggestions are all usable. */
+@media (max-width: 640px) {
+  .ai-chat-drawer {
+    right: 0.5rem;
+    left: 0.5rem;
+    bottom: calc(0.5rem + var(--safe-area-bottom, 0px));
+    width: auto;
+    height: min(78vh, calc(100vh - 5rem));
+  }
+}
+
 .ai-chat-drawer__header {
   display: flex;
   align-items: center;
@@ -6866,8 +6878,16 @@ button.admin-instance-health {
   color: inherit;
   font-size: 0.88rem;
 }
-.ai-chat-suggestions button:hover {
-  background: var(--color-surface-2, rgba(127, 127, 127, 0.12));
+.ai-chat-suggestions button:hover,
+.ai-chat-suggestions button.ai-chat-suggestions__active {
+  background: var(--accent-soft, rgba(127, 127, 127, 0.12));
+}
+
+.ai-chat-chip--context {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
 }
 
 .ai-chat-drawer__input {

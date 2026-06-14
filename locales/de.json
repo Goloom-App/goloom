@@ -985,6 +985,8 @@
       "draftCreated": "Entwurf erstellt",
       "draftUpdated": "Entwurf aktualisiert",
       "composerContextAttached": "Composer-Entwurf angehängt",
+      "composerContextWithTargets": "Composer · {{targets}}",
+      "composerContextDetach": "Composer-Entwurf lösen",
       "applyToComposer": "In Composer übernehmen",
       "openInComposer": "Im Composer öffnen",
       "toolRunning": "Führe aus: {{tool}}",

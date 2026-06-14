@@ -5,7 +5,8 @@ import { Loader2, MessageSquareText, Sparkles } from 'lucide-react'
 
 import { getApiClient, useTriggerAIJob } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
-import { openAIChatWithComposerDraft } from '../ai/composerChatBridge'
+import { openAIChatWithComposerContext } from '../ai/composerChatBridge'
+import type { AccountRecord } from '../../types'
 import type { EditorDraftState } from './types'
 
 function sleep(ms: number) {
@@ -33,12 +34,14 @@ export function ComposerAIAssist({
   draft,
   setDraft,
   activeTab,
+  teamAccounts,
 }: {
   teamId: string
   isAiEnabled: boolean
   draft: EditorDraftState
   setDraft: Dispatch<SetStateAction<EditorDraftState>>
   activeTab: string
+  teamAccounts: AccountRecord[]
 }) {
   const { t } = useTranslation()
   const triggerJob = useTriggerAIJob()
@@ -141,7 +144,15 @@ export function ComposerAIAssist({
           className="btn btn--ghost btn--sm"
           data-testid="composer-ai-chat"
           disabled={draft.content.trim().length === 0}
-          onClick={() => openAIChatWithComposerDraft(draft.content)}
+          onClick={() =>
+            openAIChatWithComposerContext({
+              content: draft.content,
+              title: draft.title,
+              targets: teamAccounts
+                .filter((account) => draft.targetAccountIds.includes(account.id))
+                .map((account) => ({ name: account.name, provider: account.provider })),
+            })
+          }
         >
           <MessageSquareText size={14} /> {t('composer.aiOpenChat')}
         </button>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Bot, Loader2, Send, Sparkles, X } from 'lucide-react'
 import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, createApiClient } from '../../api'
 import { composerContextEvent } from './composerChatBridge'
+import type { ComposerChatContext, ComposerChatTarget } from './composerChatBridge'
 
 type ApiClient = ReturnType<typeof createApiClient>
 
@@ -58,11 +59,13 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
   const [input, setInput] = useState('')
   const [pendingMentions, setPendingMentions] = useState<BackendAIChatMention[]>([])
   const [busy, setBusy] = useState(false)
-  const [composerContext, setComposerContext] = useState<string | null>(null)
+  const [composerContext, setComposerContext] = useState<{ content: string; targets: ComposerChatTarget[] } | null>(null)
   // Once a composer draft was discussed, assistant replies offer an "apply" action.
   const [composerSession, setComposerSession] = useState(false)
   const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([])
   const [suggestions, setSuggestions] = useState<{ kind: 'mention' | 'command'; query: string } | null>(null)
+  // Keyboard-driven selection within the @mention / slash-command dropdown.
+  const [activeSuggestion, setActiveSuggestion] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -82,13 +85,26 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
 
   useEffect(() => {
     function onComposerContext(event: Event) {
-      const detail = (event as CustomEvent).detail as { content?: string } | undefined
-      if (!detail?.content?.trim()) {
+      const detail = (event as CustomEvent).detail as ComposerChatContext | undefined
+      if (!detail) {
         return
       }
-      setComposerContext(detail.content)
-      setOpen(true)
-      setTimeout(() => inputRef.current?.focus(), 0)
+      if (detail.clear) {
+        setComposerContext(null)
+        return
+      }
+      if (!detail.content.trim()) {
+        // No text yet (e.g. an empty composer just opened): don't attach a chip,
+        // but if the previous context is now empty, drop it.
+        setComposerContext((prev) => (prev ? null : prev))
+        return
+      }
+      setComposerContext({ content: detail.content, targets: detail.targets ?? [] })
+      // Manual triggers (a button) open and focus the chat; auto-sync stays silent.
+      if (!detail.auto) {
+        setOpen(true)
+        setTimeout(() => inputRef.current?.focus(), 0)
+      }
     }
     window.addEventListener(composerContextEvent, onComposerContext)
     return () => window.removeEventListener(composerContextEvent, onComposerContext)
@@ -157,6 +173,11 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
       }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestions, mentionOptions, t])
+
+  // Keep the keyboard highlight in range as the suggestion list changes.
+  useEffect(() => {
+    setActiveSuggestion(0)
+  }, [suggestions])
 
   function detectSuggestions(value: string) {
     const beforeCursor = value
@@ -278,9 +299,15 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
     const mentions = pendingMentions.filter((mention) => text.includes(`@${mention.name}`))
     let modelText = text
     if (composerContext) {
-      modelText += '\n\n[The user is editing this post in the composer. Work on THIS text and reply with the revised post text only; do not create a new draft unless explicitly asked:]\n'
-        + composerContext
-      setComposerContext(null)
+      const targetNote =
+        composerContext.targets.length > 0
+          ? ` It is being posted to: ${composerContext.targets.map((target) => `${target.name} (${target.provider})`).join(', ')}.`
+          : ''
+      modelText +=
+        `\n\n[The user is editing this post in the composer.${targetNote} Work on THIS text and reply with the revised post text only; do not create a new draft unless explicitly asked:]\n` +
+        composerContext.content
+      // Keep the context attached so follow-up turns ("now make it shorter")
+      // keep operating on the post; the user can detach it via the chip.
       setComposerSession(true)
     }
     const userMessage: BackendAIChatMessage = {
@@ -396,11 +423,16 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
             <div className="ai-chat-mentions">
               <button
                 type="button"
-                className="ai-chat-chip"
+                className="ai-chat-chip ai-chat-chip--context"
                 onClick={() => setComposerContext(null)}
-                title={t('aiChat.removeMention')}
+                title={t('aiChat.composerContextDetach')}
               >
-                {t('aiChat.composerContextAttached')} ×
+                {composerContext.targets.length > 0
+                  ? t('aiChat.composerContextWithTargets', {
+                      targets: composerContext.targets.map((target) => target.name).join(', '),
+                    })
+                  : t('aiChat.composerContextAttached')}{' '}
+                ×
               </button>
             </div>
           )}
@@ -422,9 +454,17 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
           )}
 
           {filteredSuggestions.length > 0 && (
-            <div className="ai-chat-suggestions">
-              {filteredSuggestions.map((suggestion) => (
-                <button key={suggestion.key} type="button" onClick={suggestion.apply}>
+            <div className="ai-chat-suggestions" role="listbox">
+              {filteredSuggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion.key}
+                  type="button"
+                  role="option"
+                  aria-selected={index === activeSuggestion}
+                  className={index === activeSuggestion ? 'ai-chat-suggestions__active' : undefined}
+                  onMouseEnter={() => setActiveSuggestion(index)}
+                  onClick={suggestion.apply}
+                >
                   <span>{suggestion.label}</span>
                   <span className="hint">{suggestion.hint}</span>
                 </button>
@@ -443,6 +483,30 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
                 detectSuggestions(event.target.value)
               }}
               onKeyDown={(event) => {
+                // When the @mention / slash-command dropdown is open, the arrow keys
+                // move the highlight and Enter/Tab pick it — so it works without a mouse.
+                if (filteredSuggestions.length > 0) {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    setActiveSuggestion((index) => (index + 1) % filteredSuggestions.length)
+                    return
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    setActiveSuggestion((index) => (index - 1 + filteredSuggestions.length) % filteredSuggestions.length)
+                    return
+                  }
+                  if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault()
+                    filteredSuggestions[Math.min(activeSuggestion, filteredSuggestions.length - 1)]?.apply()
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    setSuggestions(null)
+                    return
+                  }
+                }
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault()
                   void send()
