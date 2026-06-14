@@ -179,6 +179,36 @@ func TestRequireAuth(t *testing.T) {
 	})
 }
 
+func TestRequireAuthBackendErrorReturns500(t *testing.T) {
+	// A transient store failure (here: a closed DB) must not masquerade as an
+	// expired/invalid session — that 401 would log the web UI out. It must be 500.
+	f := newAuthFixture(t)
+	u := f.user(t)
+	token := f.sessionToken(t, u.ID)
+
+	handler := f.service.RequireAuth(okHandler(t, nil))
+
+	// Sanity: the session authenticates while the store is healthy.
+	okReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	okReq.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	okRec := httptest.NewRecorder()
+	handler.ServeHTTP(okRec, okReq)
+	if okRec.Code != http.StatusOK {
+		t.Fatalf("healthy store: status = %d, want 200", okRec.Code)
+	}
+
+	// Closing the store makes the session lookup fail with a non-ErrNoRows error.
+	f.store.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("closed store: status = %d, want 500", rec.Code)
+	}
+}
+
 func TestAcceptQueryTokenPromotesToken(t *testing.T) {
 	f := newAuthFixture(t)
 	u := f.user(t)
