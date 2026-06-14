@@ -32,6 +32,46 @@
         "digest"
       ],
       "groupName": "frontend non-major dependencies"
+    },
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "website/package.json"
+      ],
+      "rangeStrategy": "replace",
+      "postUpdateOptions": [
+        "pnpmDedupe"
+      ]
+    },
+    {
+      "description": "Astro and Starlight are locked together by peer dependencies (Starlight requires a matching Astro major), so they must be updated in a single PR - majors included - to avoid a build that cannot install.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "website/package.json"
+      ],
+      "matchPackageNames": [
+        "astro",
+        "@astrojs/**"
+      ],
+      "groupName": "astro ecosystem"
+    },
+    {
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "website/package.json"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "website non-major dependencies"
     }
   ]
 }

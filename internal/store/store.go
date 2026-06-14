@@ -30,6 +30,7 @@ type Store interface {
 	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
 	GetTeamEngagementHourHistogram(ctx context.Context, teamID string, days int) ([]domain.EngagementHourBucket, error)
 	GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int, accountID string) ([]domain.EngagementHeatmapBucket, error)
+	ListTeamPostEngagement(ctx context.Context, teamID string, days int, provider string) ([]domain.PostEngagement, error)
 
 	// Hashtag analytics
 	ReplacePostHashtags(ctx context.Context, postID, accountID string, tags []hashtag.Tag) error
@@ -188,6 +189,7 @@ type Store interface {
 	FindMediaItemByTeamSHA256(ctx context.Context, teamID, sha256 string) (item domain.MediaItem, ok bool, err error)
 	GetMediaItemByID(ctx context.Context, teamID, mediaID string) (domain.MediaItem, error)
 	ListTeamMedia(ctx context.Context, teamID string) ([]domain.MediaItem, error)
+	UpdateMediaItemFilename(ctx context.Context, teamID, mediaID, filename string) (domain.MediaItem, error)
 	DeleteMediaItem(ctx context.Context, teamID, mediaID string) error
 	GetMediaProviderMapping(ctx context.Context, mediaID, accountID string) (domain.MediaProviderMapping, error)
 	UpsertMediaProviderMapping(ctx context.Context, mapping domain.MediaProviderMapping) error
@@ -198,8 +200,10 @@ type Store interface {
 	AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error)
 	FillAccountSyncTimestamps(ctx context.Context, accounts []domain.SocialAccount) error
 	RepairFuturePostedPosts(ctx context.Context) (int64, error)
-	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (plaintext string, meta domain.APIToken, err error)
+	CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (plaintext string, meta domain.APIToken, err error)
 	CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (plaintext string, meta domain.APIToken, err error)
+	// SetSessionTTL configures the rolling idle lifetime applied to web sessions.
+	SetSessionTTL(d time.Duration)
 	ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID string) error
 

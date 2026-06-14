@@ -500,6 +500,7 @@ alter table teams add column if not exists is_ai_enabled boolean not null defaul
 alter table teams add column if not exists brand_color text not null default '';
 alter table api_tokens add column if not exists scopes text not null default '';
 alter table api_tokens add column if not exists team_id uuid references teams(id) on delete cascade;
+alter table api_tokens add column if not exists description text not null default '';
 
 create table if not exists external_post_monitor_settings (
     id uuid primary key default gen_random_uuid(),

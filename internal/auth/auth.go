@@ -18,9 +18,11 @@ import (
 )
 
 type Service struct {
-	store     store.Store
-	verifier  *oidc.IDTokenVerifier
-	oauth2Cfg oauth2.Config
+	store         store.Store
+	verifier      *oidc.IDTokenVerifier
+	oauth2Cfg     oauth2.Config
+	sessionTTL    time.Duration
+	secureCookies bool
 }
 
 type oidcClaims struct {
@@ -30,7 +32,16 @@ type oidcClaims struct {
 }
 
 func New(ctx context.Context, cfg config.Config, store store.Store) (*Service, error) {
-	service := &Service{store: store}
+	service := &Service{
+		store:      store,
+		sessionTTL: cfg.SessionTTL,
+		// Secure cookies whenever the app is served over HTTPS; relaxed for local
+		// http dev so the cookie is not dropped by the browser.
+		secureCookies: strings.HasPrefix(strings.ToLower(strings.TrimSpace(cfg.PublicBaseURL)), "https://"),
+	}
+	if service.sessionTTL <= 0 {
+		service.sessionTTL = 12 * time.Hour
+	}
 	if cfg.OIDCIssuerURL == "" || cfg.OIDCClientID == "" {
 		return service, nil
 	}
@@ -109,6 +120,15 @@ func (s *Service) OIDCExchangeCode(ctx context.Context, code, nonce, pkceVerifie
 func (s *Service) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := bearerToken(r.Header.Get("Authorization"))
+		fromCookie := false
+		if token == "" {
+			// Browser sessions authenticate via the HttpOnly cookie. API tokens
+			// (MCP, tools) always use the Authorization header above.
+			if c := strings.TrimSpace(cookieValue(r, SessionCookieName)); c != "" {
+				token = c
+				fromCookie = true
+			}
+		}
 		if token == "" {
 			http.Error(w, "missing bearer token", http.StatusUnauthorized)
 			return
@@ -118,6 +138,24 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		if err != nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
+		}
+
+		if fromCookie {
+			// CSRF: cookie auth on a state-changing method needs the double-submit
+			// token. Bearer (header) auth is exempt — it cannot be sent cross-site.
+			if isUnsafeMethod(r.Method) && !csrfValid(r) {
+				http.Error(w, "csrf_token_required", http.StatusForbidden)
+				return
+			}
+			// Roll the cookie (the DB expiry was just rolled in authenticate);
+			// keep the existing CSRF token, minting one if a legacy session lacks it.
+			csrf := cookieValue(r, CSRFCookieName)
+			if csrf == "" {
+				if generated, gerr := NewCSRFToken(); gerr == nil {
+					csrf = generated
+				}
+			}
+			s.WriteSessionCookies(w, token, csrf)
 		}
 
 		ctx := security.WithPrincipal(r.Context(), principal)
@@ -145,6 +183,13 @@ func (s *Service) AcceptQueryToken(param string) func(http.Handler) http.Handler
 // global administrators may use any team (recovery / OIDC-linked data); otherwise
 // a team_memberships role is required.
 func (s *Service) PrincipalHasTeamAccess(ctx context.Context, principal domain.AuthenticatedPrincipal, teamID string, roles ...domain.TeamRole) (bool, error) {
+	// A team-bound API token may only ever touch its own team — the token itself
+	// is the limit, so this applies even to administrators.
+	if principal.TokenTeamID != nil {
+		if bound := strings.TrimSpace(*principal.TokenTeamID); bound != "" && bound != teamID {
+			return false, nil
+		}
+	}
 	if principal.User.IsAdmin {
 		return true, nil
 	}

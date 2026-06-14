@@ -63,6 +63,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	defer dataStore.Close()
+	dataStore.SetSessionTTL(cfg.SessionTTL)
 
 	// Wrap logger with DB-backed persistence so scheduler and API logs
 	// are captured in the log_entries table (visible in the admin UI).

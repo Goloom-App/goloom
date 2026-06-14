@@ -77,11 +77,12 @@ func (s *Store) RepairFuturePostedPosts(ctx context.Context) (int64, error) {
 	return res.RowsAffected(), nil
 }
 
-func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (string, domain.APIToken, error) {
+func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (string, domain.APIToken, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", domain.APIToken{}, errors.New("name is required")
 	}
+	description = strings.TrimSpace(description)
 	exp := expiresAt
 	if exp == nil {
 		t := time.Now().UTC().AddDate(0, 0, 90)
@@ -96,21 +97,24 @@ func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, exp
 	var createdAt time.Time
 	var storedExpires time.Time
 	err = s.pool.QueryRow(ctx, `
-		insert into api_tokens (id, user_id, name, token_hash, expires_at, scopes, team_id, created_at)
-		values ($1, $2, $3, $4, $5, $6, $7, now())
+		insert into api_tokens (id, user_id, name, token_hash, expires_at, scopes, description, team_id, created_at)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, now())
 		returning created_at, expires_at`,
-		id, userID, name, hash, *exp, scopes, teamID,
+		id, userID, name, hash, *exp, scopes, description, teamID,
 	).Scan(&createdAt, &storedExpires)
 	if err != nil {
 		return "", domain.APIToken{}, err
 	}
+	parsedScopes, _ := parseTokenScopes(scopes)
 	return plaintext, domain.APIToken{
-		ID:        id,
-		UserID:    userID,
-		Name:      name,
-		TeamID:    teamID,
-		ExpiresAt: &storedExpires,
-		CreatedAt: createdAt,
+		ID:          id,
+		UserID:      userID,
+		Name:        name,
+		Description: description,
+		TeamID:      teamID,
+		Scopes:      parsedScopes,
+		ExpiresAt:   &storedExpires,
+		CreatedAt:   createdAt,
 	}, nil
 }
 
@@ -136,10 +140,10 @@ func (s *Store) TryAcquireLock(ctx context.Context, lockID string, duration time
 
 func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
 	if ttl <= 0 {
-		ttl = 12 * time.Hour
+		ttl = s.webSessionTTL()
 	}
 	expires := time.Now().UTC().Add(ttl)
-	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires, "", nil)
+	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires, "", nil, "")
 }
 
 func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {
@@ -155,7 +159,7 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		select id, user_id, name, team_id, last_used_at, expires_at, created_at
+		select id, user_id, name, description, scopes, team_id, last_used_at, expires_at, created_at
 		from api_tokens
 		where user_id = $1
 		order by created_at desc`,
@@ -170,10 +174,15 @@ func (s *Store) ListUserAPITokens(ctx context.Context, userID string) ([]domain.
 	for rows.Next() {
 		var t domain.APIToken
 		var teamID *string
+		var description, scopes string
 		var lastUsed, expires *time.Time
 		var created time.Time
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &teamID, &lastUsed, &expires, &created); err != nil {
+		if err := rows.Scan(&t.ID, &t.UserID, &t.Name, &description, &scopes, &teamID, &lastUsed, &expires, &created); err != nil {
 			return nil, err
+		}
+		t.Description = description
+		if parsed, perr := parseTokenScopes(scopes); perr == nil {
+			t.Scopes = parsed
 		}
 		t.TeamID = teamID
 		t.LastUsedAt = lastUsed

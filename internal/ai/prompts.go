@@ -31,8 +31,8 @@ var outputFormatHints = map[string]string{
 }
 
 var moodAdjustmentHints = map[string]string{
-	"more_expertise":        "Lean on concrete facts from the source material; show domain depth.",
-	"shorter_punchier":      "Cut length aggressively. Every word must earn its place.",
+	"more_expertise":         "Lean on concrete facts from the source material; show domain depth.",
+	"shorter_punchier":       "Cut length aggressively. Every word must earn its place.",
 	"remove_marketing_speak": "Strip hype adjectives; replace with specifics.",
 }
 
@@ -513,12 +513,7 @@ func recurringPublicationPlan(p params, context domain.AIContext) string {
 
 	language := orDefault(styleMetadata(context).PreferredLanguage, "en")
 	german := strings.HasPrefix(strings.ToLower(strings.TrimSpace(language)), "de")
-	postAt := paramScheduleValue(p, "post_scheduled_at", "recurring_automation", "scheduled_at")
 	mainAt := paramScheduleValue(p, "main_event_at", "recurring_automation", "template_occurrence_at")
-	postLabel := ""
-	if postAt != "" {
-		postLabel = formatScheduleLabel(postAt, language)
-	}
 	mainLabel := ""
 	if mainAt != "" {
 		mainLabel = formatScheduleLabel(mainAt, language)
@@ -551,13 +546,16 @@ func recurringPublicationPlan(p params, context domain.AIContext) string {
 		}
 	}
 
-	if postLabel != "" {
-		if german {
-			lines = append(lines, "Veröffentlichung dieses Posts: "+postLabel)
-		} else {
-			lines = append(lines, "This post publishes: "+postLabel)
-		}
+	// The publication/posting time is a scheduling-only field: the system sets it
+	// automatically. It is NOT event information — the model used to mistake the
+	// posting time for the event time and write it into the post. Never surface
+	// it; event timing comes only from the template above.
+	if german {
+		lines = append(lines, "Die Veröffentlichungszeit dieses Posts wird automatisch gesetzt — niemals im Text erwähnen. Zeit- und Datumsangaben ausschließlich aus der Vorlage übernehmen.")
+	} else {
+		lines = append(lines, "This post's publication time is set automatically — never mention it in the text. Take any time or date wording only from the template above.")
 	}
+
 	if mainLabel != "" && kind == "announcement" {
 		if german {
 			lines = append(lines, "Event-Datum: "+mainLabel)

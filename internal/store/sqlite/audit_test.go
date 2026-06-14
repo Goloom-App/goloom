@@ -90,7 +90,7 @@ func TestSQLite_LookupAPIToken_Attribution(t *testing.T) {
 	}
 
 	// A named API key is attributed to the token (tool).
-	plain, meta, err := s.CreateUserAPIToken(ctx, user.ID, "mybot", nil, "", nil)
+	plain, meta, err := s.CreateUserAPIToken(ctx, user.ID, "mybot", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,8 +108,9 @@ func TestSQLite_LookupAPIToken_Attribution(t *testing.T) {
 		t.Fatalf("token name = %v, want 'mybot'", principal.TokenName)
 	}
 
-	// A web session is a human; it carries no token attribution.
-	sessionPlain, _, err := s.CreateSessionAPIToken(ctx, user.ID, time.Hour)
+	// A web session is a human actor: it exposes its token id (so the web UI can
+	// mark "this browser" in the token list) but stays unattributed by name.
+	sessionPlain, sessionMeta, err := s.CreateSessionAPIToken(ctx, user.ID, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +121,10 @@ func TestSQLite_LookupAPIToken_Attribution(t *testing.T) {
 	if sessionPrincipal.Kind != domain.AuditActorHuman {
 		t.Fatalf("web session kind = %q, want oidc", sessionPrincipal.Kind)
 	}
-	if sessionPrincipal.TokenID != nil || sessionPrincipal.TokenName != nil {
-		t.Fatalf("web session must not be token-attributed: id=%v name=%v", sessionPrincipal.TokenID, sessionPrincipal.TokenName)
+	if sessionPrincipal.TokenID == nil || *sessionPrincipal.TokenID != sessionMeta.ID {
+		t.Fatalf("web session token id = %v, want %q", sessionPrincipal.TokenID, sessionMeta.ID)
+	}
+	if sessionPrincipal.TokenName != nil {
+		t.Fatalf("web session must stay name-unattributed, got %v", sessionPrincipal.TokenName)
 	}
 }

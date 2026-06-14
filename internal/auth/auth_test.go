@@ -55,6 +55,56 @@ func (f authFixture) sessionToken(t *testing.T, userID string) string {
 	return token
 }
 
+func TestRequireAuthCookieAndCSRF(t *testing.T) {
+	f := newAuthFixture(t)
+	u := f.user(t)
+	sessionTok := f.sessionToken(t, u.ID)
+	// A regular API token for the bearer-bypass check.
+	apiTok, _, err := f.store.CreateUserAPIToken(context.Background(), u.ID, "bot", nil, "", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	handler := f.service.RequireAuth(okHandler(t, nil))
+	call := func(method string, mutate func(*http.Request)) int {
+		req := httptest.NewRequest(method, "/", nil)
+		mutate(req)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// GET via session cookie authenticates.
+	if code := call(http.MethodGet, func(r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sessionTok})
+	}); code != http.StatusOK {
+		t.Fatalf("cookie GET: got %d, want 200", code)
+	}
+
+	// Cookie POST without the CSRF token is rejected.
+	if code := call(http.MethodPost, func(r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sessionTok})
+	}); code != http.StatusForbidden {
+		t.Fatalf("cookie POST without CSRF: got %d, want 403", code)
+	}
+
+	// Cookie POST with matching double-submit token passes.
+	if code := call(http.MethodPost, func(r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sessionTok})
+		r.AddCookie(&http.Cookie{Name: auth.CSRFCookieName, Value: "csrf-1"})
+		r.Header.Set(auth.CSRFHeaderName, "csrf-1")
+	}); code != http.StatusOK {
+		t.Fatalf("cookie POST with CSRF: got %d, want 200", code)
+	}
+
+	// Bearer (API token) POST is exempt from CSRF — must keep working for MCP/tools.
+	if code := call(http.MethodPost, func(r *http.Request) {
+		r.Header.Set("Authorization", "Bearer "+apiTok)
+	}); code != http.StatusOK {
+		t.Fatalf("bearer POST (no CSRF) must pass: got %d, want 200", code)
+	}
+}
+
 func (f authFixture) user(t *testing.T) domain.User {
 	t.Helper()
 	u, err := f.store.UpsertOIDCUser(context.Background(), "auth-"+uuid.NewString(), "auth@test", "Auth")
@@ -247,10 +297,10 @@ func TestCurrentPrincipal(t *testing.T) {
 	}
 }
 
-func TestRequireScope(t *testing.T) {
+func TestRequireTokenScope(t *testing.T) {
 	f := newAuthFixture(t)
 	u := f.user(t)
-	handler := auth.RequireScope(auth.ScopeAIChat)(okHandler(t, nil))
+	handler := auth.RequireTokenScope(auth.ScopeWrite)(okHandler(t, nil))
 
 	serveAs := func(p *domain.AuthenticatedPrincipal) int {
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -265,26 +315,19 @@ func TestRequireScope(t *testing.T) {
 	if code := serveAs(nil); code != http.StatusUnauthorized {
 		t.Fatalf("no principal: got %d, want 401", code)
 	}
-	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token"}); code != http.StatusForbidden {
-		t.Fatalf("token without scope: got %d, want 403", code)
+	// Unscoped token: full access (backward compatible).
+	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token"}); code != http.StatusOK {
+		t.Fatalf("unscoped token: got %d, want 200", code)
 	}
-	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token", Scopes: []string{auth.ScopeAIChat}}); code != http.StatusOK {
+	// Scoped token lacking the required scope is rejected.
+	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token", Scopes: []string{auth.ScopeRead}}); code != http.StatusForbidden {
+		t.Fatalf("read-only token: got %d, want 403", code)
+	}
+	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "api_token", Scopes: []string{auth.ScopeWrite}}); code != http.StatusOK {
 		t.Fatalf("token with scope: got %d, want 200", code)
 	}
 	if code := serveAs(&domain.AuthenticatedPrincipal{User: u, Kind: "oidc"}); code != http.StatusOK {
 		t.Fatalf("oidc principals bypass scopes: got %d, want 200", code)
-	}
-}
-
-func TestHasScope(t *testing.T) {
-	if !auth.HasScope([]string{"a", "b"}, "b") {
-		t.Fatal("expected scope match")
-	}
-	if auth.HasScope([]string{"a"}, "b") {
-		t.Fatal("unexpected scope match")
-	}
-	if auth.HasScope(nil, "a") {
-		t.Fatal("nil scopes must not match")
 	}
 }
 

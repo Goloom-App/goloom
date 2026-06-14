@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -163,7 +162,7 @@ func (a *API) handleOIDCLoginCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	exchangeStart := time.Now()
-	rawIDToken, principal, err := a.auth.OIDCExchangeCode(r.Context(), code, state.Nonce, state.PKCEVerifier)
+	sessionToken, principal, err := a.auth.OIDCExchangeCode(r.Context(), code, state.Nonce, state.PKCEVerifier)
 	if err != nil {
 		a.logOIDCTokenExchangeFailure(err)
 		a.redirectOIDCLoginFailure(w, r, state.ReturnTo, err.Error())
@@ -183,67 +182,17 @@ func (a *API) handleOIDCLoginCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := writeOIDCLoginSuccessHTML(w, state.ReturnTo, rawIDToken); err != nil {
-		if a.log != nil {
-			a.log.Error("oidc login success HTML render failed", "err", err)
-		}
-		a.writeError(w, r, "failed_render_callback", http.StatusInternalServerError)
+	// Establish the browser session as an HttpOnly cookie (+ readable CSRF token)
+	// and return to the SPA. No token in the URL/hash.
+	csrf, err := auth.NewCSRFToken()
+	if err != nil {
+		a.writeError(w, r, "failed_build_session", http.StatusInternalServerError)
 		return
 	}
+	a.auth.WriteSessionCookies(w, sessionToken, csrf)
+	http.Redirect(w, r, state.ReturnTo, http.StatusSeeOther)
 }
 
-// writeOIDCLoginSuccessHTML returns an HTML document that moves the ID token into the URL hash
-// via client-side navigation. HTTP redirects with Location + fragment are unreliable across
-// browsers and proxies; this avoids losing #goloom_oidc_token=… before the SPA reads it.
-func writeOIDCLoginSuccessHTML(w http.ResponseWriter, returnTo, rawIDToken string) error {
-	rt, err := json.Marshal(returnTo)
-	if err != nil {
-		return err
-	}
-	tk, err := json.Marshal(rawIDToken)
-	if err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	data := struct {
-		ReturnTo template.JS
-		Token    template.JS
-	}{
-		ReturnTo: template.JS(rt),
-		Token:    template.JS(tk),
-	}
-	return oidcLoginSuccessTemplate.Execute(w, data)
-}
-
-var oidcLoginSuccessTemplate = template.Must(template.New("oidc-login-success").Parse(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Signing in…</title>
-</head>
-<body>
-<p>Signing in… If you are not redirected, <a id="fallback">open the app</a>.</p>
-<script>
-(function () {
-  var returnTo = {{.ReturnTo}};
-  var token = {{.Token}};
-  try {
-    var u = new URL(returnTo);
-    u.hash = "goloom_oidc_token=" + encodeURIComponent(token);
-    location.replace(u.toString());
-  } catch (e) {
-    document.body.insertAdjacentHTML("beforeend", "<p>Could not complete redirect: " + String(e) + "</p>");
-  }
-  var a = document.getElementById("fallback");
-  if (a) {
-    try { a.href = new URL(returnTo).origin + "/"; } catch (_) { a.href = "/"; }
-  }
-})();
-</script>
-</body>
-</html>`))
 
 func (a *API) redirectOIDCLoginError(w http.ResponseWriter, r *http.Request, rawState, message string) {
 	state, err := a.parseOIDCLoginState(rawState)

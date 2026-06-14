@@ -40,6 +40,10 @@ type Config struct {
 	OIDCClientSecret string
 	OIDCRedirectURI  string
 
+	// SessionTTL is the rolling idle lifetime of a web session (cookie + the
+	// __web_session token). Each request extends it; an unused session expires.
+	SessionTTL time.Duration
+
 	BootstrapAdminEmail string
 	BootstrapAdminName  string
 	BootstrapAdminToken string
@@ -79,6 +83,7 @@ func Load() (Config, error) {
 		OIDCClientID:                     getEnv("OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:                 getEnv("OIDC_CLIENT_SECRET", ""),
 		OIDCRedirectURI:                  getEnv("OIDC_REDIRECT_URI", ""),
+		SessionTTL:                       getDuration("SESSION_TTL", 720*time.Hour),
 		BootstrapAdminEmail:              getEnv("BOOTSTRAP_ADMIN_EMAIL", "admin@localhost"),
 		BootstrapAdminName:               getEnv("BOOTSTRAP_ADMIN_NAME", "Local Administrator"),
 		BootstrapAdminToken:              getEnv("BOOTSTRAP_ADMIN_TOKEN", ""),

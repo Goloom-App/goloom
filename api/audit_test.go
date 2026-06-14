@@ -55,7 +55,7 @@ func TestTeamAuditLogEndpoint(t *testing.T) {
 	if _, err := f.store.AddTeamMember(ctx, f.team.ID, domain.AddTeamMemberInput{UserID: viewer.ID, Role: domain.RoleViewer}); err != nil {
 		t.Fatal(err)
 	}
-	viewerToken, _, err := f.store.CreateUserAPIToken(ctx, viewer.ID, "viewer-token", nil, "", nil)
+	viewerToken, _, err := f.store.CreateUserAPIToken(ctx, viewer.ID, "viewer-token", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

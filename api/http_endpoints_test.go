@@ -50,7 +50,7 @@ func newEndpointFixture(t *testing.T) endpointFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "endpoints", nil, "", nil)
+	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "endpoints", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestAdminEndpointsForbiddenForNonAdmin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bearer, _, err := f.store.CreateUserAPIToken(ctx, other.ID, "na", nil, "", nil)
+	bearer, _, err := f.store.CreateUserAPIToken(ctx, other.ID, "na", nil, "", nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,27 +337,168 @@ func TestAdminEndpointsForbiddenForNonAdmin(t *testing.T) {
 	requireStatus(t, rec, http.StatusForbidden)
 }
 
-func TestAIScopeGatesOnHTTPRoutes(t *testing.T) {
+func TestPostScopeAndTeamBindingEnforcement(t *testing.T) {
 	f := newEndpointFixture(t)
 	ctx := context.Background()
-	// Non-session API tokens need explicit AI scopes for the AI routes.
-	unscoped, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "unscoped", nil, "", nil)
+
+	post := func(token string) int {
+		body, _ := json.Marshal(map[string]any{
+			"content":         "scoped post",
+			"scheduled_at":    time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339),
+			"target_accounts": []string{f.account.ID},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/v1/teams/"+f.team.ID+"/posts", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// read-only token may not schedule a post.
+	readOnly, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "read", nil, `["read"]`, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+f.team.ID+"/ai-context", nil)
-	req.Header.Set("Authorization", "Bearer "+unscoped)
+	if code := post(readOnly); code != http.StatusForbidden {
+		t.Fatalf("read-only schedule: got %d, want 403", code)
+	}
+
+	// write:schedule token may schedule.
+	scheduler, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "sched", nil, `["write:schedule"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := post(scheduler); code != http.StatusCreated {
+		t.Fatalf("write:schedule schedule: got %d, want 201", code)
+	}
+
+	// A token bound to a different team is rejected even though the user owns f.team.
+	otherTeam, err := f.store.CreateTeam(ctx, f.user.ID, domain.CreateTeamInput{Name: "other-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "bound", nil, "", &otherTeam.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := post(bound); code != http.StatusForbidden {
+		t.Fatalf("team-bound token on foreign team: got %d, want 403", code)
+	}
+}
+
+func TestScopeGatesOnHTTPRoutes(t *testing.T) {
+	f := newEndpointFixture(t)
+	ctx := context.Background()
+	get := func(token string) int {
+		req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+f.team.ID+"/ai-context", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// Unscoped tokens keep full access (backward compatible).
+	unscoped, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "unscoped", nil, "", nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := get(unscoped); code != http.StatusOK {
+		t.Fatalf("unscoped: got %d, want 200", code)
+	}
+
+	// A read-scoped token may read AI context.
+	reader, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "reader", nil, `["read"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := get(reader); code != http.StatusOK {
+		t.Fatalf("reader: got %d, want 200", code)
+	}
+
+	// A write-only token cannot read.
+	writer, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "writer", nil, `["write:draft"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := get(writer); code != http.StatusForbidden {
+		t.Fatalf("writer: got %d, want 403", code)
+	}
+}
+
+func TestTeamMediaRename(t *testing.T) {
+	f := newEndpointFixture(t)
+	ctx := context.Background()
+	created, err := f.store.CreateMediaItem(ctx, domain.MediaItem{
+		TeamID: f.team.ID, Sha256: "ren-" + uuid.NewString(), Filename: "old.png", MimeType: "image/png", SizeBytes: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := f.do(t, http.MethodPatch, "/v1/teams/"+f.team.ID+"/media/"+created.ID, map[string]any{"filename": "renamed.png"})
+	requireStatus(t, rec, http.StatusOK)
+	item := decodeJSON[domain.MediaItem](t, rec)
+	if item.Filename != "renamed.png" {
+		t.Fatalf("filename = %q, want renamed.png", item.Filename)
+	}
+
+	// Empty filename is rejected.
+	rec = f.do(t, http.MethodPatch, "/v1/teams/"+f.team.ID+"/media/"+created.ID, map[string]any{"filename": "  "})
+	requireStatus(t, rec, http.StatusBadRequest)
+
+	// Unknown media id is a 404.
+	rec = f.do(t, http.MethodPatch, "/v1/teams/"+f.team.ID+"/media/"+uuid.NewString(), map[string]any{"filename": "x.png"})
+	requireStatus(t, rec, http.StatusNotFound)
+}
+
+func TestSessionCookieLoginAndLogout(t *testing.T) {
+	f := newEndpointFixture(t)
+
+	// Exchange a valid bearer token for a cookie session.
+	body, _ := json.Marshal(map[string]string{"token": f.bearer})
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/session/token", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	f.handler.ServeHTTP(rec, req)
-	requireStatus(t, rec, http.StatusForbidden)
-
-	scoped, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "scoped", nil, `["ai:read:context"]`, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req = httptest.NewRequest(http.MethodGet, "/v1/teams/"+f.team.ID+"/ai-context", nil)
-	req.Header.Set("Authorization", "Bearer "+scoped)
-	rec = httptest.NewRecorder()
-	f.handler.ServeHTTP(rec, req)
 	requireStatus(t, rec, http.StatusOK)
+
+	var session, csrf *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		switch c.Name {
+		case "goloom_session":
+			session = c
+		case "goloom_csrf":
+			csrf = c
+		}
+	}
+	if session == nil || session.Value == "" || !session.HttpOnly {
+		t.Fatalf("expected HttpOnly session cookie, got %#v", session)
+	}
+	if csrf == nil || csrf.Value == "" || csrf.HttpOnly {
+		t.Fatalf("expected readable csrf cookie, got %#v", csrf)
+	}
+
+	// The cookie authenticates GET /v1/me (no Authorization header).
+	meReq := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	meReq.AddCookie(session)
+	meRec := httptest.NewRecorder()
+	f.handler.ServeHTTP(meRec, meReq)
+	requireStatus(t, meRec, http.StatusOK)
+
+	// Logout (cookie POST) needs the CSRF token; then it revokes the session.
+	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
+	logoutReq.AddCookie(session)
+	logoutReq.AddCookie(csrf)
+	logoutReq.Header.Set("X-CSRF-Token", csrf.Value)
+	logoutRec := httptest.NewRecorder()
+	f.handler.ServeHTTP(logoutRec, logoutReq)
+	requireStatus(t, logoutRec, http.StatusNoContent)
+
+	// The revoked session no longer authenticates.
+	goneReq := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	goneReq.AddCookie(session)
+	goneRec := httptest.NewRecorder()
+	f.handler.ServeHTTP(goneRec, goneReq)
+	requireStatus(t, goneRec, http.StatusUnauthorized)
 }

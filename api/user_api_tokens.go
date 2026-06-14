@@ -13,10 +13,11 @@ import (
 )
 
 type createAPITokenRequest struct {
-	Name      string   `json:"name"`
-	ExpiresAt *string  `json:"expires_at,omitempty"`
-	Scopes    []string `json:"scopes,omitempty"`
-	TeamID    *string  `json:"team_id,omitempty"`
+	Name        string   `json:"name"`
+	Description  string   `json:"description,omitempty"`
+	ExpiresAt   *string  `json:"expires_at,omitempty"`
+	Scopes      []string `json:"scopes,omitempty"`
+	TeamID      *string  `json:"team_id,omitempty"`
 }
 
 func (a *API) handleListMyAPITokens(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +63,12 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		expires = &t
 	}
 	normalizedScopes := normalizeTokenScopes(input.Scopes)
+	for _, scope := range normalizedScopes {
+		if !auth.IsKnownScope(scope) {
+			a.writeError(w, r, "unknown_scope", http.StatusBadRequest)
+			return
+		}
+	}
 	var encodedScopes string
 	if len(normalizedScopes) > 0 {
 		raw, err := json.Marshal(normalizedScopes)
@@ -72,7 +79,7 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		encodedScopes = string(raw)
 	}
 	tokenTeamID := normalizeOptionalStringPtr(input.TeamID)
-	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires, encodedScopes, tokenTeamID)
+	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires, encodedScopes, tokenTeamID, strings.TrimSpace(input.Description))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

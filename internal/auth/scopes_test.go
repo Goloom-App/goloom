@@ -13,75 +13,87 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestScope(t *testing.T) {
-	t.Run("RequireScopeRejects", runRequireScopeRejects)
-	t.Run("RequireScopeAllows", runRequireScopeAllows)
-	t.Run("BackwardCompat", runBackwardCompat)
-	t.Run("OIDCBypassScopes", runOIDCBypassScopes)
+func TestScopeSatisfiedHierarchy(t *testing.T) {
+	cases := []struct {
+		granted  []string
+		required string
+		want     bool
+	}{
+		{[]string{ScopeWrite}, ScopeWriteDraft, true},
+		{[]string{ScopeWrite}, ScopeWriteSchedule, true},
+		{[]string{ScopeWriteDraft}, ScopeWriteSchedule, false},
+		{[]string{ScopeWriteDraft}, ScopeWrite, false},
+		{[]string{ScopeDelete}, ScopeDeleteDraft, true},
+		{[]string{ScopeDelete}, ScopeDeleteSchedule, true},
+		{[]string{ScopeWrite}, ScopeRead, false},
+		{[]string{ScopeRead}, ScopeRead, true},
+	}
+	for _, c := range cases {
+		if got := ScopeSatisfied(c.granted, c.required); got != c.want {
+			t.Errorf("ScopeSatisfied(%v, %q) = %v, want %v", c.granted, c.required, got, c.want)
+		}
+	}
 }
 
-func TestRequireScopeRejects(t *testing.T) {
-	runRequireScopeRejects(t)
+func TestPrincipalAllows(t *testing.T) {
+	// Unscoped token: full access (backward compatible).
+	if !PrincipalAllows(domain.AuthenticatedPrincipal{Kind: "api_token"}, ScopeDelete) {
+		t.Fatal("unscoped token must be allowed")
+	}
+	// Browser session bypasses scope checks entirely.
+	if !PrincipalAllows(domain.AuthenticatedPrincipal{Kind: "oidc"}, ScopeWrite) {
+		t.Fatal("oidc principal must bypass scopes")
+	}
+	// Scoped token is restricted to its grants.
+	scoped := domain.AuthenticatedPrincipal{Kind: "api_token", Scopes: []string{ScopeRead}}
+	if !PrincipalAllows(scoped, ScopeRead) {
+		t.Fatal("read token must allow read")
+	}
+	if PrincipalAllows(scoped, ScopeWriteDraft) {
+		t.Fatal("read-only token must not allow write:draft")
+	}
 }
 
-func TestRequireScopeAllows(t *testing.T) {
-	runRequireScopeAllows(t)
-}
-
-func TestBackwardCompat(t *testing.T) {
-	runBackwardCompat(t)
-}
-
-func TestOIDCBypassScopes(t *testing.T) {
-	runOIDCBypassScopes(t)
-}
-
-func runRequireScopeRejects(t *testing.T) {
-	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/v1/ai/context", nil)
+func TestRequireTokenScopeRejects(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/teams/x/posts", nil)
 	req = req.WithContext(security.WithPrincipal(req.Context(), domain.AuthenticatedPrincipal{
 		Kind:   "api_token",
-		Scopes: []string{ScopeAIReadContext},
+		Scopes: []string{ScopeRead},
 	}))
 	rec := httptest.NewRecorder()
 
-	RequireScope(ScopeAIWriteDrafts)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	RequireTokenScope(ScopeWriteSchedule)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "ai_scope_required") {
-		t.Fatalf("expected ai_scope_required body, got %q", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "scope_required") {
+		t.Fatalf("expected scope_required body, got %q", rec.Body.String())
 	}
 }
 
-func runRequireScopeAllows(t *testing.T) {
-	t.Helper()
+func TestRequireTokenScopeAllowsViaHierarchy(t *testing.T) {
 	called := false
-	req := httptest.NewRequest(http.MethodGet, "/v1/ai/context", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/teams/x/posts", nil)
 	req = req.WithContext(security.WithPrincipal(req.Context(), domain.AuthenticatedPrincipal{
 		Kind:   "api_token",
-		Scopes: []string{ScopeAIReadContext, ScopeAIWriteDrafts},
+		Scopes: []string{ScopeWrite},
 	}))
 	rec := httptest.NewRecorder()
 
-	RequireScope(ScopeAIReadContext, ScopeAIWriteDrafts)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	RequireTokenScope(ScopeWriteSchedule)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})).ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
-	}
-	if !called {
-		t.Fatal("expected next handler to run")
+	if rec.Code != http.StatusOK || !called {
+		t.Fatalf("broad write scope must satisfy write:schedule (status=%d called=%v)", rec.Code, called)
 	}
 }
 
-func runBackwardCompat(t *testing.T) {
-	t.Helper()
+func TestRequireTokenScopeUnscopedAllows(t *testing.T) {
 	ctx := context.Background()
 	service, plaintext := newScopeTestService(t, ctx, "", nil)
 
@@ -89,32 +101,47 @@ func runBackwardCompat(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+plaintext)
 	rec := httptest.NewRecorder()
 
-	service.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	service.RequireAuth(RequireTokenScope(ScopeWrite)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(rec, req)
+	}))).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+		t.Fatalf("unscoped token must pass scope gate: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
-func runOIDCBypassScopes(t *testing.T) {
-	t.Helper()
-	called := false
-	req := httptest.NewRequest(http.MethodPost, "/v1/ai/jobs", nil)
-	req = req.WithContext(security.WithPrincipal(req.Context(), domain.AuthenticatedPrincipal{Kind: "oidc"}))
-	rec := httptest.NewRecorder()
-
-	RequireScope(ScopeAITriggerJobs)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+func TestPrincipalHasTeamAccessTeamBinding(t *testing.T) {
+	ctx := context.Background()
+	enc, err := security.NewEncrypter("auth-scope-test-secret-32bytes!")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !called {
-		t.Fatal("expected oidc request to bypass scope check")
+	store, err := sqlite.New(ctx, "file:"+uuid.NewString()+"?mode=memory&cache=shared", enc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	admin, err := store.UpsertOIDCUser(ctx, "admin-"+uuid.NewString(), "admin@x", "Admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	teamA, err := store.CreateTeam(ctx, admin.ID, domain.CreateTeamInput{Name: "A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	teamB, err := store.CreateTeam(ctx, admin.ID, domain.CreateTeamInput{Name: "B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{store: store}
+
+	bound := domain.AuthenticatedPrincipal{User: admin, Kind: "api_token", TokenTeamID: &teamA.ID}
+	if ok, _ := svc.PrincipalHasTeamAccess(ctx, bound, teamA.ID, domain.RoleOwner); !ok {
+		t.Fatal("team-bound token must access its own team")
+	}
+	if ok, _ := svc.PrincipalHasTeamAccess(ctx, bound, teamB.ID, domain.RoleOwner); ok {
+		t.Fatal("team-bound token must be denied on a foreign team, even as admin")
 	}
 }
 
@@ -134,7 +161,7 @@ func newScopeTestService(t *testing.T, ctx context.Context, scopes string, teamI
 	if err != nil {
 		t.Fatal(err)
 	}
-	plaintext, _, err := store.CreateUserAPIToken(ctx, user.ID, "scope-test", nil, scopes, teamID)
+	plaintext, _, err := store.CreateUserAPIToken(ctx, user.ID, "scope-test", nil, scopes, teamID, "")
 	if err != nil {
 		t.Fatal(err)
 	}

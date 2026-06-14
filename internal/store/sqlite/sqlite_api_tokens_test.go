@@ -18,17 +18,17 @@ func TestSQLite_ListUserAPITokens_purgesExpiredWebSessions(t *testing.T) {
 	}
 
 	past := time.Now().UTC().Add(-2 * time.Hour)
-	if _, _, err := s.CreateUserAPIToken(ctx, u.ID, domain.WebSessionAPITokenName, &past, "", nil); err != nil {
+	if _, _, err := s.CreateUserAPIToken(ctx, u.ID, domain.WebSessionAPITokenName, &past, "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.CreateSessionAPIToken(ctx, u.ID, time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	future := time.Now().UTC().Add(24 * time.Hour)
-	if _, _, err := s.CreateUserAPIToken(ctx, u.ID, "expired-ci", &past, "", nil); err != nil {
+	if _, _, err := s.CreateUserAPIToken(ctx, u.ID, "expired-ci", &past, "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.CreateUserAPIToken(ctx, u.ID, "active-ci", &future, "", nil); err != nil {
+	if _, _, err := s.CreateUserAPIToken(ctx, u.ID, "active-ci", &future, "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { addDays, addHours, format, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
+import { addHours, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
 
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
@@ -57,6 +57,12 @@ import type { AccountRecord, AppSection, AuthStatusRecord, PostRecord, PostVersi
 
 /** Survives React Strict Mode remounts: hash is promoted here, then one reload applies the session. */
 const OIDC_PENDING_SESSION_KEY = 'goloom.oidc.pending_session_v1'
+// Set right before an automatic OIDC redirect; prevents a redirect loop if the
+// IdP bounces back unauthenticated. Cleared once a session is established.
+const OIDC_AUTO_ATTEMPTED_KEY = 'goloom.oidc.auto_attempted'
+// Set on explicit sign-out so the login screen stays put instead of bouncing
+// straight back into the IdP. Cleared once a session is established.
+const OIDC_SUPPRESS_AUTO_KEY = 'goloom.oidc.suppress_auto'
 
 const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics']
 
@@ -84,8 +90,23 @@ function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatusRecord | null>(null)
   const [authStatusLoading, setAuthStatusLoading] = useState(true)
   const [authView, setAuthView] = useState<'bootstrap' | 'login'>('login')
+  // Recovery mode (token/bootstrap sign-in) is reached via the ?login=recovery
+  // fallback URL; it also suppresses the automatic OIDC redirect.
+  const [recoveryMode, setRecoveryMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false
+    }
+    return new URLSearchParams(window.location.search).get('login') === 'recovery'
+  })
   const [authTokenDraft, setAuthTokenDraft] = useState(() => loadStoredSettings().general.bearerToken)
   const [principalUser, setPrincipalUser] = useState<UserRecord | null>(null)
+  // Token id of the current request principal (from /v1/me). For a browser
+  // session this lets the token list mark "this browser".
+  const [currentTokenId, setCurrentTokenId] = useState<string | null>(null)
+  // Auth is determined by a /v1/me probe (cookie session or dev bearer override),
+  // not by a token stored client-side. authProbed gates the first render.
+  const [authenticated, setAuthenticated] = useState(false)
+  const [authProbed, setAuthProbed] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -104,7 +125,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null)
-  const [newApiTokenExpiresYmd, setNewApiTokenExpiresYmd] = useState(() => format(addDays(new Date(), 90), 'yyyy-MM-dd'))
   const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
   const [providerInstances, setProviderInstances] = useState<ProviderInstanceRecord[]>([])
   const [adminMetrics, setAdminMetrics] = useState<BackendAdminMetrics | null>(null)
@@ -114,13 +134,10 @@ function App() {
   const [adminSyncLoading, setAdminSyncLoading] = useState(false)
   const [apiTokens, setApiTokens] = useState<BackendAPIToken[]>([])
   const [apiTokensLoading, setApiTokensLoading] = useState(false)
-  const [newTokenPlaintext, setNewTokenPlaintext] = useState<string | null>(null)
   const [teamSettingsName, setTeamSettingsName] = useState('')
   const [teamSettingsDescription, setTeamSettingsDescription] = useState('')
   const [addMemberUserId, setAddMemberUserId] = useState('')
   const [memberRoleEdits, setMemberRoleEdits] = useState<Record<string, TeamRole>>({})
-  const [newApiTokenName, setNewApiTokenName] = useState('')
-  const [newApiTokenScopes, setNewApiTokenScopes] = useState<string[]>([])
   const [teamAiEnabled, setTeamAiEnabled] = useState(false)
   const [externalPostMonitorEnabled, setExternalPostMonitorEnabled] = useState(false)
   const [importOldPostsOpen, setImportOldPostsOpen] = useState(false)
@@ -138,13 +155,13 @@ function App() {
   const [mobilePreviewPostId, setMobilePreviewPostId] = useState<string | null>(null)
   const [teamBrandColor, setTeamBrandColor] = useState('')
 
-  const api = useMemo(() => {
-    const token = activeConnection.bearerToken.trim()
-    if (!token) {
-      return null
-    }
-    return createApiClient({ baseUrl: activeConnection.apiBaseUrl.trim(), token })
-  }, [activeConnection.apiBaseUrl, activeConnection.bearerToken])
+  // The api client is always built. Web sessions authenticate via the HttpOnly
+  // cookie (sent automatically, same-origin); an optional bearer override is only
+  // used by the dev "Browser session" panel.
+  const api = useMemo(
+    () => createApiClient({ baseUrl: activeConnection.apiBaseUrl.trim(), token: activeConnection.bearerToken.trim() }),
+    [activeConnection.apiBaseUrl, activeConnection.bearerToken],
+  )
 
   useEffect(() => {
     writeStoredSettings(settings)
@@ -294,6 +311,7 @@ function App() {
         }))
         setAuthTokenDraft(token)
         setPrincipalUser(toUserRecord(meResponse.user))
+        setCurrentTokenId(meResponse.token_id ?? null)
         setStatusMessage(t('auth.signedInOidc'))
       } catch (cause) {
         if (cause instanceof ApiError && cause.status === 401) {
@@ -338,7 +356,48 @@ function App() {
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
     window.location.reload()
   }, [])
+  // OIDC-first: when OIDC is configured and the user is not signed in, start the
+  // login automatically. Guards prevent a redirect loop (auto_attempted) and a
+  // bounce right after an explicit sign-out (suppress_auto); the ?login=recovery
+  // fallback and first-start/token-only setups always show the form instead.
+  useEffect(() => {
+    if (authStatusLoading || !authStatus) {
+      return
+    }
+    // Wait for the session probe; never redirect a signed-in (cookie) user.
+    if (!authProbed || authenticated) {
+      return
+    }
+    if (!authStatus.oidcOAuthEnabled || authStatus.initialSetupRequired || recoveryMode || authError) {
+      return
+    }
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      if (sessionStorage.getItem(OIDC_SUPPRESS_AUTO_KEY) || sessionStorage.getItem(OIDC_AUTO_ATTEMPTED_KEY)) {
+        return
+      }
+      sessionStorage.setItem(OIDC_AUTO_ATTEMPTED_KEY, '1')
+    }
+    void startOIDCLogin()
+    // startOIDCLogin is a stable function declaration; deps cover the gating state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus, authStatusLoading, authProbed, authenticated, recoveryMode, authError])
+
+  const enterRecoveryMode = useCallback(() => {
+    setRecoveryMode(true)
+    setAuthError(null)
+    if (typeof window !== 'undefined') {
+      const url = `${window.location.pathname}?login=recovery${window.location.hash}`
+      window.history.replaceState({}, document.title, url)
+    }
+  }, [])
+
   const clearAuthenticatedState = useCallback((message?: string) => {
+    // Stay on the login screen after an explicit sign-out instead of bouncing
+    // straight back into the IdP.
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem(OIDC_SUPPRESS_AUTO_KEY, '1')
+      sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+    }
     setActiveConnection((current) => ({ ...current, bearerToken: '' }))
     setSettings((current) => ({
       ...current,
@@ -346,6 +405,8 @@ function App() {
     }))
     setAuthTokenDraft('')
     setPrincipalUser(null)
+    setCurrentTokenId(null)
+    setAuthenticated(false)
     setTeams([])
     setAccounts([])
     setPosts([])
@@ -372,14 +433,16 @@ function App() {
     setStatusMessage(null)
 
     try {
-      const baseUrl = settings.general.apiBaseUrl.trim()
-      const meResponse = await createApiClient({ baseUrl, token }).me()
-      setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
-      setSettings((current) => ({
-        ...current,
-        general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
-      }))
-      setPrincipalUser(toUserRecord(meResponse.user))
+      // Exchange the token for an HttpOnly cookie session (no token kept client-side).
+      const res = await api.sessionFromToken(token)
+      setAuthTokenDraft('')
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+        sessionStorage.removeItem(OIDC_SUPPRESS_AUTO_KEY)
+      }
+      setPrincipalUser(toUserRecord(res.user))
+      setAuthenticated(true)
+      setAuthProbed(true)
       setStatusMessage(mode === 'bootstrap' ? t('status.bootstrapAdminSignedIn') : t('status.signedIn'))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
@@ -429,6 +492,12 @@ function App() {
     try {
       const meResponse = await api.me()
       setPrincipalUser(toUserRecord(meResponse.user))
+      setCurrentTokenId(meResponse.token_id ?? null)
+      // Session established: reset the OIDC auto-login guards.
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+        sessionStorage.removeItem(OIDC_SUPPRESS_AUTO_KEY)
+      }
 
       const [usersResponse, teamsResponse, providerInstancesResponse] = await Promise.all([
         api.listUsers(),
@@ -488,14 +557,47 @@ function App() {
     }
   }, [api, clearAuthenticatedState])
 
+  // Probe the session (cookie or dev bearer) on load / connection change. Drives
+  // the auth gate; a 401 simply means "not signed in" (no error, no logout).
   useEffect(() => {
-    if (api) {
+    let cancelled = false
+    void api
+      .me()
+      .then((me) => {
+        if (cancelled) {
+          return
+        }
+        setPrincipalUser(toUserRecord(me.user))
+        setCurrentTokenId(me.token_id ?? null)
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+          sessionStorage.removeItem(OIDC_SUPPRESS_AUTO_KEY)
+        }
+        setAuthenticated(true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAuthenticated(false)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthProbed(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api])
+
+  useEffect(() => {
+    if (api && authenticated) {
       const timer = window.setTimeout(() => {
         void loadDashboard()
       }, 0)
       return () => window.clearTimeout(timer)
     }
-  }, [api, loadDashboard])
+  }, [api, authenticated, loadDashboard])
 
   useEffect(() => {
     if (!api) {
@@ -1302,29 +1404,21 @@ function App() {
     }
   }
 
-  async function handleCreateApiToken() {
-    if (!api || !newApiTokenName.trim()) {
-      return
+  async function handleCreateApiToken(payload: {
+    name: string
+    description?: string
+    expires_at?: string
+    scopes?: string[]
+    team_id?: string
+  }): Promise<string> {
+    if (!api) {
+      throw new Error(t('common.actionFailed'))
     }
-    const expEnd = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`)
-    if (!newApiTokenExpiresYmd.trim() || Number.isNaN(expEnd.getTime()) || expEnd.getTime() <= Date.now()) {
-      setError(t('settings.expiryHint'))
-      return
-    }
-    await runAction(async () => {
-      const expiresAt = new Date(`${newApiTokenExpiresYmd}T23:59:59.999Z`).toISOString()
-      const res = await api.createMyApiToken({
-        name: newApiTokenName.trim(),
-        expires_at: expiresAt,
-        scopes: newApiTokenScopes.length > 0 ? newApiTokenScopes : undefined,
-      })
-      setNewTokenPlaintext(res.token)
-      setNewApiTokenName('')
-      setNewApiTokenScopes([])
-      setNewApiTokenExpiresYmd(format(addDays(new Date(), 90), 'yyyy-MM-dd'))
-      const list = await api.listMyApiTokens()
-      setApiTokens(list.items ?? [])
-    }, t('status.apiTokenCreated'))
+    const res = await api.createMyApiToken(payload)
+    const list = await api.listMyApiTokens()
+    setApiTokens(list.items ?? [])
+    setStatusMessage(t('status.apiTokenCreated'))
+    return res.token
   }
 
   async function handleRemoveApiToken(tokenID: string, expired: boolean) {
@@ -1472,7 +1566,7 @@ function App() {
     }, changed.length > 1 ? t('status.postsRescheduledOverlap') : t('status.postMovedCalendar'))
   }
 
-  if (authStatusLoading && !activeConnection.bearerToken.trim()) {
+  if (!authProbed && !authenticated) {
     return (
       <AuthShell theme={resolvedTheme}>
         <AuthPanel
@@ -1481,16 +1575,18 @@ function App() {
           authTokenDraft={authTokenDraft}
           authError={authError}
           authSubmitting={true}
+          recoveryMode={recoveryMode}
           onViewChange={setAuthView}
           onTokenChange={setAuthTokenDraft}
           onSubmit={() => undefined}
           onStartOIDCLogin={() => undefined}
+          onUseRecovery={enterRecoveryMode}
         />
       </AuthShell>
     )
   }
 
-  if (!activeConnection.bearerToken.trim()) {
+  if (!authenticated) {
     return (
       <AuthShell theme={resolvedTheme}>
         <AuthPanel
@@ -1499,10 +1595,12 @@ function App() {
           authTokenDraft={authTokenDraft}
           authError={authError}
           authSubmitting={authSubmitting}
+          recoveryMode={recoveryMode}
           onViewChange={setAuthView}
           onTokenChange={setAuthTokenDraft}
           onSubmit={(mode) => void authenticateWithToken(mode)}
           onStartOIDCLogin={() => void startOIDCLogin()}
+          onUseRecovery={enterRecoveryMode}
         />
       </AuthShell>
     )
@@ -1516,7 +1614,10 @@ function App() {
       selectedTeamId={effectiveSelectedTeamId}
       onSelectTeam={setSelectedTeamId}
       user={principalUser}
-      onSignOut={() => clearAuthenticatedState(t('status.signedOut'))}
+      onSignOut={() => {
+        void api.logout().catch(() => undefined)
+        clearAuthenticatedState(t('status.signedOut'))
+      }}
       openComposer={openCreateComposer}
       resolvedTheme={resolvedTheme}
       showPreviewColumn={showPreviewColumn}
@@ -1895,18 +1996,13 @@ function App() {
             loadDashboard={loadDashboard}
             apiPresent={Boolean(api)}
             syncing={syncing}
-            newTokenPlaintext={newTokenPlaintext}
-            setNewTokenPlaintext={setNewTokenPlaintext}
-            newApiTokenName={newApiTokenName}
-            setNewApiTokenName={setNewApiTokenName}
-            newApiTokenExpiresYmd={newApiTokenExpiresYmd}
-            setNewApiTokenExpiresYmd={setNewApiTokenExpiresYmd}
-            newApiTokenScopes={newApiTokenScopes}
-            setNewApiTokenScopes={setNewApiTokenScopes}
-            onCreateApiToken={handleCreateApiToken}
+            teams={teams.map((team) => ({ id: team.id, name: team.name }))}
+            createApiToken={handleCreateApiToken}
             onRemoveApiToken={handleRemoveApiToken}
             apiTokens={apiTokens}
             apiTokensLoading={apiTokensLoading}
+            currentTokenId={currentTokenId}
+            showBrowserSession={authStatus?.appEnv === 'development' && principalUser?.globalRole === 'admin'}
           />
         )}
 

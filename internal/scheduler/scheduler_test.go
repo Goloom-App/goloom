@@ -608,13 +608,14 @@ func (m *mockStore) RepairFuturePostedPosts(ctx context.Context) (int64, error) 
 	return 0, nil
 }
 
-func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string) (string, domain.APIToken, error) {
+func (m *mockStore) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
 
 func (m *mockStore) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
 	return "", domain.APIToken{}, nil
 }
+func (m *mockStore) SetSessionTTL(d time.Duration) {}
 
 func (m *mockStore) ListUserAPITokens(ctx context.Context, userID string) ([]domain.APIToken, error) {
 	return nil, nil
@@ -640,6 +641,9 @@ func (m *mockStore) ListTeamMedia(ctx context.Context, teamID string) ([]domain.
 	return nil, nil
 }
 
+func (m *mockStore) UpdateMediaItemFilename(ctx context.Context, teamID, mediaID, filename string) (domain.MediaItem, error) {
+	return domain.MediaItem{}, nil
+}
 func (m *mockStore) DeleteMediaItem(ctx context.Context, teamID, mediaID string) error { return nil }
 
 func (m *mockStore) GetMediaProviderMapping(ctx context.Context, mediaID, accountID string) (domain.MediaProviderMapping, error) {
@@ -655,6 +659,10 @@ func (m *mockStore) GetTeamEngagementHourHistogram(ctx context.Context, teamID s
 }
 
 func (m *mockStore) GetTeamEngagementHeatmap(ctx context.Context, teamID string, days int, accountID string) ([]domain.EngagementHeatmapBucket, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ListTeamPostEngagement(ctx context.Context, teamID string, days int, provider string) ([]domain.PostEngagement, error) {
 	return nil, nil
 }
 

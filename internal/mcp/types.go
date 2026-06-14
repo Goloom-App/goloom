@@ -279,3 +279,27 @@ type HashtagPerformanceValue struct {
 type GetHashtagPerformanceOutput struct {
 	Hashtags []HashtagPerformanceValue `json:"hashtags"`
 }
+
+// ===== Get Analytics Timeslots =====
+
+type GetAnalyticsTimeslotsInput struct {
+	TeamID   string `json:"team_id" jsonschema:"required,description=Team ID"`
+	Days     int    `json:"days,omitempty" jsonschema:"description=Time window in days (default 90; max 366)"`
+	Provider string `json:"provider,omitempty" jsonschema:"description=Filter by platform: bluesky; mastodon or friendica. Omit for all platforms"`
+	Timezone string `json:"timezone,omitempty" jsonschema:"description=IANA timezone for weekday/hour buckets (e.g. Europe/Berlin). Default UTC"`
+	Limit    int    `json:"limit,omitempty" jsonschema:"description=Maximum number of timeslots to return (default 5; max 50)"`
+}
+
+type TimeslotValue struct {
+	Weekday         string  `json:"weekday"`
+	Hour            int     `json:"hour"`
+	Posts           int     `json:"posts"`
+	TotalEngagement int64   `json:"total_engagement"`
+	AvgEngagement   float64 `json:"avg_engagement"`
+	Score           float64 `json:"score"`
+}
+
+type GetAnalyticsTimeslotsOutput struct {
+	Timezone  string          `json:"timezone"`
+	Timeslots []TimeslotValue `json:"timeslots"`
+}

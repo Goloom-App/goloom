@@ -21,10 +21,13 @@ func TestAPITokenScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedScopes := []string{"ai:read:context", "ai:write:drafts"}
-	plaintext, _, err := s.CreateUserAPIToken(ctx, user.ID, "scoped", nil, `["ai:read:context","ai:write:drafts"]`, &team.ID)
+	expectedScopes := []string{"read", "write:draft"}
+	plaintext, meta, err := s.CreateUserAPIToken(ctx, user.ID, "scoped", nil, `["read","write:draft"]`, &team.ID, "CI bot")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if meta.Description != "CI bot" || !reflect.DeepEqual(meta.Scopes, expectedScopes) {
+		t.Fatalf("create meta=%#v", meta)
 	}
 
 	principal, err := s.LookupAPIToken(ctx, plaintext)
@@ -36,5 +39,23 @@ func TestAPITokenScopes(t *testing.T) {
 	}
 	if principal.TokenTeamID == nil || *principal.TokenTeamID != team.ID {
 		t.Fatalf("token team=%v want=%s", principal.TokenTeamID, team.ID)
+	}
+
+	// Description round-trips through the listing.
+	tokens, err := s.ListUserAPITokens(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, tk := range tokens {
+		if tk.Name == "scoped" {
+			found = true
+			if tk.Description != "CI bot" || !reflect.DeepEqual(tk.Scopes, expectedScopes) {
+				t.Fatalf("listed token=%#v", tk)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("created token not listed")
 	}
 }

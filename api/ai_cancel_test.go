@@ -134,11 +134,11 @@ func newAICancelFixture(t *testing.T) aiCancelFixture {
 		t.Fatal(err)
 	}
 
-	rawScopes, err := json.Marshal([]string{auth.ScopeAITriggerJobs})
+	rawScopes, err := json.Marshal([]string{auth.ScopeWriteDraft})
 	if err != nil {
 		t.Fatal(err)
 	}
-	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "cancel-token", nil, string(rawScopes), nil)
+	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "cancel-token", nil, string(rawScopes), nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
