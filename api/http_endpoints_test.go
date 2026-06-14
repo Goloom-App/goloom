@@ -451,3 +451,54 @@ func TestTeamMediaRename(t *testing.T) {
 	rec = f.do(t, http.MethodPatch, "/v1/teams/"+f.team.ID+"/media/"+uuid.NewString(), map[string]any{"filename": "x.png"})
 	requireStatus(t, rec, http.StatusNotFound)
 }
+
+func TestSessionCookieLoginAndLogout(t *testing.T) {
+	f := newEndpointFixture(t)
+
+	// Exchange a valid bearer token for a cookie session.
+	body, _ := json.Marshal(map[string]string{"token": f.bearer})
+	req := httptest.NewRequest(http.MethodPost, "/v1/auth/session/token", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	f.handler.ServeHTTP(rec, req)
+	requireStatus(t, rec, http.StatusOK)
+
+	var session, csrf *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		switch c.Name {
+		case "goloom_session":
+			session = c
+		case "goloom_csrf":
+			csrf = c
+		}
+	}
+	if session == nil || session.Value == "" || !session.HttpOnly {
+		t.Fatalf("expected HttpOnly session cookie, got %#v", session)
+	}
+	if csrf == nil || csrf.Value == "" || csrf.HttpOnly {
+		t.Fatalf("expected readable csrf cookie, got %#v", csrf)
+	}
+
+	// The cookie authenticates GET /v1/me (no Authorization header).
+	meReq := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	meReq.AddCookie(session)
+	meRec := httptest.NewRecorder()
+	f.handler.ServeHTTP(meRec, meReq)
+	requireStatus(t, meRec, http.StatusOK)
+
+	// Logout (cookie POST) needs the CSRF token; then it revokes the session.
+	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
+	logoutReq.AddCookie(session)
+	logoutReq.AddCookie(csrf)
+	logoutReq.Header.Set("X-CSRF-Token", csrf.Value)
+	logoutRec := httptest.NewRecorder()
+	f.handler.ServeHTTP(logoutRec, logoutReq)
+	requireStatus(t, logoutRec, http.StatusNoContent)
+
+	// The revoked session no longer authenticates.
+	goneReq := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
+	goneReq.AddCookie(session)
+	goneRec := httptest.NewRecorder()
+	f.handler.ServeHTTP(goneRec, goneReq)
+	requireStatus(t, goneRec, http.StatusUnauthorized)
+}

@@ -103,6 +103,10 @@ function App() {
   // Token id of the current request principal (from /v1/me). For a browser
   // session this lets the token list mark "this browser".
   const [currentTokenId, setCurrentTokenId] = useState<string | null>(null)
+  // Auth is determined by a /v1/me probe (cookie session or dev bearer override),
+  // not by a token stored client-side. authProbed gates the first render.
+  const [authenticated, setAuthenticated] = useState(false)
+  const [authProbed, setAuthProbed] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [teams, setTeams] = useState<TeamRecord[]>([])
@@ -151,13 +155,13 @@ function App() {
   const [mobilePreviewPostId, setMobilePreviewPostId] = useState<string | null>(null)
   const [teamBrandColor, setTeamBrandColor] = useState('')
 
-  const api = useMemo(() => {
-    const token = activeConnection.bearerToken.trim()
-    if (!token) {
-      return null
-    }
-    return createApiClient({ baseUrl: activeConnection.apiBaseUrl.trim(), token })
-  }, [activeConnection.apiBaseUrl, activeConnection.bearerToken])
+  // The api client is always built. Web sessions authenticate via the HttpOnly
+  // cookie (sent automatically, same-origin); an optional bearer override is only
+  // used by the dev "Browser session" panel.
+  const api = useMemo(
+    () => createApiClient({ baseUrl: activeConnection.apiBaseUrl.trim(), token: activeConnection.bearerToken.trim() }),
+    [activeConnection.apiBaseUrl, activeConnection.bearerToken],
+  )
 
   useEffect(() => {
     writeStoredSettings(settings)
@@ -360,7 +364,8 @@ function App() {
     if (authStatusLoading || !authStatus) {
       return
     }
-    if (activeConnection.bearerToken.trim()) {
+    // Wait for the session probe; never redirect a signed-in (cookie) user.
+    if (!authProbed || authenticated) {
       return
     }
     if (!authStatus.oidcOAuthEnabled || authStatus.initialSetupRequired || recoveryMode || authError) {
@@ -375,7 +380,7 @@ function App() {
     void startOIDCLogin()
     // startOIDCLogin is a stable function declaration; deps cover the gating state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus, authStatusLoading, activeConnection.bearerToken, recoveryMode, authError])
+  }, [authStatus, authStatusLoading, authProbed, authenticated, recoveryMode, authError])
 
   const enterRecoveryMode = useCallback(() => {
     setRecoveryMode(true)
@@ -401,6 +406,7 @@ function App() {
     setAuthTokenDraft('')
     setPrincipalUser(null)
     setCurrentTokenId(null)
+    setAuthenticated(false)
     setTeams([])
     setAccounts([])
     setPosts([])
@@ -427,15 +433,16 @@ function App() {
     setStatusMessage(null)
 
     try {
-      const baseUrl = settings.general.apiBaseUrl.trim()
-      const meResponse = await createApiClient({ baseUrl, token }).me()
-      setActiveConnection({ apiBaseUrl: baseUrl, bearerToken: token })
-      setSettings((current) => ({
-        ...current,
-        general: { ...current.general, apiBaseUrl: baseUrl, bearerToken: token },
-      }))
-      setPrincipalUser(toUserRecord(meResponse.user))
-      setCurrentTokenId(meResponse.token_id ?? null)
+      // Exchange the token for an HttpOnly cookie session (no token kept client-side).
+      const res = await api.sessionFromToken(token)
+      setAuthTokenDraft('')
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+        sessionStorage.removeItem(OIDC_SUPPRESS_AUTO_KEY)
+      }
+      setPrincipalUser(toUserRecord(res.user))
+      setAuthenticated(true)
+      setAuthProbed(true)
       setStatusMessage(mode === 'bootstrap' ? t('status.bootstrapAdminSignedIn') : t('status.signedIn'))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
@@ -550,14 +557,47 @@ function App() {
     }
   }, [api, clearAuthenticatedState])
 
+  // Probe the session (cookie or dev bearer) on load / connection change. Drives
+  // the auth gate; a 401 simply means "not signed in" (no error, no logout).
   useEffect(() => {
-    if (api) {
+    let cancelled = false
+    void api
+      .me()
+      .then((me) => {
+        if (cancelled) {
+          return
+        }
+        setPrincipalUser(toUserRecord(me.user))
+        setCurrentTokenId(me.token_id ?? null)
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          sessionStorage.removeItem(OIDC_AUTO_ATTEMPTED_KEY)
+          sessionStorage.removeItem(OIDC_SUPPRESS_AUTO_KEY)
+        }
+        setAuthenticated(true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAuthenticated(false)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthProbed(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api])
+
+  useEffect(() => {
+    if (api && authenticated) {
       const timer = window.setTimeout(() => {
         void loadDashboard()
       }, 0)
       return () => window.clearTimeout(timer)
     }
-  }, [api, loadDashboard])
+  }, [api, authenticated, loadDashboard])
 
   useEffect(() => {
     if (!api) {
@@ -1526,7 +1566,7 @@ function App() {
     }, changed.length > 1 ? t('status.postsRescheduledOverlap') : t('status.postMovedCalendar'))
   }
 
-  if (authStatusLoading && !activeConnection.bearerToken.trim()) {
+  if (!authProbed && !authenticated) {
     return (
       <AuthShell theme={resolvedTheme}>
         <AuthPanel
@@ -1546,7 +1586,7 @@ function App() {
     )
   }
 
-  if (!activeConnection.bearerToken.trim()) {
+  if (!authenticated) {
     return (
       <AuthShell theme={resolvedTheme}>
         <AuthPanel
@@ -1574,7 +1614,10 @@ function App() {
       selectedTeamId={effectiveSelectedTeamId}
       onSelectTeam={setSelectedTeamId}
       user={principalUser}
-      onSignOut={() => clearAuthenticatedState(t('status.signedOut'))}
+      onSignOut={() => {
+        void api.logout().catch(() => undefined)
+        clearAuthenticatedState(t('status.signedOut'))
+      }}
       openComposer={openCreateComposer}
       resolvedTheme={resolvedTheme}
       showPreviewColumn={showPreviewColumn}

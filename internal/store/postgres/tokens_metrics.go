@@ -140,7 +140,7 @@ func (s *Store) TryAcquireLock(ctx context.Context, lockID string, duration time
 
 func (s *Store) CreateSessionAPIToken(ctx context.Context, userID string, ttl time.Duration) (string, domain.APIToken, error) {
 	if ttl <= 0 {
-		ttl = 12 * time.Hour
+		ttl = s.webSessionTTL()
 	}
 	expires := time.Now().UTC().Add(ttl)
 	return s.CreateUserAPIToken(ctx, userID, domain.WebSessionAPITokenName, &expires, "", nil, "")

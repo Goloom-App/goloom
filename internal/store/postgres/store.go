@@ -59,8 +59,20 @@ func decodePostMediaIDs(raw string, dest *[]string) error {
 }
 
 type Store struct {
-	pool      *pgxpool.Pool
-	encrypter *security.Encrypter
+	pool       *pgxpool.Pool
+	encrypter  *security.Encrypter
+	sessionTTL time.Duration
+}
+
+// SetSessionTTL sets the rolling idle lifetime applied to web sessions.
+func (s *Store) SetSessionTTL(d time.Duration) { s.sessionTTL = d }
+
+// webSessionTTL returns the configured session TTL, defaulting to 12h.
+func (s *Store) webSessionTTL() time.Duration {
+	if s.sessionTTL <= 0 {
+		return 12 * time.Hour
+	}
+	return s.sessionTTL
 }
 
 func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter) (*Store, error) {
@@ -212,8 +224,8 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	_, _ = s.pool.Exec(ctx, `
 		update api_tokens
 		set last_used_at = now(),
-		    expires_at = case when name = '__web_session' then now() + interval '12 hours' else expires_at end
-		where token_hash = $1`, hash)
+		    expires_at = case when name = '__web_session' then $2 else expires_at end
+		where token_hash = $1`, hash, time.Now().UTC().Add(s.webSessionTTL()))
 	return principal, nil
 }
 
