@@ -308,11 +308,9 @@ Caveman (ultra):
 
 ### Directories without AGENTS.md (no durable boundary needed)
 
-- `.cursor/` — IDE agent config
 - `.e2e/` — E2E test runtime artifacts (gitignored)
 - `.forgejo/` — CI/CD workflows (self-contained YAML)
 - `.pnpm-store/` — pnpm cache
-- `.sisyphus/` — AI orchestration state (borderline; may warrant AGENTS.md if conventions grow)
 - `api/` — Go HTTP handlers (follows Go conventions, borderline)
 - `bin/` — Compiled binary (build artifact)
 - `cmd/server/` — Go entry point (single file)
