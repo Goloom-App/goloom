@@ -1,70 +1,72 @@
 ---
 const features = [
 	{
-		icon: '📦',
-		title: 'Single binary',
-		text: 'One executable ships the API, scheduler, and web UI — no microservice maze.',
+		icon: '✍️',
+		title: 'Composer',
+		body: 'Write once, tailor per account. Per-account post versions, media attachments and validation before anything is scheduled.',
 	},
 	{
-		icon: '🗄️',
-		title: 'SQLite or PostgreSQL',
-		text: 'SQLite for low-ops setups; swap to Postgres when you need external DB ops.',
+		icon: '🗓️',
+		title: 'Content calendar',
+		body: 'A drag-and-drop, timezone-aware calendar to plan and reschedule posts across every connected account.',
 	},
 	{
-		icon: '👥',
-		title: 'Team workspaces',
-		text: 'Organize accounts and content by team with role-based access control.',
-	},
-	{
-		icon: '📅',
-		title: 'Scheduling & calendar',
-		text: 'Plan posts on a visual calendar with timezone-aware scheduling.',
-	},
-	{
-		icon: '📊',
+		icon: '📈',
 		title: 'Analytics',
-		text: 'Track engagement and performance across connected accounts.',
+		body: 'Track reach, engagement and follower growth with per-post and per-account metrics across providers.',
 	},
 	{
-		icon: '🤖',
-		title: 'API-first & AI agents',
-		text: 'Automate drafts, campaigns, and workflows via REST — built for agents.',
+		icon: '⚙️',
+		title: 'Automation',
+		body: 'Recurring post templates and RSS feed rules keep your channels active without manual busywork.',
 	},
 	{
-		icon: '🌐',
-		title: 'Fediverse providers',
-		text: 'Publish to Mastodon, Friendica, Bluesky, and more from one place.',
+		icon: '🧠',
+		title: 'AI features',
+		body: 'AI-assisted drafting with a per-team brand voice, so generated copy sounds like you — not generic LLM output.',
 	},
 	{
 		icon: '✅',
-		title: 'Review queue & automation',
-		text: 'Approve drafts before they go live, or let automation handle the pipeline.',
+		title: 'Review queue',
+		body: 'Route drafts through approval before they publish. Editors propose, owners approve — every step is logged.',
+	},
+	{
+		icon: '📚',
+		title: 'Media library',
+		body: 'A reusable per-team media library so images and assets are one click away inside the composer.',
+	},
+	{
+		icon: '🔌',
+		title: 'Built-in MCP server',
+		body: 'A Model Context Protocol server is bundled and on by default, so Claude, OpenClaw and other agents drive goloom with natural-language tools.',
+	},
+	{
+		icon: '🔑',
+		title: 'API tokens & OIDC',
+		body: 'Bearer-token API access with a full token lifecycle, plus OIDC sign-in for browser users.',
+	},
+	{
+		icon: '🛡️',
+		title: 'Audit log',
+		body: 'Every team action is attributed to a member or API key — encrypted provider tokens, hashed API tokens at rest.',
 	},
 ];
 ---
 
-<section class="landing-section">
-	<div class="landing-container">
-		<div class="landing-section__header">
-			<p class="landing-section__eyebrow">Features</p>
-			<h2 class="landing-section__title">Everything you need to plan social</h2>
-			<p class="landing-section__subtitle">
-				From draft to published post — with the control and transparency
-				self-hosters expect.
-			</p>
+<section class="lp-section" id="features">
+	<div class="lp-container">
+		<div class="lp-section__head">
+			<span class="lp-eyebrow">Everything you need</span>
+			<h2>A focused toolkit, not a bloated suite</h2>
+			<p>goloom does the core of social planning really well — and stays simple to run.</p>
 		</div>
-		<div class="feature-grid">
-			{
-				features.map((feature) => (
-					<article class="feature-card glass-panel">
-						<div class="feature-card__icon" aria-hidden="true">
-							{feature.icon}
-						</div>
-						<h3 class="feature-card__title">{feature.title}</h3>
-						<p class="feature-card__text">{feature.text}</p>
-					</article>
-				))
-			}
+		<div class="lp-features">
+			{features.map((f) => (
+				<article class="glass lp-feature">
+					<h3><span class="lp-ico" style="width:32px;height:32px;font-size:1rem;">{f.icon}</span>{f.title}</h3>
+					<p>{f.body}</p>
+				</article>
+			))}
 		</div>
 	</div>
 </section>

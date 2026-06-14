@@ -23,7 +23,7 @@ export type TeamRole = 'owner' | 'editor' | 'viewer'
 
 export type GlobalRole = 'admin' | 'member'
 
-export type ProviderName = 'bluesky' | 'friendica' | 'mastodon'
+export type ProviderName = 'bluesky' | 'friendica' | 'mastodon' | 'pixelfed'
 
 export type PostStatus = 'scheduled' | 'posted' | 'failed' | 'draft'
 

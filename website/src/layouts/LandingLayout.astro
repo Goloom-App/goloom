@@ -1,0 +1,36 @@
+---
+import '../styles/theme.css';
+import '../styles/landing.css';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const {
+	title = 'goloom — Lightweight social planning for teams and AI agents',
+	description = 'Self-hosted social media planning in a single Go binary. Plan and publish across Mastodon, Friendica and Bluesky with teams, automation and an API-first design built for AI agents.',
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta name="twitter:card" content="summary_large_image" />
+	</head>
+	<body>
+		<slot />
+	</body>
+</html>

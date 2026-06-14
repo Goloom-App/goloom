@@ -179,7 +179,7 @@ create index if not exists idx_rss_feed_configs_team on rss_feed_configs(team_id
 
 create table if not exists provider_instances (
     id text primary key,
-    provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    provider text not null check (provider <> ''),
     name text not null,
     instance_url text not null,
     client_id text not null default '',
@@ -197,7 +197,7 @@ create table if not exists social_accounts (
     id text primary key,
     team_id text not null references teams(id) on delete cascade,
     name text not null default '',
-    provider text not null check (provider in ('bluesky', 'friendica', 'mastodon')),
+    provider text not null check (provider <> ''),
     auth_type text not null default 'oauth_token' check (auth_type in ('oauth_token', 'app_password')),
     provider_instance_id text references provider_instances(id) on delete set null,
     instance_url text not null,

@@ -14,6 +14,8 @@ import (
 type Capabilities struct {
 	MaxChars   int      `json:"max_chars"`
 	MediaTypes []string `json:"media_types"`
+	// RequiresMedia is true for providers that reject text-only posts (e.g. Pixelfed needs an image).
+	RequiresMedia bool `json:"requires_media"`
 }
 
 // PublishRequest is the normalized payload for publishing a status update.

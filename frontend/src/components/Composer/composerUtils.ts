@@ -1,5 +1,27 @@
 import type { AccountRecord } from '../../types'
+import { providerRequiresMedia } from '../../mappers'
 import type { EditorDraftState } from './types'
+
+/** Media this destination publishes after per-account exclusions (mirrors backend FilterMediaIDsForAccount). */
+export function effectiveMediaForAccount(draft: EditorDraftState, accountId: string): string[] {
+  const excluded = new Set(draft.mediaExcludeByAccount[accountId] ?? [])
+  return draft.mediaIds.filter((id) => !excluded.has(id))
+}
+
+/** Target accounts whose provider requires media but that have no attachment (e.g. Pixelfed). */
+export function accountsMissingRequiredMedia(
+  draft: EditorDraftState,
+  teamAccounts: AccountRecord[],
+): AccountRecord[] {
+  const out: AccountRecord[] = []
+  for (const id of draft.targetAccountIds) {
+    const acc = teamAccounts.find((a) => a.id === id)
+    if (acc && providerRequiresMedia(acc.provider) && effectiveMediaForAccount(draft, id).length === 0) {
+      out.push(acc)
+    }
+  }
+  return out
+}
 
 /** Matches backend domain.CreatePostInput.EffectiveContent. */
 export function hasAccountContentOverride(draft: EditorDraftState, accountId: string): boolean {

@@ -46,6 +46,10 @@ type destinationInfo struct {
 	MaxChars  int    `json:"max_chars"`
 	Length    int    `json:"length"`
 	Valid     bool   `json:"valid"`
+	// RequiresMedia is true when this provider rejects text-only posts (e.g. Pixelfed).
+	RequiresMedia bool `json:"requires_media,omitempty"`
+	// MissingMedia is true when RequiresMedia holds but the destination has no attachment.
+	MissingMedia bool `json:"missing_media,omitempty"`
 }
 
 func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner, catalog *i18n.Catalog, jobManager *aijobs.Manager, hub *sse.Hub) *API {
@@ -1115,16 +1119,27 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 		effectiveContent := input.EffectiveContent(account.ID)
 		contentLen := len([]rune(effectiveContent))
 		isValid := capabilities.MaxChars == 0 || contentLen <= capabilities.MaxChars
+
+		missingMedia := false
+		if capabilities.RequiresMedia {
+			effectiveMedia := domain.FilterMediaIDsForAccount(input.MediaIDs, input.MediaExcludeByAccount, account.ID)
+			if len(effectiveMedia) == 0 {
+				missingMedia = true
+				isValid = false
+			}
+		}
 		if !isValid {
 			allValid = false
 		}
 
 		destinations = append(destinations, destinationInfo{
-			AccountID: account.ID,
-			Provider:  account.Provider,
-			MaxChars:  capabilities.MaxChars,
-			Length:    contentLen,
-			Valid:     isValid,
+			AccountID:     account.ID,
+			Provider:      account.Provider,
+			MaxChars:      capabilities.MaxChars,
+			Length:        contentLen,
+			Valid:         isValid,
+			RequiresMedia: capabilities.RequiresMedia,
+			MissingMedia:  missingMedia,
 		})
 		if maxChars == 0 || capabilities.MaxChars < maxChars {
 			maxChars = capabilities.MaxChars

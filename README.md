@@ -150,27 +150,24 @@ curl -s \
 
 For complete route list, see `api/http.go`.
 
-### Build professional API docs
+### API docs
 
-Lint OpenAPI spec:
+The interactive API reference is rendered with [Scalar](https://scalar.com) and
+served by the website at `/api/`. It reads the OpenAPI spec directly, so there is
+no separate static build step.
+
+Lint the OpenAPI spec:
 
 ```bash
 make docs-api-lint
 ```
 
-Build static API docs (Redoc HTML):
-
-```bash
-make docs-api-build
-```
-
-Generated output:
-
-- `docs/api/dist/index.html`
-- source spec: `docs/api/openapi.yaml`
+- source spec: `docs/api/openapi.yaml` (single source of truth)
+- the spec is copied to `website/public/openapi.yaml` by `make website-build`
 
 ### AI agent integration notes (OpenClaw and similar)
 
+- Built-in **MCP server** at `/mcp/` (enabled by default, `MCP_ENABLED`), authenticated with API tokens carrying `ai:read:context` / `ai:write:drafts` scopes.
 - Stable JSON responses across core endpoints.
 - Predictable resource paths with team-scoped objects.
 - Validation endpoint before scheduling: `POST /v1/teams/{teamID}/posts/validate`.
@@ -178,7 +175,8 @@ Generated output:
 
 ## Website & Documentation
 
-The project website (Astro + Starlight) lives in `website/` and bundles the Redoc API reference.
+The project website (Astro + Starlight) lives in `website/`: a marketing landing
+page, the documentation (3-column Starlight layout) and the Scalar API reference at `/api/`.
 
 Local dev server:
 
@@ -270,8 +268,8 @@ make frontend-dev
 
 Recommended API-doc workflow in CI:
 
-- run `make docs-api-lint` on pull requests
-- optionally publish `docs/api/dist/index.html` as artifact/site
+- run `make docs-api-lint` on pull requests to validate the OpenAPI spec
+- the reference is published as part of the website (`make website-build`)
 
 ## Configuration
 

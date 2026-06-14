@@ -1,0 +1,146 @@
+/* goloom — Bold Dark / Modern SaaS theme
+ * Shared design tokens + Starlight overrides.
+ * Loaded by Starlight (docs) and imported by the landing layout. */
+
+:root {
+	/* Brand gradient: cyan -> magenta */
+	--brand-grad-from: #22d3ee;
+	--brand-grad-to: #d946ef;
+	--brand-grad: linear-gradient(120deg, var(--brand-grad-from), var(--brand-grad-to));
+	--brand-grad-soft: linear-gradient(
+		120deg,
+		color-mix(in oklab, var(--brand-grad-from) 18%, transparent),
+		color-mix(in oklab, var(--brand-grad-to) 18%, transparent)
+	);
+
+	/* Surfaces */
+	--surface-0: #0a0a0f;
+	--surface-1: #101018;
+	--surface-2: #16161f;
+	--glass-bg: rgba(255, 255, 255, 0.035);
+	--glass-border: rgba(255, 255, 255, 0.08);
+	--glass-border-strong: rgba(255, 255, 255, 0.14);
+
+	/* Starlight: dark theme (default) */
+	--sl-color-accent-low: #0d3a45;
+	--sl-color-accent: #06b6d4;
+	--sl-color-accent-high: #7dd3fc;
+	--sl-color-white: #f4f4f8;
+	--sl-color-gray-1: #e6e7ee;
+	--sl-color-gray-2: #c2c4cf;
+	--sl-color-gray-3: #969aa8;
+	--sl-color-gray-4: #6a6e7d;
+	--sl-color-gray-5: #3a3d49;
+	--sl-color-gray-6: #21232c;
+	--sl-color-gray-7: #16171d;
+	--sl-color-black: #0a0a0f;
+
+	--sl-color-bg: var(--surface-0);
+	--sl-color-bg-nav: rgba(10, 10, 15, 0.72);
+	--sl-color-bg-sidebar: rgba(13, 13, 19, 0.6);
+	--sl-color-hairline-shade: rgba(255, 255, 255, 0.06);
+}
+
+/* Starlight: light theme */
+:root[data-theme='light'] {
+	--glass-bg: rgba(10, 10, 20, 0.025);
+	--glass-border: rgba(10, 10, 20, 0.08);
+	--glass-border-strong: rgba(10, 10, 20, 0.14);
+
+	--sl-color-accent-low: #cffafe;
+	--sl-color-accent: #0891b2;
+	--sl-color-accent-high: #155e75;
+	--sl-color-white: #14141a;
+	--sl-color-gray-1: #1f2027;
+	--sl-color-gray-2: #34363f;
+	--sl-color-gray-3: #5a5d69;
+	--sl-color-gray-4: #8a8d99;
+	--sl-color-gray-5: #c0c2cb;
+	--sl-color-gray-6: #e8e9ee;
+	--sl-color-gray-7: #f4f5f8;
+	--sl-color-black: #ffffff;
+	--sl-color-bg-nav: rgba(255, 255, 255, 0.75);
+	--sl-color-bg-sidebar: rgba(248, 249, 252, 0.7);
+}
+
+/* Subtle mesh background behind everything */
+body {
+	background-color: var(--surface-0);
+	background-image:
+		radial-gradient(60ch 40ch at 12% -8%, color-mix(in oklab, var(--brand-grad-from) 16%, transparent), transparent 70%),
+		radial-gradient(60ch 40ch at 92% 0%, color-mix(in oklab, var(--brand-grad-to) 14%, transparent), transparent 65%);
+	background-attachment: fixed;
+	background-repeat: no-repeat;
+}
+
+:root[data-theme='light'] body {
+	background-color: #fbfbfd;
+	background-image:
+		radial-gradient(60ch 40ch at 12% -8%, color-mix(in oklab, var(--brand-grad-from) 9%, transparent), transparent 70%),
+		radial-gradient(60ch 40ch at 92% 0%, color-mix(in oklab, var(--brand-grad-to) 8%, transparent), transparent 65%);
+}
+
+/* Make the Starlight top nav glassy */
+.starlight-aside,
+header.header {
+	backdrop-filter: blur(12px);
+}
+
+/* ---- Shared utility classes (landing + docs) ---- */
+
+.grad-text {
+	background: var(--brand-grad);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+.glass {
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border);
+	border-radius: 16px;
+	backdrop-filter: blur(10px);
+}
+
+.glow-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.75rem 1.4rem;
+	border-radius: 999px;
+	font-weight: 600;
+	font-size: 0.98rem;
+	line-height: 1;
+	text-decoration: none;
+	color: #04060a;
+	background: var(--brand-grad);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08),
+		0 12px 30px -8px color-mix(in oklab, var(--brand-grad-to) 55%, transparent);
+	transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.glow-btn:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14),
+		0 18px 44px -8px color-mix(in oklab, var(--brand-grad-to) 70%, transparent);
+}
+
+.ghost-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.75rem 1.4rem;
+	border-radius: 999px;
+	font-weight: 600;
+	font-size: 0.98rem;
+	line-height: 1;
+	text-decoration: none;
+	color: var(--sl-color-white);
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border-strong);
+	transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.ghost-btn:hover {
+	transform: translateY(-2px);
+	border-color: color-mix(in oklab, var(--brand-grad-from) 50%, var(--glass-border-strong));
+	background: var(--brand-grad-soft);
+}

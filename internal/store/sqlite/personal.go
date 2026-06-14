@@ -153,6 +153,86 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	if err := migrateSQLiteEmbeddedAnnouncements(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateSQLiteProviderConstraint(ctx, db); err != nil {
+		return err
+	}
+	return nil
+}
+
+// migrateSQLiteProviderConstraint relaxes the hard-coded provider enum CHECK on
+// provider_instances and social_accounts to `provider <> ''`, so new Mastodon-compatible
+// providers (e.g. pixelfed) are accepted. The provider registry validates names at runtime.
+func migrateSQLiteProviderConstraint(ctx context.Context, db *sql.DB) error {
+	if err := rebuildSQLiteProviderTable(ctx, db, "provider_instances", `
+CREATE TABLE provider_instances_new (
+    id text primary key,
+    provider text not null check (provider <> ''),
+    name text not null,
+    instance_url text not null,
+    client_id text not null default '',
+    client_secret_ciphertext text not null default '',
+    scopes_json text not null default '[]',
+    authorization_endpoint text not null default '',
+    token_endpoint text not null default '',
+    created_by_user_id text not null references users(id) on delete restrict,
+    created_at text not null,
+    updated_at text not null,
+    unique (provider, instance_url)
+);
+INSERT INTO provider_instances_new SELECT
+    id, provider, name, instance_url, client_id, client_secret_ciphertext, scopes_json,
+    authorization_endpoint, token_endpoint, created_by_user_id, created_at, updated_at
+FROM provider_instances;
+DROP TABLE provider_instances;
+ALTER TABLE provider_instances_new RENAME TO provider_instances;
+CREATE INDEX IF NOT EXISTS idx_provider_instances_provider ON provider_instances(provider, instance_url);
+`); err != nil {
+		return err
+	}
+
+	return rebuildSQLiteProviderTable(ctx, db, "social_accounts", `
+CREATE TABLE social_accounts_new (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    name text not null default '',
+    provider text not null check (provider <> ''),
+    auth_type text not null default 'oauth_token' check (auth_type in ('oauth_token', 'app_password')),
+    provider_instance_id text references provider_instances(id) on delete set null,
+    instance_url text not null,
+    username text not null,
+    remote_account_id text not null default '',
+    avatar_url text not null default '',
+    access_token_ciphertext text not null,
+    refresh_token_ciphertext text not null default '',
+    max_chars_override integer,
+    access_token_expires_at text,
+    created_at text not null
+);
+INSERT INTO social_accounts_new SELECT
+    id, team_id, name, provider, auth_type, provider_instance_id, instance_url, username,
+    remote_account_id, avatar_url, access_token_ciphertext, refresh_token_ciphertext,
+    max_chars_override, access_token_expires_at, created_at
+FROM social_accounts;
+DROP TABLE social_accounts;
+ALTER TABLE social_accounts_new RENAME TO social_accounts;
+CREATE INDEX IF NOT EXISTS idx_social_accounts_team ON social_accounts(team_id);
+`)
+}
+
+// rebuildSQLiteProviderTable runs a 12-step table rebuild when the existing table still
+// carries the old provider enum CHECK (i.e. its create SQL lacks the relaxed marker).
+func rebuildSQLiteProviderTable(ctx context.Context, db *sql.DB, table, rebuildBody string) error {
+	var createSQL sql.NullString
+	err := db.QueryRowContext(ctx, `SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&createSQL)
+	if err != nil || !createSQL.Valid || createSQL.String == "" {
+		return nil
+	}
+	if strings.Contains(createSQL.String, "provider <> ''") {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n"+rebuildBody+"COMMIT;\nPRAGMA foreign_keys=ON;\n"); err != nil {
+		return fmt.Errorf("sqlite migrate %s provider constraint: %w", table, err)
+	}
 	return nil
 }
 
