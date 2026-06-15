@@ -34,10 +34,10 @@ function formatSparkDate(date: string): string {
   }
 }
 
-type SparkValueMode = 'total' | 'delta' | 'balance'
+type SparkValueMode = 'total' | 'delta'
 
 function formatSparkValue(value: number, mode: SparkValueMode): string {
-  if ((mode === 'delta' || mode === 'balance') && value > 0) {
+  if (mode === 'delta' && value > 0) {
     return `+${value.toLocaleString()}`
   }
   return value.toLocaleString()
@@ -63,15 +63,10 @@ function MetricSparkline({
   valueMode?: SparkValueMode
 }) {
   const data = useMemo(() => points, [points])
-  // 'balance' shows the net change across the whole window (last − first), so a
-  // rising follower count reads as growth even when today's delta happens to be 0.
   const headlineValue = useMemo(() => {
     if (data.length === 0) return null
-    if (valueMode === 'balance') {
-      return data[data.length - 1].value - data[0].value
-    }
     return data[data.length - 1].value
-  }, [data, valueMode])
+  }, [data])
 
   return (
     <div className="dashboard-spark">
@@ -84,7 +79,7 @@ function MetricSparkline({
           <div
             className="dashboard-spark__value"
             style={
-              valueMode === 'delta' || valueMode === 'balance'
+              valueMode === 'delta'
                 ? { color: headlineValue < 0 ? '#ef4444' : headlineValue > 0 ? '#22c55e' : 'inherit' }
                 : undefined
             }
@@ -191,12 +186,14 @@ export function DashboardView({
         fetchGrowth('all', { days: 7 }),
       ])
 
-      // Plot the cumulative network size so the trend line rises with new
-      // followers; the headline ('balance' mode) shows the net change over the window.
-      const network = (growthResult.series ?? []).map((p: BackendAccountGrowthPoint) => ({
-        date: p.date,
-        value: p.followers + p.following,
-      }))
+      // The Network Trend shows the day's growth (delta); a day with no new
+      // followers reads as 0 by design.
+      const network = toDailyDeltas(
+        (growthResult.series ?? []).map((p: BackendAccountGrowthPoint) => ({
+          date: p.date,
+          value: p.followers + p.following,
+        })),
+      )
       setNetworkSeries(network)
 
       const next: Record<string, SparkPoint[]> = {}
@@ -253,7 +250,6 @@ export function DashboardView({
           title={t('dashboard.networkTrend')}
           color="#38bdf8"
           points={networkSeries}
-          valueMode="balance"
           {...sparkProps}
         />
         {ENGAGEMENT_METRICS.map((m) => (
