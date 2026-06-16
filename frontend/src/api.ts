@@ -441,7 +441,7 @@ export interface BackendAIServiceConfig {
 }
 
 export interface BackendAIChatMention {
-  type: 'campaign' | 'recurring' | 'rss'
+  type: 'campaign' | 'recurring' | 'rss' | 'account'
   id: string
   name: string
 }

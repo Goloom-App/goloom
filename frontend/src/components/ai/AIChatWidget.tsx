@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Bot, Loader2, Send, Sparkles, X } from 'lucide-react'
 import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, createApiClient } from '../../api'
+import type { AccountRecord } from '../../types'
 import { composerContextEvent } from './composerChatBridge'
 import type { ComposerChatContext, ComposerChatTarget } from './composerChatBridge'
 
@@ -16,11 +17,19 @@ interface DraftPreview {
   scheduledAt?: string
 }
 
+/** A composer revision proposed by revise_composer_post: applied back into the
+ *  open composer (default text and/or per-account overrides), never persisted. */
+interface RevisionPreview {
+  content: string
+  accountContentOverride: Record<string, string>
+}
+
 interface ChatEntry {
-  kind: 'user' | 'assistant' | 'tool' | 'preview' | 'error'
+  kind: 'user' | 'assistant' | 'tool' | 'preview' | 'revision' | 'error'
   text: string
   mentions?: BackendAIChatMention[]
   preview?: DraftPreview
+  revision?: RevisionPreview
   updated?: boolean
 }
 
@@ -43,16 +52,18 @@ const slashCommands: SlashCommand[] = [
 interface AIChatWidgetProps {
   api: ApiClient
   teamId: string
+  teamAccounts: AccountRecord[]
   onOpenInComposer: (payload: {
     title?: string
     content: string
     targetAccountIds: string[]
     scheduledAt?: string
   }) => void
-  onApplyToComposer?: (content: string) => void
+  /** Apply a revision into the open composer: default text and/or per-account overrides. */
+  onApplyToComposer?: (payload: { content?: string; accountContentOverride?: Record<string, string> }) => void
 }
 
-export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer }: AIChatWidgetProps) {
+export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onApplyToComposer }: AIChatWidgetProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<ChatEntry[]>([])
@@ -60,8 +71,8 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
   const [pendingMentions, setPendingMentions] = useState<BackendAIChatMention[]>([])
   const [busy, setBusy] = useState(false)
   const [composerContext, setComposerContext] = useState<{ content: string; targets: ComposerChatTarget[] } | null>(null)
-  // Once a composer draft was discussed, assistant replies offer an "apply" action.
-  const [composerSession, setComposerSession] = useState(false)
+  // Account ids the user toggled out of scope: edits then only touch the rest.
+  const [deselectedAccountIds, setDeselectedAccountIds] = useState<string[]>([])
   const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([])
   const [suggestions, setSuggestions] = useState<{ kind: 'mention' | 'command'; query: string } | null>(null)
   // Keyboard-driven selection within the @mention / slash-command dropdown.
@@ -80,7 +91,7 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
     setPendingMentions([])
     setInput('')
     setComposerContext(null)
-    setComposerSession(false)
+    setDeselectedAccountIds([])
   }, [teamId])
 
   useEffect(() => {
@@ -91,6 +102,7 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
       }
       if (detail.clear) {
         setComposerContext(null)
+        setDeselectedAccountIds([])
         return
       }
       if (!detail.content.trim()) {
@@ -119,6 +131,9 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
     let cancelled = false
     void (async () => {
       const options: MentionOption[] = []
+      for (const account of teamAccounts) {
+        options.push({ type: 'account', id: account.id, name: account.name, hint: t('aiChat.mentionAccount', { provider: account.provider }) })
+      }
       const [campaigns, templates, feeds] = await Promise.allSettled([
         api.listCampaignFormats(teamId),
         api.listPostTemplates(teamId),
@@ -146,7 +161,7 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
     return () => {
       cancelled = true
     }
-  }, [api, teamId, open, t])
+  }, [api, teamId, open, teamAccounts, t])
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
@@ -239,12 +254,22 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
           // follow-up turns know the ids (and text) of what already exists.
           const isError = Boolean(event.message?.startsWith('Error:'))
           const isDraftTool = event.tool_name === 'create_draft' || event.tool_name === 'update_draft'
+          const isRevisionTool = event.tool_name === 'revise_composer_post'
           if (!isError && event.tool_name && event.tool_name !== 'fetch_url' && event.message) {
             let note = `[${event.tool_name}] ${event.message}`
             if (isDraftTool && event.payload && typeof event.payload === 'object') {
               const post = event.payload as { content?: string }
               if (post.content) {
                 note += `\nCurrent draft content:\n${post.content}`
+              }
+            }
+            if (isRevisionTool && event.payload && typeof event.payload === 'object') {
+              const revision = event.payload as { content?: string; account_content_override?: Record<string, string> }
+              if (revision.content) {
+                note += `\nProposed default text:\n${revision.content}`
+              }
+              for (const [accountId, body] of Object.entries(revision.account_content_override ?? {})) {
+                note += `\nProposed override for ${accountId}:\n${body}`
               }
             }
             history.current = [...history.current, { role: 'assistant', content: note }]
@@ -276,6 +301,21 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
             }
             return
           }
+          if (isRevisionTool && !isError && event.payload && typeof event.payload === 'object') {
+            const revision = event.payload as { content?: string; account_content_override?: Record<string, string> }
+            setEntries((current) => [
+              ...current,
+              {
+                kind: 'revision',
+                text: '',
+                revision: {
+                  content: revision.content ?? '',
+                  accountContentOverride: revision.account_content_override ?? {},
+                },
+              },
+            ])
+            return
+          }
           if (isError) {
             setEntries((current) => [...current, { kind: 'error', text: event.message ?? '' }])
           }
@@ -299,16 +339,7 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
     const mentions = pendingMentions.filter((mention) => text.includes(`@${mention.name}`))
     let modelText = text
     if (composerContext) {
-      const targetNote =
-        composerContext.targets.length > 0
-          ? ` It is being posted to: ${composerContext.targets.map((target) => `${target.name} (${target.provider})`).join(', ')}.`
-          : ''
-      modelText +=
-        `\n\n[The user is editing this post in the composer.${targetNote} Work on THIS text and reply with the revised post text only; do not create a new draft unless explicitly asked:]\n` +
-        composerContext.content
-      // Keep the context attached so follow-up turns ("now make it shorter")
-      // keep operating on the post; the user can detach it via the chip.
-      setComposerSession(true)
+      modelText += buildComposerNote(composerContext, deselectedAccountIds)
     }
     const userMessage: BackendAIChatMessage = {
       role: 'user',
@@ -396,19 +427,49 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
                   </article>
                 )
               }
+              if (entry.kind === 'revision' && entry.revision) {
+                const revision = entry.revision
+                const overrideEntries = Object.entries(revision.accountContentOverride)
+                const accountName = (id: string) =>
+                  composerContext?.targets.find((target) => target.accountId === id)?.name ??
+                  teamAccounts.find((account) => account.id === id)?.name ??
+                  id
+                return (
+                  <article key={index} className="ai-chat-preview ai-chat-preview--revision">
+                    <p className="eyebrow">{t('aiChat.revisionReady')}</p>
+                    {revision.content ? (
+                      <div>
+                        <span className="hint">{t('aiChat.revisionDefault')}</span>
+                        <p className="ai-chat-preview__content">{revision.content}</p>
+                      </div>
+                    ) : null}
+                    {overrideEntries.map(([accountId, body]) => (
+                      <div key={accountId}>
+                        <span className="hint">{t('aiChat.revisionFor', { name: accountName(accountId) })}</span>
+                        <p className="ai-chat-preview__content">{body}</p>
+                      </div>
+                    ))}
+                    {onApplyToComposer ? (
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        onClick={() =>
+                          onApplyToComposer({
+                            content: revision.content || undefined,
+                            accountContentOverride:
+                              overrideEntries.length > 0 ? revision.accountContentOverride : undefined,
+                          })
+                        }
+                      >
+                        {t('aiChat.applyToComposer')}
+                      </button>
+                    ) : null}
+                  </article>
+                )
+              }
               return (
                 <div key={index} className={`ai-chat-bubble ai-chat-bubble--${entry.kind}`}>
                   {entry.text}
-                  {entry.kind === 'assistant' && composerSession && onApplyToComposer ? (
-                    <button
-                      type="button"
-                      className="btn btn--secondary btn--sm"
-                      style={{ display: 'block', marginTop: '0.5rem' }}
-                      onClick={() => onApplyToComposer(entry.text)}
-                    >
-                      {t('aiChat.applyToComposer')}
-                    </button>
-                  ) : null}
                 </div>
               )
             })}
@@ -424,16 +485,33 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
               <button
                 type="button"
                 className="ai-chat-chip ai-chat-chip--context"
-                onClick={() => setComposerContext(null)}
+                onClick={() => {
+                  setComposerContext(null)
+                  setDeselectedAccountIds([])
+                }}
                 title={t('aiChat.composerContextDetach')}
               >
-                {composerContext.targets.length > 0
-                  ? t('aiChat.composerContextWithTargets', {
-                      targets: composerContext.targets.map((target) => target.name).join(', '),
-                    })
-                  : t('aiChat.composerContextAttached')}{' '}
-                ×
+                {t('aiChat.composerContextAttached')} ×
               </button>
+              {composerContext.targets.map((target) => {
+                const active = !deselectedAccountIds.includes(target.accountId)
+                return (
+                  <button
+                    key={target.accountId}
+                    type="button"
+                    className={`ai-chat-chip ai-chat-chip--scope${active ? '' : ' ai-chat-chip--inactive'}`}
+                    aria-pressed={active}
+                    onClick={() =>
+                      setDeselectedAccountIds((current) =>
+                        active ? [...current, target.accountId] : current.filter((id) => id !== target.accountId),
+                      )
+                    }
+                    title={active ? t('aiChat.composerScopeExclude') : t('aiChat.composerScopeInclude')}
+                  >
+                    {t('aiChat.composerScopeChip', { provider: providerLabel(target.provider, t), name: target.name })}
+                  </button>
+                )
+              })}
             </div>
           )}
 
@@ -531,6 +609,39 @@ export function AIChatWidget({ api, teamId, onOpenInComposer, onApplyToComposer 
   )
 }
 
+function providerLabel(provider: string, t: (key: string) => string): string {
+  const key = `aiChat.provider.${provider}`
+  const label = t(key)
+  // i18next returns the key unchanged when there is no translation.
+  return label === key ? provider : label
+}
+
+// buildComposerNote describes the unsaved composer post to the model: the default
+// text, each account's current version, and which accounts are in scope for this
+// request, so it can revise one platform without touching the others.
+function buildComposerNote(
+  composerContext: { content: string; targets: ComposerChatTarget[] },
+  deselectedAccountIds: string[],
+): string {
+  const inScope = composerContext.targets.filter((target) => !deselectedAccountIds.includes(target.accountId))
+  const targets = inScope.length > 0 ? inScope : composerContext.targets
+  const lines = targets.map((target) => {
+    const version = target.hasOverride ? `own version: ${target.text}` : 'uses the default text'
+    return `- ${target.name} (id=${target.accountId}, ${target.provider}, max ${target.maxChars}): ${version}`
+  })
+  const scoped = inScope.length > 0 && inScope.length < composerContext.targets.length
+  const scopeLine = scoped
+    ? '\nOnly revise the accounts listed above; leave every other account unchanged.'
+    : ''
+  return (
+    '\n\n[Composer context — the user is editing an UNSAVED post (it has NO id; use revise_composer_post, never create_draft or update_draft). ' +
+    'The default text is the long version used by accounts without an override.]\n' +
+    `Default text:\n${composerContext.content || '(empty)'}\n` +
+    `Accounts in scope:\n${lines.join('\n')}` +
+    scopeLine
+  )
+}
+
 function toolLabel(toolName: string, t: (key: string) => string): string {
   switch (toolName) {
     case 'fetch_url':
@@ -539,6 +650,8 @@ function toolLabel(toolName: string, t: (key: string) => string): string {
       return t('aiChat.toolCreateDraft')
     case 'update_draft':
       return t('aiChat.toolUpdateDraft')
+    case 'revise_composer_post':
+      return t('aiChat.toolReviseComposer')
     case 'create_campaign':
       return t('aiChat.toolCreateCampaign')
     case 'create_recurring_automation':

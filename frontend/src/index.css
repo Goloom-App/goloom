@@ -6725,6 +6725,13 @@ button.admin-instance-health {
   height: min(620px, calc(100vh - 10rem));
   overflow: hidden;
   padding: 0;
+  /* Lift the floating drawer clearly off the page: a defined border, an accent
+     ring and a deep shadow so its edges read against any background. */
+  border: 1px solid var(--color-border, rgba(127, 127, 127, 0.3));
+  border-radius: 1rem;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-primary, #3b82f6) 22%, transparent),
+    0 24px 60px -12px rgba(0, 0, 0, 0.55);
 }
 @media (min-width: 900px) {
   .ai-chat-drawer {
@@ -6888,6 +6895,29 @@ button.admin-instance-health {
   border-color: var(--accent);
   color: var(--text);
   font-weight: 600;
+}
+
+/* Per-account scope chips: active accounts are highlighted; clicking one toggles
+   it out of (or back into) the edit so the user can target a single platform. */
+.ai-chat-chip--scope {
+  background: color-mix(in srgb, var(--color-primary, #3b82f6) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary, #3b82f6) 45%, transparent);
+}
+.ai-chat-chip--inactive {
+  opacity: 0.45;
+  text-decoration: line-through;
+  background: transparent;
+}
+
+.ai-chat-preview--revision .hint {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.ai-chat-preview--revision .ai-chat-preview__content {
+  margin-bottom: 0.35rem;
 }
 
 .ai-chat-drawer__input {

@@ -1,16 +1,24 @@
 // Bridge between the composer and the AI chat widget. The composer dispatches a
-// window event carrying the current draft (text + selected destinations); the
-// mounted AIChatWidget listens and keeps that context attached, so the user can
-// ask things like "rework this post for Bluesky" without leaving the chat.
+// window event carrying the current draft (default text + per-account versions and
+// destinations); the mounted AIChatWidget listens and keeps that context attached,
+// so the user can ask things like "give the Bluesky version more pep" without
+// leaving the chat, and apply the revision back into the composer.
 
 export const composerContextEvent = 'goloom:ai-chat-composer'
 
 export interface ComposerChatTarget {
+  accountId: string
   name: string
   provider: string
+  maxChars: number
+  /** The text currently used for this account (its override, or the default). */
+  text: string
+  /** True when this account has its own version that differs from the default. */
+  hasOverride: boolean
 }
 
 export interface ComposerChatContext {
+  /** The default text — the longest version, used by every account without an override. */
   content: string
   title?: string
   targets: ComposerChatTarget[]

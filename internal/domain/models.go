@@ -484,6 +484,7 @@ const (
 	AIChatMentionTypeCampaign  AIChatMentionType = "campaign"
 	AIChatMentionTypeRecurring AIChatMentionType = "recurring"
 	AIChatMentionTypeRSS       AIChatMentionType = "rss"
+	AIChatMentionTypeAccount   AIChatMentionType = "account"
 )
 
 type AIChatMention struct {

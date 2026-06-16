@@ -192,11 +192,18 @@ export function PostComposer({
       return
     }
     syncComposerChatContext({
-      content: effectiveBody(draft, activeTab === 'default' ? null : activeTab),
+      content: draft.content,
       title: draft.title,
-      targets: selectedAccounts.map((account) => ({ name: account.name, provider: account.provider })),
+      targets: selectedAccounts.map((account) => ({
+        accountId: account.id,
+        name: account.name,
+        provider: account.provider,
+        maxChars: account.maxChars,
+        text: effectiveBody(draft, account.id),
+        hasOverride: Object.hasOwn(draft.accountContentOverride, account.id),
+      })),
     })
-  }, [open, isAiEnabled, draft, activeTab, selectedAccounts])
+  }, [open, isAiEnabled, draft, selectedAccounts])
 
   // Detach the composer context from the chat once the composer is closed.
   useEffect(() => {

@@ -2081,9 +2081,16 @@ function App() {
           key={selectedTeam.id}
           api={api}
           teamId={selectedTeam.id}
+          teamAccounts={teamAccounts}
           onOpenInComposer={openComposerFromGeneratedContent}
-          onApplyToComposer={(content) => {
-            setEditorDraft((current) => ({ ...current, content }))
+          onApplyToComposer={({ content, accountContentOverride }) => {
+            setEditorDraft((current) => ({
+              ...current,
+              ...(content !== undefined ? { content } : {}),
+              ...(accountContentOverride
+                ? { accountContentOverride: { ...current.accountContentOverride, ...accountContentOverride } }
+                : {}),
+            }))
             prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
             setSection('composer')
           }}

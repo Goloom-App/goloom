@@ -61,7 +61,7 @@ func (a *API) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mentionContext := a.chatMentionContext(r.Context(), teamID, input.Messages)
+	mentionContext := a.chatMentionContext(r.Context(), teamID, aiContext, input.Messages)
 	system := ai.BuildChatSystemPrompt(aiContext, mentionContext)
 	history := ai.ChatMessagesFromDomain(input.Messages)
 	tools := a.chatTools(teamID, principal, aiContext)
@@ -89,7 +89,7 @@ func (a *API) handleAIChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // chatMentionContext loads details for @-mentioned entities into prompt sections.
-func (a *API) chatMentionContext(ctx context.Context, teamID string, messages []domain.AIChatMessage) []string {
+func (a *API) chatMentionContext(ctx context.Context, teamID string, aiContext domain.AIContext, messages []domain.AIChatMessage) []string {
 	seen := map[string]bool{}
 	var sections []string
 	for _, message := range messages {
@@ -100,6 +100,20 @@ func (a *API) chatMentionContext(ctx context.Context, teamID string, messages []
 			}
 			seen[key] = true
 			switch mention.Type {
+			case domain.AIChatMentionTypeAccount:
+				for _, account := range aiContext.Accounts {
+					if account.ID != mention.ID {
+						continue
+					}
+					name := account.Username
+					if name == "" {
+						name = account.ID
+					}
+					sections = append(sections, fmt.Sprintf(
+						"Referenced account %s (id=%s, %s, max %d chars). When the user @-mentions this account, scope the request to it: target it in new posts, or set its account_content_override when revising a composer post — do not change the other accounts unless asked.",
+						name, account.ID, account.Provider, account.MaxChars))
+					break
+				}
 			case domain.AIChatMentionTypeCampaign:
 				format, err := a.store.GetCampaignFormatByID(ctx, teamID, mention.ID)
 				if err != nil {
@@ -381,6 +395,62 @@ func (a *API) chatTools(teamID string, principal domain.AuthenticatedPrincipal, 
 				}
 				payload, _ := json.Marshal(updated)
 				return fmt.Sprintf("Post %s updated.", updated.ID), payload, nil
+			},
+		},
+		{
+			Tool: ai.Tool{
+				Name: "revise_composer_post",
+				Description: "Revise the post the user is currently editing in the composer. This is an UNSAVED draft — it has no id, " +
+					"so NEVER use create_draft or update_draft for it. Return only the fields that should change: set \"content\" to " +
+					"replace the default text (used by every account without its own version), and/or \"account_content_override\" to set " +
+					"a per-account version (e.g. a punchier Bluesky variant) WITHOUT touching the other accounts. When the user asks to " +
+					"tweak one platform, send only that account's override and leave \"content\" empty. The composer applies your revision " +
+					"when the user clicks Apply; do not also repeat the text in your reply.",
+				InputSchema: json.RawMessage(`{
+					"type": "object",
+					"properties": {
+						"content": {"type": "string", "description": "New default post text used by accounts without an override. Omit when only changing a single account's version."},
+						"account_content_override": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Per-account replacement text keyed by account ID; include ONLY the accounts you are changing."}
+					}
+				}`),
+			},
+			Execute: func(_ context.Context, args json.RawMessage) (string, json.RawMessage, error) {
+				var in struct {
+					Content                string            `json:"content"`
+					AccountContentOverride map[string]string `json:"account_content_override"`
+				}
+				if err := json.Unmarshal(args, &in); err != nil {
+					return "", nil, fmt.Errorf("invalid arguments: %w", err)
+				}
+				content := strings.TrimSpace(in.Content)
+				overrides := domain.NormalizeAccountContentOverride(in.AccountContentOverride, defaultAccountIDs)
+				if content == "" && len(overrides) == 0 {
+					return "", nil, fmt.Errorf("provide content and/or account_content_override")
+				}
+				overrideIDs := make([]string, 0, len(overrides))
+				for id := range overrides {
+					overrideIDs = append(overrideIDs, id)
+				}
+				if err := chatUnknownAccountError(aiContext, overrideIDs); err != nil {
+					return "", nil, err
+				}
+				// When the default text changes it must fit every account that would use
+				// it; per-account overrides are validated against their own limits.
+				limitTargets := overrideIDs
+				if content != "" {
+					limitTargets = defaultAccountIDs
+				}
+				if err := chatAccountLimitError(aiContext, limitTargets, content, overrides); err != nil {
+					return "", nil, err
+				}
+				if overrides == nil {
+					overrides = map[string]string{}
+				}
+				payload, _ := json.Marshal(map[string]any{
+					"content":                  content,
+					"account_content_override": overrides,
+				})
+				return "Revision ready — apply it in the composer.", payload, nil
 			},
 		},
 		{

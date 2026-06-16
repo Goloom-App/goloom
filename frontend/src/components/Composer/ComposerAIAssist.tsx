@@ -6,6 +6,7 @@ import { Loader2, MessageSquareText, Sparkles } from 'lucide-react'
 import { getApiClient, useTriggerAIJob } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
 import { openAIChatWithComposerContext } from '../ai/composerChatBridge'
+import { effectiveBody } from './composerUtils'
 import type { AccountRecord } from '../../types'
 import type { EditorDraftState } from './types'
 
@@ -150,7 +151,14 @@ export function ComposerAIAssist({
               title: draft.title,
               targets: teamAccounts
                 .filter((account) => draft.targetAccountIds.includes(account.id))
-                .map((account) => ({ name: account.name, provider: account.provider })),
+                .map((account) => ({
+                  accountId: account.id,
+                  name: account.name,
+                  provider: account.provider,
+                  maxChars: account.maxChars,
+                  text: effectiveBody(draft, account.id),
+                  hasOverride: Object.hasOwn(draft.accountContentOverride, account.id),
+                })),
             })
           }
         >

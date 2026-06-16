@@ -386,6 +386,13 @@ func generateWithRetries(ctx context.Context, client Client, attempt generateAtt
 		result, parseErr := parseVoiceResult(content, attempt.includeTitle, attempt.refineMode)
 		if parseErr == nil {
 			normalizeMultiAccountResult(&result, attempt.selectedAccounts, attempt.primaryAccountID, attempt.primaryLimit)
+			// Final attempt: rather than fail the whole job because the model never
+			// produced a required per-account override, derive the missing ones by
+			// compressing the primary text. Earlier attempts still push the model to
+			// craft a better override via the retry feedback below.
+			if try >= voiceEngineMaxRetries {
+				fillMissingOverrides(&result, attempt)
+			}
 			parseErr = validateLengths(result, attempt)
 			if parseErr == nil {
 				return result, nil
@@ -508,6 +515,30 @@ func normalizeMultiAccountResult(result *parsedVoiceResult, selected []domain.AI
 
 	result.content = content
 	result.overrides = overrides
+}
+
+// fillMissingOverrides is the final-attempt safety net: for every lower-limit
+// account whose limit the primary content exceeds but for which the model
+// supplied no override, it derives one by truncating the primary text to fit.
+// This guarantees a usable multi-account result instead of failing the job.
+func fillMissingOverrides(result *parsedVoiceResult, attempt generateAttempt) {
+	content := result.content
+	contentLen := len([]rune(content))
+	for _, account := range attempt.selectedAccounts {
+		if account.ID == attempt.primaryAccountID || account.MaxChars <= 0 {
+			continue
+		}
+		if contentLen <= account.MaxChars {
+			continue
+		}
+		if existing, ok := result.overrides[account.ID]; ok && strings.TrimSpace(existing) != "" {
+			continue
+		}
+		if result.overrides == nil {
+			result.overrides = map[string]string{}
+		}
+		result.overrides[account.ID] = truncateToLimit(content, account.MaxChars)
+	}
 }
 
 func validateLengths(result parsedVoiceResult, attempt generateAttempt) error {
