@@ -70,12 +70,15 @@ func (a *API) handleTeamMediaUploadToLibrary(w http.ResponseWriter, r *http.Requ
 
 	// Try to get dimensions if it's an image
 	if strings.HasPrefix(mimeType, "image/") {
-		if f, err := os.Open(store.GetMediaFilePath(teamID, hash)); err == nil {
-			if cfg, _, err := image.DecodeConfig(f); err == nil {
-				item.Width = &cfg.Width
-				item.Height = &cfg.Height
+		if path, err := store.GetMediaFilePath(teamID, hash); err == nil {
+			// path is contained within the media root by GetMediaFilePath.
+			if f, err := os.Open(path); err == nil { // #nosec G703 -- path validated/contained by store.GetMediaFilePath
+				if cfg, _, err := image.DecodeConfig(f); err == nil {
+					item.Width = &cfg.Width
+					item.Height = &cfg.Height
+				}
+				f.Close()
 			}
-			f.Close()
 		}
 	}
 
@@ -154,8 +157,13 @@ func (a *API) handleTeamMediaPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := store.GetMediaFilePath(teamID, item.Sha256)
+	filePath, err := store.GetMediaFilePath(teamID, item.Sha256)
+	if err != nil {
+		a.writeError(w, r, "not_found", http.StatusNotFound)
+		return
+	}
 	w.Header().Set("Content-Type", item.MimeType)
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	http.ServeFile(w, r, filePath)
+	// filePath is contained within the media root by GetMediaFilePath.
+	http.ServeFile(w, r, filePath) // #nosec G703 -- path validated/contained by store.GetMediaFilePath
 }

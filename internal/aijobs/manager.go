@@ -117,7 +117,9 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 	}
 
 	m.wg.Add(1)
-	go m.execute(job, config, aiContext)
+	// The job intentionally outlives the submitting request, so it must not
+	// inherit the request context (execute derives its own context internally).
+	go m.execute(job, config, aiContext) // #nosec G118 -- background job, decoupled from request lifecycle
 
 	return job, nil
 }

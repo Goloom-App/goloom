@@ -545,7 +545,10 @@ func (s *Service) syncMediaToProvider(ctx context.Context, teamID string, localM
 		}
 
 		// 3. Not mapped, upload now
-		filePath := store.GetMediaFilePath(teamID, item.Sha256)
+		filePath, err := store.GetMediaFilePath(teamID, item.Sha256)
+		if err != nil {
+			return nil, fmt.Errorf("resolve local media %q: %w", item.ID, err)
+		}
 		file, err := os.Open(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("open local media %q: %w", item.ID, err)

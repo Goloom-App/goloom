@@ -8,52 +8,100 @@ on:
     branches: [ "main" ]
 
 jobs:
-  test:
+  # Detect which parts of the repo changed so downstream jobs can be skipped.
+  # Implemented with plain git (no third-party action) to stay portable on the
+  # Forgejo act_runner. A docs-only change (e.g. README) leaves every test/build
+  # output 'false', so only this tiny job and the secret scan run.
+  changes:
     runs-on: docker
-    name: ${{ matrix.name }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: "Test Backend (Go)"
-            image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
-            suite: backend
-          - name: "Test Frontend (Node.js)"
-            image: ghcr.io/psarossy/node:lts
-            suite: frontend
-          - name: "E2E (Playwright + Go)"
-            image: ghcr.io/psarossy/node:lts
-            suite: e2e
+    name: "Detect changed paths"
     container:
-      image: ${{ matrix.image }}
+      image: alpine:3.24
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+      image: ${{ steps.filter.outputs.image }}
     steps:
-      - name: Install git and Node (backend image)
-        if: matrix.suite == 'backend'
-        run: apk add --no-cache git nodejs tar zstd
+      - name: Install git and Node (for actions)
+        run: apk add --no-cache git nodejs
 
-      - name: Install git (Node images)
-        if: matrix.suite == 'frontend' || matrix.suite == 'e2e'
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed files
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if command -v apk >/dev/null 2>&1; then
-            apk add --no-cache git
-          elif command -v apt-get >/dev/null 2>&1; then
-            apt-get update
-            apt-get install -y --no-install-recommends git tar zstd
-            rm -rf /var/lib/apt/lists/*
-          else
-            command -v git
+          set -euo pipefail
+
+          full_run() {
+            for k in backend frontend e2e image; do
+              echo "$k=true" >> "$GITHUB_OUTPUT"
+              echo "$k=true"
+            done
+          }
+
+          # Tag builds (releases) always run everything.
+          if [ "$EVENT" = "push" ] && [ "$REF_TYPE" = "tag" ]; then
+            echo "Tag push: running all suites"
+            full_run
+            exit 0
           fi
+
+          if [ "$EVENT" = "pull_request" ]; then
+            base="$BASE_SHA"
+          else
+            base="$BEFORE"
+          fi
+
+          # New branch / unknown base / first commit → no usable diff base: run all.
+          if [ -z "${base:-}" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "No usable base ref ('${base:-}'); running all suites"
+            full_run
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$base" HEAD)"
+          echo "Base: $base"
+          echo "Changed files:"
+          echo "$changed"
+
+          match() {
+            if printf '%s\n' "$changed" | grep -Eq "$1"; then echo true; else echo false; fi
+          }
+
+          ci='^\.forgejo/workflows/ci\.yaml$'
+          backend=$(match "\.go$|^go\.(mod|sum)$|$ci")
+          frontend=$(match "^frontend/|$ci")
+          e2e=$(match "\.go$|^go\.(mod|sum)$|^frontend/|$ci")
+          image=$(match "\.go$|^go\.(mod|sum)$|^frontend/|^locales/|^Dockerfile$|^\.dockerignore$|$ci")
+
+          for k in backend frontend e2e image; do
+            eval "v=\$$k"
+            echo "$k=$v" >> "$GITHUB_OUTPUT"
+            echo "$k=$v"
+          done
+
+  test-backend:
+    runs-on: docker
+    name: "Test Backend (Go)"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    container:
+      image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
+    steps:
+      - name: Install git and Node
+        run: apk add --no-cache git nodejs tar zstd
 
       - uses: actions/checkout@v6
 
-      - name: Set up Go (E2E)
-        if: matrix.suite == 'e2e'
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-
       - name: Go module and build cache
-        if: matrix.suite == 'backend' || matrix.suite == 'e2e'
         uses: actions/cache@v5
         with:
           path: |
@@ -63,8 +111,33 @@ jobs:
           restore-keys: |
             forgejo-go-
 
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Run Go tests
+        run: go test -count=1 -v ./...
+
+  test-frontend:
+    runs-on: docker
+    name: "Test Frontend (Node.js)"
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    container:
+      image: ghcr.io/psarossy/node:lts
+    steps:
+      - name: Install git
+        run: |
+          if command -v apk >/dev/null 2>&1; then
+            apk add --no-cache git
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends git tar zstd
+            rm -rf /var/lib/apt/lists/*
+          fi
+
+      - uses: actions/checkout@v6
+
       - name: Frontend install and build cache
-        if: matrix.suite == 'frontend' || matrix.suite == 'e2e'
         uses: actions/cache@v5
         with:
           path: ~/.local/share/pnpm/store/v3
@@ -72,27 +145,7 @@ jobs:
           restore-keys: |
             forgejo-pnpm-
 
-      - name: Playwright browser cache
-        if: matrix.suite == 'e2e'
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/ms-playwright
-            ~/.cache/playwright
-          key: forgejo-playwright-${{ hashFiles('frontend/package.json') }}
-          restore-keys: |
-            forgejo-playwright-
-
-      - name: Go vet
-        if: matrix.suite == 'backend'
-        run: go vet ./...
-
-      - name: Run Go tests
-        if: matrix.suite == 'backend'
-        run: go test -count=1 -v ./...
-
       - name: Install pnpm
-        if: matrix.suite == 'frontend' || matrix.suite == 'e2e'
         run: |
           set -euo pipefail
           corepack enable
@@ -109,24 +162,88 @@ jobs:
           pnpm --version
 
       - name: Frontend install, lint and build
-        if: matrix.suite == 'frontend'
         run: |
           pnpm --dir frontend install --frozen-lockfile
           pnpm --dir frontend lint
           pnpm --dir frontend build
 
+  test-e2e:
+    runs-on: docker
+    name: "E2E (Playwright + Go)"
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    container:
+      image: ghcr.io/psarossy/node:lts
+    steps:
+      - name: Install git
+        run: |
+          if command -v apk >/dev/null 2>&1; then
+            apk add --no-cache git
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends git tar zstd
+            rm -rf /var/lib/apt/lists/*
+          fi
+
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Go module and build cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: forgejo-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            forgejo-go-
+
+      - name: Frontend install and build cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.local/share/pnpm/store/v3
+          key: forgejo-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            forgejo-pnpm-
+
+      - name: Playwright browser cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/playwright
+          key: forgejo-playwright-${{ hashFiles('frontend/package.json') }}
+          restore-keys: |
+            forgejo-playwright-
+
+      - name: Install pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          PNPM_VERSION="$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")"
+          if ! corepack prepare "pnpm@${PNPM_VERSION}" --activate; then
+            echo "corepack prepare failed; installing pnpm ${PNPM_VERSION} from GitHub release"
+            mkdir -p "${HOME}/.local/bin"
+            curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-x64" \
+              -o "${HOME}/.local/bin/pnpm"
+            chmod +x "${HOME}/.local/bin/pnpm"
+            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          fi
+          pnpm --version
+
       - name: E2E — install frontend deps
-        if: matrix.suite == 'e2e'
         run: pnpm --dir frontend install --frozen-lockfile
 
       - name: E2E — Playwright Chromium + OS dependencies
-        if: matrix.suite == 'e2e'
         run: |
           pnpm --dir frontend exec playwright install-deps chromium
           pnpm --dir frontend exec playwright install chromium
 
       - name: E2E — Playwright tests
-        if: matrix.suite == 'e2e'
         run: pnpm --dir frontend test:e2e
 
   # The postgres store tests skip without TEST_POSTGRES_URL, so 'go test ./...'
@@ -135,6 +252,8 @@ jobs:
   test-postgres:
     runs-on: docker
     name: "Test Postgres Store"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     container:
       image: ghcr.io/psarossy/golang:1.26.3-alpine3.22
     services:
@@ -173,11 +292,93 @@ jobs:
           TEST_POSTGRES_URL: postgres://postgres:test@postgres:5432/goloom_test?sslmode=disable
         run: go test -count=1 -v ./internal/store/postgres/
 
+  # Go vulnerability scan (govulncheck) + static security analysis (gosec).
+  # govulncheck only reports advisories reachable from code actually used, so it
+  # blocks the build on real exposure. gosec blocks only on high-severity findings.
+  security-go:
+    runs-on: docker
+    name: "Security (Go: govulncheck + gosec)"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    container:
+      image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
+    steps:
+      - name: Install git and Node (for actions)
+        run: apk add --no-cache git nodejs tar zstd
+
+      - uses: actions/checkout@v6
+
+      - name: Go module and build cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: forgejo-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            forgejo-go-
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - name: gosec (block on high severity)
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          # -severity high: only high-severity issues fail the build (-> exit non-zero).
+          "$(go env GOPATH)/bin/gosec" -severity high -confidence medium ./...
+
+  # Secret scan runs on every change (cheap, repo-wide) — not path-gated, since a
+  # leaked credential can land in any file. Fails the build on any detected secret.
+  secret-scan:
+    runs-on: docker
+    name: "Security (Secrets: gitleaks)"
+    container:
+      image: ghcr.io/psarossy/node:lts
+    steps:
+      - name: Install git, curl and tar
+        run: |
+          if command -v apk >/dev/null 2>&1; then
+            apk add --no-cache git curl tar
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends git curl tar ca-certificates
+            rm -rf /var/lib/apt/lists/*
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.21.2
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan git history for secrets
+        run: gitleaks detect --source=. --redact --verbose
+
   publish-image:
     runs-on: docker
     name: Build and Publish Docker Image
-    needs: [test, test-postgres]
-    if: github.event_name == 'push'
+    needs: [changes, test-backend, test-frontend, test-e2e, test-postgres, security-go, secret-scan]
+    # Build on push when image-relevant files changed, and only if no upstream
+    # job failed (skipped jobs report 'skipped', which must not block the build).
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      needs.changes.outputs.image == 'true' &&
+      needs.test-backend.result != 'failure' &&
+      needs.test-frontend.result != 'failure' &&
+      needs.test-e2e.result != 'failure' &&
+      needs.test-postgres.result != 'failure' &&
+      needs.security-go.result != 'failure' &&
+      needs.secret-scan.result != 'failure'
     container:
       image: docker:cli
     outputs:
@@ -224,11 +425,11 @@ jobs:
             echo "Missing REGISTRY_USER or REGISTRY_PASSWORD secret"
             exit 1
           fi
-          
+
           registry_host="${SERVER_URL#https://}"
           registry_host="${registry_host#http://}"
           registry_host="${registry_host%%/*}"
-          
+
           echo "${REGISTRY_PASSWORD}" | docker login "${registry_host}" -u "${REGISTRY_USER}" --password-stdin
 
       - name: Build and push image
@@ -236,10 +437,10 @@ jobs:
           TAGS: ${{ steps.image-meta.outputs.tags }}
         run: |
           first_tag="${TAGS%% *}"
-          
+
           # Build image once
           docker build -t "${first_tag}" .
-          
+
           # Tag and push all tags
           for tag in ${TAGS}; do
             if [ "${tag}" != "${first_tag}" ]; then
@@ -252,7 +453,7 @@ jobs:
     runs-on: docker
     name: Trigger Dockhand Deployment
     needs: [publish-image]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.publish-image.result == 'success'
     container:
       image: alpine:3.24
     steps:
@@ -281,12 +482,12 @@ jobs:
             '{repository: $repo, ref: $ref, sha: $sha, image_ref: $img}')
 
           echo "Triggering webhook to ${DOCKHAND_WEBHOOK_URL}"
-          
+
           if [ -n "${DOCKHAND_WEBHOOK_TOKEN}" ]; then
             # Calculate HMAC-SHA256 signature (X-Hub-Signature-256 style)
             # The signature must be the hex digest of the HMAC of the payload using the token as key.
             sig=$(echo -n "$payload" | openssl dgst -sha256 -hmac "${DOCKHAND_WEBHOOK_TOKEN}" | sed 's/^.* //')
-            
+
             curl --fail --show-error --silent \
               -X POST "${DOCKHAND_WEBHOOK_URL}" \
               -H "Content-Type: application/json" \
