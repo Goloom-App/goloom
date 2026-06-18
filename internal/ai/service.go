@@ -12,25 +12,40 @@ import (
 // Service executes AI jobs in-process using the team's configured LLM provider.
 type Service struct {
 	httpClient *http.Client
+	observer   Observer
 }
 
 func NewService() *Service {
-	return &Service{httpClient: &http.Client{Timeout: requestTimeout}}
+	return &Service{httpClient: &http.Client{Timeout: requestTimeout}, observer: LogObserver{}}
+}
+
+// SetObserver overrides the metrics observer used for every LLM call. Passing
+// nil restores the default slog-backed observer.
+func (s *Service) SetObserver(obs Observer) {
+	if obs == nil {
+		obs = LogObserver{}
+	}
+	s.observer = obs
 }
 
 // SettingsFromConfig maps the stored team configuration to client settings.
 func SettingsFromConfig(cfg domain.AIServiceConfig) Settings {
+	team := ""
+	if cfg.TeamID != nil {
+		team = *cfg.TeamID
+	}
 	return Settings{
 		Provider: cfg.Provider,
 		Model:    cfg.Model,
 		APIKey:   cfg.APIKey,
 		BaseURL:  cfg.BaseURL,
+		Team:     team,
 	}
 }
 
 // ClientFor builds an LLM client for the team configuration.
 func (s *Service) ClientFor(cfg domain.AIServiceConfig) (Client, error) {
-	return NewClient(SettingsFromConfig(cfg), s.httpClient)
+	return NewClientWithObserver(SettingsFromConfig(cfg), s.httpClient, s.observer)
 }
 
 type workerFunc func(ctx context.Context, client Client, job domain.AIJob, aiContext domain.AIContext, p params) (json.RawMessage, error)

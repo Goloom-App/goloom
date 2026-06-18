@@ -69,6 +69,10 @@ func Run(ctx context.Context) error {
 	// are captured in the log_entries table (visible in the admin UI).
 	dbLogHandler := logging.NewDBHandler(logger.Handler(), dataStore)
 	logger = slog.New(dbLogHandler)
+	// Route the package-level default through the DB handler too, so libraries
+	// that log via slog.Default (e.g. the AI call-metrics observer) are captured
+	// in the admin-visible log_entries table rather than bypassing it.
+	slog.SetDefault(logger)
 	defer dbLogHandler.Close()
 
 	users, err := dataStore.ListUsers(ctx)
