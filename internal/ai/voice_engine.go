@@ -26,6 +26,9 @@ type voiceEngineResult struct {
 	// source material, surfaced so the UI can flag the draft for review. Empty
 	// when none were found.
 	InjectionWarning []string `json:"injection_warning,omitempty"`
+	// PIIWarning lists the kinds of PII redacted from the user-supplied request
+	// before it reached the model. Empty when none were found.
+	PIIWarning []string `json:"pii_warning,omitempty"`
 }
 
 type parsedVoiceResult struct {
@@ -56,6 +59,12 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 	primary := primaryAccount(selected)
 	primaryLimit := primary.MaxChars
 	primaryAccountID := primary.ID
+
+	piiKinds := redactParamsPII(p)
+	if len(piiKinds) > 0 {
+		slog.Warn("ai request contained PII that was redacted before the model call",
+			"team", aiContext.Team.ID, "job_type", job.Type, "kinds", piiKinds)
+	}
 
 	injectionHits := scanParamsForInjection(p)
 	if len(injectionHits) > 0 {
@@ -101,6 +110,7 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 		ScheduledAt:            formatDatetime(scheduledAt),
 		PrimaryAccountID:       primaryAccountID,
 		InjectionWarning:       injectionHits,
+		PIIWarning:             piiKinds,
 	}
 	if result.PlatformMetadata == nil {
 		result.PlatformMetadata = map[string]any{}
