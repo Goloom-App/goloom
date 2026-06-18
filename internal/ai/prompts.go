@@ -189,6 +189,7 @@ func buildBrandVoicePrompt(context domain.AIContext) string {
 		"",
 		fmt.Sprintf("Language: %s | Hashtag budget: up to %d", preferredLanguage, style.MaxHashtags),
 		"Facts about the specific item you are posting about always come from the source material in the task message.",
+		untrustedSourceGuard,
 	)
 
 	return strings.TrimSpace(strings.Join(sections, "\n"))
@@ -256,8 +257,9 @@ func formatKnowledgeSource(item domain.KnowledgeSource) string {
 	}
 	if content == "" {
 		content = "No extracted content"
+		return prefix + "\n" + content
 	}
-	return prefix + "\n" + content
+	return prefix + "\n" + wrapUntrusted(content)
 }
 
 // buildGenerationPrompt renders the per-request task prompt.
@@ -594,7 +596,7 @@ func webPageSourceSection(p params) string {
 		lines = append(lines, "Title: "+pageTitle)
 	}
 	if sourceContent != "" {
-		lines = append(lines, "Content:\n---\n"+sourceContent+"\n---")
+		lines = append(lines, "Content:\n"+wrapUntrusted(sourceContent))
 	} else if sourceURL != "" {
 		lines = append(lines, "Page content could not be extracted — keep claims minimal and do not invent article body text.")
 	}
@@ -621,7 +623,7 @@ func sourceMaterial(p params, context domain.AIContext) []string {
 			lines = append(lines, "Link: "+rssLink)
 		}
 		if rssContent != "" {
-			lines = append(lines, "Text:\n---\n"+rssContent+"\n---")
+			lines = append(lines, "Text:\n"+wrapUntrusted(rssContent))
 		}
 		lines = append(lines,
 			"The title and link above are authoritative. "+
@@ -634,14 +636,14 @@ func sourceMaterial(p params, context domain.AIContext) []string {
 	sourceContent := p.str("source_content", "existing_content")
 	switch {
 	case skeleton != "" && hasRSSSource(p):
-		sections = append(sections, "RSS post skeleton (optional layout/CTA hints only — not factual content):\n---\n"+skeleton+"\n---")
+		sections = append(sections, "RSS post skeleton (optional layout/CTA hints only — not factual content):\n"+wrapUntrusted(skeleton))
 	case sourceContent != "" && hasRSSSource(p):
-		sections = append(sections, "Additional provided source text (supplements the RSS item; keep RSS title/link authoritative):\n---\n"+sourceContent+"\n---")
+		sections = append(sections, "Additional provided source text (supplements the RSS item; keep RSS title/link authoritative):\n"+wrapUntrusted(sourceContent))
 	case sourceContent != "" && !hasWebPageSource(p):
 		if isRecurringKind(recurringPostKind(p)) {
 			sections = append(sections, recurringTemplateSource(sourceContent, context))
 		} else {
-			sections = append(sections, "Previous draft (facts and tone reference only — do not copy structure or layout verbatim):\n---\n"+sourceContent+"\n---")
+			sections = append(sections, "Previous draft (facts and tone reference only — do not copy structure or layout verbatim):\n"+wrapUntrusted(sourceContent))
 		}
 	}
 
@@ -653,7 +655,7 @@ func sourceMaterial(p params, context domain.AIContext) []string {
 			lines = append(lines, "Title: "+announcementTitle)
 		}
 		if announcement != "" {
-			lines = append(lines, "Text:\n---\n"+announcement+"\n---")
+			lines = append(lines, "Text:\n"+wrapUntrusted(announcement))
 		}
 		sections = append(sections, strings.Join(lines, "\n"))
 	}

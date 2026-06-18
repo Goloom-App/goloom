@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -21,6 +22,10 @@ type voiceEngineResult struct {
 	AccountContentOverride map[string]string `json:"account_content_override"`
 	ScheduledAt            string            `json:"scheduled_at,omitempty"`
 	PrimaryAccountID       string            `json:"primary_account_id"`
+	// InjectionWarning lists prompt-injection markers detected in the external
+	// source material, surfaced so the UI can flag the draft for review. Empty
+	// when none were found.
+	InjectionWarning []string `json:"injection_warning,omitempty"`
 }
 
 type parsedVoiceResult struct {
@@ -51,6 +56,12 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 	primary := primaryAccount(selected)
 	primaryLimit := primary.MaxChars
 	primaryAccountID := primary.ID
+
+	injectionHits := scanParamsForInjection(p)
+	if len(injectionHits) > 0 {
+		slog.Warn("ai source material contains possible prompt injection",
+			"team", aiContext.Team.ID, "job_type", job.Type, "markers", injectionHits)
+	}
 
 	systemPrompt := BuildSystemPrompt(aiContext)
 	refineMode := isRefineMode(p)
@@ -89,6 +100,7 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 		AccountContentOverride: parsed.overrides,
 		ScheduledAt:            formatDatetime(scheduledAt),
 		PrimaryAccountID:       primaryAccountID,
+		InjectionWarning:       injectionHits,
 	}
 	if result.PlatformMetadata == nil {
 		result.PlatformMetadata = map[string]any{}
