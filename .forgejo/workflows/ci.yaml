@@ -94,7 +94,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     container:
-      image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
+      image: ghcr.io/psarossy/golang:1.26.4-alpine3.22
     steps:
       - name: Install git and Node
         run: apk add --no-cache git nodejs tar zstd
@@ -255,7 +255,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     container:
-      image: ghcr.io/psarossy/golang:1.26.3-alpine3.22
+      image: ghcr.io/psarossy/golang:1.26.4-alpine3.22
     services:
       postgres:
         image: postgres:16-alpine
@@ -301,7 +301,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     container:
-      image: ghcr.io/psarossy/golang:1.26.2-alpine3.22
+      image: ghcr.io/psarossy/golang:1.26.4-alpine3.22
     steps:
       - name: Install git and Node (for actions)
         run: apk add --no-cache git nodejs tar zstd
