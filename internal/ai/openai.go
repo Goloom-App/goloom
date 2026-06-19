@@ -178,6 +178,10 @@ func (c *openAIClient) send(ctx context.Context, messages []openAIMessage, req R
 			FinishReason string        `json:"finish_reason"`
 			Message      openAIMessage `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
 	}
 	if err := decodeBody(httpResp, &data); err != nil {
 		return Response{}, err
@@ -191,7 +195,11 @@ func (c *openAIClient) send(ctx context.Context, messages []openAIMessage, req R
 		return Response{}, ErrResponseTruncated
 	}
 
-	out := Response{Content: strings.TrimSpace(data.Choices[0].Message.Content), Model: data.Model}
+	out := Response{
+		Content: strings.TrimSpace(data.Choices[0].Message.Content),
+		Model:   data.Model,
+		Usage:   Usage{InputTokens: data.Usage.PromptTokens, OutputTokens: data.Usage.CompletionTokens},
+	}
 	for _, call := range data.Choices[0].Message.ToolCalls {
 		out.ToolCalls = append(out.ToolCalls, ToolCall{
 			ID:        call.ID,

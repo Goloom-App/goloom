@@ -127,6 +127,10 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 		Model      string                  `json:"model"`
 		StopReason string                  `json:"stop_reason"`
 		Content    []anthropicContentBlock `json:"content"`
+		Usage      struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
 	}
 	if err := decodeBody(httpResp, &data); err != nil {
 		return Response{}, err
@@ -139,7 +143,7 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 		return Response{}, ErrResponseTruncated
 	}
 
-	out := Response{Model: data.Model}
+	out := Response{Model: data.Model, Usage: Usage{InputTokens: data.Usage.InputTokens, OutputTokens: data.Usage.OutputTokens}}
 	var texts []string
 	for _, block := range data.Content {
 		switch block.Type {

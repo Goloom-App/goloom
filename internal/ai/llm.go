@@ -112,6 +112,20 @@ type Settings struct {
 	Model    string
 	APIKey   string
 	BaseURL  string
+	// Team is an optional label used only for audit metrics (see CallMetrics);
+	// it is never sent to the provider.
+	Team string
+}
+
+// ResolvedProvider returns the lowercase provider name, defaulting to OpenAI
+// when unset (matching NewClient's dispatch).
+func (s Settings) ResolvedProvider() string {
+	switch p := strings.ToLower(strings.TrimSpace(s.Provider)); p {
+	case ProviderAnthropic:
+		return ProviderAnthropic
+	default:
+		return ProviderOpenAI
+	}
 }
 
 func (s Settings) ResolvedModel() string {
@@ -168,6 +182,8 @@ type Response struct {
 	Content   string
 	ToolCalls []ToolCall
 	Model     string
+	// Usage carries the provider-reported token counts, zero when unavailable.
+	Usage Usage
 }
 
 // Client is a minimal provider-neutral LLM client.
@@ -178,22 +194,34 @@ type Client interface {
 	Model() string
 }
 
-// NewClient builds a client for the configured provider.
+// NewClient builds a client for the configured provider, wrapped so every call
+// emits audit metrics via a default slog-backed observer.
 func NewClient(settings Settings, httpClient *http.Client) (Client, error) {
+	return NewClientWithObserver(settings, httpClient, LogObserver{})
+}
+
+// NewClientWithObserver is NewClient with an explicit metrics observer. A nil
+// observer disables metric emission (used in tests that assert raw behaviour).
+func NewClientWithObserver(settings Settings, httpClient *http.Client, obs Observer) (Client, error) {
 	if strings.TrimSpace(settings.APIKey) == "" {
 		return nil, fmt.Errorf("%w: missing api key", ErrNotConfigured)
 	}
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: requestTimeout}
 	}
+	var base Client
 	switch strings.ToLower(strings.TrimSpace(settings.Provider)) {
 	case ProviderAnthropic:
-		return &anthropicClient{settings: settings, http: httpClient}, nil
+		base = &anthropicClient{settings: settings, http: httpClient}
 	case ProviderOpenAI, "":
-		return &openAIClient{settings: settings, http: httpClient}, nil
+		base = &openAIClient{settings: settings, http: httpClient}
 	default:
 		return nil, fmt.Errorf("%w: unknown provider %q", ErrNotConfigured, settings.Provider)
 	}
+	if obs == nil {
+		return base, nil
+	}
+	return observedClient{inner: base, obs: obs, provider: settings.ResolvedProvider(), team: settings.Team}, nil
 }
 
 // Generate is a convenience wrapper for single-prompt completions.
