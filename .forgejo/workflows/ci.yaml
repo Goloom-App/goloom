@@ -94,12 +94,21 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     container:
-      image: ghcr.io/psarossy/golang:1.26.4-alpine3.22
+      image: ghcr.io/psarossy/golang:1.26.3-alpine3.22
     steps:
       - name: Install git and Node
         run: apk add --no-cache git nodejs tar zstd
 
       - uses: actions/checkout@v6
+
+      # The pinned golang container ships an older patch than go.mod requires
+      # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
+      # fails — so acquire the exact toolchain from go.mod via setup-go, the
+      # same mechanism the green E2E job already uses.
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
       - name: Go module and build cache
         uses: actions/cache@v5
@@ -255,7 +264,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     container:
-      image: ghcr.io/psarossy/golang:1.26.4-alpine3.22
+      image: ghcr.io/psarossy/golang:1.26.3-alpine3.22
     services:
       postgres:
         image: postgres:16-alpine
@@ -267,6 +276,15 @@ jobs:
         run: apk add --no-cache git nodejs tar zstd
 
       - uses: actions/checkout@v6
+
+      # The pinned golang container ships an older patch than go.mod requires
+      # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
+      # fails — so acquire the exact toolchain from go.mod via setup-go, the
+      # same mechanism the green E2E job already uses.
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
       - name: Go module and build cache
         uses: actions/cache@v5
@@ -301,12 +319,21 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     container:
-      image: ghcr.io/psarossy/golang:1.26.4-alpine3.22
+      image: ghcr.io/psarossy/golang:1.26.3-alpine3.22
     steps:
       - name: Install git and Node (for actions)
         run: apk add --no-cache git nodejs tar zstd
 
       - uses: actions/checkout@v6
+
+      # The pinned golang container ships an older patch than go.mod requires
+      # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
+      # fails — so acquire the exact toolchain from go.mod via setup-go, the
+      # same mechanism the green E2E job already uses.
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
       - name: Go module and build cache
         uses: actions/cache@v5
