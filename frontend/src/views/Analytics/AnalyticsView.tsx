@@ -40,11 +40,13 @@ function PostMetricsDetailPanel({
   metrics,
   totals,
   accounts,
+  publishedLinks,
 }: {
   loading: boolean
   metrics: BackendPostMetric[]
   totals: Record<string, number>
   accounts: AccountRecord[]
+  publishedLinks: Record<string, string>
 }) {
   const { t } = useTranslation()
   return (
@@ -72,7 +74,7 @@ function PostMetricsDetailPanel({
               }
               return (
                 <div key={acc.id} className="analytics-post-detail__account">
-                  <DestinationAvatar account={acc} />
+                  <DestinationAvatar account={acc} publishedPostUrl={publishedLinks[acc.id]} />
                   <span className="hint">
                     {t('analytics.engagementBreakdown', {
                       likes: engagement.likes,
@@ -146,6 +148,18 @@ function ActivityHeatmapPanel({ buckets }: { buckets: BackendEngagementHeatmapBu
   )
 }
 
+// Show the year only when the post is not from the current year, so older
+// posts stay distinguishable without cluttering recent ones.
+function formatPublishedAt(raw: string): string {
+  try {
+    const d = parseISO(raw)
+    const pattern = d.getFullYear() === new Date().getFullYear() ? 'MMM d, HH:mm' : 'MMM d, yyyy, HH:mm'
+    return format(d, pattern)
+  } catch {
+    return raw
+  }
+}
+
 function formatDeltaPct(n: number | undefined): string {
   if (n == null || Number.isNaN(n)) {
     return ''
@@ -172,7 +186,7 @@ export function AnalyticsView({
   fetchPosts: (opts?: { sort?: string; limit?: number; offset?: number }) => Promise<{ items: BackendPostAnalyticsListRow[] }>
   fetchChart: (opts: { metric: string; days?: number }) => Promise<{ metric: string; days: number; series: BackendMetricHistoryPoint[] }>
   fetchAccountGrowth: (accountId: string, opts?: { days?: number }) => Promise<{ days: number; account: string; series: BackendAccountGrowthPoint[] }>
-  fetchPostMetrics?: (postId: string) => Promise<{ items: BackendPostMetric[] }>
+  fetchPostMetrics?: (postId: string) => Promise<{ items: BackendPostMetric[]; published_links?: Record<string, string> }>
   fetchHashtags?: (opts?: { days?: number; provider?: string; limit?: number }) => Promise<{ items: BackendHashtagPerformance[]; insights?: BackendHashtagInsights }>
   fetchHeatmap?: (opts?: { days?: number; account?: string }) => Promise<{ buckets: BackendEngagementHeatmapBucket[] }>
 }) {
@@ -187,6 +201,7 @@ export function AnalyticsView({
   const [accountLatestGrowth, setAccountLatestGrowth] = useState<Record<string, BackendAccountGrowthPoint>>({})
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null)
   const [selectedPostMetrics, setSelectedPostMetrics] = useState<BackendPostMetric[]>([])
+  const [selectedPostLinks, setSelectedPostLinks] = useState<Record<string, string>>({})
   const [postMetricsLoading, setPostMetricsLoading] = useState(false)
   const [heatmapBuckets, setHeatmapBuckets] = useState<BackendEngagementHeatmapBucket[]>([])
   const [hashtags, setHashtags] = useState<BackendHashtagPerformance[]>([])
@@ -200,12 +215,15 @@ export function AnalyticsView({
   // team/tab/filter actually change, not on each poll-driven re-render.
   const fetchHashtagsRef = useRef(fetchHashtags)
   const fetchHeatmapRef = useRef(fetchHeatmap)
+  const fetchPostMetricsRef = useRef(fetchPostMetrics)
   useEffect(() => {
     fetchHashtagsRef.current = fetchHashtags
     fetchHeatmapRef.current = fetchHeatmap
+    fetchPostMetricsRef.current = fetchPostMetrics
   })
   const hasHashtags = Boolean(fetchHashtags)
   const hasHeatmap = Boolean(fetchHeatmap)
+  const hasPostMetrics = Boolean(fetchPostMetrics)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -433,22 +451,29 @@ export function AnalyticsView({
     return Array.from(seen).sort()
   }, [accounts])
 
+  // The fetcher is read through a ref so the dashboard's ~15s poll (which
+  // recreates the prop) doesn't retrigger this effect and flicker the panel.
+  // It reloads only when a different post is selected.
   useEffect(() => {
-    if (!fetchPostMetrics || !selectedPostId) {
+    const fetcher = fetchPostMetricsRef.current
+    if (!fetcher || !selectedPostId) {
       setSelectedPostMetrics([])
+      setSelectedPostLinks({})
       return
     }
     let cancelled = false
     setPostMetricsLoading(true)
-    void fetchPostMetrics(selectedPostId)
+    void fetcher(selectedPostId)
       .then((res) => {
         if (!cancelled) {
           setSelectedPostMetrics(res.items ?? [])
+          setSelectedPostLinks(res.published_links ?? {})
         }
       })
       .catch(() => {
         if (!cancelled) {
           setSelectedPostMetrics([])
+          setSelectedPostLinks({})
         }
       })
       .finally(() => {
@@ -459,7 +484,7 @@ export function AnalyticsView({
     return () => {
       cancelled = true
     }
-  }, [fetchPostMetrics, selectedPostId])
+  }, [hasPostMetrics, selectedPostId])
 
   const barData = useMemo(() => {
     if (!metrics.length) {
@@ -861,16 +886,7 @@ export function AnalyticsView({
                         <div className="post-table-title">{row.title || t('common.untitled')}</div>
                         <div className="hint mono text-xs">{row.post_id}</div>
                       </td>
-                      <td className="text-soft">
-                        {(() => {
-                          try {
-                            const d = parseISO(row.scheduled_at)
-                            return format(d, 'MMM d, HH:mm')
-                          } catch {
-                            return row.scheduled_at
-                          }
-                        })()}
-                      </td>
+                      <td className="text-soft">{formatPublishedAt(row.scheduled_at)}</td>
                       <td className="text-right font-bold">{row.score.toLocaleString()}</td>
                       </tr>
                       {fetchPostMetrics && isSelected ? (
@@ -881,6 +897,7 @@ export function AnalyticsView({
                               metrics={selectedPostMetrics}
                               totals={selectedPostTotals}
                               accounts={accounts}
+                              publishedLinks={selectedPostLinks}
                             />
                           </td>
                         </tr>

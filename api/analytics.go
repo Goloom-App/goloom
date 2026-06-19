@@ -171,7 +171,16 @@ func (a *API) handlePostAnalytics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
+	links, err := a.store.LoadPublishedLinksByPostIDs(r.Context(), []string{postID})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	publishedLinks := links[postID]
+	if publishedLinks == nil {
+		publishedLinks = map[string]string{}
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items), "published_links": publishedLinks})
 }
 
 func (a *API) handleListPostVersions(w http.ResponseWriter, r *http.Request) {

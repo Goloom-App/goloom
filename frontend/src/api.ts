@@ -1007,7 +1007,7 @@ export function createApiClient(options: ApiClientOptions) {
       )
     },
     getPostAnalytics(teamID: string, postID: string) {
-      return request<{ items: BackendPostMetric[] }>(options, `/v1/teams/${teamID}/posts/${postID}/analytics`, {
+      return request<{ items: BackendPostMetric[]; published_links?: Record<string, string> }>(options, `/v1/teams/${teamID}/posts/${postID}/analytics`, {
         headers: buildHeaders(options.token, false),
       })
     },

@@ -73,6 +73,9 @@ func seedTeamWithPostedMetrics(t *testing.T, s *sqlitestore.Store) (bearer strin
 	if err := s.UpsertPostMetrics(ctx, post.ID, acc.ID, map[string]int64{"likes": 5, "reposts": 2}, ""); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://social.example/@x/123", "", nil, "123"); err != nil {
+		t.Fatal(err)
+	}
 	return plain, team.ID, post.ID
 }
 
@@ -134,13 +137,23 @@ func TestAPI_TeamAnalytics_and_PostAnalytics(t *testing.T) {
 			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 		}
 		var body struct {
-			Items []domain.PostMetric `json:"items"`
+			Items          []domain.PostMetric `json:"items"`
+			PublishedLinks map[string]string   `json:"published_links"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
 		if len(body.Items) < 2 {
 			t.Fatalf("items: %#v", body.Items)
+		}
+		found := false
+		for _, url := range body.PublishedLinks {
+			if url == "https://social.example/@x/123" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("published_links missing post url: %#v", body.PublishedLinks)
 		}
 	})
 
@@ -249,13 +262,17 @@ func TestAPI_TeamAnalytics_and_PostAnalytics(t *testing.T) {
 			t.Fatalf("status %d body %s", rec.Code, rec.Body.String())
 		}
 		var body struct {
-			Items []domain.PostMetric `json:"items"`
+			Items          []domain.PostMetric `json:"items"`
+			PublishedLinks map[string]string   `json:"published_links"`
 		}
 		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
 		if len(body.Items) != 0 {
 			t.Fatalf("expected empty items, got %#v", body.Items)
+		}
+		if len(body.PublishedLinks) != 0 {
+			t.Fatalf("expected empty published_links, got %#v", body.PublishedLinks)
 		}
 
 		listReq := httptest.NewRequest(http.MethodGet, "/v1/teams/"+team.ID+"/analytics/posts?limit=10", nil)
