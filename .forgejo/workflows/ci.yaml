@@ -26,7 +26,7 @@ jobs:
       - name: Install git and Node (for actions)
         run: apk add --no-cache git nodejs
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -99,7 +99,7 @@ jobs:
       - name: Install git and Node
         run: apk add --no-cache git nodejs tar zstd
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # The pinned golang container ships an older patch than go.mod requires
       # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
@@ -144,7 +144,7 @@ jobs:
             rm -rf /var/lib/apt/lists/*
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Frontend install and build cache
         uses: actions/cache@v5
@@ -194,7 +194,7 @@ jobs:
             rm -rf /var/lib/apt/lists/*
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -275,7 +275,7 @@ jobs:
       - name: Install git and Node (for actions)
         run: apk add --no-cache git nodejs tar zstd
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # The pinned golang container ships an older patch than go.mod requires
       # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
@@ -324,7 +324,7 @@ jobs:
       - name: Install git and Node (for actions)
         run: apk add --no-cache git nodejs tar zstd
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # The pinned golang container ships an older patch than go.mod requires
       # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
@@ -374,7 +374,7 @@ jobs:
             rm -rf /var/lib/apt/lists/*
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -414,7 +414,7 @@ jobs:
       - name: Install git and Node (for actions/checkout)
         run: apk add --no-cache git nodejs bash
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Compute registry and tags
         id: image-meta
