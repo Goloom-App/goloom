@@ -23,7 +23,11 @@ RUN mkdir -p /src/internal/webui && \
     CI=true pnpm --dir frontend install --frozen-lockfile && \
     pnpm --dir frontend build
 
-FROM ghcr.io/psarossy/golang:1.26.3-alpine3.22 AS builder
+# go.mod requires go 1.26.4 (security bump). The psarossy mirror only carries up
+# to 1.26.3, and that image pins GOTOOLCHAIN=local, so an in-build toolchain
+# upgrade is blocked — use the official Docker Hub image that ships 1.26.4
+# directly (the runner already pulls Docker Hub library images, e.g. postgres).
+FROM golang:1.26.4-alpine3.22 AS builder
 
 WORKDIR /src
 
