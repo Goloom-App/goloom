@@ -190,7 +190,12 @@ func CORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
 					w.Header().Add("Vary", "Origin")
 				}
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+				// Mcp-Session-Id / Mcp-Protocol-Version are the MCP Streamable HTTP
+				// session headers: browser clients must be allowed to send them on
+				// follow-up requests and to read Mcp-Session-Id back from the
+				// initialize response, or the session is lost after handshake.
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version")
+				w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id, Mcp-Protocol-Version")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 			}
 

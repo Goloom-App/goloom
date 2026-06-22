@@ -317,6 +317,33 @@ func TestCORSMiddleware_optionsPreflight(t *testing.T) {
 	}
 }
 
+// TestCORSMiddleware_mcpSessionHeaders guards the Streamable HTTP contract for
+// browser-based MCP clients: they must be allowed to *send* Mcp-Session-Id /
+// Mcp-Protocol-Version and to *read* them back from responses, otherwise the
+// session id is lost after initialize and every follow-up call hits a fresh,
+// uninitialized session ("method ... is invalid during session initialization").
+func TestCORSMiddleware_mcpSessionHeaders(t *testing.T) {
+	t.Parallel()
+	h := CORSMiddleware([]string{"https://agent.example"})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	req.Header.Set("Origin", "https://agent.example")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	allow := rr.Header().Get("Access-Control-Allow-Headers")
+	expose := rr.Header().Get("Access-Control-Expose-Headers")
+	for _, want := range []string{"Mcp-Session-Id", "Mcp-Protocol-Version"} {
+		if !strings.Contains(allow, want) {
+			t.Errorf("Allow-Headers %q missing %q", allow, want)
+		}
+		if !strings.Contains(expose, want) {
+			t.Errorf("Expose-Headers %q missing %q", expose, want)
+		}
+	}
+}
+
 func TestCORSMiddleware_noOriginPassesThrough(t *testing.T) {
 	t.Parallel()
 	seen := false

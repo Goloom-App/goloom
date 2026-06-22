@@ -40,12 +40,16 @@ func NewHandler(
 		logger:    logger,
 	}
 
-	// Streamable HTTP transport: a single endpoint that handles initialize,
-	// JSON-RPC calls and (optionally) a server->client SSE stream, keyed by the
-	// Mcp-Session-Id header. Per-request auth still runs in ServeHTTP below.
+	// Streamable HTTP transport in stateless mode: every request is
+	// self-contained and auto-initialized, so we don't depend on the client (or
+	// an intermediary proxy) preserving the Mcp-Session-Id across calls — which
+	// otherwise makes follow-up calls fail with "method ... is invalid during
+	// session initialization". This fits goloom's tools, which are pure
+	// request/response with per-request bearer auth and no server->client
+	// messages, and it removes the need for session affinity behind a proxy.
 	h.handler = mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return h.createServer(r)
-	}, &mcp.StreamableHTTPOptions{Logger: logger})
+	}, &mcp.StreamableHTTPOptions{Logger: logger, Stateless: true})
 	return h
 }
 

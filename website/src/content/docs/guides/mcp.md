@@ -28,9 +28,11 @@ https://your-goloom-host/mcp
 - `POST /mcp` carries JSON-RPC messages; responses are `application/json` or a
   `text/event-stream` stream.
 - `GET /mcp` opens the optional server→client SSE stream.
-- The session is tracked via the `Mcp-Session-Id` header.
 
-The trailing slash is optional (`/mcp` and `/mcp/` both work).
+The trailing slash is optional (`/mcp` and `/mcp/` both work). The server runs
+**stateless**: each request is self-contained and authenticated on its own, so
+there is no session affinity to maintain — it works the same behind a single
+instance or several replicas.
 
 ## Configuration
 

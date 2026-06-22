@@ -17,6 +17,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"log/slog"
+	"strings"
 )
 
 type mcpFixture struct {
@@ -179,6 +180,32 @@ func TestStreamableTransportEndToEnd(t *testing.T) {
 	}
 	if len(tools.Tools) == 0 {
 		t.Fatal("expected the server to advertise at least one tool")
+	}
+}
+
+// TestToolsListWithoutRetainedSession reproduces the agent-reported symptom:
+// a tools/list call that does not ride on a server-retained session must still
+// succeed instead of failing with "method ... is invalid during session
+// initialization". Stateless mode auto-initializes each request, so the server
+// tolerates clients/proxies that don't preserve the Mcp-Session-Id across calls.
+func TestToolsListWithoutRetainedSession(t *testing.T) {
+	f := newMCPFixture(t)
+	token := f.apiToken(t, `["read"]`)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	rec := httptest.NewRecorder()
+	f.handler.ServeHTTP(rec, req)
+
+	payload := rec.Body.String()
+	if strings.Contains(payload, "invalid during session initialization") {
+		t.Fatalf("tools/list rejected during init (status %d): %s", rec.Code, payload)
+	}
+	if !strings.Contains(payload, `"tools"`) {
+		t.Fatalf("expected a tools list in the response (status %d): %s", rec.Code, payload)
 	}
 }
 
