@@ -18,14 +18,19 @@ no extra service to deploy.
 
 ## Endpoint
 
-The server is served over **SSE + JSON-RPC** at:
+The server speaks the modern **Streamable HTTP** transport
+(MCP spec 2025-03-26) at a single endpoint:
 
 ```
-https://your-goloom-host/mcp/
+https://your-goloom-host/mcp
 ```
 
-- `GET /mcp/` opens the SSE stream.
-- `POST /mcp/` carries JSON-RPC messages.
+- `POST /mcp` carries JSON-RPC messages; responses are `application/json` or a
+  `text/event-stream` stream.
+- `GET /mcp` opens the optional server→client SSE stream.
+- The session is tracked via the `Mcp-Session-Id` header.
+
+The trailing slash is optional (`/mcp` and `/mcp/` both work).
 
 ## Configuration
 
@@ -65,14 +70,14 @@ removed; re-create existing agent tokens with the scopes above.
 ## Connecting a client
 
 Point an MCP client at the endpoint and pass your token as a bearer header. The
-exact configuration depends on the client; a remote/SSE MCP server entry looks
-like this:
+exact configuration depends on the client; a remote (Streamable HTTP) MCP server
+entry looks like this:
 
 ```json
 {
   "mcpServers": {
     "goloom": {
-      "url": "https://your-goloom-host/mcp/",
+      "url": "https://your-goloom-host/mcp",
       "headers": {
         "Authorization": "Bearer <api-token>"
       }

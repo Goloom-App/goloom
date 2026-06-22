@@ -171,7 +171,11 @@ func Run(ctx context.Context) error {
 		mcpHandler := mcp.NewHandler(logger, dataStore, authService, providers, cfg)
 		mcpLimiter := security.NewLimiter(cfg.MCPRateLimitPerMinute, cfg.MCPRateLimitPerMinute*3)
 		mcpChain := security.CORSMiddleware(cfg.AllowedOrigins)(mcpLimiter.Middleware(mcpHandler))
-		rootHandler.Handle("/mcp/", http.StripPrefix("/mcp", mcpChain))
+		// Streamable HTTP uses a single endpoint and ignores the path; accept it
+		// both with and without a trailing slash so clients configured either way
+		// connect without a redirect.
+		rootHandler.Handle("/mcp", mcpChain)
+		rootHandler.Handle("/mcp/", mcpChain)
 		logger.Info("mcp server enabled", "rate_limit_per_minute", cfg.MCPRateLimitPerMinute)
 	}
 

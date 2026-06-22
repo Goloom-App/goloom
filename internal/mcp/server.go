@@ -13,7 +13,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Handler serves the MCP protocol over HTTP (SSE + JSON-RPC POST).
+// Handler serves the MCP protocol over the Streamable HTTP transport
+// (single /mcp endpoint, JSON or text/event-stream responses).
 type Handler struct {
 	handler   http.Handler
 	store     store.Store
@@ -39,12 +40,12 @@ func NewHandler(
 		logger:    logger,
 	}
 
-	// Create the SSE handler that manages MCP sessions
-	sseHandler := mcp.NewSSEHandler(func(r *http.Request) *mcp.Server {
+	// Streamable HTTP transport: a single endpoint that handles initialize,
+	// JSON-RPC calls and (optionally) a server->client SSE stream, keyed by the
+	// Mcp-Session-Id header. Per-request auth still runs in ServeHTTP below.
+	h.handler = mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return h.createServer(r)
-	}, nil)
-
-	h.handler = sseHandler
+	}, &mcp.StreamableHTTPOptions{Logger: logger})
 	return h
 }
 
@@ -59,7 +60,8 @@ func (h *Handler) createServer(r *http.Request) *mcp.Server {
 	return server
 }
 
-// ServeHTTP handles both SSE (GET) and JSON-RPC (POST) requests.
+// ServeHTTP authenticates the request, then delegates to the Streamable HTTP
+// transport (GET opens the optional SSE stream, POST carries JSON-RPC).
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Extract bearer token
 	token := ExtractBearerToken(r)

@@ -14,6 +14,7 @@ import (
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store/sqlite"
 	"github.com/google/uuid"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"io"
 	"log/slog"
 )
@@ -130,6 +131,54 @@ func TestServeHTTPAuthGate(t *testing.T) {
 	scoped := f.apiToken(t, `["read"]`)
 	if code := call(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+scoped) }); code == http.StatusUnauthorized || code == http.StatusForbidden {
 		t.Fatalf("token with read scope must pass the auth gate, got %d", code)
+	}
+}
+
+// bearerRoundTripper injects a static bearer token on every request, the way a
+// real remote MCP client authenticates against goloom.
+type bearerRoundTripper struct {
+	token string
+	base  http.RoundTripper
+}
+
+func (b bearerRoundTripper) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Bearer "+b.token)
+	return b.base.RoundTrip(r)
+}
+
+// TestStreamableTransportEndToEnd drives the handler with a real MCP client over
+// the modern Streamable HTTP transport. It guards the contract that broke in
+// production (clients hitting the endpoint over the current SDK transport must
+// connect and enumerate tools), not just the auth gate.
+func TestStreamableTransportEndToEnd(t *testing.T) {
+	f := newMCPFixture(t)
+	token := f.apiToken(t, `["read"]`)
+
+	srv := httptest.NewServer(f.handler)
+	t.Cleanup(srv.Close)
+
+	httpClient := &http.Client{Transport: bearerRoundTripper{token: token, base: http.DefaultTransport}}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "goloom-test-client", Version: "0"}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{
+		Endpoint:   srv.URL + "/",
+		HTTPClient: httpClient,
+	}, nil)
+	if err != nil {
+		t.Fatalf("connect over streamable transport: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("list tools over streamable transport: %v", err)
+	}
+	if len(tools.Tools) == 0 {
+		t.Fatal("expected the server to advertise at least one tool")
 	}
 }
 

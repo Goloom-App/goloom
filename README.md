@@ -167,7 +167,7 @@ make docs-api-lint
 
 ### AI agent integration notes (OpenClaw and similar)
 
-- Built-in **MCP server** at `/mcp/` (enabled by default, `MCP_ENABLED`), authenticated with API tokens carrying `ai:read:context` / `ai:write:drafts` scopes.
+- Built-in **MCP server** (Streamable HTTP transport) at `/mcp` (enabled by default, `MCP_ENABLED`), authenticated with API tokens carrying `read` / `write:draft` / `write:schedule` / `write` / `delete` scopes (unscoped tokens have full access).
 - Stable JSON responses across core endpoints.
 - Predictable resource paths with team-scoped objects.
 - Validation endpoint before scheduling: `POST /v1/teams/{teamID}/posts/validate`.
