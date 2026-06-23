@@ -396,6 +396,37 @@ func TestModifyPost_RejectsEmptyTitle(t *testing.T) {
 	}
 }
 
+func TestModifyPost_ShrinkTargetsWithStoredVersions(t *testing.T) {
+	f := newMCPFixture(t)
+	ctx := f.ctxFor(t, `["write"]`)
+	bsky := f.blueskyAccount(t)
+
+	// Schedule to two accounts with a bluesky-specific override (stored version).
+	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
+		TeamID:                 f.team.ID,
+		Title:                  "T",
+		Content:                "short",
+		ScheduledAt:            soon(),
+		TargetAccounts:         []string{f.account.ID, bsky.ID},
+		AccountContentOverride: map[string]string{bsky.ID: "bluesky text"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Drop bluesky from the targets WITHOUT touching overrides. The stored
+	// bluesky version is now stale and must be scoped out, not treated as a
+	// misdirected override (regression guard).
+	newTargets := []string{f.account.ID}
+	if _, _, err := f.handler.handleModifyPost(ctx, nil, ModifyPostInput{
+		TeamID:         f.team.ID,
+		PostID:         created.PostID,
+		TargetAccounts: &newTargets,
+	}); err != nil {
+		t.Fatalf("shrinking targets with a stored version must succeed: %v", err)
+	}
+}
+
 func TestModifyPost_CrossTeamTargetRejected(t *testing.T) {
 	f := newMCPFixture(t)
 	ctx := f.ctxFor(t, `["write"]`)
