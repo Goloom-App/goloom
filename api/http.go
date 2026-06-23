@@ -913,7 +913,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
-	prepared, err := a.posts.Prepare(r.Context(), pathTeamID, input, postservice.Options{CheckLimits: !input.Draft})
+	prepared, err := a.posts.Prepare(r.Context(), pathTeamID, input, postservice.Options{CheckLimits: !input.Draft, RequireTeam: true})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -983,7 +983,7 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	// Targets must belong to the post's own team; the pipeline validates the
 	// patched post exactly as creation does.
-	prepared, err := a.posts.Prepare(r.Context(), existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft})
+	prepared, err := a.posts.Prepare(r.Context(), existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft, RequireTeam: true})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

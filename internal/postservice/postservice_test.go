@@ -111,6 +111,18 @@ func TestPrepare_DraftSkipsCharLimits(t *testing.T) {
 	}
 }
 
+func TestPrepare_RequireTeamRejectsEmpty(t *testing.T) {
+	s := newService(acc("bsky", "bluesky", "team-1"))
+	// Without RequireTeam the preview may infer the team from the destinations.
+	if _, err := s.Prepare(context.Background(), "", base("c", "bsky"), Options{}); err != nil {
+		t.Fatalf("inference path should not error: %v", err)
+	}
+	// A mutating caller must not be able to persist with an inferred/empty team.
+	if _, err := s.Prepare(context.Background(), "", base("c", "bsky"), Options{RequireTeam: true}); err == nil {
+		t.Fatal("RequireTeam must reject an empty teamID")
+	}
+}
+
 func TestPrepare_OverrideFlipsValidity(t *testing.T) {
 	s := newService(acc("bsky", "bluesky", "team-1"))
 	in := base(strings.Repeat("x", 400), "bsky")

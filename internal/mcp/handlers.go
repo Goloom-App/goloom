@@ -38,6 +38,9 @@ func (h *Handler) handleCreateCampaign(ctx context.Context, req *mcp.CallToolReq
 		return nil, CreateCampaignOutput{}, fmt.Errorf("forbidden")
 	}
 
+	if strings.TrimSpace(input.TeamID) == "" {
+		return nil, CreateCampaignOutput{}, fmt.Errorf("team_id is required")
+	}
 	if strings.TrimSpace(input.Name) == "" {
 		return nil, CreateCampaignOutput{}, fmt.Errorf("name is required")
 	}
@@ -104,6 +107,9 @@ func (h *Handler) handleCreateRecurring(ctx context.Context, req *mcp.CallToolRe
 		return nil, CreateRecurringOutput{}, fmt.Errorf("forbidden")
 	}
 
+	if strings.TrimSpace(input.TeamID) == "" {
+		return nil, CreateRecurringOutput{}, fmt.Errorf("team_id is required")
+	}
 	if strings.TrimSpace(input.Content) == "" {
 		return nil, CreateRecurringOutput{}, fmt.Errorf("content is required")
 	}
@@ -154,6 +160,9 @@ func (h *Handler) handleCreateRSSFeed(ctx context.Context, req *mcp.CallToolRequ
 		return nil, CreateRSSFeedOutput{}, fmt.Errorf("forbidden")
 	}
 
+	if strings.TrimSpace(input.TeamID) == "" {
+		return nil, CreateRSSFeedOutput{}, fmt.Errorf("team_id is required")
+	}
 	if err := validateFeedURL(input.FeedURL); err != nil {
 		return nil, CreateRSSFeedOutput{}, err
 	}
@@ -311,7 +320,7 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 		TargetAccounts:         input.TargetAccounts,
 		Visibility:             input.Visibility,
 		AccountContentOverride: input.AccountContentOverride,
-	}, postservice.Options{CheckLimits: true})
+	}, postservice.Options{CheckLimits: true, RequireTeam: true})
 	if err != nil {
 		return nil, SchedulePostOutput{}, err
 	}
@@ -319,7 +328,7 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 		return nil, SchedulePostOutput{}, err
 	}
 
-	post, err := h.store.CreateScheduledPost(ctx, input.TeamID, *principal, prepared.Input)
+	post, err := h.store.CreateScheduledPost(ctx, prepared.EffectiveTeam, *principal, prepared.Input)
 	if err != nil {
 		return nil, SchedulePostOutput{}, err
 	}
@@ -356,12 +365,12 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 		Visibility:             input.Visibility,
 		Draft:                  true,
 		AccountContentOverride: input.AccountContentOverride,
-	}, postservice.Options{CheckLimits: false})
+	}, postservice.Options{CheckLimits: false, RequireTeam: true})
 	if err != nil {
 		return nil, DraftPostOutput{}, err
 	}
 
-	post, err := h.store.CreateScheduledPost(ctx, input.TeamID, *principal, prepared.Input)
+	post, err := h.store.CreateScheduledPost(ctx, prepared.EffectiveTeam, *principal, prepared.Input)
 	if err != nil {
 		return nil, DraftPostOutput{}, err
 	}
@@ -475,7 +484,7 @@ func (h *Handler) handleModifyPost(ctx context.Context, req *mcp.CallToolRequest
 	// Validate the patched post through the same pipeline as creation (shape,
 	// targets, overrides and—unless it's a draft—character limits). Persistence
 	// still goes through the patch; Prepare is the validation gate.
-	prepared, err := h.posts.Prepare(ctx, existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft})
+	prepared, err := h.posts.Prepare(ctx, existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft, RequireTeam: true})
 	if err != nil {
 		return nil, ModifyPostOutput{}, err
 	}

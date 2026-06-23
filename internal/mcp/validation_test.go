@@ -203,6 +203,27 @@ func TestSchedulePost_RequiresTitle(t *testing.T) {
 	}
 }
 
+func TestSchedulePost_RequiresTeam(t *testing.T) {
+	f := newMCPFixture(t)
+	bsky := f.blueskyAccount(t)
+	// An admin passes the team-access check even for an empty team, so the
+	// handler itself must reject an empty team_id (via the pipeline's RequireTeam)
+	// so a post can never be persisted with an inferred/empty team.
+	admin := domain.AuthenticatedPrincipal{User: domain.User{ID: f.user.ID, IsAdmin: true}}
+	ctx := WithPrincipal(context.Background(), admin)
+
+	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
+		TeamID:         "",
+		Title:          "T",
+		Content:        "hello",
+		ScheduledAt:    soon(),
+		TargetAccounts: []string{bsky.ID},
+	})
+	if err == nil || !strings.Contains(err.Error(), "team_id") {
+		t.Fatalf("schedule_post must reject an empty team_id, got %v", err)
+	}
+}
+
 // ===== draft_post =====
 
 func TestDraftPost_AllowsOversizedButValidatesTargets(t *testing.T) {

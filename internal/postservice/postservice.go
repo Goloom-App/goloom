@@ -40,6 +40,11 @@ type Options struct {
 	// CheckLimits enforces per-account character/media limits. Callers set it
 	// false for drafts, which may be oversized until they are scheduled.
 	CheckLimits bool
+	// RequireTeam rejects an empty teamID. Mutating callers (create/update) set
+	// it so a post can never be persisted with an inferred or empty team; the
+	// read-only validate preview leaves it false to allow team inference from
+	// the destinations.
+	RequireTeam bool
 }
 
 // Result is the outcome of Prepare.
@@ -70,6 +75,10 @@ func (s *Service) Prepare(ctx context.Context, teamID string, input domain.Creat
 		if strings.TrimSpace(content) != "" {
 			rawOverrideKeys = append(rawOverrideKeys, id)
 		}
+	}
+
+	if opts.RequireTeam && strings.TrimSpace(teamID) == "" {
+		return Result{}, errors.New("team_id is required")
 	}
 
 	input.Normalize()
