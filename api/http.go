@@ -15,6 +15,7 @@ import (
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/i18n"
+	"git.f4mily.net/goloom/internal/postvalidate"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/sse"
@@ -1155,10 +1156,6 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 		return validationResponse{}, "", errors.New("one or more target accounts are missing")
 	}
 	effectiveTeam := accounts[0].TeamID
-
-	destinations := make([]destinationInfo, 0, len(accounts))
-	maxChars := 0
-	allValid := true
 	for _, account := range accounts {
 		if account.TeamID != effectiveTeam {
 			return validationResponse{}, "", errors.New("target accounts must belong to one team")
@@ -1166,57 +1163,32 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 		if strings.TrimSpace(pathTeamID) != "" && account.TeamID != pathTeamID {
 			return validationResponse{}, "", errors.New("target accounts must belong to the team in the URL")
 		}
-		providerImpl, ok := a.providers.Get(account.Provider)
-		if !ok {
-			return validationResponse{}, "", errors.New("one or more target accounts use an unsupported provider")
-		}
-
-		capabilities, err := providerImpl.Capabilities(ctx, account)
-		if err != nil {
-			return validationResponse{}, "", err
-		}
-
-		effectiveContent := input.EffectiveContent(account.ID)
-		contentLen := len([]rune(effectiveContent))
-		isValid := capabilities.MaxChars == 0 || contentLen <= capabilities.MaxChars
-
-		missingMedia := false
-		if capabilities.RequiresMedia {
-			effectiveMedia := domain.FilterMediaIDsForAccount(input.MediaIDs, input.MediaExcludeByAccount, account.ID)
-			if len(effectiveMedia) == 0 {
-				missingMedia = true
-				isValid = false
-			}
-		}
-		if !isValid {
-			allValid = false
-		}
-
-		destinations = append(destinations, destinationInfo{
-			AccountID:     account.ID,
-			Provider:      account.Provider,
-			MaxChars:      capabilities.MaxChars,
-			Length:        contentLen,
-			Valid:         isValid,
-			RequiresMedia: capabilities.RequiresMedia,
-			MissingMedia:  missingMedia,
-		})
-		if maxChars == 0 || capabilities.MaxChars < maxChars {
-			maxChars = capabilities.MaxChars
-		}
 	}
 
-	slices.SortFunc(destinations, func(a, b destinationInfo) int {
-		return strings.Compare(a.AccountID, b.AccountID)
-	})
+	// Character/media validation against each destination's provider capabilities
+	// is shared with the MCP server via postvalidate (single source of truth).
+	res, err := postvalidate.Check(ctx, a.providers, accounts, input)
+	if err != nil {
+		return validationResponse{}, "", err
+	}
 
-	// Calculate global content length for reporting
-	globalContentLen := len([]rune(input.Content))
+	destinations := make([]destinationInfo, 0, len(res.Destinations))
+	for _, d := range res.Destinations {
+		destinations = append(destinations, destinationInfo{
+			AccountID:     d.AccountID,
+			Provider:      d.Provider,
+			MaxChars:      d.MaxChars,
+			Length:        d.Length,
+			Valid:         d.Valid,
+			RequiresMedia: d.RequiresMedia,
+			MissingMedia:  d.MissingMedia,
+		})
+	}
 
 	return validationResponse{
-		MaxChars:      maxChars,
-		ContentLength: globalContentLen,
-		Valid:         allValid,
+		MaxChars:      res.MaxChars,
+		ContentLength: res.ContentLength,
+		Valid:         res.Valid,
 		Destinations:  destinations,
 	}, effectiveTeam, nil
 }
