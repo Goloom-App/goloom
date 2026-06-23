@@ -15,6 +15,7 @@ import (
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/i18n"
+	"git.f4mily.net/goloom/internal/postservice"
 	"git.f4mily.net/goloom/internal/postvalidate"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/security"
@@ -27,6 +28,7 @@ type API struct {
 	store       store.Store
 	auth        *auth.Service
 	providers   *provider.Registry
+	posts       *postservice.Service
 	config      config.Config
 	metricsSync metricsSyncRunner
 	i18n        *i18n.Catalog
@@ -70,6 +72,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		store:       store,
 		auth:        authService,
 		providers:   providers,
+		posts:       postservice.New(store, providers),
 		config:      cfg,
 		metricsSync: metricsSync,
 		i18n:        catalog,
@@ -895,7 +898,6 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Normalize()
 	if input.ScheduledAt.IsZero() {
 		input.ScheduledAt = time.Now().UTC()
 	}
@@ -911,19 +913,16 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
-	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
+	prepared, err := a.posts.Prepare(r.Context(), pathTeamID, input, postservice.Options{CheckLimits: !input.Draft})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !validation.Valid {
-		auth.WriteJSON(w, http.StatusUnprocessableEntity, validation)
+	if !prepared.Validation.Valid {
+		auth.WriteJSON(w, http.StatusUnprocessableEntity, toValidationResponse(prepared.Validation))
 		return
 	}
-	if pathTeamID != "" && effectiveTeam != pathTeamID {
-		a.writeError(w, r, "team_mismatch_url_destinations", http.StatusBadRequest)
-		return
-	}
+	effectiveTeam := prepared.EffectiveTeam
 
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, effectiveTeam, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
@@ -931,7 +930,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	post, err := a.store.CreateScheduledPost(r.Context(), effectiveTeam, principal, input)
+	post, err := a.store.CreateScheduledPost(r.Context(), effectiveTeam, principal, prepared.Input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -977,22 +976,20 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	merged, _ := domain.ApplyPostPatch(existing, versions, patch)
-	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
-	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, merged)
+	// ApplyPostPatch normalizes overrides to the target set; restore the raw
+	// patch overrides so the pipeline can reject a misdirected key.
+	if patch.AccountContentOverride.Set {
+		merged.AccountContentOverride = patch.AccountContentOverride.Value
+	}
+	// Targets must belong to the post's own team; the pipeline validates the
+	// patched post exactly as creation does.
+	prepared, err := a.posts.Prepare(r.Context(), existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !validation.Valid {
-		auth.WriteJSON(w, http.StatusUnprocessableEntity, validation)
-		return
-	}
-	if pathTeamID != "" && effectiveTeam != pathTeamID {
-		a.writeError(w, r, "team_mismatch_url_destinations", http.StatusBadRequest)
-		return
-	}
-	if effectiveTeam != existing.TeamID {
-		a.writeError(w, r, "target_accounts_same_team", http.StatusBadRequest)
+	if !prepared.Validation.Valid {
+		auth.WriteJSON(w, http.StatusUnprocessableEntity, toValidationResponse(prepared.Validation))
 		return
 	}
 
@@ -1089,81 +1086,22 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Normalize()
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
-	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
+	prepared, err := a.posts.Prepare(r.Context(), pathTeamID, input, postservice.Options{CheckLimits: !input.Draft})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if pathTeamID != "" && effectiveTeam != pathTeamID {
-		a.writeError(w, r, "team_mismatch_url_destinations", http.StatusBadRequest)
-		return
-	}
-	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, effectiveTeam, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
+	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, prepared.EffectiveTeam, domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
-	auth.WriteJSON(w, http.StatusOK, validation)
+	auth.WriteJSON(w, http.StatusOK, toValidationResponse(prepared.Validation))
 }
 
-func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input domain.CreatePostInput) (validationResponse, string, error) {
-	// Shape invariants (title always, content/targets for non-drafts) live in the
-	// domain so REST and MCP enforce the same rules.
-	if err := input.Validate(); err != nil {
-		return validationResponse{}, "", err
-	}
-	if input.Draft {
-		if strings.TrimSpace(pathTeamID) == "" {
-			return validationResponse{}, "", errors.New("team id required")
-		}
-		if len(input.TargetAccounts) > 0 {
-			accounts, err := a.store.GetAccountsByIDsGlobal(ctx, input.TargetAccounts)
-			if err != nil {
-				return validationResponse{}, "", err
-			}
-			if len(accounts) != len(input.TargetAccounts) {
-				return validationResponse{}, "", errors.New("one or more target accounts are missing")
-			}
-			for _, acc := range accounts {
-				if acc.TeamID != pathTeamID {
-					return validationResponse{}, "", errors.New("target accounts must belong to the team in the URL")
-				}
-			}
-		}
-		return validationResponse{
-			Valid:         true,
-			MaxChars:      0,
-			ContentLength: len([]rune(input.Content)),
-			Destinations:  nil,
-		}, pathTeamID, nil
-	}
-
-	accounts, err := a.store.GetAccountsByIDsGlobal(ctx, input.TargetAccounts)
-	if err != nil {
-		return validationResponse{}, "", err
-	}
-	if len(accounts) == 0 {
-		return validationResponse{}, "", errors.New("one or more target accounts are missing")
-	}
-	effectiveTeam := accounts[0].TeamID
-	for _, account := range accounts {
-		if account.TeamID != effectiveTeam {
-			return validationResponse{}, "", errors.New("target accounts must belong to one team")
-		}
-		if strings.TrimSpace(pathTeamID) != "" && account.TeamID != pathTeamID {
-			return validationResponse{}, "", errors.New("target accounts must belong to the team in the URL")
-		}
-	}
-
-	// Character/media validation against each destination's provider capabilities
-	// is shared with the MCP server via postvalidate (single source of truth).
-	res, err := postvalidate.Check(ctx, a.providers, accounts, input)
-	if err != nil {
-		return validationResponse{}, "", err
-	}
-
+// toValidationResponse maps the shared postvalidate result onto the REST DTO.
+func toValidationResponse(res postvalidate.Result) validationResponse {
 	destinations := make([]destinationInfo, 0, len(res.Destinations))
 	for _, d := range res.Destinations {
 		destinations = append(destinations, destinationInfo{
@@ -1176,13 +1114,12 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 			MissingMedia:  d.MissingMedia,
 		})
 	}
-
 	return validationResponse{
 		MaxChars:      res.MaxChars,
 		ContentLength: res.ContentLength,
 		Valid:         res.Valid,
 		Destinations:  destinations,
-	}, effectiveTeam, nil
+	}
 }
 
 func (a *API) handleMigrateAccount(w http.ResponseWriter, r *http.Request) {
