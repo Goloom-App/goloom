@@ -724,6 +724,61 @@ func GenerateTitleFromContent(content string) string {
 	return ""
 }
 
+// ResolvedPostInsert holds the persistence-ready scalar fields derived from a
+// CreatePostInput that both store backends need identically (author, status,
+// source and the optional template/feed references). Centralizing the resolution
+// keeps the two stores from drifting; each only differs in SQL and time encoding.
+type ResolvedPostInsert struct {
+	AuthorID             string
+	Status               PostStatus
+	Source               PostSource
+	TemplateID           *string
+	TemplateCounter      *int
+	TemplateOccurrenceAt *time.Time
+	TemplateRole         string
+	RSSFeedID            *string
+}
+
+// ResolvePostInsert computes the shared insert fields for a new scheduled post.
+// A post is Draft when requested, otherwise Pending. The author defaults to the
+// acting principal unless an explicit AuthorUserID is set (automation).
+func ResolvePostInsert(principal AuthenticatedPrincipal, in CreatePostInput) ResolvedPostInsert {
+	r := ResolvedPostInsert{
+		AuthorID:     principal.User.ID,
+		Status:       PostStatusPending,
+		Source:       in.Source,
+		TemplateRole: strings.TrimSpace(in.TemplatePostRole),
+	}
+	if in.Draft {
+		r.Status = PostStatusDraft
+	}
+	if in.AuthorUserID != nil && strings.TrimSpace(*in.AuthorUserID) != "" {
+		id := strings.TrimSpace(*in.AuthorUserID)
+		r.AuthorID = id
+	}
+	if strings.TrimSpace(string(r.Source)) == "" {
+		r.Source = PostSourceScheduled
+	}
+	if in.PostTemplateID != nil {
+		if id := strings.TrimSpace(*in.PostTemplateID); id != "" {
+			r.TemplateID = &id
+		}
+	}
+	if in.TemplateCounter != nil {
+		r.TemplateCounter = in.TemplateCounter
+	}
+	if in.TemplateOccurrenceAt != nil && !in.TemplateOccurrenceAt.IsZero() {
+		t := in.TemplateOccurrenceAt.UTC()
+		r.TemplateOccurrenceAt = &t
+	}
+	if in.RSSFeedID != nil {
+		if id := strings.TrimSpace(*in.RSSFeedID); id != "" {
+			r.RSSFeedID = &id
+		}
+	}
+	return r
+}
+
 // EnsureTitle fills an empty title from the content, so a post is never stored
 // with a placeholder derived downstream (e.g. the UI showing the first characters
 // of the body). Automation paths call this; interactive paths require a title via

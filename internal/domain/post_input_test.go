@@ -20,6 +20,37 @@ func TestGenerateTitleFromContent(t *testing.T) {
 	}
 }
 
+func TestResolvePostInsert(t *testing.T) {
+	principal := AuthenticatedPrincipal{User: User{ID: "actor"}}
+
+	r := ResolvePostInsert(principal, CreatePostInput{})
+	if r.AuthorID != "actor" || r.Status != PostStatusPending || r.Source != PostSourceScheduled {
+		t.Fatalf("defaults wrong: %+v", r)
+	}
+
+	r = ResolvePostInsert(principal, CreatePostInput{Draft: true})
+	if r.Status != PostStatusDraft {
+		t.Errorf("draft status = %s, want draft", r.Status)
+	}
+
+	author := "automation-bot"
+	tmpl := "tmpl-1"
+	r = ResolvePostInsert(principal, CreatePostInput{
+		AuthorUserID:   &author,
+		PostTemplateID: &tmpl,
+		Source:         PostSourceAutomation,
+	})
+	if r.AuthorID != "automation-bot" {
+		t.Errorf("author override = %q", r.AuthorID)
+	}
+	if r.TemplateID == nil || *r.TemplateID != "tmpl-1" {
+		t.Errorf("template id = %v", r.TemplateID)
+	}
+	if r.Source != PostSourceAutomation {
+		t.Errorf("source = %q", r.Source)
+	}
+}
+
 func TestEnsureTitle(t *testing.T) {
 	in := CreatePostInput{Content: "Generated from body"}
 	in.EnsureTitle()

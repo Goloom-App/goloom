@@ -919,44 +919,17 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		          attempt_count, coalesce(last_error, ''), visibility, media_ids, media_exclude_by_account, created_at, updated_at, post_template_id, template_counter
 	`
 
-	authorID := principal.User.ID
-	if input.AuthorUserID != nil && strings.TrimSpace(*input.AuthorUserID) != "" {
-		authorID = strings.TrimSpace(*input.AuthorUserID)
-	}
-	var templateID any
-	var templateCounter any
+	ins := domain.ResolvePostInsert(principal, input)
 	var templateOccurrence any
-	templateRole := strings.TrimSpace(input.TemplatePostRole)
-	if input.PostTemplateID != nil && strings.TrimSpace(*input.PostTemplateID) != "" {
-		templateID = strings.TrimSpace(*input.PostTemplateID)
-	}
-	if input.TemplateCounter != nil {
-		templateCounter = *input.TemplateCounter
-	}
-	if input.TemplateOccurrenceAt != nil && !input.TemplateOccurrenceAt.IsZero() {
-		templateOccurrence = input.TemplateOccurrenceAt.UTC()
-	}
-	source := input.Source
-	if strings.TrimSpace(string(source)) == "" {
-		source = domain.PostSourceScheduled
-	}
-	var rssFeedID any
-	if input.RSSFeedID != nil && strings.TrimSpace(*input.RSSFeedID) != "" {
-		rssFeedID = strings.TrimSpace(*input.RSSFeedID)
+	if ins.TemplateOccurrenceAt != nil {
+		templateOccurrence = *ins.TemplateOccurrenceAt
 	}
 
 	post := domain.ScheduledPost{}
 	var mediaRaw, mediaExcludeRaw string
 	var postTemplateID sql.NullString
 	var templateCtr sql.NullInt64
-	st := domain.PostStatusPending
-	// Safety check: if the post is in the future, it must be pending or draft.
-	if !input.Draft && input.ScheduledAt.After(time.Now().Add(5*time.Minute)) {
-		st = domain.PostStatusPending
-	} else if input.Draft {
-		st = domain.PostStatusDraft
-	}
-	err = tx.QueryRow(ctx, insertPost, teamID, authorID, input.Title, input.Content, input.ScheduledAt, st, source, visibility, mediaJSON, excludeJSON, templateID, templateCounter, templateOccurrence, templateRole, rssFeedID).Scan(
+	err = tx.QueryRow(ctx, insertPost, teamID, ins.AuthorID, input.Title, input.Content, input.ScheduledAt, ins.Status, ins.Source, visibility, mediaJSON, excludeJSON, ins.TemplateID, ins.TemplateCounter, templateOccurrence, ins.TemplateRole, ins.RSSFeedID).Scan(
 		&post.ID,
 		&post.TeamID,
 		&post.AuthorUserID,

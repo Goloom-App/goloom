@@ -745,37 +745,10 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	if err != nil {
 		return domain.ScheduledPost{}, err
 	}
-	st := domain.PostStatusPending
-	// Safety check: if the post is in the future, it must be pending or draft.
-	if !input.Draft && input.ScheduledAt.After(time.Now().Add(5*time.Minute)) {
-		st = domain.PostStatusPending
-	} else if input.Draft {
-		st = domain.PostStatusDraft
-	}
-	authorID := principal.User.ID
-	if input.AuthorUserID != nil && strings.TrimSpace(*input.AuthorUserID) != "" {
-		authorID = strings.TrimSpace(*input.AuthorUserID)
-	}
-	var templateID any
-	var templateCounter any
+	ins := domain.ResolvePostInsert(principal, input)
 	var templateOccurrence any
-	templateRole := strings.TrimSpace(input.TemplatePostRole)
-	if input.PostTemplateID != nil && strings.TrimSpace(*input.PostTemplateID) != "" {
-		templateID = strings.TrimSpace(*input.PostTemplateID)
-	}
-	if input.TemplateCounter != nil {
-		templateCounter = *input.TemplateCounter
-	}
-	if input.TemplateOccurrenceAt != nil && !input.TemplateOccurrenceAt.IsZero() {
-		templateOccurrence = formatTime(input.TemplateOccurrenceAt.UTC())
-	}
-	source := input.Source
-	if strings.TrimSpace(string(source)) == "" {
-		source = domain.PostSourceScheduled
-	}
-	var rssFeedID any
-	if input.RSSFeedID != nil && strings.TrimSpace(*input.RSSFeedID) != "" {
-		rssFeedID = strings.TrimSpace(*input.RSSFeedID)
+	if ins.TemplateOccurrenceAt != nil {
+		templateOccurrence = formatTime(*ins.TemplateOccurrenceAt)
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -785,8 +758,8 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 			post_template_id, template_counter, template_occurrence_at, template_post_role, rss_feed_id, created_at, updated_at
 		)
 		values (?, ?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		postID, teamID, authorID, input.Title, input.Content, formatTime(input.ScheduledAt), st, source,
-		visibility, mediaJSON, excludeJSON, templateID, templateCounter, templateOccurrence, templateRole, rssFeedID, now, now,
+		postID, teamID, ins.AuthorID, input.Title, input.Content, formatTime(input.ScheduledAt), ins.Status, ins.Source,
+		visibility, mediaJSON, excludeJSON, ins.TemplateID, ins.TemplateCounter, templateOccurrence, ins.TemplateRole, ins.RSSFeedID, now, now,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
