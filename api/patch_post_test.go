@@ -21,7 +21,7 @@ func TestPatchPost_ValidateMerged_ScheduledAtOnlyUsesStoredOverride(t *testing.T
 	short := string(runeLen(232))
 
 	post, err := s.CreateScheduledPost(ctx, teamID, principal, domain.CreatePostInput{
-		Content: long, ScheduledAt: when, TargetAccounts: []string{bsID, mastoID},
+		Title: "Test post", Content: long, ScheduledAt: when, TargetAccounts: []string{bsID, mastoID},
 		AccountContentOverride: map[string]string{bsID: short},
 	})
 	if err != nil {
@@ -64,7 +64,7 @@ func TestPatchPost_Store_ScheduledAtOnlyPreservesVersions(t *testing.T) {
 	short := string(runeLen(232))
 
 	post, err := s.CreateScheduledPost(ctx, teamID, principal, domain.CreatePostInput{
-		Content: long, ScheduledAt: when, TargetAccounts: []string{bsID},
+		Title: "Test post", Content: long, ScheduledAt: when, TargetAccounts: []string{bsID},
 		AccountContentOverride: map[string]string{bsID: short},
 	})
 	if err != nil {

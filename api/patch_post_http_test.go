@@ -24,7 +24,7 @@ func TestHandleUpdatePost_PartialScheduledAt_Persists(t *testing.T) {
 	u, _ := s.UpsertOIDCUser(ctx, "patch-http", "ph@x", "PH")
 	principal := domain.AuthenticatedPrincipal{User: u}
 	post, err := s.CreateScheduledPost(ctx, teamID, principal, domain.CreatePostInput{
-		Content: "body", ScheduledAt: when, TargetAccounts: []string{accID},
+		Title: "Test post", Content: "body", ScheduledAt: when, TargetAccounts: []string{accID},
 	})
 	if err != nil {
 		t.Fatal(err)

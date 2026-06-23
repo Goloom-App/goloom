@@ -99,7 +99,7 @@ type FindFreeSlotOutput struct {
 
 type SchedulePostInput struct {
 	TeamID                 string            `json:"team_id" jsonschema:"Team ID"`
-	Title                  string            `json:"title,omitempty" jsonschema:"Post title"`
+	Title                  string            `json:"title" jsonschema:"Post title (required, set it explicitly)"`
 	Content                string            `json:"content" jsonschema:"Post content"`
 	ScheduledAt            string            `json:"scheduled_at" jsonschema:"Schedule datetime (RFC3339)"`
 	TargetAccounts         []string          `json:"target_accounts" jsonschema:"List of account IDs"`
@@ -117,7 +117,7 @@ type SchedulePostOutput struct {
 
 type DraftPostInput struct {
 	TeamID                 string            `json:"team_id" jsonschema:"Team ID"`
-	Title                  string            `json:"title,omitempty" jsonschema:"Post title"`
+	Title                  string            `json:"title" jsonschema:"Post title (required, set it explicitly)"`
 	Content                string            `json:"content" jsonschema:"Post content"`
 	TargetAccounts         []string          `json:"target_accounts" jsonschema:"List of account IDs"`
 	Visibility             string            `json:"visibility,omitempty" jsonschema:"public,unlisted,private,direct"`

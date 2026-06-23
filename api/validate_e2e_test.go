@@ -291,6 +291,7 @@ func TestValidateE2E_Pixelfed_RequiresMedia(t *testing.T) {
 	post := func(t *testing.T, mediaIDs []string) validationResponseJSON {
 		t.Helper()
 		payload := map[string]any{
+			"title":           "Test post",
 			"content":         "a nice caption",
 			"scheduled_at":    time.Now().UTC().Format(time.RFC3339),
 			"target_accounts": []string{pixelAcc.ID},
@@ -377,6 +378,7 @@ func findDestJSON(dests []destinationInfoJSON, accountID string) *destinationInf
 func validateBody(t *testing.T, contentLen int, targetAccounts []string, accountContentOverride map[string]string) []byte {
 	t.Helper()
 	payload := map[string]any{
+		"title":           "Test post",
 		"content":         string(runeLenE2E(contentLen)),
 		"scheduled_at":    time.Now().UTC().Format(time.RFC3339),
 		"target_accounts": targetAccounts,

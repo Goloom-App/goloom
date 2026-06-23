@@ -96,6 +96,7 @@ func TestValidatePost_OverallInvalid_WhenNotAllValid(t *testing.T) {
 
 	ctx := context.Background()
 	resp, _, err := api.validatePostInput(ctx, teamID, domain.CreatePostInput{
+		Title:          "Test post",
 		Content:        string(runeLen(418)),
 		ScheduledAt:    time.Now().UTC(),
 		TargetAccounts: []string{bsID, mastoID},
@@ -151,6 +152,7 @@ func TestValidatePost_OverallInvalid_WhenNoValidDestination(t *testing.T) {
 
 	ctx := context.Background()
 	resp, _, err := api.validatePostInput(ctx, teamID, domain.CreatePostInput{
+		Title:          "Test post",
 		Content:        string(runeLen(600)),
 		ScheduledAt:    time.Now().UTC(),
 		TargetAccounts: []string{bsID, mastoID},
@@ -174,6 +176,7 @@ func TestValidatePost_OverallInvalid_WithPartialOverrides(t *testing.T) {
 
 	ctx := context.Background()
 	resp, _, err := api.validatePostInput(ctx, teamID, domain.CreatePostInput{
+		Title:          "Test post",
 		Content:        string(runeLen(600)),
 		ScheduledAt:    time.Now().UTC(),
 		TargetAccounts: []string{bsID, mastoID},
@@ -224,6 +227,7 @@ func TestValidatePost_OverallValid_WithAllOverrides(t *testing.T) {
 
 	ctx := context.Background()
 	resp, _, err := api.validatePostInput(ctx, teamID, domain.CreatePostInput{
+		Title:          "Test post",
 		Content:        string(runeLen(600)),
 		ScheduledAt:    time.Now().UTC(),
 		TargetAccounts: []string{bsID, mastoID},
@@ -261,6 +265,7 @@ func TestValidatePost_AllDestinationsValid(t *testing.T) {
 
 	ctx := context.Background()
 	resp, _, err := api.validatePostInput(ctx, teamID, domain.CreatePostInput{
+		Title:          "Test post",
 		Content:        string(runeLen(250)),
 		ScheduledAt:    time.Now().UTC(),
 		TargetAccounts: []string{bsID, mastoID},

@@ -343,6 +343,7 @@ func TestPostScopeAndTeamBindingEnforcement(t *testing.T) {
 
 	post := func(token string) int {
 		body, _ := json.Marshal(map[string]any{
+			"title":           "scoped post",
 			"content":         "scoped post",
 			"scheduled_at":    time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339),
 			"target_accounts": []string{f.account.ID},

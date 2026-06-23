@@ -412,6 +412,7 @@ func TestScheduleGetAndDeletePostHandlers(t *testing.T) {
 	scheduledAt := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
 	_, scheduled, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Geplanter Titel",
 		Content:        "Geplanter MCP-Post",
 		ScheduledAt:    scheduledAt.Format(time.RFC3339),
 		TargetAccounts: []string{f.account.ID},

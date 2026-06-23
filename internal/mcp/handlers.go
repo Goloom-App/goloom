@@ -297,15 +297,6 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 		return nil, SchedulePostOutput{}, fmt.Errorf("invalid scheduled_at: %w", err)
 	}
 
-	if strings.TrimSpace(input.Content) == "" {
-		return nil, SchedulePostOutput{}, fmt.Errorf("content is required")
-	}
-
-	accounts, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccounts, input.AccountContentOverride)
-	if err != nil {
-		return nil, SchedulePostOutput{}, err
-	}
-
 	createInput := domain.CreatePostInput{
 		Title:                  strings.TrimSpace(input.Title),
 		Content:                strings.TrimSpace(input.Content),
@@ -316,6 +307,15 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 	}
 	createInput.UseVersions = len(createInput.AccountContentOverride) > 0
 
+	// Shape invariants (title/content/targets) come from the domain; account
+	// existence/team and character limits need the store and providers.
+	if err := createInput.Validate(); err != nil {
+		return nil, SchedulePostOutput{}, err
+	}
+	accounts, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccounts, input.AccountContentOverride)
+	if err != nil {
+		return nil, SchedulePostOutput{}, err
+	}
 	if err := enforceCharLimits(ctx, h.providers, accounts, createInput); err != nil {
 		return nil, SchedulePostOutput{}, err
 	}
@@ -348,15 +348,6 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 		return nil, DraftPostOutput{}, fmt.Errorf("forbidden")
 	}
 
-	// Drafts may omit targets (they can be filled in before scheduling), but when
-	// targets or overrides are given they must be valid so nothing is silently
-	// dropped. Character limits are intentionally not enforced for drafts.
-	if len(input.TargetAccounts) > 0 || len(input.AccountContentOverride) > 0 {
-		if _, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccounts, input.AccountContentOverride); err != nil {
-			return nil, DraftPostOutput{}, err
-		}
-	}
-
 	createInput := domain.CreatePostInput{
 		Title:                  strings.TrimSpace(input.Title),
 		Content:                strings.TrimSpace(input.Content),
@@ -366,6 +357,18 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts),
 	}
 	createInput.UseVersions = len(createInput.AccountContentOverride) > 0
+
+	// Drafts still require a title, but may omit content/targets (Validate skips
+	// those for drafts). When targets or overrides are given they must be valid
+	// so nothing is silently dropped; character limits are not enforced for drafts.
+	if err := createInput.Validate(); err != nil {
+		return nil, DraftPostOutput{}, err
+	}
+	if len(input.TargetAccounts) > 0 || len(input.AccountContentOverride) > 0 {
+		if _, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccounts, input.AccountContentOverride); err != nil {
+			return nil, DraftPostOutput{}, err
+		}
+	}
 
 	post, err := h.store.CreateScheduledPost(ctx, input.TeamID, *principal, createInput)
 	if err != nil {
@@ -471,6 +474,12 @@ func (h *Handler) handleModifyPost(ctx context.Context, req *mcp.CallToolRequest
 		return nil, ModifyPostOutput{}, err
 	}
 	merged, _ := domain.ApplyPostPatch(existing, versions, patch)
+
+	// The patched post must still satisfy the shared shape invariants (e.g. the
+	// title must not be cleared to empty).
+	if err := merged.Validate(); err != nil {
+		return nil, ModifyPostOutput{}, err
+	}
 
 	// Re-validate destinations whenever the change can affect how content fits:
 	// new content, new targets, or new overrides.

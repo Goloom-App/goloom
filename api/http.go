@@ -1116,6 +1116,11 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input domain.CreatePostInput) (validationResponse, string, error) {
+	// Shape invariants (title always, content/targets for non-drafts) live in the
+	// domain so REST and MCP enforce the same rules.
+	if err := input.Validate(); err != nil {
+		return validationResponse{}, "", err
+	}
 	if input.Draft {
 		if strings.TrimSpace(pathTeamID) == "" {
 			return validationResponse{}, "", errors.New("team id required")
@@ -1140,10 +1145,6 @@ func (a *API) validatePostInput(ctx context.Context, pathTeamID string, input do
 			ContentLength: len([]rune(input.Content)),
 			Destinations:  nil,
 		}, pathTeamID, nil
-	}
-
-	if err := input.Validate(); err != nil {
-		return validationResponse{}, "", err
 	}
 
 	accounts, err := a.store.GetAccountsByIDsGlobal(ctx, input.TargetAccounts)

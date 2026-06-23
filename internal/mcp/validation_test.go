@@ -62,6 +62,7 @@ func TestSchedulePost_RejectsOversizedContent(t *testing.T) {
 
 	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        strings.Repeat("x", 400), // > 300 (bluesky)
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{bsky.ID},
@@ -83,6 +84,7 @@ func TestSchedulePost_AppliesValidOverride(t *testing.T) {
 
 	_, out, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:                 f.team.ID,
+		Title:                  "Test post",
 		Content:                long, // too long for bluesky on its own
 		ScheduledAt:            soon(),
 		TargetAccounts:         []string{bsky.ID},
@@ -107,6 +109,7 @@ func TestSchedulePost_OverrideKeyMismatchRejected(t *testing.T) {
 
 	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:                 f.team.ID,
+		Title:                  "Test post",
 		Content:                "fits everywhere",
 		ScheduledAt:            soon(),
 		TargetAccounts:         []string{bsky.ID},
@@ -124,6 +127,7 @@ func TestSchedulePost_CrossTeamTargetRejected(t *testing.T) {
 
 	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "hello",
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{foreign.ID},
@@ -142,6 +146,7 @@ func TestSchedulePost_UnknownTargetRejected(t *testing.T) {
 
 	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "hello",
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{uuid.NewString()},
@@ -157,6 +162,7 @@ func TestSchedulePost_EmptyContentRejected(t *testing.T) {
 
 	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "   ",
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{f.account.ID},
@@ -172,11 +178,28 @@ func TestSchedulePost_EmptyTargetsRejected(t *testing.T) {
 
 	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:      f.team.ID,
+		Title:       "Test post",
 		Content:     "hello",
 		ScheduledAt: soon(),
 	})
 	if err == nil {
 		t.Fatal("missing target_accounts must be rejected")
+	}
+}
+
+func TestSchedulePost_RequiresTitle(t *testing.T) {
+	f := newMCPFixture(t)
+	ctx := f.ctxFor(t, `["write"]`)
+
+	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
+		TeamID:         f.team.ID,
+		Title:          "   ",
+		Content:        "hello",
+		ScheduledAt:    soon(),
+		TargetAccounts: []string{f.account.ID},
+	})
+	if err == nil {
+		t.Fatal("schedule_post must require an explicit title")
 	}
 }
 
@@ -190,6 +213,7 @@ func TestDraftPost_AllowsOversizedButValidatesTargets(t *testing.T) {
 	// Drafts may exceed limits (refined before scheduling).
 	if _, _, err := f.handler.handleDraftPost(ctx, nil, DraftPostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        strings.Repeat("x", 400),
 		TargetAccounts: []string{bsky.ID},
 	}); err != nil {
@@ -200,6 +224,7 @@ func TestDraftPost_AllowsOversizedButValidatesTargets(t *testing.T) {
 	foreign := f.foreignAccount(t)
 	if _, _, err := f.handler.handleDraftPost(ctx, nil, DraftPostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "hi",
 		TargetAccounts: []string{foreign.ID},
 	}); err == nil {
@@ -213,11 +238,25 @@ func TestDraftPost_OverrideKeyMismatchRejected(t *testing.T) {
 
 	if _, _, err := f.handler.handleDraftPost(ctx, nil, DraftPostInput{
 		TeamID:                 f.team.ID,
+		Title:                  "Test post",
 		Content:                "hi",
 		TargetAccounts:         []string{f.account.ID},
 		AccountContentOverride: map[string]string{"nope": "x"},
 	}); err == nil {
 		t.Fatal("draft override for a non-target account must be rejected")
+	}
+}
+
+func TestDraftPost_RequiresTitle(t *testing.T) {
+	f := newMCPFixture(t)
+	ctx := f.ctxFor(t, `["write"]`)
+
+	if _, _, err := f.handler.handleDraftPost(ctx, nil, DraftPostInput{
+		TeamID:         f.team.ID,
+		Content:        "hello",
+		TargetAccounts: []string{f.account.ID},
+	}); err == nil {
+		t.Fatal("draft_post must require an explicit title")
 	}
 }
 
@@ -230,6 +269,7 @@ func TestModifyPost_RejectsOversizedContentOnScheduled(t *testing.T) {
 
 	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "short",
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{bsky.ID},
@@ -259,6 +299,7 @@ func TestModifyPost_AppliesOverride(t *testing.T) {
 
 	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "short",
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{bsky.ID},
@@ -287,6 +328,7 @@ func TestModifyPost_AppliesTargetChange(t *testing.T) {
 
 	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "short",
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{f.account.ID},
@@ -309,6 +351,30 @@ func TestModifyPost_AppliesTargetChange(t *testing.T) {
 	}
 }
 
+func TestModifyPost_RejectsEmptyTitle(t *testing.T) {
+	f := newMCPFixture(t)
+	ctx := f.ctxFor(t, `["write"]`)
+
+	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
+		TeamID:         f.team.ID,
+		Title:          "Original",
+		Content:        "short",
+		ScheduledAt:    soon(),
+		TargetAccounts: []string{f.account.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := "  "
+	if _, _, err := f.handler.handleModifyPost(ctx, nil, ModifyPostInput{
+		TeamID: f.team.ID,
+		PostID: created.PostID,
+		Title:  &empty,
+	}); err == nil {
+		t.Fatal("modify_post must reject clearing the title to empty")
+	}
+}
+
 func TestModifyPost_CrossTeamTargetRejected(t *testing.T) {
 	f := newMCPFixture(t)
 	ctx := f.ctxFor(t, `["write"]`)
@@ -316,6 +382,7 @@ func TestModifyPost_CrossTeamTargetRejected(t *testing.T) {
 
 	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
 		TeamID:         f.team.ID,
+		Title:          "Test post",
 		Content:        "short",
 		ScheduledAt:    soon(),
 		TargetAccounts: []string{f.account.ID},

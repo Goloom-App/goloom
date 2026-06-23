@@ -1068,11 +1068,20 @@ func (in CreatePostInput) EffectiveContent(accountID string) string {
 	return in.Content
 }
 
+// Validate is the single source of truth for post-shape invariants, shared by
+// every interactive create/update path (REST and MCP). A title is always
+// required so a post is never stored with a placeholder derived from its body;
+// automation paths that legitimately have no human title generate one before
+// persisting and bypass this check (see ResolveAutomationPostTitle). Drafts may
+// still omit content and targets — they are filled in before scheduling.
 func (in CreatePostInput) Validate() error {
+	if strings.TrimSpace(in.Title) == "" {
+		return errors.New("title is required")
+	}
 	if in.Draft {
 		return nil
 	}
-	if in.Content == "" {
+	if strings.TrimSpace(in.Content) == "" {
 		return errors.New("content is required")
 	}
 	if len(in.TargetAccounts) == 0 {
