@@ -116,6 +116,11 @@ entry looks like this:
 `schedule_post`, `draft_post`, `modify_post`, `create_recurring` and
 `create_rss_feed` validate their input before anything is stored:
 
+- **A title is required.** Every post needs an explicit `title` (including
+  drafts) — it is never derived from the body. Automations (RSS/AI) generate one
+  when there is no human title.
+- **A team is required.** `team_id` must be set; a post is never stored with an
+  inferred or empty team.
 - **Targets must belong to the team.** Every account in `target_accounts` must
   exist and belong to `team_id`; cross-team or unknown accounts are rejected.
 - **Character limits are enforced** when a post is scheduled (not for drafts).
