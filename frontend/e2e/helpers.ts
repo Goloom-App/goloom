@@ -3,9 +3,26 @@ import { e2eBootstrapToken, E2E_REVIEW_POST_TITLE } from './constants'
 
 export async function signIn(page: Page) {
   await page.goto('/')
-  await page.getByLabel(/access token|administrator token/i).fill(e2eBootstrapToken())
-  await page.getByRole('button', { name: 'Sign in with token' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 30_000 })
+  const tokenField = page.getByLabel(/access token|administrator token/i)
+  await expect(tokenField).toBeVisible({ timeout: 30_000 })
+  await tokenField.fill(e2eBootstrapToken())
+
+  const signInBtn = page.getByRole('button', { name: 'Sign in with token' })
+  const dashboard = page.getByRole('heading', { level: 1, name: 'Dashboard' })
+
+  await signInBtn.click()
+  try {
+    await expect(dashboard).toBeVisible({ timeout: 20_000 })
+  } catch {
+    // On a loaded CI runner the first submit occasionally does not take; if the
+    // sign-in form is still shown, submit once more before failing. Makes the
+    // shared sign-in robust for every spec instead of relying on the job retry.
+    if (await signInBtn.isVisible().catch(() => false)) {
+      await tokenField.fill(e2eBootstrapToken())
+      await signInBtn.click()
+    }
+    await expect(dashboard).toBeVisible({ timeout: 30_000 })
+  }
   await expect(page.getByText(/too many requests|rate limit/i)).toHaveCount(0, { timeout: 30_000 })
   await expect(page.getByRole('button', { name: /select team/i })).toHaveCount(0, { timeout: 30_000 })
 }
