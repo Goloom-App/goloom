@@ -58,6 +58,7 @@ func (h *Handler) handleCreateCampaign(ctx context.Context, req *mcp.CallToolReq
 	if err != nil {
 		return nil, CreateCampaignOutput{}, err
 	}
+	h.audit(ctx, input.TeamID, "campaign.create", "campaign", created.ID, "Created campaign: "+created.Name)
 
 	return nil, CreateCampaignOutput{
 		CampaignID: created.ID,
@@ -138,6 +139,7 @@ func (h *Handler) handleCreateRecurring(ctx context.Context, req *mcp.CallToolRe
 	if err != nil {
 		return nil, CreateRecurringOutput{}, err
 	}
+	h.audit(ctx, input.TeamID, "recurring.create", "recurring", template.ID, "Created recurring template: "+strings.TrimSpace(input.Title))
 
 	return nil, CreateRecurringOutput{
 		TemplateID: template.ID,
@@ -190,6 +192,7 @@ func (h *Handler) handleCreateRSSFeed(ctx context.Context, req *mcp.CallToolRequ
 	if err != nil {
 		return nil, CreateRSSFeedOutput{}, err
 	}
+	h.audit(ctx, input.TeamID, "rss_feed.create", "rss_feed", created.ID, "Created RSS feed: "+strings.TrimSpace(input.Name))
 
 	return nil, CreateRSSFeedOutput{
 		FeedID: created.ID,
@@ -332,6 +335,7 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 	if err != nil {
 		return nil, SchedulePostOutput{}, err
 	}
+	h.audit(ctx, prepared.EffectiveTeam, "post.create", "post", post.ID, "Scheduled post: "+post.Title)
 
 	return nil, SchedulePostOutput{
 		PostID:      post.ID,
@@ -374,6 +378,7 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 	if err != nil {
 		return nil, DraftPostOutput{}, err
 	}
+	h.audit(ctx, prepared.EffectiveTeam, "post.create", "post", post.ID, "Drafted post: "+post.Title)
 
 	return nil, DraftPostOutput{
 		PostID: post.ID,
@@ -497,6 +502,7 @@ func (h *Handler) handleModifyPost(ctx context.Context, req *mcp.CallToolRequest
 	if err != nil {
 		return nil, ModifyPostOutput{}, err
 	}
+	h.audit(ctx, existing.TeamID, "post.update", "post", input.PostID, "Updated post: "+prepared.Input.Title)
 
 	return nil, ModifyPostOutput{
 		PostID: input.PostID,
@@ -530,6 +536,7 @@ func (h *Handler) handleDeletePost(ctx context.Context, req *mcp.CallToolRequest
 	if err != nil {
 		return nil, DeletePostOutput{}, err
 	}
+	h.audit(ctx, existing.TeamID, "post.delete", "post", input.PostID, "Deleted post: "+existing.Title)
 
 	return nil, DeletePostOutput{Success: true}, nil
 }

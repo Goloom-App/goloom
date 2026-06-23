@@ -63,6 +63,7 @@ func (h *Handler) createServer(r *http.Request) *mcp.Server {
 		Version: "1.0.0",
 	}, nil)
 
+	server.AddReceivingMiddleware(h.loggingMiddleware)
 	h.registerTools(server)
 	return server
 }

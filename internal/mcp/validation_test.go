@@ -224,6 +224,40 @@ func TestSchedulePost_RequiresTeam(t *testing.T) {
 	}
 }
 
+func TestSchedulePost_RecordsAuditEvent(t *testing.T) {
+	f := newMCPFixture(t)
+	ctx := f.ctxFor(t, `["write"]`)
+	bsky := f.blueskyAccount(t)
+
+	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
+		TeamID:         f.team.ID,
+		Title:          "Audit me",
+		Content:        "hi",
+		ScheduledAt:    soon(),
+		TargetAccounts: []string{bsky.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := f.store.ListAuditEvents(context.Background(), domain.AuditFilter{TeamID: f.team.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found *domain.AuditEvent
+	for i := range events {
+		if events[i].Action == "post.create" && events[i].TargetID != nil && *events[i].TargetID == created.PostID {
+			found = &events[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("schedule_post must record a post.create audit event, got %d events", len(events))
+	}
+	if found.ActorKind != domain.AuditActorToken || found.TokenID == nil {
+		t.Fatalf("audit event must be attributed to the API token, got kind=%q token=%v", found.ActorKind, found.TokenID)
+	}
+}
+
 // ===== draft_post =====
 
 func TestDraftPost_AllowsOversizedButValidatesTargets(t *testing.T) {
