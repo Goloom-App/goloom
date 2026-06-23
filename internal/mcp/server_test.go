@@ -66,7 +66,11 @@ func newMCPFixture(t *testing.T) mcpFixture {
 	}
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	handler := NewHandler(logger, s, authSvc, provider.NewRegistry(), config.Config{})
+	registry := provider.NewRegistry(
+		provider.NewBlueskyProvider(),
+		provider.NewMastodonProvider(provider.MastodonRegistrationConfig{}),
+	)
+	handler := NewHandler(logger, s, authSvc, registry, config.Config{})
 	return mcpFixture{store: s, handler: handler, user: u, team: team, account: acc}
 }
 

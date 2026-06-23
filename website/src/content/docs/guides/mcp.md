@@ -111,6 +111,20 @@ entry looks like this:
 | `get_hashtag_performance` | Best-performing hashtags from published-post analytics. |
 | `get_analytics_timeslots` | Best times to post: weekday/hour slots ranked by historical engagement, in a chosen timezone. |
 
+## Validation
+
+`schedule_post`, `draft_post`, `modify_post`, `create_recurring` and
+`create_rss_feed` validate their input before anything is stored:
+
+- **Targets must belong to the team.** Every account in `target_accounts` must
+  exist and belong to `team_id`; cross-team or unknown accounts are rejected.
+- **Character limits are enforced** when a post is scheduled (not for drafts).
+  If the content — or a per-account `account_content_override` — exceeds a
+  destination's limit, the call fails with a message naming the account, so the
+  agent can shorten the text or add a fitting override and retry.
+- **Overrides are never silently dropped.** An `account_content_override` keyed
+  by an account that is not in `target_accounts` is an error, not a no-op.
+
 ## Working safely with agents
 
 - Scope tokens tightly (`read` only, when an agent should not write) and bind

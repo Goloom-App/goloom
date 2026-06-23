@@ -31,14 +31,13 @@ type GetCampaignOutput struct {
 // ===== Recurring Posts =====
 
 type CreateRecurringInput struct {
-	TeamID                 string            `json:"team_id" jsonschema:"Team ID"`
-	Title                  string            `json:"title" jsonschema:"Post title with optional {{variables}}"`
-	Content                string            `json:"content" jsonschema:"Post content with optional {{variables}}"`
-	RecurrenceJSON         string            `json:"recurrence_json" jsonschema:"RRULE string (e.g., FREQ=WEEKLY;BYDAY=TU)"`
-	TargetAccounts         []string          `json:"target_accounts" jsonschema:"List of account IDs"`
-	Visibility             string            `json:"visibility,omitempty" jsonschema:"public,unlisted,private,direct"`
-	Enabled                *bool             `json:"enabled,omitempty" jsonschema:"Enable immediately (default: true)"`
-	AccountContentOverride map[string]string `json:"account_content_override,omitempty" jsonschema:"Per-account content overrides"`
+	TeamID         string   `json:"team_id" jsonschema:"Team ID"`
+	Title          string   `json:"title" jsonschema:"Post title with optional {{variables}}"`
+	Content        string   `json:"content" jsonschema:"Post content with optional {{variables}}"`
+	RecurrenceJSON string   `json:"recurrence_json" jsonschema:"RRULE string (e.g., FREQ=WEEKLY;BYDAY=TU)"`
+	TargetAccounts []string `json:"target_accounts" jsonschema:"List of account IDs"`
+	Visibility     string   `json:"visibility,omitempty" jsonschema:"public,unlisted,private,direct"`
+	Enabled        *bool    `json:"enabled,omitempty" jsonschema:"Enable immediately (default: true)"`
 }
 
 type CreateRecurringOutput struct {
