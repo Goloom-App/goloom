@@ -41,16 +41,33 @@ func (a *API) handleCreateAIDraft(w http.ResponseWriter, r *http.Request) {
 	}
 
 	teamID := r.PathValue("teamID")
+	targets := domain.NormalizeMediaIDs(input.AccountIDs)
+
+	// Validate target accounts belong to the team (and that overrides reference a
+	// target) before persisting. This endpoint is user-driven, so it must not be
+	// able to target another team's accounts.
+	var overrideKeys []string
+	for id, c := range input.AccountContentOverride {
+		if strings.TrimSpace(c) != "" {
+			overrideKeys = append(overrideKeys, id)
+		}
+	}
+	if _, _, err := a.posts.ResolveTargets(r.Context(), teamID, targets, overrideKeys); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	postInput := domain.CreatePostInput{
-		Title:                  strings.TrimSpace(input.Title),
+		Title:                  input.Title,
 		Content:                content,
-		TargetAccounts:         domain.NormalizeMediaIDs(input.AccountIDs),
-		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.AccountIDs),
+		TargetAccounts:         targets,
+		AccountContentOverride: input.AccountContentOverride,
 		ScheduledAt:            time.Now().UTC(),
 		Draft:                  true,
 		AuthorUserID:           &principal.User.ID,
-		UseVersions:            len(input.AccountContentOverride) > 0,
 	}
+	postInput.Normalize()
+	postInput.EnsureTitle()
 	if input.ScheduledAt != nil && !input.ScheduledAt.IsZero() {
 		postInput.ScheduledAt = input.ScheduledAt.UTC()
 	}

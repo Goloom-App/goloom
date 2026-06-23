@@ -64,6 +64,57 @@ func (r Result) Problems() string {
 	return strings.Join(parts, "; ")
 }
 
+// AccountLimit is a pre-resolved per-account character limit, used where the
+// provider capabilities are already cached (e.g. the AI chat context) and a full
+// account/provider lookup would be wasteful.
+type AccountLimit struct {
+	AccountID string
+	Username  string
+	Provider  string
+	MaxChars  int
+}
+
+// CheckLimits is the capability-free sibling of Check: it validates content
+// (honoring per-account overrides) against pre-resolved character limits and
+// shares the same Result/Problems formatting, so character-limit reporting lives
+// in exactly one place. It does not evaluate media requirements.
+func CheckLimits(content string, overrides map[string]string, limits []AccountLimit) Result {
+	destinations := make([]Destination, 0, len(limits))
+	maxChars := 0
+	allValid := true
+	for _, l := range limits {
+		effective := content
+		if o, ok := overrides[l.AccountID]; ok && strings.TrimSpace(o) != "" {
+			effective = o
+		}
+		contentLen := len([]rune(effective))
+		valid := l.MaxChars == 0 || contentLen <= l.MaxChars
+		if !valid {
+			allValid = false
+		}
+		destinations = append(destinations, Destination{
+			AccountID: l.AccountID,
+			Provider:  l.Provider,
+			Username:  l.Username,
+			MaxChars:  l.MaxChars,
+			Length:    contentLen,
+			Valid:     valid,
+		})
+		if l.MaxChars > 0 && (maxChars == 0 || l.MaxChars < maxChars) {
+			maxChars = l.MaxChars
+		}
+	}
+	slices.SortFunc(destinations, func(a, b Destination) int {
+		return strings.Compare(a.AccountID, b.AccountID)
+	})
+	return Result{
+		Valid:         allValid,
+		MaxChars:      maxChars,
+		ContentLength: len([]rune(content)),
+		Destinations:  destinations,
+	}
+}
+
 // Check validates the post content against each target account's provider
 // capabilities, honoring per-account content overrides (input.EffectiveContent).
 //

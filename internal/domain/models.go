@@ -701,6 +701,94 @@ func ResolveAutomationPostTitle(templateTitle, aiTitle string) string {
 	return strings.TrimSpace(templateTitle)
 }
 
+// generatedTitleMaxRunes caps the length of a title derived from content.
+const generatedTitleMaxRunes = 80
+
+// GenerateTitleFromContent derives a short, human-readable title from post
+// content: the first non-empty line, trimmed and capped. It is the single place
+// a title is synthesised, used as the fallback for automation that has no
+// explicit title (interactive callers require one instead). Returns "" only for
+// empty content.
+func GenerateTitleFromContent(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		runes := []rune(line)
+		if len(runes) > generatedTitleMaxRunes {
+			return strings.TrimRight(string(runes[:generatedTitleMaxRunes]), " ") + "…"
+		}
+		return line
+	}
+	return ""
+}
+
+// ResolvedPostInsert holds the persistence-ready scalar fields derived from a
+// CreatePostInput that both store backends need identically (author, status,
+// source and the optional template/feed references). Centralizing the resolution
+// keeps the two stores from drifting; each only differs in SQL and time encoding.
+type ResolvedPostInsert struct {
+	AuthorID             string
+	Status               PostStatus
+	Source               PostSource
+	TemplateID           *string
+	TemplateCounter      *int
+	TemplateOccurrenceAt *time.Time
+	TemplateRole         string
+	RSSFeedID            *string
+}
+
+// ResolvePostInsert computes the shared insert fields for a new scheduled post.
+// A post is Draft when requested, otherwise Pending. The author defaults to the
+// acting principal unless an explicit AuthorUserID is set (automation).
+func ResolvePostInsert(principal AuthenticatedPrincipal, in CreatePostInput) ResolvedPostInsert {
+	r := ResolvedPostInsert{
+		AuthorID:     principal.User.ID,
+		Status:       PostStatusPending,
+		Source:       in.Source,
+		TemplateRole: strings.TrimSpace(in.TemplatePostRole),
+	}
+	if in.Draft {
+		r.Status = PostStatusDraft
+	}
+	if in.AuthorUserID != nil && strings.TrimSpace(*in.AuthorUserID) != "" {
+		id := strings.TrimSpace(*in.AuthorUserID)
+		r.AuthorID = id
+	}
+	if strings.TrimSpace(string(r.Source)) == "" {
+		r.Source = PostSourceScheduled
+	}
+	if in.PostTemplateID != nil {
+		if id := strings.TrimSpace(*in.PostTemplateID); id != "" {
+			r.TemplateID = &id
+		}
+	}
+	if in.TemplateCounter != nil {
+		r.TemplateCounter = in.TemplateCounter
+	}
+	if in.TemplateOccurrenceAt != nil && !in.TemplateOccurrenceAt.IsZero() {
+		t := in.TemplateOccurrenceAt.UTC()
+		r.TemplateOccurrenceAt = &t
+	}
+	if in.RSSFeedID != nil {
+		if id := strings.TrimSpace(*in.RSSFeedID); id != "" {
+			r.RSSFeedID = &id
+		}
+	}
+	return r
+}
+
+// EnsureTitle fills an empty title from the content, so a post is never stored
+// with a placeholder derived downstream (e.g. the UI showing the first characters
+// of the body). Automation paths call this; interactive paths require a title via
+// Validate instead.
+func (in *CreatePostInput) EnsureTitle() {
+	if strings.TrimSpace(in.Title) == "" {
+		in.Title = GenerateTitleFromContent(in.Content)
+	}
+}
+
 // ExpandPostTemplateTitle renders dynamic variables in a recurring template title.
 func ExpandPostTemplateTitle(title string, scheduledAt time.Time, counter int, mainEventAt *time.Time, mainCounter *int) string {
 	counterVal := counter
@@ -1066,6 +1154,25 @@ func (in CreatePostInput) EffectiveContent(accountID string) string {
 		return over
 	}
 	return in.Content
+}
+
+// Normalize canonicalises a post input in one place so every create/update path
+// (REST, MCP, automation) produces identically-shaped data: trimmed title and
+// content, a supported visibility, deduplicated media, exclusions scoped to the
+// attached media, per-account overrides limited to the targeted accounts, and
+// the derived UseVersions flag.
+//
+// Note: dropping override keys that do not match a target is a normalization,
+// not a validation — callers that want to reject a misdirected override (so it
+// is never silently lost) must check the raw input before calling Normalize.
+func (in *CreatePostInput) Normalize() {
+	in.Title = strings.TrimSpace(in.Title)
+	in.Content = strings.TrimSpace(in.Content)
+	in.Visibility = NormalizePostVisibility(in.Visibility)
+	in.MediaIDs = NormalizeMediaIDs(in.MediaIDs)
+	in.MediaExcludeByAccount = NormalizeMediaExcludeByAccount(in.MediaExcludeByAccount, in.MediaIDs)
+	in.AccountContentOverride = NormalizeAccountContentOverride(in.AccountContentOverride, in.TargetAccounts)
+	in.UseVersions = len(in.AccountContentOverride) > 0
 }
 
 // Validate is the single source of truth for post-shape invariants, shared by

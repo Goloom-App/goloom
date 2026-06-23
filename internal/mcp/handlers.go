@@ -9,6 +9,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/postservice"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -37,6 +38,9 @@ func (h *Handler) handleCreateCampaign(ctx context.Context, req *mcp.CallToolReq
 		return nil, CreateCampaignOutput{}, fmt.Errorf("forbidden")
 	}
 
+	if strings.TrimSpace(input.TeamID) == "" {
+		return nil, CreateCampaignOutput{}, fmt.Errorf("team_id is required")
+	}
 	if strings.TrimSpace(input.Name) == "" {
 		return nil, CreateCampaignOutput{}, fmt.Errorf("name is required")
 	}
@@ -103,10 +107,16 @@ func (h *Handler) handleCreateRecurring(ctx context.Context, req *mcp.CallToolRe
 		return nil, CreateRecurringOutput{}, fmt.Errorf("forbidden")
 	}
 
+	if strings.TrimSpace(input.TeamID) == "" {
+		return nil, CreateRecurringOutput{}, fmt.Errorf("team_id is required")
+	}
 	if strings.TrimSpace(input.Content) == "" {
 		return nil, CreateRecurringOutput{}, fmt.Errorf("content is required")
 	}
-	if _, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccounts, nil); err != nil {
+	if len(input.TargetAccounts) == 0 {
+		return nil, CreateRecurringOutput{}, fmt.Errorf("target_accounts is required")
+	}
+	if _, _, err := h.posts.ResolveTargets(ctx, input.TeamID, input.TargetAccounts, nil); err != nil {
 		return nil, CreateRecurringOutput{}, err
 	}
 
@@ -150,13 +160,19 @@ func (h *Handler) handleCreateRSSFeed(ctx context.Context, req *mcp.CallToolRequ
 		return nil, CreateRSSFeedOutput{}, fmt.Errorf("forbidden")
 	}
 
+	if strings.TrimSpace(input.TeamID) == "" {
+		return nil, CreateRSSFeedOutput{}, fmt.Errorf("team_id is required")
+	}
 	if err := validateFeedURL(input.FeedURL); err != nil {
 		return nil, CreateRSSFeedOutput{}, err
 	}
 	if strings.TrimSpace(input.Name) == "" {
 		return nil, CreateRSSFeedOutput{}, fmt.Errorf("name is required")
 	}
-	if _, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccountIDs, nil); err != nil {
+	if len(input.TargetAccountIDs) == 0 {
+		return nil, CreateRSSFeedOutput{}, fmt.Errorf("target_account_ids is required")
+	}
+	if _, _, err := h.posts.ResolveTargets(ctx, input.TeamID, input.TargetAccountIDs, nil); err != nil {
 		return nil, CreateRSSFeedOutput{}, err
 	}
 
@@ -297,30 +313,22 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 		return nil, SchedulePostOutput{}, fmt.Errorf("invalid scheduled_at: %w", err)
 	}
 
-	createInput := domain.CreatePostInput{
-		Title:                  strings.TrimSpace(input.Title),
-		Content:                strings.TrimSpace(input.Content),
+	prepared, err := h.posts.Prepare(ctx, input.TeamID, domain.CreatePostInput{
+		Title:                  input.Title,
+		Content:                input.Content,
 		ScheduledAt:            scheduledAt,
 		TargetAccounts:         input.TargetAccounts,
-		Visibility:             domain.NormalizePostVisibility(input.Visibility),
-		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts),
-	}
-	createInput.UseVersions = len(createInput.AccountContentOverride) > 0
-
-	// Shape invariants (title/content/targets) come from the domain; account
-	// existence/team and character limits need the store and providers.
-	if err := createInput.Validate(); err != nil {
-		return nil, SchedulePostOutput{}, err
-	}
-	accounts, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccounts, input.AccountContentOverride)
+		Visibility:             input.Visibility,
+		AccountContentOverride: input.AccountContentOverride,
+	}, postservice.Options{CheckLimits: true, RequireTeam: true})
 	if err != nil {
 		return nil, SchedulePostOutput{}, err
 	}
-	if err := enforceCharLimits(ctx, h.providers, accounts, createInput); err != nil {
+	if err := postservice.ValidationError(prepared.Validation); err != nil {
 		return nil, SchedulePostOutput{}, err
 	}
 
-	post, err := h.store.CreateScheduledPost(ctx, input.TeamID, *principal, createInput)
+	post, err := h.store.CreateScheduledPost(ctx, prepared.EffectiveTeam, *principal, prepared.Input)
 	if err != nil {
 		return nil, SchedulePostOutput{}, err
 	}
@@ -348,29 +356,21 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 		return nil, DraftPostOutput{}, fmt.Errorf("forbidden")
 	}
 
-	createInput := domain.CreatePostInput{
-		Title:                  strings.TrimSpace(input.Title),
-		Content:                strings.TrimSpace(input.Content),
+	// Drafts still require a title and validated targets/overrides, but skip
+	// character-limit enforcement (they are refined before scheduling).
+	prepared, err := h.posts.Prepare(ctx, input.TeamID, domain.CreatePostInput{
+		Title:                  input.Title,
+		Content:                input.Content,
 		TargetAccounts:         input.TargetAccounts,
-		Visibility:             domain.NormalizePostVisibility(input.Visibility),
+		Visibility:             input.Visibility,
 		Draft:                  true,
-		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts),
-	}
-	createInput.UseVersions = len(createInput.AccountContentOverride) > 0
-
-	// Drafts still require a title, but may omit content/targets (Validate skips
-	// those for drafts). When targets or overrides are given they must be valid
-	// so nothing is silently dropped; character limits are not enforced for drafts.
-	if err := createInput.Validate(); err != nil {
+		AccountContentOverride: input.AccountContentOverride,
+	}, postservice.Options{CheckLimits: false, RequireTeam: true})
+	if err != nil {
 		return nil, DraftPostOutput{}, err
 	}
-	if len(input.TargetAccounts) > 0 || len(input.AccountContentOverride) > 0 {
-		if _, err := h.resolveTargets(ctx, input.TeamID, input.TargetAccounts, input.AccountContentOverride); err != nil {
-			return nil, DraftPostOutput{}, err
-		}
-	}
 
-	post, err := h.store.CreateScheduledPost(ctx, input.TeamID, *principal, createInput)
+	post, err := h.store.CreateScheduledPost(ctx, prepared.EffectiveTeam, *principal, prepared.Input)
 	if err != nil {
 		return nil, DraftPostOutput{}, err
 	}
@@ -474,27 +474,22 @@ func (h *Handler) handleModifyPost(ctx context.Context, req *mcp.CallToolRequest
 		return nil, ModifyPostOutput{}, err
 	}
 	merged, _ := domain.ApplyPostPatch(existing, versions, patch)
-
-	// The patched post must still satisfy the shared shape invariants (e.g. the
-	// title must not be cleared to empty).
-	if err := merged.Validate(); err != nil {
-		return nil, ModifyPostOutput{}, err
+	// ApplyPostPatch already normalizes overrides to the target set; restore the
+	// raw patch overrides so the pipeline can reject a misdirected key instead of
+	// silently dropping it.
+	if input.AccountContentOverride != nil {
+		merged.AccountContentOverride = input.AccountContentOverride
 	}
 
-	// Re-validate destinations whenever the change can affect how content fits:
-	// new content, new targets, or new overrides.
-	if patch.Content.Set || patch.TargetAccounts.Set || patch.AccountContentOverride.Set {
-		if len(merged.TargetAccounts) > 0 || len(input.AccountContentOverride) > 0 {
-			accounts, err := h.resolveTargets(ctx, existing.TeamID, merged.TargetAccounts, input.AccountContentOverride)
-			if err != nil {
-				return nil, ModifyPostOutput{}, err
-			}
-			if !merged.Draft {
-				if err := enforceCharLimits(ctx, h.providers, accounts, merged); err != nil {
-					return nil, ModifyPostOutput{}, err
-				}
-			}
-		}
+	// Validate the patched post through the same pipeline as creation (shape,
+	// targets, overrides and—unless it's a draft—character limits). Persistence
+	// still goes through the patch; Prepare is the validation gate.
+	prepared, err := h.posts.Prepare(ctx, existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft, RequireTeam: true})
+	if err != nil {
+		return nil, ModifyPostOutput{}, err
+	}
+	if err := postservice.ValidationError(prepared.Validation); err != nil {
+		return nil, ModifyPostOutput{}, err
 	}
 
 	// Apply patch

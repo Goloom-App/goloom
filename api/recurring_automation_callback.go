@@ -1,8 +1,8 @@
 package api
 
 import (
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -70,7 +70,7 @@ func (a *API) createRecurringAutomationPost(
 		User: domain.User{ID: job.AuthorUserID},
 		Kind: "api_token",
 	}
-	_, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, domain.CreatePostInput{
+	recPost := domain.CreatePostInput{
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
@@ -84,7 +84,9 @@ func (a *API) createRecurringAutomationPost(
 		TemplateOccurrenceAt:   meta.TemplateOccurrenceAt,
 		TemplatePostRole:       role,
 		UseVersions:            len(normalizedOverrides) > 0,
-	})
+	}
+	recPost.EnsureTitle()
+	_, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, recPost)
 	if err != nil {
 		a.log.ErrorContext(ctx, "recurring automation: create scheduled post failed",
 			"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind, "error", err)

@@ -8,6 +8,7 @@ import (
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/postservice"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/store"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,6 +21,7 @@ type Handler struct {
 	store     store.Store
 	auth      *auth.Service
 	providers *provider.Registry
+	posts     *postservice.Service
 	config    config.Config
 	logger    *slog.Logger
 }
@@ -36,6 +38,7 @@ func NewHandler(
 		store:     store,
 		auth:      authSvc,
 		providers: providers,
+		posts:     postservice.New(store, providers),
 		config:    cfg,
 		logger:    logger,
 	}

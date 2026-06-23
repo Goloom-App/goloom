@@ -81,6 +81,37 @@ func TestCheck_UnsupportedProvider(t *testing.T) {
 	}
 }
 
+func TestCheckLimits_PreResolvedLimits(t *testing.T) {
+	limits := []AccountLimit{
+		{AccountID: "bsky", Username: "team.bsky", Provider: "bluesky", MaxChars: 300},
+		{AccountID: "masto", Username: "team", Provider: "mastodon", MaxChars: 500},
+	}
+	long := strings.Repeat("x", 400)
+
+	res := CheckLimits(long, nil, limits)
+	if res.Valid {
+		t.Fatal("expected invalid: bluesky limit exceeded")
+	}
+	if res.MaxChars != 300 {
+		t.Errorf("MaxChars = %d, want 300", res.MaxChars)
+	}
+	if !strings.Contains(res.Problems(), "bsky") || strings.Contains(res.Problems(), "masto") {
+		t.Errorf("Problems() should name only the violating account: %q", res.Problems())
+	}
+
+	// Override that fits flips the result to valid.
+	res = CheckLimits(long, map[string]string{"bsky": "short"}, limits)
+	if !res.Valid {
+		t.Fatalf("override within limit should be valid, got %q", res.Problems())
+	}
+
+	// A zero/unknown limit is treated as unlimited.
+	res = CheckLimits(long, nil, []AccountLimit{{AccountID: "x", MaxChars: 0}})
+	if !res.Valid {
+		t.Fatal("zero limit must be treated as unlimited")
+	}
+}
+
 func TestCheck_PerAccountOverrideStillTooLong(t *testing.T) {
 	reg := testRegistry(t)
 	accounts := []domain.SocialAccount{acc("bsky", "bluesky")}

@@ -43,9 +43,9 @@ func (s *Service) submitRSSAIEnhancement(
 		"rss_article_title":   strings.TrimSpace(item.Title),
 		"rss_article_content": articleText,
 		"rss_article_link":    strings.TrimSpace(item.Link),
-		"title_hint":         strings.TrimSpace(feed.TitleHint),
-		"target_account_ids": feed.TargetAccountIDs,
-		"schedule":             false,
+		"title_hint":          strings.TrimSpace(feed.TitleHint),
+		"target_account_ids":  feed.TargetAccountIDs,
+		"schedule":            false,
 		"rss_automation": map[string]any{
 			"feed_id":          feed.ID,
 			"item_key":         itemKey,
@@ -110,6 +110,7 @@ func (s *Service) createRSSPostDirect(
 		Source:         domain.PostSourceAutomation,
 		RSSFeedID:      &feedID,
 	}
+	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: ownerID}, Kind: "system"}
 	post, err := s.store.CreateScheduledPost(ctx, feed.TeamID, principal, input)
 	if err != nil {

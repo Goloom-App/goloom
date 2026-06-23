@@ -98,7 +98,11 @@ func ApplyPostPatch(existing ScheduledPost, versions []PostVersion, patch Update
 		merged.AccountContentOverride = NormalizeAccountContentOverride(patch.AccountContentOverride.Value, merged.TargetAccounts)
 		flags.Versions = true
 	} else {
-		merged.AccountContentOverride = VersionsToOverrideMap(versions)
+		// Stored versions for accounts that are no longer targets (e.g. the patch
+		// shrank target_accounts) are irrelevant to the merged post and must be
+		// scoped out, so validation does not mistake them for a misdirected
+		// override. flags.Versions stays false, so stored versions are untouched.
+		merged.AccountContentOverride = NormalizeAccountContentOverride(VersionsToOverrideMap(versions), merged.TargetAccounts)
 	}
 
 	return merged, flags

@@ -11,6 +11,7 @@ import (
 	"git.f4mily.net/goloom/internal/ai"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/htmltext"
+	"git.f4mily.net/goloom/internal/postvalidate"
 )
 
 // chatFetchMaxChars caps how much fetched page text is fed back to the model.
@@ -149,29 +150,25 @@ func chatAccountLimitError(aiContext domain.AIContext, targets []string, content
 	for _, account := range aiContext.Accounts {
 		accounts[account.ID] = account
 	}
-	var problems []string
+	limits := make([]postvalidate.AccountLimit, 0, len(targets))
 	for _, id := range targets {
 		account, ok := accounts[id]
 		if !ok || account.MaxChars <= 0 {
 			continue
 		}
-		text := content
-		if override, ok := overrides[id]; ok && strings.TrimSpace(override) != "" {
-			text = override
-		}
-		if length := len([]rune(text)); length > account.MaxChars {
-			name := account.Username
-			if name == "" {
-				name = account.ID
-			}
-			problems = append(problems, fmt.Sprintf("account %s (id=%s) allows %d characters but the text for it has %d", name, account.ID, account.MaxChars, length))
-		}
+		limits = append(limits, postvalidate.AccountLimit{
+			AccountID: account.ID,
+			Username:  account.Username,
+			Provider:  account.Provider,
+			MaxChars:  account.MaxChars,
+		})
 	}
-	if len(problems) == 0 {
+	res := postvalidate.CheckLimits(content, overrides, limits)
+	if res.Valid {
 		return nil
 	}
 	return fmt.Errorf("character limit exceeded: %s. Shorten the content or add account_content_override entries that fit each account's limit, then call the tool again",
-		strings.Join(problems, "; "))
+		res.Problems())
 }
 
 // chatUnknownAccountError rejects account IDs that are not connected to the team.

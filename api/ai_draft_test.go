@@ -138,3 +138,48 @@ func TestAIDraft(t *testing.T) {
 		}
 	})
 }
+
+func TestAIDraft_RejectsCrossTeamTarget(t *testing.T) {
+	ctx := context.Background()
+	s := newAICRUDStore(t)
+	h := newAICRUDHandler(t, s)
+
+	u, err := s.UpsertOIDCUser(ctx, "ai-draft-xteam-"+uuid.NewString(), "xteam@example.test", "AI Draft XTeam")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled := true
+	teamA, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "a-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateTeam(ctx, teamA.ID, domain.UpdateTeamInput{Name: teamA.Name, IsAIEnabled: &enabled}); err != nil {
+		t.Fatal(err)
+	}
+	teamB, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "b-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	accB, err := s.CreateAccount(ctx, teamB.ID, domain.ConnectedAccount{
+		Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://mastodon.social", Username: "b-user", AccessToken: "tok",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scopes, _ := json.Marshal([]string{auth.ScopeWriteDraft})
+	bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "xteam-token", nil, string(scopes), nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The user owns both teams, but a draft for team A must not target team B's account.
+	body := map[string]any{
+		"content":     "draft body",
+		"account_ids": []string{accB.ID},
+	}
+	rec := doRequest(t, h, http.MethodPost, "/v1/teams/"+teamA.ID+"/posts/draft", bearer, body)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("cross-team AI draft: got %d, want 400; body: %s", rec.Code, rec.Body.String())
+	}
+}

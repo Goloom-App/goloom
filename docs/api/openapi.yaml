@@ -187,8 +187,13 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScheduledPost"
+        "400":
+          description: >-
+            Invalid input — missing title/team, or a target account that does not
+            exist or belongs to another team, or a per-account override keyed by
+            a non-target account.
         "422":
-          description: Validation failed
+          description: Content exceeds a destination's character limit (or omits required media)
           content:
             application/json:
               schema:
@@ -1137,12 +1142,16 @@ components:
               type: string
     CreatePostInput:
       type: object
-      required: [content]
+      required: [title, content]
       properties:
         title:
           type: string
+          description: >-
+            Required for every post (including drafts); it is never derived from
+            the body.
         content:
           type: string
+          description: Required for scheduled posts; may be empty for drafts.
         scheduled_at:
           type: string
           format: date-time

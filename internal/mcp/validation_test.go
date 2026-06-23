@@ -203,6 +203,27 @@ func TestSchedulePost_RequiresTitle(t *testing.T) {
 	}
 }
 
+func TestSchedulePost_RequiresTeam(t *testing.T) {
+	f := newMCPFixture(t)
+	bsky := f.blueskyAccount(t)
+	// An admin passes the team-access check even for an empty team, so the
+	// handler itself must reject an empty team_id (via the pipeline's RequireTeam)
+	// so a post can never be persisted with an inferred/empty team.
+	admin := domain.AuthenticatedPrincipal{User: domain.User{ID: f.user.ID, IsAdmin: true}}
+	ctx := WithPrincipal(context.Background(), admin)
+
+	_, _, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
+		TeamID:         "",
+		Title:          "T",
+		Content:        "hello",
+		ScheduledAt:    soon(),
+		TargetAccounts: []string{bsky.ID},
+	})
+	if err == nil || !strings.Contains(err.Error(), "team_id") {
+		t.Fatalf("schedule_post must reject an empty team_id, got %v", err)
+	}
+}
+
 // ===== draft_post =====
 
 func TestDraftPost_AllowsOversizedButValidatesTargets(t *testing.T) {
@@ -372,6 +393,37 @@ func TestModifyPost_RejectsEmptyTitle(t *testing.T) {
 		Title:  &empty,
 	}); err == nil {
 		t.Fatal("modify_post must reject clearing the title to empty")
+	}
+}
+
+func TestModifyPost_ShrinkTargetsWithStoredVersions(t *testing.T) {
+	f := newMCPFixture(t)
+	ctx := f.ctxFor(t, `["write"]`)
+	bsky := f.blueskyAccount(t)
+
+	// Schedule to two accounts with a bluesky-specific override (stored version).
+	_, created, err := f.handler.handleSchedulePost(ctx, nil, SchedulePostInput{
+		TeamID:                 f.team.ID,
+		Title:                  "T",
+		Content:                "short",
+		ScheduledAt:            soon(),
+		TargetAccounts:         []string{f.account.ID, bsky.ID},
+		AccountContentOverride: map[string]string{bsky.ID: "bluesky text"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Drop bluesky from the targets WITHOUT touching overrides. The stored
+	// bluesky version is now stale and must be scoped out, not treated as a
+	// misdirected override (regression guard).
+	newTargets := []string{f.account.ID}
+	if _, _, err := f.handler.handleModifyPost(ctx, nil, ModifyPostInput{
+		TeamID:         f.team.ID,
+		PostID:         created.PostID,
+		TargetAccounts: &newTargets,
+	}); err != nil {
+		t.Fatalf("shrinking targets with a stored version must succeed: %v", err)
 	}
 }
 
