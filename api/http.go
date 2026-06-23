@@ -895,12 +895,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Content = strings.TrimSpace(input.Content)
-	input.Title = strings.TrimSpace(input.Title)
-	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
-	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
-	input.MediaExcludeByAccount = domain.NormalizeMediaExcludeByAccount(input.MediaExcludeByAccount, input.MediaIDs)
-	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
+	input.Normalize()
 	if input.ScheduledAt.IsZero() {
 		input.ScheduledAt = time.Now().UTC()
 	}
@@ -1094,10 +1089,7 @@ func (a *API) handleValidatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	input.Content = strings.TrimSpace(input.Content)
-	input.Visibility = domain.NormalizePostVisibility(input.Visibility)
-	input.MediaIDs = domain.NormalizeMediaIDs(input.MediaIDs)
-	input.AccountContentOverride = domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts)
+	input.Normalize()
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
 	validation, effectiveTeam, err := a.validatePostInput(r.Context(), pathTeamID, input)
 	if err != nil {

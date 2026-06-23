@@ -1068,6 +1068,25 @@ func (in CreatePostInput) EffectiveContent(accountID string) string {
 	return in.Content
 }
 
+// Normalize canonicalises a post input in one place so every create/update path
+// (REST, MCP, automation) produces identically-shaped data: trimmed title and
+// content, a supported visibility, deduplicated media, exclusions scoped to the
+// attached media, per-account overrides limited to the targeted accounts, and
+// the derived UseVersions flag.
+//
+// Note: dropping override keys that do not match a target is a normalization,
+// not a validation — callers that want to reject a misdirected override (so it
+// is never silently lost) must check the raw input before calling Normalize.
+func (in *CreatePostInput) Normalize() {
+	in.Title = strings.TrimSpace(in.Title)
+	in.Content = strings.TrimSpace(in.Content)
+	in.Visibility = NormalizePostVisibility(in.Visibility)
+	in.MediaIDs = NormalizeMediaIDs(in.MediaIDs)
+	in.MediaExcludeByAccount = NormalizeMediaExcludeByAccount(in.MediaExcludeByAccount, in.MediaIDs)
+	in.AccountContentOverride = NormalizeAccountContentOverride(in.AccountContentOverride, in.TargetAccounts)
+	in.UseVersions = len(in.AccountContentOverride) > 0
+}
+
 // Validate is the single source of truth for post-shape invariants, shared by
 // every interactive create/update path (REST and MCP). A title is always
 // required so a post is never stored with a placeholder derived from its body;

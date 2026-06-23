@@ -42,15 +42,15 @@ func (a *API) handleCreateAIDraft(w http.ResponseWriter, r *http.Request) {
 
 	teamID := r.PathValue("teamID")
 	postInput := domain.CreatePostInput{
-		Title:                  strings.TrimSpace(input.Title),
+		Title:                  input.Title,
 		Content:                content,
 		TargetAccounts:         domain.NormalizeMediaIDs(input.AccountIDs),
-		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.AccountIDs),
+		AccountContentOverride: input.AccountContentOverride,
 		ScheduledAt:            time.Now().UTC(),
 		Draft:                  true,
 		AuthorUserID:           &principal.User.ID,
-		UseVersions:            len(input.AccountContentOverride) > 0,
 	}
+	postInput.Normalize()
 	if input.ScheduledAt != nil && !input.ScheduledAt.IsZero() {
 		postInput.ScheduledAt = input.ScheduledAt.UTC()
 	}

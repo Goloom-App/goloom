@@ -298,14 +298,14 @@ func (h *Handler) handleSchedulePost(ctx context.Context, req *mcp.CallToolReque
 	}
 
 	createInput := domain.CreatePostInput{
-		Title:                  strings.TrimSpace(input.Title),
-		Content:                strings.TrimSpace(input.Content),
+		Title:                  input.Title,
+		Content:                input.Content,
 		ScheduledAt:            scheduledAt,
 		TargetAccounts:         input.TargetAccounts,
-		Visibility:             domain.NormalizePostVisibility(input.Visibility),
-		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts),
+		Visibility:             input.Visibility,
+		AccountContentOverride: input.AccountContentOverride,
 	}
-	createInput.UseVersions = len(createInput.AccountContentOverride) > 0
+	createInput.Normalize()
 
 	// Shape invariants (title/content/targets) come from the domain; account
 	// existence/team and character limits need the store and providers.
@@ -349,14 +349,14 @@ func (h *Handler) handleDraftPost(ctx context.Context, req *mcp.CallToolRequest,
 	}
 
 	createInput := domain.CreatePostInput{
-		Title:                  strings.TrimSpace(input.Title),
-		Content:                strings.TrimSpace(input.Content),
+		Title:                  input.Title,
+		Content:                input.Content,
 		TargetAccounts:         input.TargetAccounts,
-		Visibility:             domain.NormalizePostVisibility(input.Visibility),
+		Visibility:             input.Visibility,
 		Draft:                  true,
-		AccountContentOverride: domain.NormalizeAccountContentOverride(input.AccountContentOverride, input.TargetAccounts),
+		AccountContentOverride: input.AccountContentOverride,
 	}
-	createInput.UseVersions = len(createInput.AccountContentOverride) > 0
+	createInput.Normalize()
 
 	// Drafts still require a title, but may omit content/targets (Validate skips
 	// those for drafts). When targets or overrides are given they must be valid
