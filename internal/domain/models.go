@@ -701,6 +701,39 @@ func ResolveAutomationPostTitle(templateTitle, aiTitle string) string {
 	return strings.TrimSpace(templateTitle)
 }
 
+// generatedTitleMaxRunes caps the length of a title derived from content.
+const generatedTitleMaxRunes = 80
+
+// GenerateTitleFromContent derives a short, human-readable title from post
+// content: the first non-empty line, trimmed and capped. It is the single place
+// a title is synthesised, used as the fallback for automation that has no
+// explicit title (interactive callers require one instead). Returns "" only for
+// empty content.
+func GenerateTitleFromContent(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		runes := []rune(line)
+		if len(runes) > generatedTitleMaxRunes {
+			return strings.TrimRight(string(runes[:generatedTitleMaxRunes]), " ") + "…"
+		}
+		return line
+	}
+	return ""
+}
+
+// EnsureTitle fills an empty title from the content, so a post is never stored
+// with a placeholder derived downstream (e.g. the UI showing the first characters
+// of the body). Automation paths call this; interactive paths require a title via
+// Validate instead.
+func (in *CreatePostInput) EnsureTitle() {
+	if strings.TrimSpace(in.Title) == "" {
+		in.Title = GenerateTitleFromContent(in.Content)
+	}
+}
+
 // ExpandPostTemplateTitle renders dynamic variables in a recurring template title.
 func ExpandPostTemplateTitle(title string, scheduledAt time.Time, counter int, mainEventAt *time.Time, mainCounter *int) string {
 	counterVal := counter

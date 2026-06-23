@@ -103,7 +103,7 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		Kind: "api_token",
 	}
 
-	_, _ = a.store.CreateScheduledPost(ctx, job.TeamID, principal, domain.CreatePostInput{
+	aiPost := domain.CreatePostInput{
 		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
@@ -112,7 +112,9 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		Draft:                  false,
 		AuthorUserID:           &job.AuthorUserID,
 		UseVersions:            len(overrides) > 0,
-	})
+	}
+	aiPost.EnsureTitle()
+	_, _ = a.store.CreateScheduledPost(ctx, job.TeamID, principal, aiPost)
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {

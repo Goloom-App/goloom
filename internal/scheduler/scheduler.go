@@ -29,11 +29,11 @@ type Service struct {
 	rssImportInterval          time.Duration
 	workers                    int
 
-	accountMetricsMu      sync.Mutex
-	postMetricsMu         sync.Mutex
-	accountHealthMu       sync.Mutex
-	externalPostImportMu  sync.Mutex
-	rssImportMu           sync.Mutex
+	accountMetricsMu     sync.Mutex
+	postMetricsMu        sync.Mutex
+	accountHealthMu      sync.Mutex
+	externalPostImportMu sync.Mutex
+	rssImportMu          sync.Mutex
 }
 
 func New(logger *slog.Logger, store store.Store, providers *provider.Registry, pollInterval time.Duration, workers int, metricSyncInterval time.Duration, accountHealthInterval time.Duration, externalPostImportInterval time.Duration, rssImportInterval time.Duration, jobManager *aijobs.Manager) *Service {
@@ -643,10 +643,11 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 		AuthorUserID:          &authorID,
 		PostTemplateID:        &tplID,
 		TemplateCounter:       &counterVal,
-		TemplateOccurrenceAt:    &mainEventAt,
+		TemplateOccurrenceAt:  &mainEventAt,
 		TemplatePostRole:      domain.TemplatePostRoleAnnouncement,
 		Source:                domain.PostSourceAutomation,
 	}
+	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
 	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
 		return err
@@ -718,6 +719,7 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 		TemplatePostRole:      role,
 		Source:                domain.PostSourceAutomation,
 	}
+	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
 	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
 		s.logger.Error("materialize scheduled post from template failed", "template_id", tmpl.ID, "error", err)

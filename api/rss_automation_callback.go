@@ -1,8 +1,8 @@
 package api
 
 import (
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -54,7 +54,7 @@ func (a *API) createRSSAutomationPost(
 		User: domain.User{ID: job.AuthorUserID},
 		Kind: "api_token",
 	}
-	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, domain.CreatePostInput{
+	rssPost := domain.CreatePostInput{
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
@@ -65,7 +65,9 @@ func (a *API) createRSSAutomationPost(
 		Source:                 domain.PostSourceAutomation,
 		RSSFeedID:              &feedID,
 		UseVersions:            len(normalizedOverrides) > 0,
-	})
+	}
+	rssPost.EnsureTitle()
+	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, rssPost)
 	if err != nil {
 		return
 	}

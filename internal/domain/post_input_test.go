@@ -1,6 +1,38 @@
 package domain
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestGenerateTitleFromContent(t *testing.T) {
+	cases := map[string]string{
+		"":                       "",
+		"   ":                    "",
+		"\n\n  first\nsecond":    "first",
+		"short caption":          "short caption",
+		strings.Repeat("a", 100): strings.Repeat("a", 80) + "…",
+	}
+	for in, want := range cases {
+		if got := GenerateTitleFromContent(in); got != want {
+			t.Errorf("GenerateTitleFromContent(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestEnsureTitle(t *testing.T) {
+	in := CreatePostInput{Content: "Generated from body"}
+	in.EnsureTitle()
+	if in.Title != "Generated from body" {
+		t.Fatalf("EnsureTitle should derive from content, got %q", in.Title)
+	}
+
+	kept := CreatePostInput{Title: "Explicit", Content: "body"}
+	kept.EnsureTitle()
+	if kept.Title != "Explicit" {
+		t.Fatalf("EnsureTitle must not overwrite an explicit title, got %q", kept.Title)
+	}
+}
 
 func TestCreatePostInput_Normalize(t *testing.T) {
 	in := CreatePostInput{
