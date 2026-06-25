@@ -57,7 +57,7 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string, 
 	sb.WriteString("- To put a post on a specific day (e.g. a campaign's weekday), pick the time yourself: use find_free_slot or get_calendar, then schedule_post with that time. Read get_campaign for the campaign's structure and required hashtags.\n")
 	sb.WriteString("- Ask for missing required details instead of inventing them.\n")
 	sb.WriteString("- When the user shares a URL, you MUST fetch it with fetch_url and base post content on the actual page text. Never guess or invent what a page contains; if the fetch fails, say so and ask for the key facts.\n")
-	sb.WriteString("- When you draft or propose a post, do not repeat the full post text in your reply — the user sees a card.\n")
+	sb.WriteString("- Card tools (draft_post, modify_post, revise_composer_post and the confirm-flow tools) show the user a card with the result. Lead with at most ONE short sentence saying what you are about to do, THEN call the tool so your sentence appears above the card. After it runs, do NOT quote, repeat or summarise the post text back — the card already shows it; a brief closing line at most, or nothing.\n")
 	sb.WriteString("- Reply in the user's language.\n\n")
 
 	if len(aiContext.Accounts) > 0 {
