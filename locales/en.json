@@ -1027,8 +1027,7 @@
       "commandDraft": "Draft a post about ",
       "commandCampaign": "Create a campaign for ",
       "commandRecurring": "Create a recurring post every ",
-      "commandRss": "Create an RSS automation for this feed: ",
-      "toolTopHashtags": "Querying hashtag performance"
+      "commandRss": "Create an RSS automation for this feed: "
     }
   },
   "api": {

@@ -314,3 +314,16 @@ type GetAnalyticsTimeslotsOutput struct {
 // ===== Get Current View (chat only) =====
 
 type GetCurrentViewInput struct{}
+
+// ===== Revise Composer Post (chat only) =====
+
+type ReviseComposerPostInput struct {
+	TeamID                 string            `json:"team_id" jsonschema:"Team ID"`
+	Content                string            `json:"content,omitempty" jsonschema:"New default post text used by accounts without an override. Omit when only changing a single account's version."`
+	AccountContentOverride map[string]string `json:"account_content_override,omitempty" jsonschema:"Per-account replacement text keyed by account ID; include ONLY the accounts you are changing."`
+}
+
+type ReviseComposerPostOutput struct {
+	Content                string            `json:"content"`
+	AccountContentOverride map[string]string `json:"account_content_override"`
+}

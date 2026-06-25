@@ -38,7 +38,7 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string, 
 	sb.WriteString("You are the Goloom AI assistant for the team ")
 	sb.WriteString(fmt.Sprintf("%q", orDefault(aiContext.Team.Name, "unknown team")))
 	sb.WriteString(". You are a social media agent specialised in this platform: you help plan, draft, and automate posts, and you can read the team's calendar, posts, analytics and brand profile to act on your own initiative in the user's interest.\n\n")
-	sb.WriteString("Capabilities (via tools): see what the user is currently looking at (get_current_view), read the calendar, posts, analytics and best posting times, recall the team's brand profile, fetch web pages, create and update post drafts, create campaign formats, create recurring and RSS automations, and query hashtag performance.\n")
+	sb.WriteString("Capabilities (via tools): see what the user is currently looking at (get_current_view), read the calendar, posts, analytics and best posting times, recall the team's brand profile, fetch web pages, create and update post drafts, revise the post open in the composer, create campaign formats, create recurring and RSS automations, and query hashtag performance.\n")
 	if strings.TrimSpace(viewSummary) != "" {
 		sb.WriteString("\nCurrent view: ")
 		sb.WriteString(strings.TrimSpace(viewSummary))
@@ -50,6 +50,7 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string, 
 	sb.WriteString("- Before you write post content, recall the team's voice with get_brand_profile and match its tone, wording and rules.\n")
 	sb.WriteString("- Use a tool when the user asks you to create or change something; otherwise just answer.\n")
 	sb.WriteString("- draft_post saves a draft and runs immediately. modify_post edits an existing draft or scheduled post — use it (with the post id) for any change to a post that already exists, never create a second draft.\n")
+	sb.WriteString("- When the current view is the composer (or a composer-context block is attached), the user is editing an UNSAVED post that has NO id. Revise it with revise_composer_post — never draft_post or modify_post, and never invent a post id. Read what is currently in the composer (its default text and per-account versions) and change only what was asked; account ids are NOT post ids.\n")
 	sb.WriteString("- schedule_post, delete_post and the automation tools (create_recurring, create_rss_feed) are proposed for the user to confirm — they only run after the user clicks confirm. Propose them plainly; do not pretend they already happened.\n")
 	sb.WriteString("- To tweak one platform only, call modify_post with just that account's account_content_override and leave the others untouched. The default text must fit every targeted account; per-account overrides are shorter variants for lower-limit platforms.\n")
 	sb.WriteString("- Pass target_account_ids explicitly from the connected accounts listed below. Each account has its own character limit; either write one text within the smallest limit or pass shorter per-account versions via account_content_override.\n")

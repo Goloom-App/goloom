@@ -68,6 +68,11 @@ func All() []*Tool {
 			desc:       "See what the user is currently looking at in the app (active section, focused entity, visible data). Call this to ground your help in their current screen, e.g. when they say 'this post' or 'here'.",
 			transports: transportsChatOnly,
 		}, coreGetCurrentView),
+		define[ReviseComposerPostInput, ReviseComposerPostOutput](spec{
+			name:       "revise_composer_post",
+			desc:       "Revise the post the user is currently editing in the composer — an UNSAVED draft with no id. Returns the proposed default text and/or per-account overrides for the composer to apply; nothing is saved. Use this (never draft_post or modify_post) whenever the current view is the composer.",
+			transports: transportsChatOnly,
+		}, coreReviseComposerPost),
 
 		// ===== Reads (MCP only) =====
 		define[GetTeamsInput, GetTeamsOutput](spec{

@@ -6,7 +6,7 @@ import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, cr
 import type { AccountRecord } from '../../types'
 import { composerContextEvent } from './composerChatBridge'
 import type { ComposerChatContext, ComposerChatTarget } from './composerChatBridge'
-import { getViewContext } from './viewContextBridge'
+import { getViewContext, setViewFocus, setViewVisible } from './viewContextBridge'
 
 type ApiClient = ReturnType<typeof createApiClient>
 
@@ -115,15 +115,36 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
       if (detail.clear) {
         setComposerContext(null)
         setDeselectedAccountIds([])
+        setViewFocus(undefined)
+        setViewVisible(undefined)
         return
       }
       if (!detail.content.trim()) {
         // No text yet (e.g. an empty composer just opened): don't attach a chip,
         // but if the previous context is now empty, drop it.
         setComposerContext((prev) => (prev ? null : prev))
+        setViewFocus(undefined)
+        setViewVisible(undefined)
         return
       }
       setComposerContext({ content: detail.content, targets: detail.targets ?? [] })
+      // Mirror the open composer draft into the view context so the agent can see,
+      // via get_current_view, which post is open and what it currently says.
+      setViewFocus({ type: 'composerDraft', label: detail.title })
+      setViewVisible({
+        composer: {
+          content: detail.content,
+          title: detail.title,
+          targets: (detail.targets ?? []).map((target) => ({
+            accountId: target.accountId,
+            name: target.name,
+            provider: target.provider,
+            maxChars: target.maxChars,
+            text: target.text,
+            hasOverride: target.hasOverride,
+          })),
+        },
+      })
       // Manual triggers (a button) open and focus the chat; auto-sync stays silent.
       if (!detail.auto) {
         setOpen(true)
@@ -763,6 +784,8 @@ function toolLabel(toolName: string, t: (key: string) => string): string {
       return t('aiChat.toolCreateDraft')
     case 'modify_post':
       return t('aiChat.toolUpdateDraft')
+    case 'revise_composer_post':
+      return t('aiChat.toolReviseComposer')
     case 'schedule_post':
       return t('aiChat.toolSchedule')
     case 'delete_post':

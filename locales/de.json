@@ -1027,8 +1027,7 @@
       "commandDraft": "Entwirf einen Post über ",
       "commandCampaign": "Erstelle eine Kampagne für ",
       "commandRecurring": "Erstelle einen wiederkehrenden Post jeden ",
-      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: ",
-      "toolTopHashtags": "Frage Hashtag-Performance ab"
+      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: "
     }
   },
   "api": {
