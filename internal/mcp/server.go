@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"git.f4mily.net/goloom/internal/agenttools"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
@@ -15,32 +16,42 @@ import (
 )
 
 // Handler serves the MCP protocol over the Streamable HTTP transport
-// (single /mcp endpoint, JSON or text/event-stream responses).
+// (single /mcp endpoint, JSON or text/event-stream responses). The tools
+// themselves live in the agenttools catalog, shared with the in-app chat
+// assistant; this handler only authenticates the request and registers that
+// catalog onto a per-request MCP server.
 type Handler struct {
-	handler   http.Handler
-	store     store.Store
-	auth      *auth.Service
-	providers *provider.Registry
-	posts     *postservice.Service
-	config    config.Config
-	logger    *slog.Logger
+	handler http.Handler
+	store   store.Store
+	logger  *slog.Logger
+	deps    agenttools.Deps
 }
 
 // NewHandler creates a new MCP handler with all tools registered.
 func NewHandler(
 	logger *slog.Logger,
-	store store.Store,
+	dataStore store.Store,
 	authSvc *auth.Service,
 	providers *provider.Registry,
-	cfg config.Config,
+	_ config.Config,
 ) *Handler {
 	h := &Handler{
-		store:     store,
-		auth:      authSvc,
-		providers: providers,
-		posts:     postservice.New(store, providers),
-		config:    cfg,
-		logger:    logger,
+		store:  dataStore,
+		logger: logger,
+		deps: agenttools.Deps{
+			Store:     dataStore,
+			Auth:      authSvc,
+			Posts:     postservice.New(dataStore, providers),
+			Providers: providers,
+			Logger:    logger,
+			// Mirror the REST API's audit so agent actions show up in the team
+			// audit log. Best-effort: a failure is logged, never fatal.
+			Audit: func(ctx context.Context, event domain.AuditEvent) {
+				if err := dataStore.InsertAuditEvent(ctx, event); err != nil {
+					logger.Error("mcp audit insert failed", "team_id", event.TeamID, "action", event.Action, "error", err)
+				}
+			},
+		},
 	}
 
 	// Streamable HTTP transport in stateless mode: every request is
@@ -57,14 +68,14 @@ func NewHandler(
 }
 
 // createServer creates a new MCP server for each request (with tools registered).
-func (h *Handler) createServer(r *http.Request) *mcp.Server {
+func (h *Handler) createServer(_ *http.Request) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "goloom",
 		Version: "1.0.0",
 	}, nil)
 
 	server.AddReceivingMiddleware(h.loggingMiddleware)
-	h.registerTools(server)
+	agenttools.RegisterMCP(server, h.deps)
 	return server
 }
 
@@ -93,18 +104,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Store principal in request context for tool handlers
-	r = r.WithContext(WithPrincipal(r.Context(), principal))
+	// 4. Store principal in context for the agent tools to read.
+	r = r.WithContext(agenttools.WithPrincipal(r.Context(), principal))
 
-	// 5. Delegate to SSE handler
+	// 5. Delegate to the Streamable HTTP handler.
 	h.handler.ServeHTTP(w, r)
-}
-
-// principalFromContext extracts the authenticated principal from context.
-func principalFromContext(ctx context.Context) *domain.AuthenticatedPrincipal {
-	p, ok := ctx.Value(principalKey).(*domain.AuthenticatedPrincipal)
-	if !ok {
-		return nil
-	}
-	return p
 }

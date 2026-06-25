@@ -1519,12 +1519,13 @@ export function createApiClient(options: ApiClientOptions) {
       messages: BackendAIChatMessage[],
       onEvent: (event: BackendAIChatEvent) => void,
       signal?: AbortSignal,
+      viewContext?: unknown,
     ) {
       const baseUrl = options.baseUrl.trim().replace(/\/$/, '')
       const response = await fetch(`${baseUrl}/v1/teams/${teamID}/ai/chat`, {
         method: 'POST',
         headers: buildHeaders(options.token),
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify(viewContext ? { messages, view_context: viewContext } : { messages }),
         signal,
       })
       if (!response.ok || !response.body) {

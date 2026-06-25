@@ -6,6 +6,7 @@ import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, cr
 import type { AccountRecord } from '../../types'
 import { composerContextEvent } from './composerChatBridge'
 import type { ComposerChatContext, ComposerChatTarget } from './composerChatBridge'
+import { getViewContext } from './viewContextBridge'
 
 type ApiClient = ReturnType<typeof createApiClient>
 
@@ -355,7 +356,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      await api.streamAIChat(teamId, history.current, handleEvent, controller.signal)
+      await api.streamAIChat(teamId, history.current, handleEvent, controller.signal, getViewContext())
     } catch (cause) {
       if (!controller.signal.aborted) {
         const message = cause instanceof Error ? cause.message : String(cause)

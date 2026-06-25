@@ -1,4 +1,4 @@
-package mcp
+package agenttools
 
 // ===== Campaigns =====
 
@@ -302,3 +302,7 @@ type GetAnalyticsTimeslotsOutput struct {
 	Timezone  string          `json:"timezone"`
 	Timeslots []TimeslotValue `json:"timeslots"`
 }
+
+// ===== Get Current View (chat only) =====
+
+type GetCurrentViewInput struct{}

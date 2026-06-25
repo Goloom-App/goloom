@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"git.f4mily.net/goloom/internal/agenttools"
 	"git.f4mily.net/goloom/internal/ai"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/htmltext"
@@ -63,9 +64,17 @@ func (a *API) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mentionContext := a.chatMentionContext(r.Context(), teamID, aiContext, input.Messages)
-	system := ai.BuildChatSystemPrompt(aiContext, mentionContext)
+	system := ai.BuildChatSystemPrompt(aiContext, mentionContext, agenttools.ViewSummary(input.ViewContext))
 	history := ai.ChatMessagesFromDomain(input.Messages)
 	tools := a.chatTools(teamID, principal, aiContext)
+	// The shared agent catalog adds the read/insight tools (calendar, posts,
+	// search, analytics, brand recall, current view, …) the chat assistant
+	// lacked, keeping it in sync with the MCP surface.
+	tools = append(tools, agenttools.ChatTools(a.agentDeps(), agenttools.ChatBinding{
+		TeamID:      teamID,
+		Principal:   principal,
+		ViewContext: input.ViewContext,
+	})...)
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -626,60 +635,6 @@ func (a *API) chatTools(teamID string, principal domain.AuthenticatedPrincipal, 
 				}
 				payload, _ := json.Marshal(feed)
 				return fmt.Sprintf("RSS automation %q created with id %s.", feed.Name, feed.ID), payload, nil
-			},
-		},
-		{
-			Tool: ai.Tool{
-				Name: "get_top_hashtags",
-				Description: "Query the team's best-performing hashtags from published post analytics. " +
-					"Returns per hashtag: uses, total engagement, average engagement per post, and a smoothed score. " +
-					"Use it to pick proven hashtags for a draft (only topically fitting ones; using none is fine) or to answer hashtag questions.",
-				InputSchema: json.RawMessage(`{
-					"type": "object",
-					"properties": {
-						"days": {"type": "integer", "description": "Time window in days (default 90, max 366)"},
-						"provider": {"type": "string", "description": "Filter by platform: bluesky, mastodon or friendica; omit for all"},
-						"limit": {"type": "integer", "description": "Maximum number of hashtags to return (default 20, max 50)"}
-					}
-				}`),
-			},
-			Execute: func(ctx context.Context, args json.RawMessage) (string, json.RawMessage, error) {
-				var in struct {
-					Days     int    `json:"days"`
-					Provider string `json:"provider"`
-					Limit    int    `json:"limit"`
-				}
-				if err := json.Unmarshal(args, &in); err != nil {
-					return "", nil, fmt.Errorf("invalid arguments: %w", err)
-				}
-				if in.Days <= 0 {
-					in.Days = 90
-				}
-				if in.Limit <= 0 || in.Limit > 50 {
-					in.Limit = 20
-				}
-				items, err := a.store.ListTeamHashtagPerformance(ctx, teamID, in.Days, in.Provider, in.Limit)
-				if err != nil {
-					return "", nil, err
-				}
-				if len(items) == 0 {
-					return "No hashtag performance data yet for this team and filter.", nil, nil
-				}
-				var sb strings.Builder
-				fmt.Fprintf(&sb, "Top hashtags (last %d days", in.Days)
-				if p := strings.TrimSpace(in.Provider); p != "" && p != "all" {
-					fmt.Fprintf(&sb, ", %s", p)
-				}
-				sb.WriteString("):\n")
-				for _, item := range items {
-					display := item.Display
-					if display == "" {
-						display = item.Tag
-					}
-					fmt.Fprintf(&sb, "- #%s: %d uses, %d total engagement, avg %.1f per post, score %.1f\n",
-						display, item.Uses, item.TotalEngagement, item.AvgEngagement, item.Score)
-				}
-				return sb.String(), nil, nil
 			},
 		},
 	}

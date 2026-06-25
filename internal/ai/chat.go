@@ -33,14 +33,21 @@ type ChatTool struct {
 
 // BuildChatSystemPrompt assembles the chat assistant system prompt from the
 // team's brand voice and the entities referenced via mentions.
-func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string) string {
+func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string, viewSummary string) string {
 	var sb strings.Builder
 	sb.WriteString("You are the Goloom AI assistant for the team ")
 	sb.WriteString(fmt.Sprintf("%q", orDefault(aiContext.Team.Name, "unknown team")))
-	sb.WriteString(". You help plan, draft, and automate social media posts.\n\n")
-	sb.WriteString("Capabilities (via tools): fetch web pages, create and update post drafts, create campaign formats, ")
-	sb.WriteString("create recurring post automations, create RSS feed automations, and query hashtag performance.\n")
+	sb.WriteString(". You are a social media agent specialised in this platform: you help plan, draft, and automate posts, and you can read the team's calendar, posts, analytics and brand profile to act on your own initiative in the user's interest.\n\n")
+	sb.WriteString("Capabilities (via tools): see what the user is currently looking at (get_current_view), read the calendar, posts, analytics and best posting times, recall the team's brand profile, fetch web pages, create and update post drafts, create campaign formats, create recurring and RSS automations, and query hashtag performance.\n")
+	if strings.TrimSpace(viewSummary) != "" {
+		sb.WriteString("\nCurrent view: ")
+		sb.WriteString(strings.TrimSpace(viewSummary))
+		sb.WriteString("\n")
+	}
 	sb.WriteString("Rules:\n")
+	sb.WriteString("- Stay on the platform and your work. Answer a brief factual aside if asked, but steer back to social media and this team; decline off-platform jobs with no social-media purpose (e.g. writing an essay or a manuscript).\n")
+	sb.WriteString("- When the user refers to what they see ('this post', 'here', 'the one I'm editing'), call get_current_view to ground yourself before acting.\n")
+	sb.WriteString("- Before you write post content, recall the team's voice with get_brand_profile and match its tone, wording and rules.\n")
 	sb.WriteString("- Use a tool when the user asks you to create something; otherwise just answer.\n")
 	sb.WriteString("- When the user asks for changes to a post that already exists — especially one you created earlier in this conversation — call update_draft with its post id. Never create a second draft for a change request.\n")
 	sb.WriteString("- When a composer-context block is attached to the user's message, the user is editing an UNSAVED post that has NO id. Use revise_composer_post for it — never create_draft or update_draft, and never invent a post id. Account ids are NOT post ids.\n")
@@ -71,7 +78,7 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string) 
 		for _, tag := range aiContext.TopHashtags {
 			sb.WriteString(fmt.Sprintf("- #%s (%d uses, avg %.1f engagement per post)\n", orDefault(tag.Display, tag.Tag), tag.Uses, tag.AvgEngagement))
 		}
-		sb.WriteString("When drafting posts, prefer hashtags from this list if they fit the topic — but only topically fitting ones; using none is better than forcing an unrelated tag. Use get_top_hashtags to filter by platform or time window.\n\n")
+		sb.WriteString("When drafting posts, prefer hashtags from this list if they fit the topic — but only topically fitting ones; using none is better than forcing an unrelated tag. Use get_hashtag_performance to filter by platform or time window.\n\n")
 	}
 	for _, section := range mentionContext {
 		if strings.TrimSpace(section) == "" {

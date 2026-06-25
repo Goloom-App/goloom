@@ -501,6 +501,11 @@ type AIChatMessage struct {
 
 type AIChatRequest struct {
 	Messages []AIChatMessage `json:"messages"`
+	// ViewContext is an opaque snapshot of what the user is currently looking at
+	// in the app (active section, focused entity, visible data). The assistant
+	// reads it via the get_current_view tool and a one-line summary in its prompt
+	// so it can help with what's on screen.
+	ViewContext json.RawMessage `json:"view_context,omitempty"`
 }
 
 // MaxCharsForProvider returns the default character limit for a provider, honoring per-account overrides.
