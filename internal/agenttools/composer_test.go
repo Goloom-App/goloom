@@ -72,6 +72,29 @@ func TestReviseComposerPost_RequiresSomething(t *testing.T) {
 	}
 }
 
+// A successful revise is the FINAL step — the result is shown in the composer
+// for the user to apply, there is nothing to save. The summary the model reads
+// back must say so, otherwise the agent keeps trying to "save" by re-calling the
+// tool until the chat loop hits its iteration cap (the niri composer loop).
+func TestReviseComposerPost_SummarySignalsTerminal(t *testing.T) {
+	f := newFixture(t)
+	bsky := f.blueskyAccount(t)
+	tool := chatTool(t, f, "revise_composer_post")
+
+	args := json.RawMessage(`{"account_content_override":{"` + bsky.ID + `":"` + strings.Repeat("b", 100) + `"}}`)
+	summary, _, err := tool(context.Background(), args)
+	if err != nil {
+		t.Fatalf("a within-limit revision must succeed: %v", err)
+	}
+	if strings.HasPrefix(strings.TrimSpace(summary), "{") {
+		t.Fatalf("the model-facing summary must not be raw JSON, got %q", summary)
+	}
+	low := strings.ToLower(summary)
+	if !strings.Contains(low, "composer") || !strings.Contains(low, "do not call") {
+		t.Fatalf("summary must tell the model the revision is applied and terminal, got %q", summary)
+	}
+}
+
 // chatTool returns the Execute func of a chat-exposed tool by name.
 func chatTool(t *testing.T, f fixture, name string) func(context.Context, json.RawMessage) (string, json.RawMessage, error) {
 	t.Helper()

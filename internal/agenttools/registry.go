@@ -131,10 +131,19 @@ func define[In, Out any](s spec, core coreFn[In, Out]) *Tool {
 		if err != nil {
 			return Result{}, err
 		}
-		// The marshalled output is both the textual result for the model and the
-		// structured payload the chat UI renders (e.g. a created draft).
+		// The marshalled output is the structured payload the chat UI renders
+		// (e.g. a created draft) and, by default, the textual result for the
+		// model too. A tool whose output implements ToolSummary can override the
+		// model-facing text — e.g. to signal that the call is terminal so the
+		// agent stops instead of re-calling it.
 		marshalled, _ := json.Marshal(out)
-		return Result{Summary: string(marshalled), Payload: marshalled}, nil
+		summary := string(marshalled)
+		if s, ok := any(out).(interface{ ToolSummary() string }); ok {
+			if custom := s.ToolSummary(); custom != "" {
+				summary = custom
+			}
+		}
+		return Result{Summary: summary, Payload: marshalled}, nil
 	}
 	t.registerMCP = func(server *mcp.Server, d Deps) {
 		mcp.AddTool(server, &mcp.Tool{Name: s.name, Description: s.desc},

@@ -75,3 +75,14 @@ func coreReviseComposerPost(ctx context.Context, d Deps, inv Invocation, in Revi
 	}
 	return ReviseComposerPostOutput{Content: content, AccountContentOverride: overrides}, nil
 }
+
+// ToolSummary overrides the model-facing tool result for a successful revision.
+// The proposal is already shown in the composer card for the user to apply, so
+// this is the final step. Without an explicit "done" signal the agent treats the
+// JSON echo as unfinished work and re-calls the tool trying to "save" it, which
+// spins the chat loop until it hits the iteration cap (the niri composer loop).
+func (o ReviseComposerPostOutput) ToolSummary() string {
+	return "Revision applied to the composer card the user sees, and it fits every account's character limit. " +
+		"This is the final step — there is nothing to save, so do NOT call revise_composer_post again. " +
+		"Close with at most one short line."
+}

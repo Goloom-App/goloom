@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -17,6 +18,23 @@ func fetchURLBody(ctx context.Context, rawURL string) (string, error) {
 		return "", errors.New("source_url is required")
 	}
 
+	// GitHub web pages render their content client-side, so fetch the raw source
+	// (README/blob) instead. Candidates are tried in order; the original URL is
+	// the final fallback, so non-GitHub URLs and unrewritable pages behave as
+	// before.
+	urls := append(githubRawCandidates(rawURL), rawURL)
+	var lastErr error
+	for _, u := range urls {
+		body, err := httpGetBody(ctx, u)
+		if err == nil {
+			return body, nil
+		}
+		lastErr = err
+	}
+	return "", lastErr
+}
+
+func httpGetBody(ctx context.Context, rawURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
@@ -36,7 +54,7 @@ func fetchURLBody(ctx context.Context, rawURL string) (string, error) {
 		return "", err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", errors.New("url fetch failed")
+		return "", fmt.Errorf("url fetch failed: HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
 	return string(body), nil
