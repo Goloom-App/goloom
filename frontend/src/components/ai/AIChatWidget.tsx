@@ -59,6 +59,7 @@ const slashCommands: SlashCommand[] = [
   { command: '/campaign', textKey: 'aiChat.commandCampaign' },
   { command: '/recurring', textKey: 'aiChat.commandRecurring' },
   { command: '/rss', textKey: 'aiChat.commandRss' },
+  { command: '/clear', textKey: 'aiChat.commandClear' },
 ]
 
 interface AIChatWidgetProps {
@@ -96,15 +97,25 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
   // History sent to the model: user/assistant turns only.
   const history = useRef<BackendAIChatMessage[]>([])
 
-  useEffect(() => {
-    // Reset the conversation when the team changes.
+  // Wipe the in-memory conversation and start a fresh agent session. Used by the
+  // team switch and the /clear command; aborts any in-flight stream first.
+  const resetConversation = useCallback(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
     history.current = []
     setEntries([])
     setPendingMentions([])
     setInput('')
     setComposerContext(null)
     setDeselectedAccountIds([])
-  }, [teamId])
+    setSuggestions(null)
+    setBusy(false)
+  }, [])
+
+  useEffect(() => {
+    // Reset the conversation when the team changes.
+    resetConversation()
+  }, [teamId, resetConversation])
 
   useEffect(() => {
     function onComposerContext(event: Event) {
@@ -255,8 +266,12 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
   }
 
   function applyCommand(cmd: SlashCommand) {
-    setInput(t(cmd.textKey))
     setSuggestions(null)
+    if (cmd.command === '/clear') {
+      resetConversation()
+      return
+    }
+    setInput(t(cmd.textKey))
     inputRef.current?.focus()
   }
 
@@ -370,7 +385,12 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
             return
           }
           if (isError) {
-            setEntries((current) => [...current, { kind: 'error', text: event.message ?? '' }])
+            // The server-side agent loop retries failed tool calls itself (e.g.
+            // shortening content that overran a platform limit), so show a muted
+            // "adjusting" step rather than an alarming error bubble. Real
+            // terminal failures still surface via the 'error' event and the
+            // stream catch in send().
+            setEntries((current) => [...current, { kind: 'tool', text: t('aiChat.toolAdjusting') }])
           }
           break
         }
@@ -434,6 +454,11 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
 
   async function send() {
     const text = input.trim()
+    if (text === '/clear') {
+      // Start a fresh session; allowed even mid-stream (reset aborts it).
+      resetConversation()
+      return
+    }
     if (!text || busy) {
       return
     }

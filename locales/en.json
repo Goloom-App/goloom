@@ -995,6 +995,7 @@
       "applyToComposer": "Apply in composer",
       "openInComposer": "Open in Composer",
       "toolRunning": "Running: {{tool}}",
+      "toolAdjusting": "Adjusting…",
       "toolFetchUrl": "Reading linked page",
       "toolCreateDraft": "Creating draft",
       "toolUpdateDraft": "Updating draft",
@@ -1027,7 +1028,8 @@
       "commandDraft": "Draft a post about ",
       "commandCampaign": "Create a campaign for ",
       "commandRecurring": "Create a recurring post every ",
-      "commandRss": "Create an RSS automation for this feed: "
+      "commandRss": "Create an RSS automation for this feed: ",
+      "commandClear": "Start a new conversation"
     }
   },
   "api": {

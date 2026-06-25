@@ -995,6 +995,7 @@
       "applyToComposer": "In Composer übernehmen",
       "openInComposer": "Im Composer öffnen",
       "toolRunning": "Führe aus: {{tool}}",
+      "toolAdjusting": "Passe an…",
       "toolFetchUrl": "Lese verlinkte Seite",
       "toolCreateDraft": "Erstelle Entwurf",
       "toolUpdateDraft": "Aktualisiere Entwurf",
@@ -1027,7 +1028,8 @@
       "commandDraft": "Entwirf einen Post über ",
       "commandCampaign": "Erstelle eine Kampagne für ",
       "commandRecurring": "Erstelle einen wiederkehrenden Post jeden ",
-      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: "
+      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: ",
+      "commandClear": "Neue Unterhaltung beginnen"
     }
   },
   "api": {
