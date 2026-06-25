@@ -76,48 +76,56 @@ func All() []*Tool {
 			transports: transportsMCPOnly,
 		}, coreGetTeams),
 
-		// ===== Writes (MCP only for now) =====
-		define[CreateCampaignInput, CreateCampaignOutput](spec{
-			name:       "create_campaign",
-			desc:       "Create a new campaign with structure, hashtags, and optional instructions for AI agents.",
-			scope:      auth.ScopeWrite,
-			transports: transportsMCPOnly,
-		}, coreCreateCampaign),
-		define[CreateRecurringInput, CreateRecurringOutput](spec{
-			name:       "create_recurring",
-			desc:       "Create a recurring post template with an RRULE schedule.",
-			scope:      auth.ScopeWrite,
-			transports: transportsMCPOnly,
-		}, coreCreateRecurring),
-		define[CreateRSSFeedInput, CreateRSSFeedOutput](spec{
-			name:       "create_rss_feed",
-			desc:       "Create an RSS feed automation with a content template.",
-			scope:      auth.ScopeWrite,
-			transports: transportsMCPOnly,
-		}, coreCreateRSSFeed),
-		define[SchedulePostInput, SchedulePostOutput](spec{
-			name:       "schedule_post",
-			desc:       "Schedule a post. Use account_content_override for per-platform character limits.",
-			scope:      auth.ScopeWriteSchedule,
-			transports: transportsMCPOnly,
-		}, coreSchedulePost),
+		// ===== Writes =====
+		// Autonomous (no publish): drafts, in-place edits and campaign-format
+		// definitions run immediately. Confirm=true actions (scheduling,
+		// deletion, auto-publishing automations) are only proposed in the chat and
+		// run after the user confirms; the MCP adapter ignores Confirm.
 		define[DraftPostInput, DraftPostOutput](spec{
 			name:       "draft_post",
-			desc:       "Save a post as a draft (not scheduled, not published).",
+			desc:       "Save a post as a draft (not scheduled, not published). Pass target_account_ids; use account_content_override for shorter per-platform variants.",
 			scope:      auth.ScopeWriteDraft,
-			transports: transportsMCPOnly,
+			transports: transportsShared,
 		}, coreDraftPost),
 		define[ModifyPostInput, ModifyPostOutput](spec{
 			name:       "modify_post",
-			desc:       "Update an existing post (content, schedule, targets, overrides).",
+			desc:       "Update an existing draft or scheduled post (content, schedule, targets, per-account overrides). Use this for changes to a post that already exists — never create a second draft.",
 			scope:      auth.ScopeWrite,
-			transports: transportsMCPOnly,
+			transports: transportsShared,
 		}, coreModifyPost),
+		define[CreateCampaignInput, CreateCampaignOutput](spec{
+			name:       "create_campaign",
+			desc:       "Create a campaign format (a reusable post-series definition). Does not publish anything.",
+			scope:      auth.ScopeWrite,
+			transports: transportsShared,
+		}, coreCreateCampaign),
+		define[SchedulePostInput, SchedulePostOutput](spec{
+			name:       "schedule_post",
+			desc:       "Schedule a post for publication at a specific time. Use account_content_override for per-platform character limits.",
+			scope:      auth.ScopeWriteSchedule,
+			confirm:    true,
+			transports: transportsShared,
+		}, coreSchedulePost),
 		define[DeletePostInput, DeletePostOutput](spec{
 			name:       "delete_post",
 			desc:       "Delete a scheduled or draft post.",
 			scope:      auth.ScopeDelete,
-			transports: transportsMCPOnly,
+			confirm:    true,
+			transports: transportsShared,
 		}, coreDeletePost),
+		define[CreateRecurringInput, CreateRecurringOutput](spec{
+			name:       "create_recurring",
+			desc:       "Create a recurring post automation that auto-publishes on an RRULE schedule.",
+			scope:      auth.ScopeWrite,
+			confirm:    true,
+			transports: transportsShared,
+		}, coreCreateRecurring),
+		define[CreateRSSFeedInput, CreateRSSFeedOutput](spec{
+			name:       "create_rss_feed",
+			desc:       "Create an RSS feed automation that turns new feed items into posts.",
+			scope:      auth.ScopeWrite,
+			confirm:    true,
+			transports: transportsShared,
+		}, coreCreateRSSFeed),
 	}
 }

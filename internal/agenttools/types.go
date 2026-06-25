@@ -125,8 +125,12 @@ type DraftPostInput struct {
 }
 
 type DraftPostOutput struct {
-	PostID string `json:"post_id"`
-	Status string `json:"status"`
+	PostID         string   `json:"post_id"`
+	Status         string   `json:"status"`
+	Title          string   `json:"title,omitempty"`
+	Content        string   `json:"content,omitempty"`
+	TargetAccounts []string `json:"target_accounts,omitempty"`
+	ScheduledAt    string   `json:"scheduled_at,omitempty"`
 }
 
 // ===== Get Posts =====
@@ -163,8 +167,12 @@ type ModifyPostInput struct {
 }
 
 type ModifyPostOutput struct {
-	PostID string `json:"post_id"`
-	Status string `json:"status"`
+	PostID         string   `json:"post_id"`
+	Status         string   `json:"status"`
+	Title          string   `json:"title,omitempty"`
+	Content        string   `json:"content,omitempty"`
+	TargetAccounts []string `json:"target_accounts,omitempty"`
+	ScheduledAt    string   `json:"scheduled_at,omitempty"`
 }
 
 // ===== Delete Post =====

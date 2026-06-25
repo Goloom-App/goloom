@@ -188,7 +188,14 @@ func coreDraftPost(ctx context.Context, d Deps, inv Invocation, in DraftPostInpu
 		return DraftPostOutput{}, err
 	}
 	d.recordAudit(ctx, inv, prepared.EffectiveTeam, "post.create", "post", post.ID, "Drafted post: "+post.Title)
-	return DraftPostOutput{PostID: post.ID, Status: string(post.Status)}, nil
+	return DraftPostOutput{
+		PostID:         post.ID,
+		Status:         string(post.Status),
+		Title:          post.Title,
+		Content:        post.Content,
+		TargetAccounts: post.TargetAccounts,
+		ScheduledAt:    post.ScheduledAt.Format(time.RFC3339),
+	}, nil
 }
 
 func coreModifyPost(ctx context.Context, d Deps, inv Invocation, in ModifyPostInput) (ModifyPostOutput, error) {
@@ -248,11 +255,19 @@ func coreModifyPost(ctx context.Context, d Deps, inv Invocation, in ModifyPostIn
 		return ModifyPostOutput{}, err
 	}
 
-	if _, err := d.Store.PatchScheduledPost(ctx, existing.TeamID, in.PostID, patch); err != nil {
+	updated, err := d.Store.PatchScheduledPost(ctx, existing.TeamID, in.PostID, patch)
+	if err != nil {
 		return ModifyPostOutput{}, err
 	}
 	d.recordAudit(ctx, inv, existing.TeamID, "post.update", "post", in.PostID, "Updated post: "+prepared.Input.Title)
-	return ModifyPostOutput{PostID: in.PostID, Status: string(existing.Status)}, nil
+	return ModifyPostOutput{
+		PostID:         in.PostID,
+		Status:         string(updated.Status),
+		Title:          updated.Title,
+		Content:        updated.Content,
+		TargetAccounts: updated.TargetAccounts,
+		ScheduledAt:    updated.ScheduledAt.Format(time.RFC3339),
+	}, nil
 }
 
 func coreDeletePost(ctx context.Context, d Deps, inv Invocation, in DeletePostInput) (DeletePostOutput, error) {

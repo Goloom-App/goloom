@@ -1559,6 +1559,15 @@ export function createApiClient(options: ApiClientOptions) {
         }
       }
     },
+    // confirmAgentAction runs a write the assistant proposed (scheduling,
+    // deletion, automations) only after the user confirms it in the chat.
+    confirmAgentAction(teamID: string, tool: string, args: unknown) {
+      return request<{ summary: string; payload: unknown }>(options, `/v1/teams/${teamID}/ai/confirm-action`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify({ tool, args }),
+      })
+    },
     getProactiveSettings(teamID: string) {
       return request<BackendProactiveTriggerSettings>(options, `/v1/teams/${teamID}/proactive-settings`, {
         headers: buildHeaders(options.token, false),

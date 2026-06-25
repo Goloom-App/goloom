@@ -131,8 +131,10 @@ func define[In, Out any](s spec, core coreFn[In, Out]) *Tool {
 		if err != nil {
 			return Result{}, err
 		}
-		summary, _ := json.Marshal(out)
-		return Result{Summary: string(summary)}, nil
+		// The marshalled output is both the textual result for the model and the
+		// structured payload the chat UI renders (e.g. a created draft).
+		marshalled, _ := json.Marshal(out)
+		return Result{Summary: string(marshalled), Payload: marshalled}, nil
 	}
 	t.registerMCP = func(server *mcp.Server, d Deps) {
 		mcp.AddTool(server, &mcp.Tool{Name: s.name, Description: s.desc},
