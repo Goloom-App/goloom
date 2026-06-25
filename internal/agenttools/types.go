@@ -311,6 +311,58 @@ type GetAnalyticsTimeslotsOutput struct {
 	Timeslots []TimeslotValue `json:"timeslots"`
 }
 
+// ===== Get Account Growth =====
+
+type GetAccountGrowthInput struct {
+	TeamID    string `json:"team_id" jsonschema:"Team ID"`
+	AccountID string `json:"account_id,omitempty" jsonschema:"Restrict to one connected account ID. Omit (or 'all') to aggregate the whole team"`
+	Days      int    `json:"days,omitempty" jsonschema:"Time window in days (default 30; max 366). Use 30 for last month, 7 for last week"`
+}
+
+type AccountGrowthPoint struct {
+	Date      string `json:"date"`
+	Followers int64  `json:"followers"`
+	Following int64  `json:"following"`
+	Posts     int64  `json:"posts"`
+}
+
+type GetAccountGrowthOutput struct {
+	AccountID      string               `json:"account_id"`
+	Days           int                  `json:"days"`
+	FromDate       string               `json:"from_date"`
+	ToDate         string               `json:"to_date"`
+	FollowersStart int64                `json:"followers_start"`
+	FollowersEnd   int64                `json:"followers_end"`
+	FollowersDelta int64                `json:"followers_delta"`
+	FollowingDelta int64                `json:"following_delta"`
+	PostsDelta     int64                `json:"posts_delta"`
+	Points         []AccountGrowthPoint `json:"points"`
+}
+
+// ===== Get Metric History =====
+
+type GetMetricHistoryInput struct {
+	TeamID string `json:"team_id" jsonschema:"Team ID"`
+	Metric string `json:"metric" jsonschema:"Engagement metric to chart over time, e.g. likes, reposts, replies"`
+	Days   int    `json:"days,omitempty" jsonschema:"Time window in days (default 30; max 366)"`
+}
+
+type MetricHistoryValue struct {
+	Date  string `json:"date"`
+	Value int64  `json:"value"`
+}
+
+type GetMetricHistoryOutput struct {
+	Metric   string               `json:"metric"`
+	Days     int                  `json:"days"`
+	FromDate string               `json:"from_date"`
+	ToDate   string               `json:"to_date"`
+	Start    int64                `json:"start"`
+	End      int64                `json:"end"`
+	Delta    int64                `json:"delta"`
+	Points   []MetricHistoryValue `json:"points"`
+}
+
 // ===== Get Current View (chat only) =====
 
 type GetCurrentViewInput struct{}

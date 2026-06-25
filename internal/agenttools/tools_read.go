@@ -253,6 +253,99 @@ func coreGetAnalytics(ctx context.Context, d Deps, inv Invocation, in GetAnalyti
 	return GetAnalyticsOutput{Metrics: metrics, TopPosts: topPosts}, nil
 }
 
+func coreGetAccountGrowth(ctx context.Context, d Deps, inv Invocation, in GetAccountGrowthInput) (GetAccountGrowthOutput, error) {
+	if err := requireTeam(ctx, d, inv, in.TeamID, roleViewer...); err != nil {
+		return GetAccountGrowthOutput{}, err
+	}
+	days := in.Days
+	if days <= 0 {
+		days = 30
+	}
+	accountID := strings.TrimSpace(in.AccountID)
+	if accountID == "" {
+		accountID = "all"
+	}
+	points, err := d.Store.GetTeamAccountMetricHistorySeries(ctx, in.TeamID, accountID, days)
+	if err != nil {
+		return GetAccountGrowthOutput{}, err
+	}
+	out := GetAccountGrowthOutput{
+		AccountID: accountID,
+		Days:      days,
+		Points:    make([]AccountGrowthPoint, 0, len(points)),
+	}
+	for _, p := range points {
+		out.Points = append(out.Points, AccountGrowthPoint{
+			Date: p.Date, Followers: p.Followers, Following: p.Following, Posts: p.Posts,
+		})
+	}
+	if len(out.Points) == 0 {
+		return out, nil
+	}
+	out.FromDate = out.Points[0].Date
+	out.ToDate = out.Points[len(out.Points)-1].Date
+	// Baseline at the first day with any synced data: leading zeros are
+	// forward-fill placeholders for days before the first metrics sync, not a
+	// real "0 followers" reading, so anchoring the delta there avoids a phantom
+	// jump from 0.
+	base := out.Points[0]
+	for _, p := range out.Points {
+		if p.Followers != 0 || p.Following != 0 || p.Posts != 0 {
+			base = p
+			break
+		}
+	}
+	end := out.Points[len(out.Points)-1]
+	out.FollowersStart = base.Followers
+	out.FollowersEnd = end.Followers
+	out.FollowersDelta = end.Followers - base.Followers
+	out.FollowingDelta = end.Following - base.Following
+	out.PostsDelta = end.Posts - base.Posts
+	return out, nil
+}
+
+func coreGetMetricHistory(ctx context.Context, d Deps, inv Invocation, in GetMetricHistoryInput) (GetMetricHistoryOutput, error) {
+	if err := requireTeam(ctx, d, inv, in.TeamID, roleViewer...); err != nil {
+		return GetMetricHistoryOutput{}, err
+	}
+	metric := strings.TrimSpace(in.Metric)
+	if metric == "" {
+		return GetMetricHistoryOutput{}, fmt.Errorf("metric is required")
+	}
+	days := in.Days
+	if days <= 0 {
+		days = 30
+	}
+	points, err := d.Store.GetTeamMetricHistorySeries(ctx, in.TeamID, metric, days)
+	if err != nil {
+		return GetMetricHistoryOutput{}, err
+	}
+	out := GetMetricHistoryOutput{
+		Metric: metric,
+		Days:   days,
+		Points: make([]MetricHistoryValue, 0, len(points)),
+	}
+	for _, p := range points {
+		out.Points = append(out.Points, MetricHistoryValue{Date: p.Date, Value: p.Value})
+	}
+	if len(out.Points) == 0 {
+		return out, nil
+	}
+	out.FromDate = out.Points[0].Date
+	out.ToDate = out.Points[len(out.Points)-1].Date
+	start := out.Points[0].Value
+	for _, p := range out.Points {
+		if p.Value != 0 {
+			start = p.Value
+			break
+		}
+	}
+	out.Start = start
+	out.End = out.Points[len(out.Points)-1].Value
+	out.Delta = out.End - start
+	return out, nil
+}
+
 func coreGetHashtagPerformance(ctx context.Context, d Deps, inv Invocation, in GetHashtagPerformanceInput) (GetHashtagPerformanceOutput, error) {
 	if err := requireTeam(ctx, d, inv, in.TeamID, roleViewer...); err != nil {
 		return GetHashtagPerformanceOutput{}, err

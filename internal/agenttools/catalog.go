@@ -48,9 +48,19 @@ func All() []*Tool {
 		}, coreGetBrandProfile),
 		define[GetAnalyticsInput, GetAnalyticsOutput](spec{
 			name:       "get_analytics",
-			desc:       "Get engagement analytics (likes, reposts, followers) for the team plus its top posts.",
+			desc:       "Get post-engagement totals (likes, reposts, replies) for the team plus its top posts. For follower counts and growth over time use get_account_growth.",
 			transports: transportsShared,
 		}, coreGetAnalytics),
+		define[GetAccountGrowthInput, GetAccountGrowthOutput](spec{
+			name:       "get_account_growth",
+			desc:       "Get follower/following/posts counts over time for the team's connected accounts, with start, end and delta over the window. Use this for questions about follower growth (e.g. 'how many followers did we gain this month'). Defaults to the last 30 days across all accounts.",
+			transports: transportsShared,
+		}, coreGetAccountGrowth),
+		define[GetMetricHistoryInput, GetMetricHistoryOutput](spec{
+			name:       "get_metric_history",
+			desc:       "Chart a single engagement metric (likes, reposts, replies) as a daily time series for the team's posted content, with start, end and delta over the window.",
+			transports: transportsShared,
+		}, coreGetMetricHistory),
 		define[GetHashtagPerformanceInput, GetHashtagPerformanceOutput](spec{
 			name:       "get_hashtag_performance",
 			desc:       "Get the team's best-performing hashtags from published post analytics (uses, engagement, smoothed score), optionally filtered by platform and time window.",

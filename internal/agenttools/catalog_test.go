@@ -43,6 +43,7 @@ func TestReadToolsSharedAcrossTransports(t *testing.T) {
 		"search_posts": true, "get_campaign": true, "get_platforms": true,
 		"get_brand_profile": true, "get_analytics": true,
 		"get_hashtag_performance": true, "get_analytics_timeslots": true,
+		"get_account_growth": true, "get_metric_history": true,
 	}
 	for _, tool := range All() {
 		if !shared[tool.Name] {

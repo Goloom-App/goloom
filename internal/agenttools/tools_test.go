@@ -302,6 +302,78 @@ func TestGetAnalyticsTimeslotsCore(t *testing.T) {
 
 // ===== schedule_post validation (postservice pipeline through the tool) =====
 
+func TestGetAccountGrowthCore(t *testing.T) {
+	f := newFixture(t)
+	inv := f.inv(t, `["read"]`)
+
+	now := time.Now().UTC()
+	if err := f.store.UpsertAccountMetrics(bg(), f.account.ID, map[string]int64{"followers": 100, "following": 50, "posts": 10}, now.AddDate(0, 0, -20)); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.UpsertAccountMetrics(bg(), f.account.ID, map[string]int64{"followers": 150, "following": 60, "posts": 20}, now.AddDate(0, 0, -2)); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := coreGetAccountGrowth(bg(), f.deps, inv, GetAccountGrowthInput{TeamID: f.team.ID, Days: 30})
+	if err != nil {
+		t.Fatalf("coreGetAccountGrowth: %v", err)
+	}
+	if len(out.Points) != 30 {
+		t.Fatalf("len(points) = %d, want 30", len(out.Points))
+	}
+	// Baseline anchors on the first synced day (-20), not the leading fill zeros.
+	if out.FollowersStart != 100 || out.FollowersEnd != 150 || out.FollowersDelta != 50 {
+		t.Fatalf("followers start/end/delta = %d/%d/%d, want 100/150/50", out.FollowersStart, out.FollowersEnd, out.FollowersDelta)
+	}
+	if out.FollowingDelta != 10 || out.PostsDelta != 10 {
+		t.Fatalf("following/posts delta = %d/%d, want 10/10", out.FollowingDelta, out.PostsDelta)
+	}
+	if last := out.Points[len(out.Points)-1]; last.Followers != 150 {
+		t.Fatalf("last point followers = %d, want 150 (forward-filled)", last.Followers)
+	}
+	if out.AccountID != "all" {
+		t.Fatalf("account_id = %q, want all", out.AccountID)
+	}
+}
+
+func TestGetMetricHistoryCore(t *testing.T) {
+	f := newFixture(t)
+	principal := f.principal(t, `["read"]`)
+	inv := Invocation{Principal: principal, Transport: TransportMCP}
+
+	now := time.Now().UTC()
+	post, err := f.store.CreateScheduledPost(bg(), f.team.ID, principal, domain.CreatePostInput{
+		Content: "x", ScheduledAt: now.Add(time.Hour), TargetAccounts: []string{f.account.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.MarkPostResult(bg(), post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.UpsertPostMetrics(bg(), post.ID, f.account.ID, map[string]int64{"likes": 4}, now.AddDate(0, 0, -10).Format("2006-01-02")); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.UpsertPostMetrics(bg(), post.ID, f.account.ID, map[string]int64{"likes": 12}, now.AddDate(0, 0, -1).Format("2006-01-02")); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := coreGetMetricHistory(bg(), f.deps, inv, GetMetricHistoryInput{TeamID: f.team.ID, Metric: "likes", Days: 30})
+	if err != nil {
+		t.Fatalf("coreGetMetricHistory: %v", err)
+	}
+	if out.Metric != "likes" || len(out.Points) != 30 {
+		t.Fatalf("metric=%q points=%d, want likes/30", out.Metric, len(out.Points))
+	}
+	if out.Start != 4 || out.End != 12 || out.Delta != 8 {
+		t.Fatalf("start/end/delta = %d/%d/%d, want 4/12/8", out.Start, out.End, out.Delta)
+	}
+
+	if _, err := coreGetMetricHistory(bg(), f.deps, inv, GetMetricHistoryInput{TeamID: f.team.ID}); err == nil {
+		t.Fatal("empty metric must error")
+	}
+}
+
 func TestSchedulePost_RejectsOversizedContent(t *testing.T) {
 	f := newFixture(t)
 	inv := f.inv(t, `["write"]`)
