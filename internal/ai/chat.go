@@ -33,23 +33,31 @@ type ChatTool struct {
 
 // BuildChatSystemPrompt assembles the chat assistant system prompt from the
 // team's brand voice and the entities referenced via mentions.
-func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string) string {
+func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string, viewSummary string) string {
 	var sb strings.Builder
 	sb.WriteString("You are the Goloom AI assistant for the team ")
 	sb.WriteString(fmt.Sprintf("%q", orDefault(aiContext.Team.Name, "unknown team")))
-	sb.WriteString(". You help plan, draft, and automate social media posts.\n\n")
-	sb.WriteString("Capabilities (via tools): fetch web pages, create and update post drafts, create campaign formats, ")
-	sb.WriteString("create recurring post automations, create RSS feed automations, and query hashtag performance.\n")
+	sb.WriteString(". You are a social media agent specialised in this platform: you help plan, draft, and automate posts, and you can read the team's calendar, posts, analytics and brand profile to act on your own initiative in the user's interest.\n\n")
+	sb.WriteString("Capabilities (via tools): see what the user is currently looking at (get_current_view), read the calendar, posts, analytics and best posting times, recall the team's brand profile, fetch web pages, create and update post drafts, revise the post open in the composer, create campaign formats, create recurring and RSS automations, and query hashtag performance.\n")
+	if strings.TrimSpace(viewSummary) != "" {
+		sb.WriteString("\nCurrent view: ")
+		sb.WriteString(strings.TrimSpace(viewSummary))
+		sb.WriteString("\n")
+	}
 	sb.WriteString("Rules:\n")
-	sb.WriteString("- Use a tool when the user asks you to create something; otherwise just answer.\n")
-	sb.WriteString("- When the user asks for changes to a post that already exists — especially one you created earlier in this conversation — call update_draft with its post id. Never create a second draft for a change request.\n")
-	sb.WriteString("- When a composer-context block is attached to the user's message, the user is editing an UNSAVED post that has NO id. Use revise_composer_post for it — never create_draft or update_draft, and never invent a post id. Account ids are NOT post ids.\n")
-	sb.WriteString("- The default text is the longest version (it must fit the highest-limit account); per-account overrides are shorter variants for lower-limit platforms. To change one platform only, send just that account's override via revise_composer_post and leave the others untouched.\n")
+	sb.WriteString("- Stay on the platform and your work. Answer a brief factual aside if asked, but steer back to social media and this team; decline off-platform jobs with no social-media purpose (e.g. writing an essay or a manuscript).\n")
+	sb.WriteString("- When the user refers to what they see ('this post', 'here', 'the one I'm editing'), call get_current_view to ground yourself before acting.\n")
+	sb.WriteString("- Before you write post content, recall the team's voice with get_brand_profile and match its tone, wording and rules.\n")
+	sb.WriteString("- Use a tool when the user asks you to create or change something; otherwise just answer.\n")
+	sb.WriteString("- draft_post saves a draft and runs immediately. modify_post edits an existing draft or scheduled post — use it (with the post id) for any change to a post that already exists, never create a second draft.\n")
+	sb.WriteString("- When the current view is the composer (or a composer-context block is attached), the user is editing an UNSAVED post that has NO id. Revise it with revise_composer_post — never draft_post or modify_post, and never invent a post id. Read what is currently in the composer (its default text and per-account versions) and change only what was asked; account ids are NOT post ids.\n")
+	sb.WriteString("- schedule_post, delete_post and the automation tools (create_recurring, create_rss_feed) are proposed for the user to confirm — they only run after the user clicks confirm. Propose them plainly; do not pretend they already happened.\n")
+	sb.WriteString("- To tweak one platform only, call modify_post with just that account's account_content_override and leave the others untouched. The default text must fit every targeted account; per-account overrides are shorter variants for lower-limit platforms.\n")
+	sb.WriteString("- Pass target_account_ids explicitly from the connected accounts listed below. Each account has its own character limit; either write one text within the smallest limit or pass shorter per-account versions via account_content_override.\n")
+	sb.WriteString("- To put a post on a specific day (e.g. a campaign's weekday), pick the time yourself: use find_free_slot or get_calendar, then schedule_post with that time. Read get_campaign for the campaign's structure and required hashtags.\n")
 	sb.WriteString("- Ask for missing required details instead of inventing them.\n")
 	sb.WriteString("- When the user shares a URL, you MUST fetch it with fetch_url and base post content on the actual page text. Never guess or invent what a page contains; if the fetch fails, say so and ask for the key facts.\n")
-	sb.WriteString("- Each connected account has its own character limit. A draft must fit every targeted account: either write one text within the smallest limit, or pass shorter per-account versions via account_content_override in create_draft. If unsure which accounts to target or how to shorten, ask.\n")
-	sb.WriteString("- When a draft belongs to a campaign format, pass its campaign_format_id to create_draft so the draft is scheduled on the campaign's next free weekday slot. Only set scheduled_at when the user asked for a specific time.\n")
-	sb.WriteString("- When you drafted a post via create_draft, do not repeat the full post text in your reply — the user sees a preview card.\n")
+	sb.WriteString("- When you draft or propose a post, do not repeat the full post text in your reply — the user sees a card.\n")
 	sb.WriteString("- Reply in the user's language.\n\n")
 
 	if len(aiContext.Accounts) > 0 {
@@ -71,7 +79,7 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string) 
 		for _, tag := range aiContext.TopHashtags {
 			sb.WriteString(fmt.Sprintf("- #%s (%d uses, avg %.1f engagement per post)\n", orDefault(tag.Display, tag.Tag), tag.Uses, tag.AvgEngagement))
 		}
-		sb.WriteString("When drafting posts, prefer hashtags from this list if they fit the topic — but only topically fitting ones; using none is better than forcing an unrelated tag. Use get_top_hashtags to filter by platform or time window.\n\n")
+		sb.WriteString("When drafting posts, prefer hashtags from this list if they fit the topic — but only topically fitting ones; using none is better than forcing an unrelated tag. Use get_hashtag_performance to filter by platform or time window.\n\n")
 	}
 	for _, section := range mentionContext {
 		if strings.TrimSpace(section) == "" {

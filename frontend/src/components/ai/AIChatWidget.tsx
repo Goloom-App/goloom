@@ -6,6 +6,7 @@ import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, cr
 import type { AccountRecord } from '../../types'
 import { composerContextEvent } from './composerChatBridge'
 import type { ComposerChatContext, ComposerChatTarget } from './composerChatBridge'
+import { getViewContext, setViewFocus, setViewVisible } from './viewContextBridge'
 
 type ApiClient = ReturnType<typeof createApiClient>
 
@@ -24,12 +25,23 @@ interface RevisionPreview {
   accountContentOverride: Record<string, string>
 }
 
+/** A write action the assistant proposed but did not run (scheduling, deletion,
+ *  automations). The user confirms or dismisses it; on confirm it runs via the
+ *  confirm-action endpoint. */
+interface ConfirmCardData {
+  tool: string
+  args: Record<string, unknown>
+  summary: string
+  resolved?: 'confirmed' | 'declined'
+}
+
 interface ChatEntry {
-  kind: 'user' | 'assistant' | 'tool' | 'preview' | 'revision' | 'error'
+  kind: 'user' | 'assistant' | 'tool' | 'preview' | 'revision' | 'confirm' | 'error'
   text: string
   mentions?: BackendAIChatMention[]
   preview?: DraftPreview
   revision?: RevisionPreview
+  confirm?: ConfirmCardData
   updated?: boolean
 }
 
@@ -103,15 +115,36 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
       if (detail.clear) {
         setComposerContext(null)
         setDeselectedAccountIds([])
+        setViewFocus(undefined)
+        setViewVisible(undefined)
         return
       }
       if (!detail.content.trim()) {
         // No text yet (e.g. an empty composer just opened): don't attach a chip,
         // but if the previous context is now empty, drop it.
         setComposerContext((prev) => (prev ? null : prev))
+        setViewFocus(undefined)
+        setViewVisible(undefined)
         return
       }
       setComposerContext({ content: detail.content, targets: detail.targets ?? [] })
+      // Mirror the open composer draft into the view context so the agent can see,
+      // via get_current_view, which post is open and what it currently says.
+      setViewFocus({ type: 'composerDraft', label: detail.title })
+      setViewVisible({
+        composer: {
+          content: detail.content,
+          title: detail.title,
+          targets: (detail.targets ?? []).map((target) => ({
+            accountId: target.accountId,
+            name: target.name,
+            provider: target.provider,
+            maxChars: target.maxChars,
+            text: target.text,
+            hasOverride: target.hasOverride,
+          })),
+        },
+      })
       // Manual triggers (a button) open and focus the chat; auto-sync stays silent.
       if (!detail.auto) {
         setOpen(true)
@@ -253,8 +286,12 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
           // Keep successful create/update results in the model history so
           // follow-up turns know the ids (and text) of what already exists.
           const isError = Boolean(event.message?.startsWith('Error:'))
-          const isDraftTool = event.tool_name === 'create_draft' || event.tool_name === 'update_draft'
+          const isDraftTool = event.tool_name === 'draft_post' || event.tool_name === 'modify_post'
           const isRevisionTool = event.tool_name === 'revise_composer_post'
+          const confirmation =
+            event.payload && typeof event.payload === 'object'
+              ? (event.payload as { confirmation?: { tool?: string; args?: Record<string, unknown>; summary?: string } }).confirmation
+              : undefined
           if (!isError && event.tool_name && event.tool_name !== 'fetch_url' && event.message) {
             let note = `[${event.tool_name}] ${event.message}`
             if (isDraftTool && event.payload && typeof event.payload === 'object') {
@@ -274,8 +311,24 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
             }
             history.current = [...history.current, { role: 'assistant', content: note }]
           }
+          if (confirmation?.tool) {
+            setEntries((current) => [
+              ...current,
+              {
+                kind: 'confirm',
+                text: '',
+                confirm: {
+                  tool: confirmation.tool ?? '',
+                  args: confirmation.args ?? {},
+                  summary: confirmation.summary ?? '',
+                },
+              },
+            ])
+            return
+          }
           if (isDraftTool && event.payload && typeof event.payload === 'object') {
             const post = event.payload as {
+              post_id?: string
               id?: string
               title?: string
               content?: string
@@ -288,9 +341,9 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
                 {
                   kind: 'preview',
                   text: '',
-                  updated: event.tool_name === 'update_draft',
+                  updated: event.tool_name === 'modify_post',
                   preview: {
-                    id: post.id ?? '',
+                    id: post.post_id ?? post.id ?? '',
                     title: post.title ?? '',
                     content: post.content ?? '',
                     targetAccountIds: post.target_accounts ?? [],
@@ -331,6 +384,54 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     [t],
   )
 
+  // Run a proposed write after the user confirms it. Team access and scope are
+  // re-checked server-side, so this is a deliberate user action, not a bypass.
+  async function confirmProposedAction(index: number, data: ConfirmCardData) {
+    setBusy(true)
+    try {
+      const res = await api.confirmAgentAction(teamId, data.tool, data.args)
+      setEntries((current) =>
+        current.map((entry, i) => (i === index ? { ...entry, confirm: { ...data, resolved: 'confirmed' } } : entry)),
+      )
+      history.current = [
+        ...history.current,
+        { role: 'assistant', content: `[${data.tool}] confirmed by the user. ${res.summary ?? ''}`.trim() },
+      ]
+      const post =
+        res.payload && typeof res.payload === 'object'
+          ? (res.payload as { post_id?: string; content?: string; title?: string; target_accounts?: string[]; scheduled_at?: string })
+          : null
+      if (post?.content) {
+        setEntries((current) => [
+          ...current,
+          {
+            kind: 'preview',
+            text: '',
+            preview: {
+              id: post.post_id ?? '',
+              title: post.title ?? '',
+              content: post.content ?? '',
+              targetAccountIds: post.target_accounts ?? [],
+              scheduledAt: post.scheduled_at,
+            },
+          },
+        ])
+      }
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      setEntries((current) => [...current, { kind: 'error', text: message || t('aiChat.genericError') }])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function declineProposedAction(index: number, data: ConfirmCardData) {
+    setEntries((current) =>
+      current.map((entry, i) => (i === index ? { ...entry, confirm: { ...data, resolved: 'declined' } } : entry)),
+    )
+    history.current = [...history.current, { role: 'user', content: `Dismissed the proposed ${data.tool}.` }]
+  }
+
   async function send() {
     const text = input.trim()
     if (!text || busy) {
@@ -355,7 +456,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      await api.streamAIChat(teamId, history.current, handleEvent, controller.signal)
+      await api.streamAIChat(teamId, history.current, handleEvent, controller.signal, getViewContext())
     } catch (cause) {
       if (!controller.signal.aborted) {
         const message = cause instanceof Error ? cause.message : String(cause)
@@ -464,6 +565,39 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
                         {t('aiChat.applyToComposer')}
                       </button>
                     ) : null}
+                  </article>
+                )
+              }
+              if (entry.kind === 'confirm' && entry.confirm) {
+                const c = entry.confirm
+                const proposedContent = typeof c.args.content === 'string' ? (c.args.content as string) : ''
+                return (
+                  <article key={index} className="ai-chat-preview ai-chat-preview--confirm">
+                    <p className="eyebrow">{t('aiChat.confirmTitle', { tool: toolLabel(c.tool, t) })}</p>
+                    {c.summary ? <p className="ai-chat-preview__content">{c.summary}</p> : null}
+                    {proposedContent ? <p className="ai-chat-preview__content">{proposedContent}</p> : null}
+                    {c.resolved ? (
+                      <p className="hint">{t(c.resolved === 'confirmed' ? 'aiChat.confirmDone' : 'aiChat.confirmDeclined')}</p>
+                    ) : (
+                      <div className="ai-chat-confirm__actions">
+                        <button
+                          type="button"
+                          className="btn btn--primary btn--sm"
+                          disabled={busy}
+                          onClick={() => confirmProposedAction(index, c)}
+                        >
+                          {t('aiChat.confirmApprove')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          disabled={busy}
+                          onClick={() => declineProposedAction(index, c)}
+                        >
+                          {t('aiChat.confirmDecline')}
+                        </button>
+                      </div>
+                    )}
                   </article>
                 )
               }
@@ -646,20 +780,36 @@ function toolLabel(toolName: string, t: (key: string) => string): string {
   switch (toolName) {
     case 'fetch_url':
       return t('aiChat.toolFetchUrl')
-    case 'create_draft':
+    case 'draft_post':
       return t('aiChat.toolCreateDraft')
-    case 'update_draft':
+    case 'modify_post':
       return t('aiChat.toolUpdateDraft')
     case 'revise_composer_post':
       return t('aiChat.toolReviseComposer')
+    case 'schedule_post':
+      return t('aiChat.toolSchedule')
+    case 'delete_post':
+      return t('aiChat.toolDelete')
     case 'create_campaign':
       return t('aiChat.toolCreateCampaign')
-    case 'create_recurring_automation':
+    case 'create_recurring':
       return t('aiChat.toolCreateRecurring')
-    case 'create_rss_automation':
+    case 'create_rss_feed':
       return t('aiChat.toolCreateRss')
-    case 'get_top_hashtags':
-      return t('aiChat.toolTopHashtags')
+    case 'get_current_view':
+      return t('aiChat.toolCurrentView')
+    case 'get_brand_profile':
+      return t('aiChat.toolBrandProfile')
+    case 'get_calendar':
+    case 'get_posts':
+    case 'search_posts':
+    case 'find_free_slot':
+    case 'get_campaign':
+    case 'get_platforms':
+    case 'get_analytics':
+    case 'get_analytics_timeslots':
+    case 'get_hashtag_performance':
+      return t('aiChat.toolLookup')
     default:
       return toolName
   }

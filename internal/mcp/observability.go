@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/agenttools"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -41,42 +41,9 @@ func (h *Handler) loggingMiddleware(next mcp.MethodHandler) mcp.MethodHandler {
 	}
 }
 
-// audit records a team audit event for an MCP write action, mirroring the REST
-// API's recordAudit so agent actions show up in the team audit log. Best-effort:
-// a failure is logged but does not fail the tool call.
-func (h *Handler) audit(ctx context.Context, teamID, action, targetType, targetID, summary string) {
-	if strings.TrimSpace(teamID) == "" {
-		return
-	}
-	principal := principalFromContext(ctx)
-	if principal == nil {
-		return
-	}
-	event := domain.AuditEvent{
-		TeamID:      teamID,
-		ActorUserID: principal.User.ID,
-		ActorName:   principal.User.Name,
-		ActorEmail:  principal.User.Email,
-		ActorKind:   principal.Kind,
-		Action:      action,
-		TargetType:  targetType,
-		Summary:     summary,
-	}
-	if strings.TrimSpace(targetID) != "" {
-		event.TargetID = &targetID
-	}
-	if principal.Kind == domain.AuditActorToken {
-		event.TokenID = principal.TokenID
-		event.TokenName = principal.TokenName
-	}
-	if err := h.store.InsertAuditEvent(ctx, event); err != nil {
-		h.logger.Error("mcp audit insert failed", "team_id", teamID, "action", action, "error", err)
-	}
-}
-
 // mcpActor returns a short identifier for the calling principal for log lines.
 func mcpActor(ctx context.Context) string {
-	p := principalFromContext(ctx)
+	p := agenttools.PrincipalFromContext(ctx)
 	if p == nil {
 		return "unknown"
 	}

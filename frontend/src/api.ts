@@ -1519,12 +1519,13 @@ export function createApiClient(options: ApiClientOptions) {
       messages: BackendAIChatMessage[],
       onEvent: (event: BackendAIChatEvent) => void,
       signal?: AbortSignal,
+      viewContext?: unknown,
     ) {
       const baseUrl = options.baseUrl.trim().replace(/\/$/, '')
       const response = await fetch(`${baseUrl}/v1/teams/${teamID}/ai/chat`, {
         method: 'POST',
         headers: buildHeaders(options.token),
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify(viewContext ? { messages, view_context: viewContext } : { messages }),
         signal,
       })
       if (!response.ok || !response.body) {
@@ -1557,6 +1558,15 @@ export function createApiClient(options: ApiClientOptions) {
           separator = buffer.indexOf('\n\n')
         }
       }
+    },
+    // confirmAgentAction runs a write the assistant proposed (scheduling,
+    // deletion, automations) only after the user confirms it in the chat.
+    confirmAgentAction(teamID: string, tool: string, args: unknown) {
+      return request<{ summary: string; payload: unknown }>(options, `/v1/teams/${teamID}/ai/confirm-action`, {
+        method: 'POST',
+        headers: buildHeaders(options.token),
+        body: JSON.stringify({ tool, args }),
+      })
     },
     getProactiveSettings(teamID: string) {
       return request<BackendProactiveTriggerSettings>(options, `/v1/teams/${teamID}/proactive-settings`, {

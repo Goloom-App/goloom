@@ -1002,6 +1002,16 @@
       "toolCreateCampaign": "Erstelle Kampagne",
       "toolCreateRecurring": "Erstelle wiederkehrende Automation",
       "toolCreateRss": "Erstelle RSS-Automation",
+      "toolSchedule": "Plane Beitrag ein",
+      "toolDelete": "Lösche Beitrag",
+      "toolCurrentView": "Prüfe deine Ansicht",
+      "toolBrandProfile": "Rufe Markenprofil ab",
+      "toolLookup": "Schlage Daten nach",
+      "confirmTitle": "Bestätigen: {{tool}}",
+      "confirmApprove": "Bestätigen",
+      "confirmDecline": "Verwerfen",
+      "confirmDone": "Bestätigt.",
+      "confirmDeclined": "Verworfen.",
       "genericError": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
       "provider": {
         "mastodon": "Mastodon",
@@ -1017,8 +1027,7 @@
       "commandDraft": "Entwirf einen Post über ",
       "commandCampaign": "Erstelle eine Kampagne für ",
       "commandRecurring": "Erstelle einen wiederkehrenden Post jeden ",
-      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: ",
-      "toolTopHashtags": "Frage Hashtag-Performance ab"
+      "commandRss": "Erstelle eine RSS-Automation für diesen Feed: "
     }
   },
   "api": {

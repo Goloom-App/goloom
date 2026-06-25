@@ -27,6 +27,7 @@ import { SettingsView } from './views/settings/SettingsView'
 import { TeamSettingsView } from './views/teams/TeamSettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
 import { AIChatWidget } from './components/ai/AIChatWidget'
+import { setViewSection } from './components/ai/viewContextBridge'
 import { BrandProfileView } from './views/ai/BrandProfileView'
 import { AIGeneratorView } from './views/ai/AIGeneratorView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
@@ -76,6 +77,12 @@ function App() {
   const prevSectionRef = useRef<AppSection | null>(null)
   const prevSectionBeforeComposerRef = useRef<AppSection | null>(null)
   const [settings, setSettings] = useState<SettingsState>(() => loadStoredSettings())
+
+  // Tell the AI chat assistant which view the user is on, so it can ground its
+  // help in the current screen via the get_current_view tool.
+  useEffect(() => {
+    setViewSection(section)
+  }, [section])
 
   useEffect(() => {
     const lang = settings.ui.language
