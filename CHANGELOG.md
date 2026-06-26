@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/Goloom-App/goloom/compare/v0.1.1...v0.1.2) (2026-06-26)
+
+
+### Bug Fixes
+
+* **deps:** update website non-major dependencies ([#15](https://github.com/Goloom-App/goloom/issues/15)) ([8281db0](https://github.com/Goloom-App/goloom/commit/8281db0e7682538289baa0ad280ca9994089155c))
+* **teams:** wire up "Create team" in the sidebar selector ([95c3764](https://github.com/Goloom-App/goloom/commit/95c3764d4cf7b11585622e844287d1caabdb9c24))
+
 ## [0.1.1](https://github.com/Goloom-App/goloom/compare/v0.1.0...v0.1.1) (2026-06-26)
 
 
