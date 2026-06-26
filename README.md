@@ -72,6 +72,17 @@ goloom was created for one focused outcome:
 
 ## Getting Started
 
+Three ways to run goloom — pick one (full guide:
+[Installation](https://goloom-app.github.io/getting-started/installation/)):
+
+- **Docker** — `docker run ... ghcr.io/goloom-app/goloom:latest` (see [Docker](#docker)).
+- **Prebuilt binary** — download a static Linux binary from the
+  [latest release](https://github.com/Goloom-App/goloom/releases/latest)
+  (`goloom_<version>_linux_amd64` / `arm64`), `chmod +x`, set `ENCRYPTION_KEY` +
+  `BOOTSTRAP_ADMIN_TOKEN` and run it. The web UI is embedded; data goes to
+  `./data/goloom.db` (SQLite) by default.
+- **From source** — build it yourself (below).
+
 ### 1) Configure environment
 
 ```bash
