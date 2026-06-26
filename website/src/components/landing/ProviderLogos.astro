@@ -1,8 +1,9 @@
 ---
+const base = import.meta.env.BASE_URL;
 const providers = [
-	{ name: 'Mastodon', icon: '/icons/platforms/mastodon.svg' },
-	{ name: 'Friendica', icon: '/icons/platforms/friendica.svg' },
-	{ name: 'Bluesky', icon: '/icons/platforms/bluesky.svg' },
+	{ name: 'Mastodon', icon: `${base}icons/platforms/mastodon.svg` },
+	{ name: 'Friendica', icon: `${base}icons/platforms/friendica.svg` },
+	{ name: 'Bluesky', icon: `${base}icons/platforms/bluesky.svg` },
 ];
 ---
 

@@ -1,11 +1,12 @@
 ---
-const repo = 'https://git.f4mily.net/goloom';
+const repo = 'https://github.com/Goloom-App/goloom';
+const base = import.meta.env.BASE_URL;
 ---
 
 <header class="lp-header">
 	<div class="lp-container lp-header__inner">
-		<a class="lp-brand" href="/">
-			<img src="/favicon.svg" alt="" width="30" height="30" />
+		<a class="lp-brand" href={base}>
+			<img src={`${base}favicon.svg`} alt="" width="30" height="30" />
 			<span>goloom</span>
 		</a>
 		<nav class="lp-nav" aria-label="Primary">
@@ -13,10 +14,10 @@ const repo = 'https://git.f4mily.net/goloom';
 				<a href="#features">Features</a>
 				<a href="#screenshots">Screenshots</a>
 				<a href="#architecture">Architecture</a>
-				<a href="/getting-started/installation/">Docs</a>
-				<a href="/api/">API</a>
+				<a href={`${base}getting-started/installation/`}>Docs</a>
+				<a href={`${base}api/`}>API</a>
 			</div>
-			<a class="ghost-btn" href={repo} style="padding:0.5rem 1rem;font-size:0.9rem;">Forgejo</a>
+			<a class="ghost-btn" href={repo} style="padding:0.5rem 1rem;font-size:0.9rem;">GitHub</a>
 		</nav>
 	</div>
 </header>

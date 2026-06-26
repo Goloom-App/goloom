@@ -3,6 +3,7 @@
 // the Redoc bundle (/api/redoc.standalone.js) are vendored into public/ by
 // `make website-spec` and `make docs-api-build`, so nothing is fetched from a
 // CDN at runtime.
+const base = import.meta.env.BASE_URL;
 ---
 
 <!doctype html>
@@ -10,7 +11,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
 		<title>goloom — API reference</title>
 		<meta name="description" content="OpenAPI reference for the goloom REST API." />
 		<style>
@@ -59,19 +60,19 @@
 	</head>
 	<body>
 		<div class="api-topbar">
-			<a class="api-brand" href="/">
-				<img src="/favicon.svg" alt="" width="24" height="24" />
+			<a class="api-brand" href={base}>
+				<img src={`${base}favicon.svg`} alt="" width="24" height="24" />
 				goloom
 			</a>
 			<nav class="api-links">
-				<a href="/getting-started/installation/">Docs</a>
-				<a href="/guides/mcp/">MCP</a>
-				<a href="/openapi.yaml">openapi.yaml</a>
-				<a href="https://git.f4mily.net/goloom">Forgejo</a>
+				<a href={`${base}getting-started/installation/`}>Docs</a>
+				<a href={`${base}guides/mcp/`}>MCP</a>
+				<a href={`${base}openapi.yaml`}>openapi.yaml</a>
+				<a href="https://github.com/Goloom-App/goloom">GitHub</a>
 			</nav>
 		</div>
 
-		<redoc spec-url="/openapi.yaml"></redoc>
-		<script is:inline src="/api/redoc.standalone.js"></script>
+		<redoc spec-url={`${base}openapi.yaml`}></redoc>
+		<script is:inline src={`${base}api/redoc.standalone.js`}></script>
 	</body>
 </html>

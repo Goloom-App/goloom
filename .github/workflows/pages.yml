@@ -1,0 +1,69 @@
+name: Deploy website to GitHub Pages
+
+# Builds the Astro/Starlight site (landing page + docs + API reference) and
+# publishes it to GitHub Pages at https://goloom-app.github.io/goloom/.
+#
+# Pages must be enabled for this repo with "Source: GitHub Actions"
+# (Settings → Pages). The site's base path (/goloom) is set in
+# website/astro.config.mjs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/api/**"
+      - "Makefile"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build website
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
+
+      - name: Build website
+        run: make website-build
+        env:
+          CI: "true"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to GitHub Pages
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

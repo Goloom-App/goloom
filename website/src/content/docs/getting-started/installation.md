@@ -37,7 +37,7 @@ survive container restarts.
 ## Build from source
 
 ```bash
-git clone https://git.f4mily.net/goloom
+git clone https://github.com/Goloom-App/goloom.git
 cd goloom
 
 cp .env.example .env

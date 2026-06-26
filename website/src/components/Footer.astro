@@ -1,14 +1,15 @@
 ---
 import Default from '@astrojs/starlight/components/Footer.astro';
-const repo = 'https://git.f4mily.net/goloom';
+const repo = 'https://github.com/Goloom-App/goloom';
+const base = import.meta.env.BASE_URL;
 const year = new Date().getFullYear();
 ---
 
 <Default><slot /></Default>
 
 <div class="goloom-docs-footer">
-	<a href="/">← Back to goloom.dev</a>
-	<span>© {year} goloom · <a href={repo}>Source</a> · <a href="/api/">API reference</a></span>
+	<a href={base}>← Back to goloom.dev</a>
+	<span>© {year} goloom · <a href={repo}>Source</a> · <a href={`${base}api/`}>API reference</a></span>
 </div>
 
 <style>

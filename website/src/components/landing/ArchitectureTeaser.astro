@@ -6,6 +6,7 @@ const points = [
 	['SQLite or PostgreSQL', 'Zero-config by default; switch to Postgres for larger deployments.'],
 	['Docker & Kubernetes', 'Run it anywhere — from a homelab box to a CNPG-backed cluster.'],
 ];
+const base = import.meta.env.BASE_URL;
 ---
 
 <section class="lp-section" id="architecture">
@@ -25,8 +26,8 @@ const points = [
 				))}
 			</ul>
 			<div class="lp-cta-row" style="margin-top:1.6rem;">
-				<a class="glow-btn" href="/api/">Explore the API</a>
-				<a class="ghost-btn" href="/guides/mcp/">MCP for agents</a>
+				<a class="glow-btn" href={`${base}api/`}>Explore the API</a>
+				<a class="ghost-btn" href={`${base}guides/mcp/`}>MCP for agents</a>
 			</div>
 		</div>
 

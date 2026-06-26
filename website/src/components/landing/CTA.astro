@@ -1,5 +1,6 @@
 ---
-const repo = 'https://git.f4mily.net/goloom';
+const repo = 'https://github.com/Goloom-App/goloom';
+const base = import.meta.env.BASE_URL;
 ---
 
 <section class="lp-section">
@@ -11,8 +12,8 @@ const repo = 'https://git.f4mily.net/goloom';
 				your social presence on your terms.
 			</p>
 			<div class="lp-cta-row">
-				<a class="glow-btn" href="/getting-started/installation/">Get started</a>
-				<a class="ghost-btn" href={repo}>View on Forgejo</a>
+				<a class="glow-btn" href={`${base}getting-started/installation/`}>Get started</a>
+				<a class="ghost-btn" href={repo}>View on GitHub</a>
 			</div>
 		</div>
 	</div>

@@ -3,7 +3,8 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
-	site: 'https://git.f4mily.net/goloom',
+	site: 'https://goloom-app.github.io',
+	base: '/goloom/',
 	integrations: [
 		starlight({
 			title: 'goloom',
@@ -14,13 +15,13 @@ export default defineConfig({
 			},
 			social: [
 				{
-					icon: 'gitlab',
-					label: 'Forgejo',
-					href: 'https://git.f4mily.net/goloom',
+					icon: 'github',
+					label: 'GitHub',
+					href: 'https://github.com/Goloom-App/goloom',
 				},
 			],
 			editLink: {
-				baseUrl: 'https://git.f4mily.net/goloom/_edit/main/website/src/content/docs/',
+				baseUrl: 'https://github.com/Goloom-App/goloom/edit/main/website/src/content/docs/',
 			},
 			customCss: ['./src/styles/theme.css'],
 			components: {

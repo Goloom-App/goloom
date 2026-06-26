@@ -9,7 +9,7 @@
 Plan posts across Mastodon, Bluesky and Friendica from a single Go binary — no enterprise stack, no per-seat pricing.
 
 <!-- Build & tech -->
-[![CI/CD](https://git.f4mily.net/kreativmonkey/goloon/actions/workflows/ci.yaml/badge.svg?branch=main)](https://git.f4mily.net/kreativmonkey/goloon/actions)
+[![Deploy website](https://github.com/Goloom-App/goloom/actions/workflows/pages.yml/badge.svg)](https://github.com/Goloom-App/goloom/actions/workflows/pages.yml)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat&logo=go&logoColor=white)](go.mod)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat&logo=typescript&logoColor=white)](frontend)
 [![Single binary](https://img.shields.io/badge/deploy-single%20binary-7c3aed?style=flat)](#deployment-options)
@@ -18,10 +18,10 @@ Plan posts across Mastodon, Bluesky and Friendica from a single Go binary — no
 [![E2E: Playwright](https://img.shields.io/badge/E2E-Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)](frontend/playwright.config.ts)
 
 <!-- Repository activity -->
-[![Last commit](https://img.shields.io/gitea/last-commit/kreativmonkey/goloon?gitea_url=https%3A%2F%2Fgit.f4mily.net&style=flat)](https://git.f4mily.net/kreativmonkey/goloon/commits/branch/main)
-[![Open issues](https://img.shields.io/gitea/issues/open/kreativmonkey/goloon?gitea_url=https%3A%2F%2Fgit.f4mily.net&style=flat)](https://git.f4mily.net/kreativmonkey/goloon/issues)
-[![Open PRs](https://img.shields.io/gitea/pull-requests/open/kreativmonkey/goloon?gitea_url=https%3A%2F%2Fgit.f4mily.net&style=flat)](https://git.f4mily.net/kreativmonkey/goloon/pulls)
-[![Stars](https://img.shields.io/gitea/stars/kreativmonkey/goloon?gitea_url=https%3A%2F%2Fgit.f4mily.net&style=flat)](https://git.f4mily.net/kreativmonkey/goloon/stars)
+[![Last commit](https://img.shields.io/github/last-commit/Goloom-App/goloom?style=flat)](https://github.com/Goloom-App/goloom/commits/main)
+[![Open issues](https://img.shields.io/github/issues/Goloom-App/goloom?style=flat)](https://github.com/Goloom-App/goloom/issues)
+[![Open PRs](https://img.shields.io/github/issues-pr/Goloom-App/goloom?style=flat)](https://github.com/Goloom-App/goloom/pulls)
+[![Stars](https://img.shields.io/github/stars/Goloom-App/goloom?style=flat)](https://github.com/Goloom-App/goloom/stargazers)
 
 <br />
 
@@ -192,7 +192,10 @@ make website-build
 
 Generated output: `website/dist/`
 
-Deployed via Forgejo Pages on push to `main` when `website/` or `docs/api/` changes. Site URL: [https://git.f4mily.net/goloom](https://git.f4mily.net/goloom) (Forgejo Pages).
+Deployed via GitHub Pages on push to `main` when `website/` or `docs/api/`
+changes: the [`pages.yml`](.github/workflows/pages.yml) workflow builds the site
+with `make website-build` and deploys `website/dist` with the official GitHub
+Pages actions. Site URL: [https://goloom-app.github.io/goloom/](https://goloom-app.github.io/goloom/).
 
 ## Provider Support
 

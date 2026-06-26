@@ -1,5 +1,6 @@
 ---
-const repo = 'https://git.f4mily.net/goloom';
+const repo = 'https://github.com/Goloom-App/goloom';
+const base = import.meta.env.BASE_URL;
 ---
 
 <section class="lp-hero">
@@ -19,7 +20,7 @@ const repo = 'https://git.f4mily.net/goloom';
 				and let AI agents drive it through a clean REST API.
 			</p>
 			<div class="lp-cta-row">
-				<a class="glow-btn" href="/getting-started/installation/">Get started</a>
+				<a class="glow-btn" href={`${base}getting-started/installation/`}>Get started</a>
 				<a class="ghost-btn" href={repo}>View source</a>
 			</div>
 		</div>
