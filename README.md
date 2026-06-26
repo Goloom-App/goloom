@@ -305,6 +305,12 @@ If you need broad enterprise suites, many commercial upsell modules, or advanced
 - API tokens are stored as hashes.
 - Set strong `ENCRYPTION_KEY` and rotate bootstrap/admin secrets after setup.
 
+## About this project
+
+goloom grew out of my own needs as a self-hosted tool. It is built with heavy use
+of AI, and I use it as a testbed for exploring methods for efficient, AI-assisted
+development.
+
 ## License
 
 See repository license file.
