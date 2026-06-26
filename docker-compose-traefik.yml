@@ -63,7 +63,7 @@ services:
       - traefik.http.routers.goloom.tls=${TRAEFIK_TLS:-true}
 
   db:
-    image: postgres:16
+    image: postgres:18
     container_name: goloom-db
     restart: unless-stopped
     environment:
