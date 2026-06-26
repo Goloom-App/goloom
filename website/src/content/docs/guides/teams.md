@@ -2,7 +2,7 @@
 title: Teams & roles
 description: Organize work into team workspaces with owner, editor and viewer roles.
 sidebar:
-  order: 11
+  order: 12
 ---
 
 Everything in goloom is organized into **teams** (workspaces). Accounts, posts,

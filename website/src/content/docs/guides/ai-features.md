@@ -6,7 +6,17 @@ sidebar:
 ---
 
 goloom is built to work well with AI — both as an **assistant inside the app**
-and as an **API that agents can drive**.
+and as an **API that agents can drive**. Both surfaces share **one tool catalog**,
+so the assistant in the UI and an external agent over the API can do the same
+things and behave consistently.
+
+## In the app: the AI assistant
+
+goloom has a built-in **[AI assistant](/guides/ai-assistant/)** — a screen-aware
+chat agent that drafts and edits posts, sets up campaigns and automations, and
+schedules publishing for the team. It is conversational, understands what you are
+currently looking at, and asks for confirmation before anything publishes,
+schedules, deletes or auto-publishes.
 
 ## AI-assisted drafting
 
@@ -19,9 +29,9 @@ Drafts produced with AI can flow through the
 
 ## Built for agents
 
-goloom ships a built-in **[MCP server](/guides/mcp/)** so agents like Claude or
-OpenClaw can plan and schedule posts through natural-language tools — no glue code
-required.
+goloom ships a built-in **[MCP server](/guides/mcp/)** so external agents like
+Claude or OpenClaw can plan and schedule posts through the same natural-language
+tools as the in-app assistant — no glue code required.
 
 The REST API is likewise designed for automation:
 

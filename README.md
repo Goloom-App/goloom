@@ -194,8 +194,10 @@ Generated output: `website/dist/`
 
 Deployed via GitHub Pages on push to `main` when `website/` or `docs/api/`
 changes: the [`pages.yml`](.github/workflows/pages.yml) workflow builds the site
-with `make website-build` and deploys `website/dist` with the official GitHub
-Pages actions. Site URL: [https://goloom-app.github.io/goloom/](https://goloom-app.github.io/goloom/).
+with `make website-build` and force-pushes `website/dist` to the org Pages repo
+[`goloom-app.github.io`](https://github.com/Goloom-App/goloom-app.github.io),
+which GitHub serves at the root URL
+[https://goloom-app.github.io/](https://goloom-app.github.io/).
 
 ## Provider Support
 

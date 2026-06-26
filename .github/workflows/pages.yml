@@ -1,11 +1,15 @@
 name: Deploy website to GitHub Pages
 
 # Builds the Astro/Starlight site (landing page + docs + API reference) and
-# publishes it to GitHub Pages at https://goloom-app.github.io/goloom/.
+# publishes it to the org Pages repo `Goloom-App/goloom-app.github.io`, which
+# GitHub serves at the root URL https://goloom-app.github.io/.
 #
-# Pages must be enabled for this repo with "Source: GitHub Actions"
-# (Settings → Pages). The site's base path (/goloom) is set in
-# website/astro.config.mjs.
+# Cross-repo deploy: the built `website/dist` is force-pushed to the Pages repo's
+# default branch with an SSH deploy key. Prerequisites (one-time):
+#   1. Repo `Goloom-App/goloom-app.github.io` exists and is public, with Pages
+#      enabled (Deploy from branch: main / root).
+#   2. A write deploy key on that repo whose private half is stored here as the
+#      Actions secret `PAGES_DEPLOY_KEY`.
 
 on:
   push:
@@ -17,20 +21,14 @@ on:
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Allow one concurrent deployment; don't cancel an in-progress one.
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
-    name: Build website
+    name: Build and deploy website
     steps:
       - uses: actions/checkout@v4
 
@@ -51,19 +49,29 @@ jobs:
         env:
           CI: "true"
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: website/dist
+      - name: Deploy to org Pages repo
+        env:
+          DEPLOY_KEY: ${{ secrets.PAGES_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_KEY:-}" ]; then
+            echo "Missing PAGES_DEPLOY_KEY secret" >&2
+            exit 1
+          fi
 
-  deploy:
-    runs-on: ubuntu-latest
-    name: Deploy to GitHub Pages
-    needs: build
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/pages_deploy
+          chmod 600 ~/.ssh/pages_deploy
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/pages_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+
+          # Publish a fresh single-commit history to keep the Pages repo small.
+          # .nojekyll stops GitHub Pages from running Jekyll over the static output.
+          cd website/dist
+          touch .nojekyll
+          git init -q
+          git checkout -q -b main
+          git config user.name "goloom-ci"
+          git config user.email "ci@goloom-app.github.io"
+          git add -A
+          git commit -q -m "Deploy website from ${GITHUB_SHA}"
+          git push -f git@github.com:Goloom-App/goloom-app.github.io.git main:main

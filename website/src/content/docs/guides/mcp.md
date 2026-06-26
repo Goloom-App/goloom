@@ -2,7 +2,7 @@
 title: MCP server
 description: goloom ships a built-in Model Context Protocol server so AI agents can plan and schedule posts with natural language.
 sidebar:
-  order: 10
+  order: 11
   badge:
     text: AI
     variant: tip
@@ -15,6 +15,12 @@ check analytics, and more, using a set of well-defined tools.
 
 The MCP server is **enabled by default** and runs inside the same goloom process —
 no extra service to deploy.
+
+The MCP tools are the **same catalog** that powers the in-app
+[AI assistant](/guides/ai-assistant/): a tool added in goloom is available to
+both surfaces with an identical contract. A couple of tools are in-app only
+(reading your current screen, revising the open composer draft) because they have
+no meaning over a stateless API; everything else listed below is shared.
 
 ## Endpoint
 
@@ -107,7 +113,9 @@ entry looks like this:
 | `get_campaign` | Read full campaign details. |
 | `create_recurring` | Create a recurring post template (RRULE schedule). |
 | `create_rss_feed` | Create an RSS feed automation with a content template. |
-| `get_analytics` | Engagement analytics (likes, reposts, followers) for a team or posts. |
+| `get_analytics` | Engagement totals (likes, reposts, replies) for a team plus its top posts. |
+| `get_account_growth` | Follower/following/post counts over time, with start, end and delta — for follower-growth questions. |
+| `get_metric_history` | A single engagement metric (likes, reposts, replies) as a daily time series with start, end and delta. |
 | `get_hashtag_performance` | Best-performing hashtags from published-post analytics. |
 | `get_analytics_timeslots` | Best times to post: weekday/hour slots ranked by historical engagement, in a chosen timezone. |
 

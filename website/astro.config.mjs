@@ -4,7 +4,6 @@ import starlight from '@astrojs/starlight';
 
 export default defineConfig({
 	site: 'https://goloom-app.github.io',
-	base: '/goloom/',
 	integrations: [
 		starlight({
 			title: 'goloom',
