@@ -247,6 +247,10 @@ Use when you need external DB operations and scale patterns:
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/goloom?sslmode=disable
 ```
 
+Upgrading PostgreSQL to a new **major** version (e.g. 16 → 18) is a dump &
+restore, not an in-place swap — see the
+[PostgreSQL major upgrade guide](https://goloom-app.github.io/migrations/postgres-major-upgrade/).
+
 ## Production migration (Docker → Kubernetes)
 
 If you run Goloom with Docker PostgreSQL and want to move to the homelab CNPG deployment, see [`docs/migrations/docker-to-kubernetes-homelab.md`](docs/migrations/docker-to-kubernetes-homelab.md).
