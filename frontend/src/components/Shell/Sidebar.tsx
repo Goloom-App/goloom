@@ -15,6 +15,7 @@ interface SidebarProps {
   reviewQueueCount?: number
   reviewQueueOverdueCount?: number
   onSelectTeam: (id: string) => void
+  onCreateTeam: () => void
   user: UserRecord | null
   onSignOut: () => void
   openComposer: () => void
@@ -30,6 +31,7 @@ export function Sidebar({
   reviewQueueCount = 0,
   reviewQueueOverdueCount = 0,
   onSelectTeam,
+  onCreateTeam,
   user,
   onSignOut,
   openComposer,
@@ -115,7 +117,11 @@ export function Sidebar({
                 </DropdownMenu.Item>
               ))}
               <DropdownMenu.Separator className="divider" />
-              <DropdownMenu.Item className="radix-dropdown-item">
+              <DropdownMenu.Item
+                className="radix-dropdown-item"
+                data-testid="sidebar-create-team"
+                onSelect={() => onCreateTeam()}
+              >
                 {t('sidebarShell.createTeam')}
               </DropdownMenu.Item>
             </DropdownMenu.Content>

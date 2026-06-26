@@ -20,6 +20,7 @@ interface AppShellProps {
   teams: TeamRecord[]
   selectedTeamId: string
   onSelectTeam: (id: string) => void
+  onCreateTeam: () => void
   user: UserRecord | null
   onSignOut: () => void
   openComposer: () => void
@@ -40,6 +41,7 @@ export function AppShell({
   teams,
   selectedTeamId,
   onSelectTeam,
+  onCreateTeam,
   user,
   onSignOut,
   openComposer,
@@ -80,6 +82,7 @@ export function AppShell({
         reviewQueueCount={reviewQueueCount}
         reviewQueueOverdueCount={reviewQueueOverdueCount}
         onSelectTeam={onSelectTeam}
+        onCreateTeam={onCreateTeam}
         user={user}
         onSignOut={onSignOut}
         openComposer={openComposer}

@@ -11,6 +11,7 @@ import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
 import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
+import { CreateTeamModal } from './components/Shell/CreateTeamModal'
 import { Sun, Moon, Edit, Trash2, Copy, X } from 'lucide-react'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
@@ -131,6 +132,7 @@ function App() {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [createTeamOpen, setCreateTeamOpen] = useState(false)
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null)
   const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
   const [providerInstances, setProviderInstances] = useState<ProviderInstanceRecord[]>([])
@@ -1631,12 +1633,14 @@ function App() {
   }
 
   return (
+    <>
     <AppShell
       section={section}
       setSection={setSection}
       teams={teams}
       selectedTeamId={effectiveSelectedTeamId}
       onSelectTeam={setSelectedTeamId}
+      onCreateTeam={() => setCreateTeamOpen(true)}
       user={principalUser}
       onSignOut={() => {
         void api.logout().catch(() => undefined)
@@ -2105,6 +2109,17 @@ function App() {
       )}
 
     </AppShell>
+    <CreateTeamModal
+      open={createTeamOpen}
+      onOpenChange={setCreateTeamOpen}
+      onCreate={async (name, description) => {
+        const created = await api.createTeam({ name, description })
+        await loadDashboard({ silent: true })
+        setSelectedTeamId(created.id)
+        setStatusMessage(t('teams.createdStatus', 'Team "{{name}}" created.', { name: created.name }))
+      }}
+    />
+    </>
   )
 }
 
