@@ -16,6 +16,7 @@ Plan posts across Mastodon, Bluesky and Friendica from a single Go binary — no
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-22c55e?style=flat)](#docker)
 [![API-first](https://img.shields.io/badge/API-first-0ea5e9?style=flat&logo=openapiinitiative&logoColor=white)](#api-documentation)
 [![E2E: Playwright](https://img.shields.io/badge/E2E-Playwright-2EAD33?style=flat&logo=playwright&logoColor=white)](frontend/playwright.config.ts)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat)](LICENSE)
 
 <!-- Repository activity -->
 [![Last commit](https://img.shields.io/github/last-commit/Goloom-App/goloom?style=flat)](https://github.com/Goloom-App/goloom/commits/main)
@@ -326,4 +327,4 @@ development.
 
 ## License
 
-See repository license file.
+Licensed under the [MIT License](LICENSE).
