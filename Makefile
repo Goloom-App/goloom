@@ -1,5 +1,10 @@
 APP_NAME := goloom
 
+# Release version embedded into the binary. Derived from the git tag for local
+# builds; CI/Docker override it explicitly. See internal/version.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X git.f4mily.net/goloom/internal/version.Version=$(VERSION)
+
 .PHONY: fmt tidy build test test-postgres cover run schema frontend-install frontend-dev frontend-build frontend-lint frontend-e2e docs-api-lint docs-api-build website-spec website-install website-dev website-build website-screenshots
 
 fmt:
@@ -9,7 +14,7 @@ tidy:
 	go mod tidy
 
 build: frontend-build
-	go build -o bin/$(APP_NAME) ./cmd/server
+	go build -ldflags "$(LDFLAGS)" -o bin/$(APP_NAME) ./cmd/server
 
 test:
 	go test ./...
@@ -33,7 +38,7 @@ cover:
 	@go tool cover -func=coverage.out | tail -1
 
 run: frontend-build
-	go run ./cmd/server
+	go run -ldflags "$(LDFLAGS)" ./cmd/server
 
 schema:
 	psql "$$DATABASE_URL" -f db/schema.sql

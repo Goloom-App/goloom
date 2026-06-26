@@ -21,6 +21,7 @@ import (
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/sse"
 	"git.f4mily.net/goloom/internal/store"
+	"git.f4mily.net/goloom/internal/version"
 )
 
 type API struct {
@@ -248,7 +249,7 @@ func (s *statusRecorder) WriteHeader(code int) {
 }
 
 func (a *API) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	auth.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	auth.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": version.String()})
 }
 
 func (a *API) handleProviders(w http.ResponseWriter, _ *http.Request) {

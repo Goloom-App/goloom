@@ -241,13 +241,7 @@ If you run Goloom with Docker PostgreSQL and want to move to the homelab CNPG de
 
 ## Docker
 
-Build:
-
-```bash
-docker build -t goloom .
-```
-
-Run:
+Use the published multi-arch image (linux/amd64 + arm64) from GHCR:
 
 ```bash
 docker run --rm \
@@ -255,8 +249,11 @@ docker run --rm \
   -e ENCRYPTION_KEY=replace-with-a-long-random-secret \
   -e BOOTSTRAP_ADMIN_TOKEN=replace-with-a-strong-bootstrap-token \
   -v "$(pwd)/data:/app/data" \
-  goloom
+  ghcr.io/goloom-app/goloom:latest
 ```
+
+For production, pin a version tag (e.g. `ghcr.io/goloom-app/goloom:v0.1.0`)
+instead of `:latest`. To build the image yourself: `docker build -t goloom .`.
 
 ## Development
 
@@ -304,6 +301,22 @@ If you need broad enterprise suites, many commercial upsell modules, or advanced
 - Provider access tokens are encrypted at rest.
 - API tokens are stored as hashes.
 - Set strong `ENCRYPTION_KEY` and rotate bootstrap/admin secrets after setup.
+
+## Versioning & releases
+
+goloom follows [Semantic Versioning](https://semver.org/) and is intentionally
+**pre-1.0 (0.x)** — usable and self-hostable today, but breaking changes can
+still land between minor versions, so pin a version and read the notes before
+upgrading.
+
+- Releases are automated from [Conventional Commits](https://www.conventionalcommits.org/)
+  via [release-please](https://github.com/googleapis/release-please): a release PR
+  maintains `CHANGELOG.md` and the version; merging it tags `vX.Y.Z`, publishes a
+  [GitHub Release](https://github.com/Goloom-App/goloom/releases) with prebuilt
+  Linux binaries (amd64/arm64), and pushes the `ghcr.io/goloom-app/goloom` image.
+- The running version is reported by `GET /healthz` and the agent discovery doc.
+- The REST API has its own contract version under `/v1`, independent of the app
+  version; it changes only on breaking API changes.
 
 ## About this project
 

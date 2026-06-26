@@ -1,0 +1,118 @@
+name: Release
+
+# Automated releases from Conventional Commits via release-please:
+#  - on every push to main, release-please maintains a "release PR" that bumps
+#    the version and updates CHANGELOG.md from the commit history;
+#  - merging that PR creates the vX.Y.Z tag and the GitHub Release;
+#  - the publish jobs then build the binaries and the GHCR image for that tag.
+#
+# Versioning: SemVer, intentionally pre-1.0 (0.x = breaking changes possible).
+# The REST API has its own contract version under /v1, independent of this.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    name: Release PR / tag
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  binaries:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    name: Build release binaries
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build frontend (embedded into the binary)
+        run: make frontend-build
+        env:
+          CI: "true"
+
+      - name: Cross-compile binaries
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ldflags="-s -w -X git.f4mily.net/goloom/internal/version.Version=${VERSION}"
+          for arch in amd64 arm64; do
+            out="dist/goloom_${VERSION}_linux_${arch}"
+            CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
+              go build -ldflags "${ldflags}" -o "${out}" ./cmd/server
+          done
+          ( cd dist && sha256sum goloom_* > checksums.txt )
+
+      - name: Attach binaries to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${VERSION}" dist/* --clobber
+
+  image:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    name: Build and push GHCR image
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.release-please.outputs.tag_name }}
+      IMAGE: ghcr.io/goloom-app/goloom
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (linux/amd64, linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VERSION }}
+            ${{ env.IMAGE }}:latest

@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+
+	"git.f4mily.net/goloom/internal/version"
 )
 
 // discovery types are structured for AI agents: paths, auth, request schemas, workflows, examples.
@@ -55,6 +57,7 @@ type discoveryGuide struct {
 
 type discoveryDocument struct {
 	AppName          string                       `json:"app_name"`
+	AppVersion       string                       `json:"app_version"`
 	Version          string                       `json:"version"`
 	Description      string                       `json:"description"`
 	OpenAPISpecNote  string                       `json:"openapi_spec_note"`
@@ -178,6 +181,7 @@ func buildDiscoveryDocument() discoveryDocument {
 
 	return discoveryDocument{
 		AppName:         "Goloom",
+		AppVersion:      version.String(),
 		Version:         "v1",
 		Description:     "Social Media Scheduling & Analytics Platform",
 		OpenAPISpecNote: "Full OpenAPI 3.1 spec: docs/api/openapi.yaml in the repository (not served by default).",

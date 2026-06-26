@@ -1,5 +1,7 @@
 # GHCR mirror of Docker Hub (see https://github.com/psarossy/dockerhub-mirror).
-FROM ghcr.io/psarossy/node:lts AS frontend-builder
+# Pin to the build host's platform so multi-arch builds compile once natively and
+# the Go stage cross-compiles per target arch (no qemu emulation).
+FROM --platform=$BUILDPLATFORM ghcr.io/psarossy/node:lts AS frontend-builder
 
 WORKDIR /src
 
@@ -27,7 +29,7 @@ RUN mkdir -p /src/internal/webui && \
 # to 1.26.3, and that image pins GOTOOLCHAIN=local, so an in-build toolchain
 # upgrade is blocked — use the official Docker Hub image that ships 1.26.4
 # directly (the runner already pulls Docker Hub library images, e.g. postgres).
-FROM golang:1.26.4-alpine3.22 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine3.22 AS builder
 
 WORKDIR /src
 
@@ -38,7 +40,13 @@ RUN go mod download
 
 COPY . .
 COPY --from=frontend-builder /src/internal/webui/dist ./internal/webui/dist
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/goloom ./cmd/server
+# Release version embedded into the binary (see internal/version). Defaults to
+# "dev"; CI passes the real version via --build-arg VERSION=vX.Y.Z.
+ARG VERSION=dev
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
+	go build -ldflags "-X git.f4mily.net/goloom/internal/version.Version=${VERSION}" \
+	-o /out/goloom ./cmd/server
 
 FROM gcr.io/distroless/static-debian12
 
