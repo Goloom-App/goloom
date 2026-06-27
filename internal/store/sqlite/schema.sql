@@ -222,6 +222,7 @@ create table if not exists scheduled_posts (
     source text not null default 'scheduled' check (source in ('scheduled', 'imported', 'automation')),
     attempt_count integer not null default 0,
     last_error text,
+    acknowledged_at text,
     visibility text not null default 'public',
     media_ids text not null default '[]',
     media_exclude_by_account text not null default '{}',

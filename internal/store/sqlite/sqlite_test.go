@@ -367,9 +367,11 @@ func TestSQLite_ListDuePosts_and_processingFlow(t *testing.T) {
 	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://u", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}
+	// LoadPostTargets feeds the publisher and excludes already-posted targets so
+	// a re-processed post never double-posts. The only target here is posted.
 	targets, err := s.LoadPostTargets(ctx, post.ID)
-	if err != nil || len(targets) != 1 {
-		t.Fatalf("LoadPostTargets: %v", err)
+	if err != nil || len(targets) != 0 {
+		t.Fatalf("LoadPostTargets after post: %v len=%d", err, len(targets))
 	}
 	links, err := s.LoadPublishedLinksByPostIDs(ctx, []string{post.ID})
 	if err != nil || links[post.ID][acc.ID] != "https://u" {

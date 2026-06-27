@@ -1122,6 +1122,30 @@ type AdminMetrics struct {
 	PostsCancelled         int64 `json:"posts_cancelled"`
 }
 
+// PublishFailureTarget is one account-level failure within a failed post.
+type PublishFailureTarget struct {
+	AccountID    string `json:"account_id"`
+	AccountName  string `json:"account_name"`
+	Provider     string `json:"provider"`
+	Status       string `json:"status"`
+	LastError    string `json:"last_error,omitempty"`
+	PublishedURL string `json:"published_url,omitempty"`
+}
+
+// PublishFailure is a failed (and not yet acknowledged) scheduled post with its
+// per-account results, surfaced to admins so they can inspect and resolve it.
+type PublishFailure struct {
+	PostID       string                 `json:"post_id"`
+	TeamID       string                 `json:"team_id"`
+	TeamName     string                 `json:"team_name"`
+	Title        string                 `json:"title"`
+	ScheduledAt  time.Time              `json:"scheduled_at"`
+	AttemptCount int                    `json:"attempt_count"`
+	LastError    string                 `json:"last_error,omitempty"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+	Targets      []PublishFailureTarget `json:"targets"`
+}
+
 type AddTeamMemberInput struct {
 	UserID string   `json:"user_id"`
 	Role   TeamRole `json:"role"`

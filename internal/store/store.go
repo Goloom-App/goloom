@@ -197,6 +197,15 @@ type Store interface {
 	TryAcquireLock(ctx context.Context, lockID string, duration time.Duration) (bool, error)
 
 	AdminMetrics(ctx context.Context) (domain.AdminMetrics, error)
+	// AdminListPublishFailures returns failed, not-yet-acknowledged posts with
+	// their per-account results, newest first.
+	AdminListPublishFailures(ctx context.Context) ([]domain.PublishFailure, error)
+	// AdminAcknowledgeFailedPost marks a failed post as reviewed so it no longer
+	// counts as needing attention. Returns ok=false if the post is not failed.
+	AdminAcknowledgeFailedPost(ctx context.Context, postID string) (ok bool, err error)
+	// AdminRetryFailedPost re-queues a failed post for publication (resets status,
+	// attempts and targets). Returns ok=false if the post is not failed.
+	AdminRetryFailedPost(ctx context.Context, postID string) (ok bool, err error)
 	AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error)
 	FillAccountSyncTimestamps(ctx context.Context, accounts []domain.SocialAccount) error
 	RepairFuturePostedPosts(ctx context.Context) (int64, error)

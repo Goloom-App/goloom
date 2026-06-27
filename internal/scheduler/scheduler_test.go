@@ -596,6 +596,18 @@ func (m *mockStore) AdminMetrics(ctx context.Context) (domain.AdminMetrics, erro
 	return domain.AdminMetrics{}, nil
 }
 
+func (m *mockStore) AdminListPublishFailures(ctx context.Context) ([]domain.PublishFailure, error) {
+	return nil, nil
+}
+
+func (m *mockStore) AdminAcknowledgeFailedPost(ctx context.Context, postID string) (bool, error) {
+	return false, nil
+}
+
+func (m *mockStore) AdminRetryFailedPost(ctx context.Context, postID string) (bool, error) {
+	return false, nil
+}
+
 func (m *mockStore) AdminSyncStatus(ctx context.Context, notBefore time.Time) (domain.AdminSyncStatus, error) {
 	return domain.AdminSyncStatus{}, nil
 }

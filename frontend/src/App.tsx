@@ -44,6 +44,7 @@ import {
   type BackendAPIToken,
   type BackendAdminMetrics,
   type BackendAdminSyncStatus,
+  type BackendPublishFailure,
   type BackendPostMetric,
   type BackendPostVersion,
   type BackendTeam,
@@ -137,6 +138,7 @@ function App() {
   const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
   const [providerInstances, setProviderInstances] = useState<ProviderInstanceRecord[]>([])
   const [adminMetrics, setAdminMetrics] = useState<BackendAdminMetrics | null>(null)
+  const [publishFailures, setPublishFailures] = useState<BackendPublishFailure[]>([])
   const [adminMetricsLoading, setAdminMetricsLoading] = useState(false)
   const [adminRuntime, setAdminRuntime] = useState<RuntimeConfigRecord | null>(null)
   const [adminSyncStatus, setAdminSyncStatus] = useState<BackendAdminSyncStatus | null>(null)
@@ -670,12 +672,13 @@ function App() {
     let cancelled = false
     setAdminMetricsLoading(true)
     setAdminSyncLoading(true)
-    void Promise.all([api.adminMetrics(), api.runtimeConfig(), api.adminSyncStatus()])
-      .then(([m, r, sync]) => {
+    void Promise.all([api.adminMetrics(), api.runtimeConfig(), api.adminSyncStatus(), api.adminPublishFailures()])
+      .then(([m, r, sync, failures]) => {
         if (!cancelled) {
           setAdminMetrics(m)
           setAdminRuntime(toRuntimeConfigRecord(r))
           setAdminSyncStatus(sync)
+          setPublishFailures(failures.items ?? [])
         }
       })
       .catch(() => {
@@ -683,6 +686,7 @@ function App() {
           setAdminMetrics(null)
           setAdminRuntime(null)
           setAdminSyncStatus(null)
+          setPublishFailures([])
         }
       })
       .finally(() => {
@@ -1294,6 +1298,30 @@ function App() {
       await loadDashboard({ silent: true })
       setStatusMessage(result.message)
     }, t('status.metricsSyncStarted'))
+  }
+
+  async function handleAcknowledgePublishFailure(postID: string) {
+    if (!api) {
+      return
+    }
+    await runAction(async () => {
+      await api.adminAcknowledgePublishFailure(postID)
+      const [m, failures] = await Promise.all([api.adminMetrics(), api.adminPublishFailures()])
+      setAdminMetrics(m)
+      setPublishFailures(failures.items ?? [])
+    }, t('admin.failureAcknowledged'))
+  }
+
+  async function handleRetryPublishFailure(postID: string) {
+    if (!api) {
+      return
+    }
+    await runAction(async () => {
+      await api.adminRetryPublishFailure(postID)
+      const [m, failures] = await Promise.all([api.adminMetrics(), api.adminPublishFailures()])
+      setAdminMetrics(m)
+      setPublishFailures(failures.items ?? [])
+    }, t('admin.failureRetried'))
   }
 
   async function handleDeleteTeamAccount(accountId: string) {
@@ -2059,6 +2087,9 @@ function App() {
             adminSyncStatus={adminSyncStatus}
             adminSyncLoading={adminSyncLoading}
             onTriggerMetricsSync={handleAdminSyncMetrics}
+            publishFailures={publishFailures}
+            onAcknowledgePublishFailure={handleAcknowledgePublishFailure}
+            onRetryPublishFailure={handleRetryPublishFailure}
             directoryUsers={directoryUsers}
             providerInstances={providerInstances}
             accounts={accounts}

@@ -60,7 +60,17 @@ func (s *Store) AdminMetrics(ctx context.Context) (domain.AdminMetrics, error) {
 			m.PostsCancelled = n
 		}
 	}
-	return m, rows.Err()
+	if err := rows.Err(); err != nil {
+		return domain.AdminMetrics{}, err
+	}
+	// Acknowledged failures no longer need attention, so exclude them from the
+	// failed count that drives the admin health banner.
+	if err := s.pool.QueryRow(ctx,
+		`select count(*) from scheduled_posts where status = 'failed' and acknowledged_at is null`,
+	).Scan(&m.PostsFailed); err != nil {
+		return domain.AdminMetrics{}, err
+	}
+	return m, nil
 }
 
 func (s *Store) RepairFuturePostedPosts(ctx context.Context) (int64, error) {

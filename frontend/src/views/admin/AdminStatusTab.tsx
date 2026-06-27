@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Icon } from '../../icons'
-import type { BackendAdminMetrics, BackendAdminSyncStatus } from '../../api'
+import type { BackendAdminMetrics, BackendAdminSyncStatus, BackendPublishFailure } from '../../api'
 import type { RuntimeConfigRecord } from '../../types'
 
 export function AdminStatusTab({
@@ -12,6 +13,9 @@ export function AdminStatusTab({
   adminSyncLoading,
   syncing,
   onTriggerMetricsSync,
+  publishFailures,
+  onAcknowledgePublishFailure,
+  onRetryPublishFailure,
 }: {
   adminMetrics: BackendAdminMetrics | null
   adminMetricsLoading: boolean
@@ -20,8 +24,22 @@ export function AdminStatusTab({
   adminSyncLoading: boolean
   syncing: boolean
   onTriggerMetricsSync: () => void | Promise<void>
+  publishFailures: BackendPublishFailure[]
+  onAcknowledgePublishFailure: (postID: string) => void | Promise<void>
+  onRetryPublishFailure: (postID: string) => void | Promise<void>
 }) {
   const { t } = useTranslation()
+  const [showFailures, setShowFailures] = useState(false)
+  const [busyFailureId, setBusyFailureId] = useState<string | null>(null)
+
+  const runFailureAction = async (postID: string, action: (id: string) => void | Promise<void>) => {
+    setBusyFailureId(postID)
+    try {
+      await action(postID)
+    } finally {
+      setBusyFailureId(null)
+    }
+  }
 
   // Health signals drive the top-of-page banner so operators see problems at a
   // glance instead of scanning every metric.
@@ -48,16 +66,100 @@ export function AdminStatusTab({
             <span className={`status-dot ${schedulerOk ? 'status-dot--active' : 'status-dot--neutral'}`} aria-hidden />
             {schedulerOk ? t('admin.schedulerRunning') : t('admin.schedulerUnknown')}
           </span>
-          <span className="admin-health__signal">
-            <span className={`status-dot ${failedPosts > 0 ? 'status-dot--error' : 'status-dot--active'}`} aria-hidden />
-            {failedPosts > 0 ? t('admin.failedPostsAlert', { count: failedPosts }) : t('admin.noFailedPosts')}
-          </span>
+          {failedPosts > 0 ? (
+            <button
+              type="button"
+              className="admin-health__signal"
+              data-testid="admin-failed-toggle"
+              onClick={() => setShowFailures((v) => !v)}
+              aria-expanded={showFailures}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              <span className="status-dot status-dot--error" aria-hidden />
+              {t('admin.failedPostsAlert', { count: failedPosts })}
+              <span aria-hidden>{showFailures ? ' ▴' : ' ▾'}</span>
+            </button>
+          ) : (
+            <span className="admin-health__signal">
+              <span className="status-dot status-dot--active" aria-hidden />
+              {t('admin.noFailedPosts')}
+            </span>
+          )}
           <span className="admin-health__signal">
             <span className={`status-dot ${pendingSync > 0 ? 'status-dot--warning' : 'status-dot--active'}`} aria-hidden />
             {pendingSync > 0 ? t('admin.syncBacklog', { count: pendingSync }) : t('admin.syncUpToDate')}
           </span>
         </div>
       </section>
+
+      {showFailures && failedPosts > 0 ? (
+        <section className="admin-section glass-panel" data-testid="admin-failures-panel">
+          <header className="admin-section__head">
+            <div className="admin-section__heading">
+              <span className="admin-section__icon" aria-hidden><Icon name="refresh" /></span>
+              <div>
+                <h2 className="admin-section__title">{t('admin.failuresTitle')}</h2>
+                <p className="hint admin-section__hint">{t('admin.failuresHint')}</p>
+              </div>
+            </div>
+          </header>
+          {publishFailures.length === 0 ? (
+            <p className="hint">{t('common.loadingMetrics')}</p>
+          ) : (
+            <ul className="stack stack--sm" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {publishFailures.map((f) => (
+                <li
+                  key={f.post_id}
+                  className="admin-kv-card"
+                  data-testid="admin-failure-item"
+                  style={{ display: 'block' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <strong>{f.title?.trim() || t('admin.failureUntitled')}</strong>
+                    <span className="hint">
+                      {f.team_name} · {new Date(f.scheduled_at).toLocaleString()} · {t('admin.failureAttempts', { count: f.attempt_count })}
+                    </span>
+                  </div>
+                  {f.last_error ? (
+                    <p className="hint" style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{f.last_error}</p>
+                  ) : null}
+                  {f.targets?.some((tg) => tg.status === 'failed' || tg.last_error) ? (
+                    <ul style={{ listStyle: 'none', margin: '8px 0 0', padding: 0, display: 'grid', gap: 4 }}>
+                      {f.targets
+                        .filter((tg) => tg.status === 'failed' || tg.last_error)
+                        .map((tg) => (
+                          <li key={tg.account_id} style={{ display: 'flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                            <span className="status-dot status-dot--error" aria-hidden />
+                            <span>{tg.account_name || tg.account_id} <span className="hint">({tg.provider})</span></span>
+                            {tg.last_error ? <span className="hint" style={{ whiteSpace: 'pre-wrap' }}>— {tg.last_error}</span> : null}
+                          </li>
+                        ))}
+                    </ul>
+                  ) : null}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button
+                      type="button"
+                      className="button button--primary"
+                      disabled={busyFailureId === f.post_id}
+                      onClick={() => void runFailureAction(f.post_id, onRetryPublishFailure)}
+                    >
+                      {t('admin.failureRetry')}
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      disabled={busyFailureId === f.post_id}
+                      onClick={() => void runFailureAction(f.post_id, onAcknowledgePublishFailure)}
+                    >
+                      {t('admin.failureAcknowledge')}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       <section className="admin-section glass-panel">
         <header className="admin-section__head">

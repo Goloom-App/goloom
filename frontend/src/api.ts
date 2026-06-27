@@ -309,6 +309,27 @@ export interface BackendAdminMetrics {
   posts_cancelled: number
 }
 
+export interface BackendPublishFailureTarget {
+  account_id: string
+  account_name: string
+  provider: string
+  status: string
+  last_error?: string
+  published_url?: string
+}
+
+export interface BackendPublishFailure {
+  post_id: string
+  team_id: string
+  team_name: string
+  title: string
+  scheduled_at: string
+  attempt_count: number
+  last_error?: string
+  updated_at: string
+  targets: BackendPublishFailureTarget[]
+}
+
 export interface BackendAPIToken {
   id: string
   user_id: string
@@ -671,6 +692,23 @@ export function createApiClient(options: ApiClientOptions) {
     },
     adminSyncMetrics() {
       return request<{ status: string; message: string }>(options, '/v1/admin/sync-metrics', {
+        method: 'POST',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    adminPublishFailures() {
+      return request<{ items: BackendPublishFailure[] }>(options, '/v1/admin/publish-failures', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    adminAcknowledgePublishFailure(postID: string) {
+      return request<{ status: string }>(options, `/v1/admin/publish-failures/${postID}/acknowledge`, {
+        method: 'POST',
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    adminRetryPublishFailure(postID: string) {
+      return request<{ status: string }>(options, `/v1/admin/publish-failures/${postID}/retry`, {
         method: 'POST',
         headers: buildHeaders(options.token, false),
       })

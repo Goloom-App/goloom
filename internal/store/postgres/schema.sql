@@ -178,6 +178,9 @@ alter table if exists scheduled_posts
 alter table if exists scheduled_posts
     alter column title set not null;
 
+alter table if exists scheduled_posts
+    add column if not exists acknowledged_at timestamptz;
+
 create table if not exists scheduled_post_targets (
     post_id uuid not null references scheduled_posts(id) on delete cascade,
     account_id uuid not null references social_accounts(id) on delete cascade,

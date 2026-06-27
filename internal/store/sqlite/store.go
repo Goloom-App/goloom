@@ -1110,7 +1110,7 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.access_token_expires_at, a.created_at
 		from scheduled_post_targets t
 		join social_accounts a on a.id = t.account_id
-		where t.post_id = ?`,
+		where t.post_id = ? and t.status <> 'posted'`,
 		postID,
 	)
 	if err != nil {

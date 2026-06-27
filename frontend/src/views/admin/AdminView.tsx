@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { BackendAdminMetrics, BackendAdminSyncStatus, BackendTeam } from '../../api'
+import type { BackendAdminMetrics, BackendAdminSyncStatus, BackendPublishFailure, BackendTeam } from '../../api'
 import type { createApiClient } from '../../api'
 import type { AccountRecord, ProviderInstanceRecord, RuntimeConfigRecord, UserRecord } from '../../types'
 import type { AdminProviderDraft } from './adminTypes'
@@ -22,6 +22,9 @@ export function AdminView({
   adminSyncStatus,
   adminSyncLoading,
   onTriggerMetricsSync,
+  publishFailures,
+  onAcknowledgePublishFailure,
+  onRetryPublishFailure,
   directoryUsers,
   providerInstances,
   accounts,
@@ -46,6 +49,9 @@ export function AdminView({
   adminSyncStatus: BackendAdminSyncStatus | null
   adminSyncLoading: boolean
   onTriggerMetricsSync: () => void | Promise<void>
+  publishFailures: BackendPublishFailure[]
+  onAcknowledgePublishFailure: (postID: string) => void | Promise<void>
+  onRetryPublishFailure: (postID: string) => void | Promise<void>
   directoryUsers: UserRecord[]
   providerInstances: ProviderInstanceRecord[]
   accounts: AccountRecord[]
@@ -110,6 +116,9 @@ export function AdminView({
             adminSyncLoading={adminSyncLoading}
             syncing={syncing}
             onTriggerMetricsSync={onTriggerMetricsSync}
+            publishFailures={publishFailures}
+            onAcknowledgePublishFailure={onAcknowledgePublishFailure}
+            onRetryPublishFailure={onRetryPublishFailure}
           />
         ) : null}
 
