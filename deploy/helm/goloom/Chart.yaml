@@ -1,0 +1,23 @@
+apiVersion: v2
+name: goloom
+description: Lightweight, self-hosted social media planning for teams and AI agents — a single Go binary serving the web UI and REST API.
+type: application
+# Chart version — bumped independently of the app.
+version: 0.1.0
+# Default application version (the container image tag).
+appVersion: "0.1.2"
+home: https://goloom-app.github.io/
+icon: https://goloom-app.github.io/favicon.svg
+sources:
+  - https://github.com/Goloom-App/goloom
+keywords:
+  - social-media
+  - scheduler
+  - self-hosted
+  - fediverse
+  - mastodon
+  - bluesky
+  - mcp
+maintainers:
+  - name: Goloom
+    url: https://github.com/Goloom-App

@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "goloom.fullname" . }}
+  labels:
+    {{- include "goloom.labels" . | nindent 4 }}
+spec:
+  {{- if eq .Values.database.type "sqlite" }}
+  # SQLite is single-writer on a ReadWriteOnce volume: one replica, and Recreate
+  # so the volume is never mounted by two pods during a rollout.
+  replicas: 1
+  strategy:
+    type: Recreate
+  {{- else }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "goloom.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "goloom.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "goloom.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: goloom
+          image: {{ include "goloom.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: HTTP_ADDR
+              value: ":8080"
+            - name: APP_ENV
+              value: {{ .Values.config.appEnv | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.config.logFormat | quote }}
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.config.publicBaseUrl | quote }}
+            - name: ALLOWED_ORIGINS
+              value: {{ .Values.config.allowedOrigins | default .Values.config.publicBaseUrl | quote }}
+            - name: MCP_ENABLED
+              value: {{ .Values.config.mcpEnabled | quote }}
+            - name: BOOTSTRAP_ADMIN_EMAIL
+              value: {{ .Values.bootstrap.adminEmail | quote }}
+            - name: BOOTSTRAP_ADMIN_NAME
+              value: {{ .Values.bootstrap.adminName | quote }}
+            {{- if eq .Values.database.type "sqlite" }}
+            - name: DATABASE_URL
+              value: {{ printf "file:%s" .Values.database.sqlite.path | quote }}
+            {{- else }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "goloom.secretName" . }}
+                  key: DATABASE_URL
+            {{- end }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "goloom.secretName" . }}
+                  key: ENCRYPTION_KEY
+            - name: BOOTSTRAP_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "goloom.secretName" . }}
+                  key: BOOTSTRAP_ADMIN_TOKEN
+            {{- if .Values.oidc.enabled }}
+            - name: OIDC_ISSUER_URL
+              value: {{ .Values.oidc.issuerUrl | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ .Values.oidc.clientId | quote }}
+            - name: OIDC_REDIRECT_URI
+              value: {{ .Values.oidc.redirectUri | quote }}
+            - name: OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "goloom.secretName" . }}
+                  key: OIDC_CLIENT_SECRET
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "goloom.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

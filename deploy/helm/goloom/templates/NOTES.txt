@@ -1,0 +1,25 @@
+goloom {{ .Chart.AppVersion }} has been deployed as release "{{ .Release.Name }}".
+
+Database backend: {{ .Values.database.type }}
+{{- if eq .Values.database.type "sqlite" }}
+  SQLite on a {{ if .Values.persistence.enabled }}PersistentVolume ({{ .Values.persistence.size }}){{ else }}temporary emptyDir (data is LOST on restart!){{ end }}.
+{{- end }}
+
+Reach the app:
+{{- if .Values.ingress.enabled }}
+  {{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+  {{- end }}
+{{- else }}
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "goloom.fullname" . }} 8080:{{ .Values.service.port }}
+  # then open http://localhost:8080
+{{- end }}
+
+Check it is up:
+  kubectl --namespace {{ .Release.Namespace }} get pods -l "app.kubernetes.io/instance={{ .Release.Name }}"
+
+First login: use BOOTSTRAP_ADMIN_TOKEN in the UI to create the first admin, then
+rotate it. See https://goloom-app.github.io/getting-started/first-login/
+
+IMPORTANT: keep ENCRYPTION_KEY stable and backed up — it decrypts stored provider
+tokens. If it changes, connected accounts must be re-linked.

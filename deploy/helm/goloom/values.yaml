@@ -1,0 +1,134 @@
+# Default values for the goloom Helm chart.
+
+image:
+  repository: ghcr.io/goloom-app/goloom
+  # Defaults to the chart's appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Replicas. Ignored (forced to 1) when database.type is "sqlite", because the
+# embedded SQLite file is single-writer and lives on a ReadWriteOnce volume.
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+# --- Database ---------------------------------------------------------------
+# type: "sqlite" (zero-dependency, uses a PersistentVolume) or
+#       "postgres" (external PostgreSQL; recommended for scaling / HA).
+database:
+  type: sqlite
+  sqlite:
+    # Path of the SQLite file inside the persistent volume (see persistence).
+    path: /app/data/goloom.db
+  postgres:
+    # Full DSN, e.g. postgres://user:pass@host:5432/goloom?sslmode=require
+    # Leave empty and use secret.existingSecret (key DATABASE_URL) to keep the
+    # password out of values. Set here only for quick tests.
+    url: ""
+
+# Persistent storage for the SQLite database and uploaded media. Required when
+# database.type is "sqlite"; with "postgres" it still stores uploaded media.
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 2Gi
+  mountPath: /app/data
+
+# --- Application configuration (non-secret) ---------------------------------
+config:
+  # Public URL the app is reached at (used for OAuth callbacks, links, CORS).
+  publicBaseUrl: "http://localhost:8080"
+  appEnv: production
+  logLevel: info
+  logFormat: json
+  # Comma-separated allowed CORS origins. Defaults to publicBaseUrl when empty.
+  allowedOrigins: ""
+  # Built-in MCP server for AI agents.
+  mcpEnabled: true
+
+# --- Secrets ----------------------------------------------------------------
+# Either let the chart create a Secret from the values below, or point at an
+# existing Secret that already holds: ENCRYPTION_KEY, BOOTSTRAP_ADMIN_TOKEN,
+# (DATABASE_URL when database.type=postgres) and OIDC_CLIENT_SECRET (if used).
+secret:
+  create: true
+  existingSecret: ""
+  # REQUIRED when secret.create=true. Generate a long random value (e.g.
+  # `openssl rand -hex 32`) and keep it STABLE — it decrypts stored provider
+  # tokens; changing it makes connected accounts undecryptable.
+  encryptionKey: ""
+  # REQUIRED when secret.create=true. Used once to bootstrap the first admin.
+  bootstrapAdminToken: ""
+
+bootstrap:
+  adminEmail: admin@example.com
+  adminName: Administrator
+
+# --- OIDC (optional browser SSO) --------------------------------------------
+oidc:
+  enabled: false
+  issuerUrl: ""
+  clientId: ""
+  clientSecret: ""
+  # Defaults to {publicBaseUrl}/v1/oauth/oidc/callback when empty.
+  redirectUri: ""
+
+# Arbitrary extra environment variables (e.g. SCHEDULER_*, RATE_LIMIT_*,
+# MASTODON_*). Standard Kubernetes env entries.
+extraEnv: []
+#  - name: SCHEDULER_WORKERS
+#    value: "4"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: goloom.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: goloom-tls
+  #    hosts:
+  #      - goloom.example.com
+
+resources: {}
+  # limits:
+  #   cpu: 500m
+  #   memory: 256Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

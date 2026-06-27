@@ -251,6 +251,21 @@ Upgrading PostgreSQL to a new **major** version (e.g. 16 → 18) is a dump &
 restore, not an in-place swap — see the
 [PostgreSQL major upgrade guide](https://goloom-app.github.io/migrations/postgres-major-upgrade/).
 
+### Kubernetes (Helm)
+
+A Helm chart is provided at [`deploy/helm/goloom`](deploy/helm/goloom) (SQLite on
+a PersistentVolume, or external PostgreSQL; optional Ingress):
+
+```bash
+helm install goloom ./deploy/helm/goloom \
+  --namespace goloom --create-namespace \
+  --set secret.encryptionKey="$(openssl rand -hex 32)" \
+  --set secret.bootstrapAdminToken="change-me-please" \
+  --set config.publicBaseUrl="https://goloom.example.com"
+```
+
+See the [Kubernetes (Helm) guide](https://goloom-app.github.io/getting-started/kubernetes/).
+
 ## Production migration (Docker → Kubernetes)
 
 If you run Goloom with Docker PostgreSQL and want to move to the homelab CNPG deployment, see [`docs/migrations/docker-to-kubernetes-homelab.md`](docs/migrations/docker-to-kubernetes-homelab.md).
