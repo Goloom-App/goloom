@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/Goloom-App/goloom/compare/v0.1.2...v0.1.3) (2026-06-27)
+
+
+### Features
+
+* **admin:** inspect, retry and acknowledge failed publishes ([1db093b](https://github.com/Goloom-App/goloom/commit/1db093bb9af1b97c143ffb246474efbc8dca37b3))
+* **helm:** add Kubernetes Helm chart + docs ([bc53f71](https://github.com/Goloom-App/goloom/commit/bc53f7132ec12a8e021a6e930f93165bc4e9391c))
+
 ## [0.1.2](https://github.com/Goloom-App/goloom/compare/v0.1.1...v0.1.2) (2026-06-26)
 
 
