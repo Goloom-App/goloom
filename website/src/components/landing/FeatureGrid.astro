@@ -1,54 +1,44 @@
 ---
 const features = [
 	{
-		icon: '✍️',
 		title: 'Composer',
 		body: 'Write once, tailor per account. Per-account post versions, media attachments and validation before anything is scheduled.',
 	},
 	{
-		icon: '🗓️',
 		title: 'Content calendar',
 		body: 'A drag-and-drop, timezone-aware calendar to plan and reschedule posts across every connected account.',
 	},
 	{
-		icon: '📈',
 		title: 'Analytics',
-		body: 'Track reach, engagement and follower growth with per-post and per-account metrics across providers.',
+		body: 'Per-post and per-account metrics — reach, engagement and follower growth across providers.',
 	},
 	{
-		icon: '⚙️',
 		title: 'Automation',
-		body: 'Recurring post templates and RSS feed rules keep your channels active without manual busywork.',
+		body: 'Recurring post templates and RSS feed rules keep channels active without manual reposting.',
 	},
 	{
-		icon: '🧠',
-		title: 'AI features',
-		body: 'AI-assisted drafting with a per-team brand voice, so generated copy sounds like you — not generic LLM output.',
+		title: 'AI assist (optional)',
+		body: 'Off until you wire up a provider. When enabled, AI-assisted drafting follows a per-team brand voice.',
 	},
 	{
-		icon: '✅',
 		title: 'Review queue',
-		body: 'Route drafts through approval before they publish. Editors propose, owners approve — every step is logged.',
+		body: 'Route drafts through approval before they publish. Editors propose, owners approve, every step is logged.',
 	},
 	{
-		icon: '📚',
 		title: 'Media library',
-		body: 'A reusable per-team media library so images and assets are one click away inside the composer.',
+		body: 'A reusable per-team media library so images and assets are one click away in the composer.',
 	},
 	{
-		icon: '🔌',
 		title: 'Built-in MCP server',
-		body: 'A Model Context Protocol server is bundled and on by default, so Claude, OpenClaw and other agents drive goloom with natural-language tools.',
+		body: 'A Model Context Protocol server ships in the binary, so agents can drive goloom over the same tools you use by hand.',
 	},
 	{
-		icon: '🔑',
 		title: 'API tokens & OIDC',
-		body: 'Bearer-token API access with a full token lifecycle, plus OIDC sign-in for browser users.',
+		body: 'Bearer-token API access with a full token lifecycle, plus OIDC sign-in for the browser UI.',
 	},
 	{
-		icon: '🛡️',
 		title: 'Audit log',
-		body: 'Every team action is attributed to a member or API key — encrypted provider tokens, hashed API tokens at rest.',
+		body: 'Every team action is attributed to a member or API key. Provider tokens encrypted, API tokens hashed at rest.',
 	},
 ];
 ---
@@ -56,14 +46,13 @@ const features = [
 <section class="lp-section" id="features">
 	<div class="lp-container">
 		<div class="lp-section__head">
-			<span class="lp-eyebrow">Everything you need</span>
-			<h2>A focused toolkit, not a bloated suite</h2>
-			<p>goloom does the core of social planning really well — and stays simple to run.</p>
+			<h2>What it does</h2>
+			<p>Everything around scheduling posts to multiple accounts — and not much you have to grow into.</p>
 		</div>
 		<div class="lp-features">
 			{features.map((f) => (
 				<article class="glass lp-feature">
-					<h3><span class="lp-ico" style="width:32px;height:32px;font-size:1rem;">{f.icon}</span>{f.title}</h3>
+					<h3>{f.title}</h3>
 					<p>{f.body}</p>
 				</article>
 			))}

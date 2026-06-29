@@ -1,0 +1,78 @@
+---
+import LandingLayout from '../../layouts/LandingLayout.astro';
+import Header from '../../components/landing/Header.astro';
+import SiteFooter from '../../components/landing/SiteFooter.astro';
+
+const repo = 'https://github.com/Goloom-App/goloom';
+const license = `${repo}/blob/main/LICENSE`;
+---
+
+<LandingLayout title="goloom — license & legal">
+	<Header />
+	<main>
+		<section class="lp-section">
+			<div class="lp-container lp-legal">
+				<h1>License &amp; legal</h1>
+
+				<h2>License</h2>
+				<p>
+					goloom is free and open source software, released under the
+					<a href={license}>MIT License</a>. You may use, copy, modify and
+					distribute it, including for commercial purposes, as long as the
+					copyright notice and license text are kept.
+				</p>
+
+				<h2>No warranty</h2>
+				<p>
+					goloom is provided “as is”, without warranty of any kind, express or
+					implied. The authors are not liable for any claim, damages or other
+					liability arising from its use. You run it on your own infrastructure
+					and are responsible for your data, your accounts and what you publish.
+				</p>
+
+				<h2>This website</h2>
+				<p>
+					This site is a static page served by GitHub Pages. It sets no cookies
+					and runs no analytics or tracking. As the host, GitHub may process
+					request data (such as IP addresses) under its own
+					<a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">privacy statement</a>.
+				</p>
+
+				<h2>Contact</h2>
+				<p>
+					Questions, bugs and security reports go through the project on GitHub:
+					<a href={repo}>Goloom-App/goloom</a>.
+				</p>
+			</div>
+		</section>
+	</main>
+	<SiteFooter />
+</LandingLayout>
+
+<style>
+	.lp-legal {
+		max-width: 48rem;
+	}
+	.lp-legal h1 {
+		font-size: clamp(2rem, 5vw, 3rem);
+		letter-spacing: -0.03em;
+		margin: 0 0 1.5rem;
+	}
+	.lp-legal h2 {
+		font-size: 1.2rem;
+		letter-spacing: -0.01em;
+		margin: 2rem 0 0.5rem;
+	}
+	.lp-legal p {
+		color: var(--sl-color-gray-2);
+		line-height: 1.65;
+		margin: 0;
+	}
+	.lp-legal a {
+		color: var(--brand-grad-from);
+		text-decoration: none;
+	}
+	.lp-legal a:hover {
+		text-decoration: underline;
+	}
+</style>

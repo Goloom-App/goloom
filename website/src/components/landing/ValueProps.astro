@@ -1,24 +1,20 @@
 ---
 const pillars = [
 	{
-		icon: '📦',
-		title: 'One binary, low ops',
-		body: 'UI and API ship in a single Go process. SQLite by default — no external database to run. PostgreSQL when you need to scale.',
+		title: 'One binary',
+		body: 'UI and API run in a single Go process. SQLite by default — no external database to operate. Switch to PostgreSQL when you outgrow it.',
 	},
 	{
-		icon: '🌐',
-		title: 'Fediverse-native',
-		body: 'First-class support for Mastodon, Friendica and Bluesky, with OAuth onboarding and per-platform publishing and metrics.',
+		title: 'Fediverse first',
+		body: 'Mastodon, Bluesky and Friendica today, with OAuth onboarding and per-account publishing and metrics. More networks are in progress.',
 	},
 	{
-		icon: '🤖',
-		title: 'Built for AI agents',
-		body: 'A stable, team-scoped REST API with bearer-token auth and a validation endpoint — designed for agent workflows like OpenClaw.',
+		title: 'Scriptable',
+		body: 'Everything in the UI is a team-scoped REST call with bearer-token auth. A built-in MCP server lets agents drive it too — both are optional.',
 	},
 	{
-		icon: '👥',
-		title: 'Team-first',
-		body: 'Team workspaces with owner / editor / viewer roles, a review queue for approvals, and a per-team audit log for accountability.',
+		title: 'Teams and review',
+		body: 'Owner, editor and viewer roles, a review queue for approvals, and a per-team audit log that attributes every action.',
 	},
 ];
 ---
@@ -28,7 +24,6 @@ const pillars = [
 		<div class="lp-pillars">
 			{pillars.map((p) => (
 				<article class="glass lp-pillar">
-					<span class="lp-ico">{p.icon}</span>
 					<h3>{p.title}</h3>
 					<p>{p.body}</p>
 				</article>
