@@ -8,20 +8,21 @@ const base = import.meta.env.BASE_URL;
 		<div>
 			<span class="lp-pill">
 				<span class="dot"></span>
-				Single binary · SQLite by default · API-first
+				MIT · single binary · SQLite by default
 			</span>
 			<h1>
-				Plan. Post.<br />
-				<span class="grad-text">Automate.</span>
+				Schedule one post<br />
+				across every account.
 			</h1>
 			<p class="lp-hero__sub">
-				goloom is a lightweight, self-hosted social planning app in one Go binary.
-				Schedule posts across Mastodon, Friendica and Bluesky, collaborate as a team,
-				and let AI agents drive it through a clean REST API.
+				Mastodon's built-in scheduler covers one account on one server. goloom
+				schedules and publishes across all of yours — Mastodon, Bluesky and
+				Friendica — from one queue and calendar you host yourself. Single Go
+				binary, SQLite by default, full REST API.
 			</p>
 			<div class="lp-cta-row">
 				<a class="glow-btn" href={`${base}getting-started/installation/`}>Get started</a>
-				<a class="ghost-btn" href={repo}>View source</a>
+				<a class="ghost-btn" href={repo}>Source on GitHub</a>
 			</div>
 		</div>
 
@@ -30,15 +31,13 @@ const base = import.meta.env.BASE_URL;
 				<span></span><span></span><span></span>
 				<span class="t-title">goloom — quickstart</span>
 			</div>
-			<pre><code><span class="c-comment"># Run the whole app — UI + API — in one container</span>
-<span class="c-prompt">$</span> docker run --rm <span class="c-flag">-p</span> 8080:8080 \
-    <span class="c-flag">-e</span> ENCRYPTION_KEY=$(openssl rand -hex 32) \
-    <span class="c-flag">-e</span> BOOTSTRAP_ADMIN_TOKEN=change-me \
-    <span class="c-flag">-v</span> "$(pwd)/data:/app/data" \
-    goloom
+			<pre><code><span class="c-comment"># One static binary — no Docker, no external database</span>
+<span class="c-prompt">$</span> ENCRYPTION_KEY=$(openssl rand -hex 32) \
+    BOOTSTRAP_ADMIN_TOKEN=change-me \
+    ./goloom
 
-<span class="c-comment"># Open the UI</span>
-<span class="c-prompt">$</span> open http://localhost:8080</code></pre>
+<span class="c-comment"># UI + API on http://localhost:8080</span>
+<span class="c-comment"># Prefer containers? Docker and Kubernetes work too.</span></code></pre>
 		</div>
 	</div>
 </section>

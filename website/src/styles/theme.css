@@ -3,9 +3,9 @@
  * Loaded by Starlight (docs) and imported by the landing layout. */
 
 :root {
-	/* Brand gradient: cyan -> magenta */
+	/* Brand accent: a calm single-hue cyan (no rainbow gradient) */
 	--brand-grad-from: #22d3ee;
-	--brand-grad-to: #d946ef;
+	--brand-grad-to: #38bdf8;
 	--brand-grad: linear-gradient(120deg, var(--brand-grad-from), var(--brand-grad-to));
 	--brand-grad-soft: linear-gradient(
 		120deg,
@@ -63,12 +63,11 @@
 	--sl-color-bg-sidebar: rgba(248, 249, 252, 0.7);
 }
 
-/* Subtle mesh background behind everything */
+/* Very subtle single glow, top-left only — flat, not a mesh */
 body {
 	background-color: var(--surface-0);
 	background-image:
-		radial-gradient(60ch 40ch at 12% -8%, color-mix(in oklab, var(--brand-grad-from) 16%, transparent), transparent 70%),
-		radial-gradient(60ch 40ch at 92% 0%, color-mix(in oklab, var(--brand-grad-to) 14%, transparent), transparent 65%);
+		radial-gradient(70ch 45ch at 8% -12%, color-mix(in oklab, var(--brand-grad-from) 6%, transparent), transparent 70%);
 	background-attachment: fixed;
 	background-repeat: no-repeat;
 }
@@ -76,8 +75,7 @@ body {
 :root[data-theme='light'] body {
 	background-color: #fbfbfd;
 	background-image:
-		radial-gradient(60ch 40ch at 12% -8%, color-mix(in oklab, var(--brand-grad-from) 9%, transparent), transparent 70%),
-		radial-gradient(60ch 40ch at 92% 0%, color-mix(in oklab, var(--brand-grad-to) 8%, transparent), transparent 65%);
+		radial-gradient(70ch 45ch at 8% -12%, color-mix(in oklab, var(--brand-grad-from) 5%, transparent), transparent 70%);
 }
 
 /* Make the Starlight top nav glassy */
@@ -106,22 +104,18 @@ header.header {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.5rem;
-	padding: 0.75rem 1.4rem;
-	border-radius: 999px;
+	padding: 0.7rem 1.3rem;
+	border-radius: 8px;
 	font-weight: 600;
 	font-size: 0.98rem;
 	line-height: 1;
 	text-decoration: none;
 	color: #04060a;
-	background: var(--brand-grad);
-	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08),
-		0 12px 30px -8px color-mix(in oklab, var(--brand-grad-to) 55%, transparent);
-	transition: transform 0.15s ease, box-shadow 0.2s ease;
+	background: var(--brand-grad-from);
+	transition: background 0.15s ease;
 }
 .glow-btn:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14),
-		0 18px 44px -8px color-mix(in oklab, var(--brand-grad-to) 70%, transparent);
+	background: color-mix(in oklab, var(--brand-grad-from) 85%, white);
 }
 
 .ghost-btn {
@@ -135,12 +129,12 @@ header.header {
 	line-height: 1;
 	text-decoration: none;
 	color: var(--sl-color-white);
-	background: var(--glass-bg);
+	background: transparent;
 	border: 1px solid var(--glass-border-strong);
-	transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+	border-radius: 8px;
+	transition: border-color 0.15s ease, background 0.15s ease;
 }
 .ghost-btn:hover {
-	transform: translateY(-2px);
 	border-color: color-mix(in oklab, var(--brand-grad-from) 50%, var(--glass-border-strong));
-	background: var(--brand-grad-soft);
+	background: var(--glass-bg);
 }
