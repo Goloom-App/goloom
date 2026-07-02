@@ -93,3 +93,6 @@ result-*
 
 # Data directory
 /data/
+
+# direnv cache (if `use flake` is set up locally)
+/.direnv/

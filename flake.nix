@@ -11,6 +11,8 @@
       let
         pkgs = import nixpkgs { inherit system; };
       in {
+        formatter = pkgs.nixpkgs-fmt;
+
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             go
