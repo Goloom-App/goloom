@@ -127,3 +127,71 @@ func TestCheck_PerAccountOverrideStillTooLong(t *testing.T) {
 		t.Fatal("expected invalid: override itself exceeds bluesky limit")
 	}
 }
+
+func TestCheck_MastodonCountsURLsAsFixedLength(t *testing.T) {
+	reg := testRegistry(t)
+	accounts := []domain.SocialAccount{acc("masto", "mastodon")}
+	// 450 plain characters plus a 200-character URL: raw length is far over
+	// Mastodon's 500-char limit, but Mastodon counts the URL as 23 characters
+	// (450 + 1 + 23 = 474), so the post is valid.
+	content := strings.Repeat("a", 450) + " https://example.com/" + strings.Repeat("x", 179)
+
+	res, err := Check(context.Background(), reg, accounts, domain.CreatePostInput{
+		Content:        content,
+		TargetAccounts: []string{"masto"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Valid {
+		t.Fatalf("expected valid (Mastodon counts URLs as 23 chars), got %q", res.Problems())
+	}
+	if got := res.Destinations[0].Length; got != 474 {
+		t.Errorf("mastodon destination length = %d, want 474", got)
+	}
+}
+
+func TestCheck_BlueskyCountsGraphemesAndFullURLs(t *testing.T) {
+	reg := testRegistry(t)
+	accounts := []domain.SocialAccount{acc("bsky", "bluesky")}
+
+	// 299 characters + one multi-rune emoji: exactly 300 graphemes, valid.
+	content := strings.Repeat("a", 299) + "👨‍👩‍👧‍👦"
+	res, err := Check(context.Background(), reg, accounts, domain.CreatePostInput{
+		Content:        content,
+		TargetAccounts: []string{"bsky"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Valid {
+		t.Fatalf("expected valid (300 graphemes), got %q with length %d", res.Problems(), res.Destinations[0].Length)
+	}
+
+	// Bluesky gives URLs no discount: 290 chars + 23-char URL = 313 > 300.
+	content = strings.Repeat("a", 290) + "https://example.com/xyz"
+	res, err = Check(context.Background(), reg, accounts, domain.CreatePostInput{
+		Content:        content,
+		TargetAccounts: []string{"bsky"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Valid {
+		t.Fatal("expected invalid: bluesky counts URLs at full length")
+	}
+}
+
+func TestCheckLimits_ProviderAwareCounting(t *testing.T) {
+	// 470 plain chars + space + long URL: 470 + 1 + 23 = 494 for Mastodon.
+	content := strings.Repeat("a", 470) + " https://example.com/" + strings.Repeat("x", 100)
+	limits := []AccountLimit{{AccountID: "masto", Provider: "mastodon", MaxChars: 500}}
+	if res := CheckLimits(content, nil, limits); !res.Valid {
+		t.Fatalf("expected valid (Mastodon URL discount), got %q", res.Problems())
+	}
+	// The same text on a 500-char provider without URL discount is invalid.
+	limits = []AccountLimit{{AccountID: "pixel", Provider: "pixelfed", MaxChars: 500}}
+	if res := CheckLimits(content, nil, limits); res.Valid {
+		t.Fatal("expected invalid: pixelfed counts URLs at full length")
+	}
+}

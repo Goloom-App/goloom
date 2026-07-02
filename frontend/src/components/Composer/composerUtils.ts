@@ -1,5 +1,6 @@
 import type { AccountRecord } from '../../types'
 import { providerRequiresMedia } from '../../mappers'
+import { providerPostLength } from '../../postLength'
 import type { EditorDraftState } from './types'
 
 /** Media this destination publishes after per-account exclusions (mirrors backend FilterMediaIDsForAccount). */
@@ -43,7 +44,7 @@ export function isAccountOverCharLimit(draft: EditorDraftState, account: Account
   if (account.maxChars <= 0) {
     return false
   }
-  return bodyForAccountLimit(draft, account.id).length > account.maxChars
+  return providerPostLength(account.provider, bodyForAccountLimit(draft, account.id)) > account.maxChars
 }
 
 export function isAnyTargetAccountOverCharLimit(
