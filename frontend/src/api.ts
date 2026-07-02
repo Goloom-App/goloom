@@ -36,9 +36,7 @@ export interface BackendTeam {
   name: string
   description: string
   created_at: string
-  is_personal: boolean
   is_ai_enabled?: boolean
-  personal_for_user_id?: string
   scheduling_preferences?: BackendTeamSchedulingPreferences
   brand_color?: string
 }
@@ -86,6 +84,16 @@ export interface BackendMembership {
   user_id: string
   team_id: string
   role: 'owner' | 'editor' | 'viewer'
+  created_at: string
+}
+
+export interface BackendTeamInvitation {
+  id: string
+  team_id: string
+  email: string
+  role: 'editor' | 'viewer'
+  expires_at: string
+  created_by_user_id: string
   created_at: string
 }
 
@@ -869,7 +877,7 @@ export function createApiClient(options: ApiClientOptions) {
       })
     },
     createTeamInvitation(teamID: string, payload: { email: string; role: 'editor' | 'viewer' }) {
-      return request<{ invitation: { id: string; team_id: string; email: string; role: string; expires_at: string }; token: string }>(
+      return request<{ invitation: BackendTeamInvitation; token: string }>(
         options,
         `/v1/teams/${teamID}/invitations`,
         {
@@ -878,6 +886,17 @@ export function createApiClient(options: ApiClientOptions) {
           body: JSON.stringify(payload),
         },
       )
+    },
+    listTeamInvitations(teamID: string) {
+      return request<{ items: BackendTeamInvitation[] }>(options, `/v1/teams/${teamID}/invitations`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    deleteTeamInvitation(teamID: string, invitationID: string) {
+      return request<void>(options, `/v1/teams/${teamID}/invitations/${invitationID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token),
+      })
     },
     acceptTeamInvitation(payload: { token: string }) {
       return request<BackendMembership>(options, `/v1/invitations/accept`, {

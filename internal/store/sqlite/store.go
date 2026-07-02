@@ -122,11 +122,7 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 	if err != nil {
 		return err
 	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	_, err = s.EnsurePersonalTeam(ctx, userID)
-	return err
+	return tx.Commit()
 }
 
 func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {
@@ -152,9 +148,6 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 			return domain.User{}, err
 		}
 		if err := tx.Commit(); err != nil {
-			return domain.User{}, err
-		}
-		if _, err := s.EnsurePersonalTeam(ctx, user.ID); err != nil {
 			return domain.User{}, err
 		}
 		return user, nil
@@ -185,9 +178,6 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 		return domain.User{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return domain.User{}, err
-	}
-	if _, err := s.EnsurePersonalTeam(ctx, user.ID); err != nil {
 		return domain.User{}, err
 	}
 	return user, nil
@@ -294,12 +284,12 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	_ = isAdmin
 	query := `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+		select id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 		from teams
 	`
 	args := []any{userID}
 	query += ` where id in (select team_id from team_memberships where user_id = ?)`
-	query += ` order by is_personal desc, name asc`
+	query += ` order by name asc`
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -324,8 +314,8 @@ func (s *Store) CreateTeam(ctx context.Context, ownerUserID string, input domain
 		CreatedAt:   mustParseTime(now),
 	}
 	if _, err := tx.ExecContext(ctx, `
-		insert into teams (id, name, description, is_personal, personal_for_user_id, created_at)
-		values (?, ?, ?, 0, null, ?)`,
+		insert into teams (id, name, description, created_at)
+		values (?, ?, ?, ?)`,
 		team.ID, team.Name, team.Description, now,
 	); err != nil {
 		return domain.Team{}, err
@@ -394,7 +384,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 		}
 	}
 	return queryTeam(ctx, s.db, `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+		select id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 		from teams
 		where id = ?`,
 		teamID,
@@ -1263,20 +1253,16 @@ func scanUser(scanner userScanner) (domain.User, error) {
 
 func scanTeam(scanner teamScanner) (domain.Team, error) {
 	var (
-		team              domain.Team
-		isPersonal        int
-		isAIEnabled       int
-		personalForUserID sql.NullString
-		schedulingPrefs   sql.NullString
-		brandColor        sql.NullString
-		createdAt         string
+		team            domain.Team
+		isAIEnabled     int
+		schedulingPrefs sql.NullString
+		brandColor      sql.NullString
+		createdAt       string
 	)
-	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt, &isPersonal, &isAIEnabled, &personalForUserID, &schedulingPrefs, &brandColor); err != nil {
+	if err := scanner.Scan(&team.ID, &team.Name, &team.Description, &createdAt, &isAIEnabled, &schedulingPrefs, &brandColor); err != nil {
 		return domain.Team{}, err
 	}
-	team.IsPersonal = isPersonal != 0
 	team.IsAIEnabled = isAIEnabled != 0
-	team.PersonalForUserID = personalForUserID.String
 	team.BrandColor = brandColor.String
 	if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {
 		prefs, err := domain.ParseTeamSchedulingPrefsJSON(schedulingPrefs.String)

@@ -207,15 +207,13 @@ type User struct {
 }
 
 type Team struct {
-	ID                string                    `json:"id"`
-	Name              string                    `json:"name"`
-	Description       string                    `json:"description"`
-	IsPersonal        bool                      `json:"is_personal"`
-	IsAIEnabled       bool                      `json:"is_ai_enabled"`
-	PersonalForUserID string                    `json:"personal_for_user_id,omitempty"`
-	SchedulingPrefs   TeamSchedulingPreferences `json:"scheduling_preferences"`
-	BrandColor        string                    `json:"brand_color"`
-	CreatedAt         time.Time                 `json:"created_at"`
+	ID              string                    `json:"id"`
+	Name            string                    `json:"name"`
+	Description     string                    `json:"description"`
+	IsAIEnabled     bool                      `json:"is_ai_enabled"`
+	SchedulingPrefs TeamSchedulingPreferences `json:"scheduling_preferences"`
+	BrandColor      string                    `json:"brand_color"`
+	CreatedAt       time.Time                 `json:"created_at"`
 }
 
 type BrandIdentity struct {

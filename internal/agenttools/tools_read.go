@@ -205,7 +205,6 @@ func coreGetTeams(ctx context.Context, d Deps, inv Invocation, _ GetTeamsInput) 
 			TeamID:      t.ID,
 			Name:        t.Name,
 			Description: t.Description,
-			IsPersonal:  t.IsPersonal,
 		})
 	}
 	return GetTeamsOutput{Teams: result}, nil

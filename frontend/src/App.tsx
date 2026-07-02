@@ -12,6 +12,8 @@ import { SocialPreview } from './components/post/SocialPreview'
 import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
 import { CreateTeamModal } from './components/Shell/CreateTeamModal'
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
+import { PlatformTour } from './components/onboarding/PlatformTour'
 import { Sun, Moon, Edit, Trash2, Copy, X } from 'lucide-react'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
@@ -49,7 +51,7 @@ import {
   type BackendPostVersion,
   type BackendTeam,
 } from './api'
-import { loadInitialSection, loadInitialTeamId, loadStoredSettings, writeStoredSettings, LAST_SECTION_STORAGE_KEY, LAST_TEAM_STORAGE_KEY } from './appStorage'
+import { isTourDone, loadInitialSection, loadInitialTeamId, loadStoredSettings, markTourDone, resetTourDone, writeStoredSettings, LAST_SECTION_STORAGE_KEY, LAST_TEAM_STORAGE_KEY } from './appStorage'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { engagementForAccount } from './postMetrics'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
@@ -130,6 +132,14 @@ function App() {
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
   const [editorDraft, setEditorDraft] = useState<EditorDraftState>(() => defaultEditorDraft(currentDate, []))
   const [loading, setLoading] = useState(false)
+  // True once the first dashboard load delivered team data; gates onboarding.
+  const [dashboardReady, setDashboardReady] = useState(false)
+  // True while an ?invite= token from the URL is still being redeemed —
+  // suppresses the onboarding wizard until the membership exists.
+  const [invitePending, setInvitePending] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('invite'),
+  )
+  const [tourOpen, setTourOpen] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -427,6 +437,7 @@ function App() {
     prevSectionBeforeComposerRef.current = null
     setSection('calendar')
     setLoading(false)
+    setDashboardReady(false)
     if (message) {
       setStatusMessage(message)
     }
@@ -551,6 +562,7 @@ function App() {
       setAccounts(teamPayloads.flatMap((payload) => payload.accounts))
       setPosts(teamPayloads.flatMap((payload) => payload.posts))
       setPostVersions(teamPayloads.flatMap((payload) => payload.versions))
+      setDashboardReady(true)
       setExpandedPostId((current) => (current && teamPayloads.flatMap((payload) => payload.posts).some((post) => post.id === current) ? current : null))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
@@ -610,6 +622,17 @@ function App() {
     }
   }, [api, authenticated, loadDashboard])
 
+  // Open the platform tour once per user, on the first sign-in with at least
+  // one team — right after onboarding, or immediately for invited users.
+  useEffect(() => {
+    if (!authenticated || !dashboardReady || invitePending || teams.length === 0) {
+      return
+    }
+    if (!isTourDone()) {
+      setTourOpen(true)
+    }
+  }, [authenticated, dashboardReady, invitePending, teams.length])
+
   useEffect(() => {
     if (!api) {
       return
@@ -657,6 +680,10 @@ function App() {
       } catch (cause) {
         if (!cancelled) {
           setError(translateApiError(cause instanceof Error ? cause.message : t('status.failedAcceptInvitation'), t))
+        }
+      } finally {
+        if (!cancelled) {
+          setInvitePending(false)
         }
       }
     })()
@@ -1084,33 +1111,8 @@ function App() {
     return result.imported
   }
 
-  async function handleSavePersonalAiSettings() {
-    if (!api || !selectedTeam || !selectedTeam.isPersonal) {
-      return
-    }
-    await runAction(async () => {
-      await api.updateTeam(selectedTeam.id, {
-        name: selectedTeam.name,
-        description: selectedTeam.description ?? '',
-        is_ai_enabled: teamAiEnabled,
-      })
-      if (teamAiEnabled && (teamAiApiKey.trim() || teamAiKeySet)) {
-        const cfg = await api.upsertAIServiceConfig(selectedTeam.id, {
-          provider: teamAiProvider,
-          model: teamAiModel.trim(),
-          base_url: teamAiBaseUrl.trim(),
-          api_key: teamAiApiKey.trim(),
-          description: 'team llm',
-        })
-        setTeamAiApiKey('')
-        setTeamAiKeySet(Boolean(cfg.api_key_set))
-      }
-      await loadDashboard({ silent: true })
-    }, t('status.teamSettingsUpdated'))
-  }
-
   async function handleUpdateTeam() {
-    if (!api || !selectedTeam || selectedTeam.isPersonal) {
+    if (!api || !selectedTeam) {
       return
     }
     const name = teamSettingsName.trim()
@@ -1129,7 +1131,7 @@ function App() {
   }
 
   async function handleSaveTeamBrandColor(color: string) {
-    if (!api || !selectedTeam || (!selectedTeam.isPersonal && myRoleInSelectedTeam !== 'owner')) {
+    if (!api || !selectedTeam || myRoleInSelectedTeam !== 'owner') {
       return
     }
     await runAction(async () => {
@@ -1660,6 +1662,25 @@ function App() {
     )
   }
 
+  // First sign-in without a team (and no invite being redeemed): the user
+  // creates their team before entering the app.
+  if (dashboardReady && !invitePending && teams.length === 0) {
+    return (
+      <AuthShell theme={resolvedTheme}>
+        <OnboardingWizard
+          userName={principalUser?.name ?? ''}
+          userEmail={principalUser?.email ?? ''}
+          onCreate={async (name, description) => {
+            const created = await api.createTeam({ name, description })
+            setSelectedTeamId(created.id)
+            await loadDashboard({ silent: true })
+            setStatusMessage(t('teams.createdStatus', 'Team "{{name}}" created.', { name: created.name }))
+          }}
+        />
+      </AuthShell>
+    )
+  }
+
   return (
     <>
     <AppShell
@@ -2015,7 +2036,6 @@ function App() {
             setMemberRoleEdits={setMemberRoleEdits}
             addMemberUserId={addMemberUserId}
             setAddMemberUserId={setAddMemberUserId}
-            onSavePersonalAiSettings={() => void handleSavePersonalAiSettings()}
             onUpdateTeam={() => void handleUpdateTeam()}
             onSaveAiServiceConfig={() => void handleSaveAiServiceConfig()}
             onSaveBrandColor={(color) => void handleSaveTeamBrandColor(color)}
@@ -2059,6 +2079,10 @@ function App() {
             apiTokensLoading={apiTokensLoading}
             currentTokenId={currentTokenId}
             showBrowserSession={authStatus?.appEnv === 'development' && principalUser?.globalRole === 'admin'}
+            onRestartTour={() => {
+              resetTourDone()
+              setTourOpen(true)
+            }}
           />
         )}
 
@@ -2150,6 +2174,14 @@ function App() {
         setStatusMessage(t('teams.createdStatus', 'Team "{{name}}" created.', { name: created.name }))
       }}
     />
+    {tourOpen ? (
+      <PlatformTour
+        onClose={() => {
+          markTourDone()
+          setTourOpen(false)
+        }}
+      />
+    ) : null}
     </>
   )
 }

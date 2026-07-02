@@ -113,6 +113,92 @@ paths:
                 $ref: "#/components/schemas/Team"
         "400":
           $ref: "#/components/responses/BadRequest"
+  /v1/teams/{teamID}/invitations:
+    post:
+      tags: [Teams]
+      summary: Invite a user to the team by email (owner only)
+      description: |
+        Creates an email-bound invitation and returns the plaintext invite token
+        exactly once. Share it as `<app-url>/?invite=<token>`; the invitee joins
+        the team after signing in with the invited email address.
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamInvitationInput"
+      responses:
+        "201":
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invitation:
+                    $ref: "#/components/schemas/TeamInvitation"
+                  token:
+                    type: string
+                    description: Plaintext invite token; only returned here.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      tags: [Teams]
+      summary: List pending invitations for the team (owner only)
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+      responses:
+        "200":
+          description: Pending invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TeamInvitation"
+  /v1/teams/{teamID}/invitations/{invitationID}:
+    delete:
+      tags: [Teams]
+      summary: Revoke a pending invitation (owner only)
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/invitationID"
+      responses:
+        "204":
+          description: Invitation revoked
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /v1/invitations/accept:
+    post:
+      tags: [Teams]
+      summary: Accept a team invitation
+      description: |
+        Redeems an invite token for the signed-in user. The user's email must
+        match the invited email address.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Membership created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMembership"
+        "400":
+          $ref: "#/components/responses/BadRequest"
   /v1/teams/{teamID}/accounts:
     get:
       tags: [Accounts]
@@ -992,6 +1078,13 @@ components:
       schema:
         type: string
         format: uuid
+    invitationID:
+      in: path
+      name: invitationID
+      required: true
+      schema:
+        type: string
+        format: uuid
   responses:
     Unauthorized:
       description: Missing or invalid bearer token
@@ -1048,19 +1141,63 @@ components:
           type: string
         description:
           type: string
-        is_personal:
-          type: boolean
         is_ai_enabled:
           type: boolean
-        personal_for_user_id:
-          type: string
-          format: uuid
         scheduling_preferences:
           type: object
         brand_color:
           type: string
           description: Team accent color as "#rrggbb"; empty means default accent.
           example: "#7c3aed"
+        created_at:
+          type: string
+          format: date-time
+    TeamInvitation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        team_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [editor, viewer]
+        expires_at:
+          type: string
+          format: date-time
+        created_by_user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+    CreateTeamInvitationInput:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [editor, viewer]
+    TeamMembership:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        team_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [owner, editor, viewer]
         created_at:
           type: string
           format: date-time

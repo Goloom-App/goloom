@@ -211,7 +211,6 @@ type TeamInfo struct {
 	TeamID      string `json:"team_id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	IsPersonal  bool   `json:"is_personal"`
 }
 
 type GetTeamsOutput struct {

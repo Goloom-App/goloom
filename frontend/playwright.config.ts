@@ -26,6 +26,19 @@ export default defineConfig({
     baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    // The platform tour auto-opens once per browser profile and would block
+    // clicks in every spec (each test gets a fresh profile). Mark it as seen
+    // for the shared server's origin; onboarding.spec.ts runs its own server
+    // on a different origin and still exercises the tour.
+    storageState: {
+      cookies: [],
+      origins: [
+        {
+          origin: baseURL,
+          localStorage: [{ name: 'goloom.tour_done.v1', value: '1' }],
+        },
+      ],
+    },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: process.env.PLAYWRIGHT_SKIP_WEB_SERVER

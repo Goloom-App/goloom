@@ -23,8 +23,7 @@ type Store interface {
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (domain.User, error)
 	ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error)
-	EnsurePersonalTeam(ctx context.Context, userID string) (domain.Team, error)
-	EnsurePersonalTeamsMigrated(ctx context.Context) error
+	MigratePersonalWorkspaces(ctx context.Context) error
 	GetTeamByID(ctx context.Context, teamID string) (domain.Team, error)
 	CreateTeam(ctx context.Context, ownerUserID string, input domain.CreateTeamInput) (domain.Team, error)
 	UpdateTeam(ctx context.Context, teamID string, input domain.UpdateTeamInput) (domain.Team, error)
@@ -147,6 +146,8 @@ type Store interface {
 	GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error)
 	MigrateAccountToTeam(ctx context.Context, userID string, accountID, targetTeamID string, isAdmin bool) error
 	CreateTeamInvitation(ctx context.Context, teamID, createdByUserID string, input domain.CreateTeamInvitationInput) (domain.TeamInvitation, string, error)
+	ListTeamInvitations(ctx context.Context, teamID string) ([]domain.TeamInvitation, error)
+	DeleteTeamInvitation(ctx context.Context, teamID, invitationID string) error
 	AcceptTeamInvitation(ctx context.Context, userID, email, rawToken string) (domain.TeamMembership, error)
 	CreateScheduledPost(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostInput) (domain.ScheduledPost, error)
 	ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error)

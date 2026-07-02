@@ -146,9 +146,7 @@ export interface TeamRecord {
   description: string
   members: TeamMemberRecord[]
   accountIds: string[]
-  isPersonal: boolean
   isAiEnabled: boolean
-  personalForUserId?: string
   schedulingPreferences?: TeamSchedulingPreferences
   brandColor?: string
 }

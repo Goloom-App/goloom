@@ -135,6 +135,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
 	mux.Handle("GET /v1/teams/{teamID}/audit-log", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamAuditLog))))
 	mux.Handle("POST /v1/teams/{teamID}/invitations", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleCreateTeamInvitation))))
+	mux.Handle("GET /v1/teams/{teamID}/invitations", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamInvitations))))
+	mux.Handle("DELETE /v1/teams/{teamID}/invitations/{invitationID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleDeleteTeamInvitation))))
 	mux.Handle("POST /v1/invitations/accept", a.auth.RequireAuth(http.HandlerFunc(a.handleAcceptTeamInvitation)))
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListAccounts)))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/oauth/mastodon/start", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleStartMastodonOAuth))))
@@ -354,25 +356,6 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.BrandColor != nil && !isValidBrandColor(*input.BrandColor) {
 		a.writeError(w, r, "invalid_brand_color", http.StatusBadRequest)
-		return
-	}
-
-	if team.IsPersonal {
-		if input.IsAIEnabled == nil && input.BrandColor == nil {
-			a.writeError(w, r, "personal_workspace_ai_only", http.StatusBadRequest)
-			return
-		}
-		updated, err := a.store.UpdateTeam(r.Context(), team.ID, domain.UpdateTeamInput{
-			Name:        team.Name,
-			Description: team.Description,
-			IsAIEnabled: input.IsAIEnabled,
-			BrandColor:  input.BrandColor,
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		auth.WriteJSON(w, http.StatusOK, updated)
 		return
 	}
 
@@ -641,13 +624,8 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
-	if err != nil {
+	if _, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if team.IsPersonal {
-		a.writeError(w, r, "cannot_add_members_personal", http.StatusBadRequest)
 		return
 	}
 
@@ -662,13 +640,8 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
-	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
-	if err != nil {
+	if _, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if team.IsPersonal {
-		a.writeError(w, r, "cannot_remove_members_personal", http.StatusBadRequest)
 		return
 	}
 	if err := a.store.RemoveTeamMember(r.Context(), r.PathValue("teamID"), r.PathValue("userID")); err != nil {
@@ -1176,10 +1149,34 @@ func (a *API) handleCreateTeamInvitation(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.recordAudit(r, inv.TeamID, "invitation.create", "invitation", &inv.ID, "Invited "+inv.Email+" as "+string(inv.Role))
 	auth.WriteJSON(w, http.StatusCreated, map[string]any{
 		"invitation": inv,
 		"token":      token,
 	})
+}
+
+func (a *API) handleListTeamInvitations(w http.ResponseWriter, r *http.Request) {
+	invitations, err := a.store.ListTeamInvitations(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if invitations == nil {
+		invitations = []domain.TeamInvitation{}
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": invitations})
+}
+
+func (a *API) handleDeleteTeamInvitation(w http.ResponseWriter, r *http.Request) {
+	teamID := r.PathValue("teamID")
+	invitationID := r.PathValue("invitationID")
+	if err := a.store.DeleteTeamInvitation(r.Context(), teamID, invitationID); err != nil {
+		a.writeError(w, r, "invitation_not_found", http.StatusNotFound)
+		return
+	}
+	a.recordAudit(r, teamID, "invitation.revoke", "invitation", &invitationID, "Revoked invitation")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) handleAcceptTeamInvitation(w http.ResponseWriter, r *http.Request) {

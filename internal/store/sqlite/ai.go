@@ -858,7 +858,7 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 
 func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+		select id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 		from teams
 		where is_ai_enabled = 1
 		order by name asc`)
@@ -870,23 +870,19 @@ func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
 	var teams []domain.Team
 	for rows.Next() {
 		var (
-			team              domain.Team
-			isPersonal        int
-			isAIEnabled       int
-			personalForUserID sql.NullString
-			schedulingPrefs   sql.NullString
-			brandColor        sql.NullString
-			createdAt         string
+			team            domain.Team
+			isAIEnabled     int
+			schedulingPrefs sql.NullString
+			brandColor      sql.NullString
+			createdAt       string
 		)
 		if err := rows.Scan(
 			&team.ID, &team.Name, &team.Description, &createdAt,
-			&isPersonal, &isAIEnabled, &personalForUserID, &schedulingPrefs, &brandColor,
+			&isAIEnabled, &schedulingPrefs, &brandColor,
 		); err != nil {
 			return nil, err
 		}
-		team.IsPersonal = isPersonal != 0
 		team.IsAIEnabled = isAIEnabled != 0
-		team.PersonalForUserID = personalForUserID.String
 		team.BrandColor = brandColor.String
 		if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {
 			prefs, err := domain.ParseTeamSchedulingPrefsJSON(schedulingPrefs.String)
