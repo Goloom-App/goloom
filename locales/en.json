@@ -428,6 +428,13 @@
       "accountName": "Account name",
       "editing": "Editing"
     },
+    "onboarding": {
+      "welcomeTitle": "Welcome, {{name}}!",
+      "welcomeText": "goloom organizes everything around teams: social accounts, posts, and members all live in a team. Create yours to get started — use it solo or invite others later.",
+      "teamHint": "You can rename the team and invite members at any time in the team settings.",
+      "defaultTeamName": "My team",
+      "createTeamButton": "Create team & get started"
+    },
     "teams": {
       "yourTeams": "Your teams",
       "cardsHint": "Each card shows members, connected accounts, and post activity for that workspace.",

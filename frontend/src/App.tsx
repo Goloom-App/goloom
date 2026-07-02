@@ -12,6 +12,7 @@ import { SocialPreview } from './components/post/SocialPreview'
 import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
 import { CreateTeamModal } from './components/Shell/CreateTeamModal'
+import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
 import { Sun, Moon, Edit, Trash2, Copy, X } from 'lucide-react'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
@@ -130,6 +131,13 @@ function App() {
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
   const [editorDraft, setEditorDraft] = useState<EditorDraftState>(() => defaultEditorDraft(currentDate, []))
   const [loading, setLoading] = useState(false)
+  // True once the first dashboard load delivered team data; gates onboarding.
+  const [dashboardReady, setDashboardReady] = useState(false)
+  // True while an ?invite= token from the URL is still being redeemed —
+  // suppresses the onboarding wizard until the membership exists.
+  const [invitePending, setInvitePending] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('invite'),
+  )
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -427,6 +435,7 @@ function App() {
     prevSectionBeforeComposerRef.current = null
     setSection('calendar')
     setLoading(false)
+    setDashboardReady(false)
     if (message) {
       setStatusMessage(message)
     }
@@ -551,6 +560,7 @@ function App() {
       setAccounts(teamPayloads.flatMap((payload) => payload.accounts))
       setPosts(teamPayloads.flatMap((payload) => payload.posts))
       setPostVersions(teamPayloads.flatMap((payload) => payload.versions))
+      setDashboardReady(true)
       setExpandedPostId((current) => (current && teamPayloads.flatMap((payload) => payload.posts).some((post) => post.id === current) ? current : null))
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 401) {
@@ -657,6 +667,10 @@ function App() {
       } catch (cause) {
         if (!cancelled) {
           setError(translateApiError(cause instanceof Error ? cause.message : t('status.failedAcceptInvitation'), t))
+        }
+      } finally {
+        if (!cancelled) {
+          setInvitePending(false)
         }
       }
     })()
@@ -1630,6 +1644,25 @@ function App() {
           onSubmit={(mode) => void authenticateWithToken(mode)}
           onStartOIDCLogin={() => void startOIDCLogin()}
           onUseRecovery={enterRecoveryMode}
+        />
+      </AuthShell>
+    )
+  }
+
+  // First sign-in without a team (and no invite being redeemed): the user
+  // creates their team before entering the app.
+  if (dashboardReady && !invitePending && teams.length === 0) {
+    return (
+      <AuthShell theme={resolvedTheme}>
+        <OnboardingWizard
+          userName={principalUser?.name ?? ''}
+          userEmail={principalUser?.email ?? ''}
+          onCreate={async (name, description) => {
+            const created = await api.createTeam({ name, description })
+            setSelectedTeamId(created.id)
+            await loadDashboard({ silent: true })
+            setStatusMessage(t('teams.createdStatus', 'Team "{{name}}" created.', { name: created.name }))
+          }}
         />
       </AuthShell>
     )

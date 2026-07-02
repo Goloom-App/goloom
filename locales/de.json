@@ -428,6 +428,13 @@
       "accountName": "Kontoname",
       "editing": "Bearbeitung"
     },
+    "onboarding": {
+      "welcomeTitle": "Willkommen, {{name}}!",
+      "welcomeText": "goloom organisiert alles in Teams: Social-Konten, Beiträge und Mitglieder gehören immer zu einem Team. Lege dein Team an, um loszulegen — nutze es allein oder lade später andere ein.",
+      "teamHint": "Du kannst das Team jederzeit in den Team-Einstellungen umbenennen und Mitglieder einladen.",
+      "defaultTeamName": "Mein Team",
+      "createTeamButton": "Team anlegen & loslegen"
+    },
     "teams": {
       "yourTeams": "Ihre Teams",
       "cardsHint": "Jede Karte zeigt Mitglieder, verbundene Konten und Beitragsaktivität für diesen Arbeitsbereich.",
