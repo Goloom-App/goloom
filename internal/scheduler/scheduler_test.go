@@ -588,6 +588,14 @@ func (m *mockStore) CreateTeamInvitation(ctx context.Context, teamID, createdByU
 	return domain.TeamInvitation{}, "", nil
 }
 
+func (m *mockStore) ListTeamInvitations(ctx context.Context, teamID string) ([]domain.TeamInvitation, error) {
+	return nil, nil
+}
+
+func (m *mockStore) DeleteTeamInvitation(ctx context.Context, teamID, invitationID string) error {
+	return nil
+}
+
 func (m *mockStore) AcceptTeamInvitation(ctx context.Context, userID, email, rawToken string) (domain.TeamMembership, error) {
 	return domain.TeamMembership{}, nil
 }

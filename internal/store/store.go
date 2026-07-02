@@ -147,6 +147,8 @@ type Store interface {
 	GetAccountsByIDs(ctx context.Context, teamID string, ids []string) ([]domain.SocialAccount, error)
 	MigrateAccountToTeam(ctx context.Context, userID string, accountID, targetTeamID string, isAdmin bool) error
 	CreateTeamInvitation(ctx context.Context, teamID, createdByUserID string, input domain.CreateTeamInvitationInput) (domain.TeamInvitation, string, error)
+	ListTeamInvitations(ctx context.Context, teamID string) ([]domain.TeamInvitation, error)
+	DeleteTeamInvitation(ctx context.Context, teamID, invitationID string) error
 	AcceptTeamInvitation(ctx context.Context, userID, email, rawToken string) (domain.TeamMembership, error)
 	CreateScheduledPost(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostInput) (domain.ScheduledPost, error)
 	ListTeamPosts(ctx context.Context, teamID string) ([]domain.ScheduledPost, error)

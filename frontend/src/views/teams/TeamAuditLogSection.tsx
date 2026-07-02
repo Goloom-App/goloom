@@ -23,6 +23,8 @@ const AUDIT_ACTIONS = [
   'brand_profile.update',
   'api_token.create',
   'api_token.revoke',
+  'invitation.create',
+  'invitation.revoke',
 ]
 
 function actionLabel(t: TFunction, action: string): string {

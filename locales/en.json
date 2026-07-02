@@ -479,6 +479,19 @@
       "addMember": "Add Member",
       "selectUser": "Select user…",
       "addToTeam": "Add to Team",
+      "inviteTitle": "Invite by email",
+      "inviteHint": "Invite someone who is not on the platform yet. They join this team automatically once they sign in with the invited email address.",
+      "inviteEmailLabel": "Email address",
+      "inviteRoleLabel": "Role",
+      "inviteSubmit": "Create invitation",
+      "inviteLinkLabel": "Invite link",
+      "inviteLinkNote": "Copy and share this link now — it is shown only once.",
+      "inviteCopy": "Copy link",
+      "inviteCopied": "Copied!",
+      "invitePendingTitle": "Pending invitations",
+      "invitePendingEmpty": "No pending invitations.",
+      "inviteExpires": "expires {{date}}",
+      "inviteRevoke": "Revoke",
       "brandingTitle": "Branding",
       "brandingHint": "Pick your team's brand color. It is used as the accent color across the app for everyone in this team.",
       "brandColorLabel": "Brand color",
@@ -698,7 +711,9 @@
         "ai_config_update": "AI configuration changed",
         "brand_profile_update": "Brand profile updated",
         "api_token_create": "API key created",
-        "api_token_revoke": "API key revoked"
+        "api_token_revoke": "API key revoked",
+        "invitation_create": "Invitation created",
+        "invitation_revoke": "Invitation revoked"
       }
     },
     "admin": {

@@ -6,6 +6,7 @@ import { SectionCard, ToggleSwitch } from '../../components/ui'
 import type { createApiClient } from '../../api'
 import type { TeamRecord, TeamRole, UserRecord } from '../../types'
 import { TeamAuditLogSection } from './TeamAuditLogSection'
+import { TeamInvitationsSection } from './TeamInvitationsSection'
 
 interface TeamSettingsViewProps {
   api: ReturnType<typeof createApiClient> | null
@@ -322,6 +323,8 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
               </button>
             </div>
           </SectionCard>
+
+          <TeamInvitationsSection api={props.api} teamId={selectedTeam.id} />
 
           <TeamAuditLogSection api={props.api} teamId={selectedTeam.id} />
         </>

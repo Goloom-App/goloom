@@ -135,6 +135,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
 	mux.Handle("GET /v1/teams/{teamID}/audit-log", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamAuditLog))))
 	mux.Handle("POST /v1/teams/{teamID}/invitations", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleCreateTeamInvitation))))
+	mux.Handle("GET /v1/teams/{teamID}/invitations", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamInvitations))))
+	mux.Handle("DELETE /v1/teams/{teamID}/invitations/{invitationID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleDeleteTeamInvitation))))
 	mux.Handle("POST /v1/invitations/accept", a.auth.RequireAuth(http.HandlerFunc(a.handleAcceptTeamInvitation)))
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListAccounts)))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/oauth/mastodon/start", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleStartMastodonOAuth))))
@@ -1176,10 +1178,34 @@ func (a *API) handleCreateTeamInvitation(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.recordAudit(r, inv.TeamID, "invitation.create", "invitation", &inv.ID, "Invited "+inv.Email+" as "+string(inv.Role))
 	auth.WriteJSON(w, http.StatusCreated, map[string]any{
 		"invitation": inv,
 		"token":      token,
 	})
+}
+
+func (a *API) handleListTeamInvitations(w http.ResponseWriter, r *http.Request) {
+	invitations, err := a.store.ListTeamInvitations(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if invitations == nil {
+		invitations = []domain.TeamInvitation{}
+	}
+	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": invitations})
+}
+
+func (a *API) handleDeleteTeamInvitation(w http.ResponseWriter, r *http.Request) {
+	teamID := r.PathValue("teamID")
+	invitationID := r.PathValue("invitationID")
+	if err := a.store.DeleteTeamInvitation(r.Context(), teamID, invitationID); err != nil {
+		a.writeError(w, r, "invitation_not_found", http.StatusNotFound)
+		return
+	}
+	a.recordAudit(r, teamID, "invitation.revoke", "invitation", &invitationID, "Revoked invitation")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) handleAcceptTeamInvitation(w http.ResponseWriter, r *http.Request) {
