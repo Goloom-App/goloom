@@ -30,6 +30,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Image refs must be lowercase; github.repository may contain uppercase.
+      - name: Compute image name
+        id: img
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push (linux/amd64, linux/arm64)
         uses: docker/build-push-action@v7
         with:
@@ -39,7 +44,7 @@ jobs:
           build-args: |
             VERSION=dev-${{ github.sha }}
           tags: |
-            ghcr.io/${{ github.repository }}:dev
-            ghcr.io/${{ github.repository }}:dev-${{ github.sha }}
+            ${{ steps.img.outputs.image }}:dev
+            ${{ steps.img.outputs.image }}:dev-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
