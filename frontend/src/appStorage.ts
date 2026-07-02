@@ -5,6 +5,29 @@ import type { AppSection, SettingsState } from './types'
 export const SETTINGS_STORAGE_KEY = 'goloom-ui-settings'
 export const LAST_SECTION_STORAGE_KEY = 'goloom.last_section.v1'
 export const LAST_TEAM_STORAGE_KEY = 'goloom.last_team.v1'
+export const TOUR_DONE_STORAGE_KEY = 'goloom.tour_done.v1'
+
+/** Whether this browser has already finished (or skipped) the platform tour. */
+export function isTourDone(): boolean {
+  if (typeof window === 'undefined') {
+    return true
+  }
+  return window.localStorage.getItem(TOUR_DONE_STORAGE_KEY) === '1'
+}
+
+export function markTourDone() {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.localStorage.setItem(TOUR_DONE_STORAGE_KEY, '1')
+}
+
+export function resetTourDone() {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.localStorage.removeItem(TOUR_DONE_STORAGE_KEY)
+}
 
 export function loadStoredSettings(): SettingsState {
   if (typeof window === 'undefined') {

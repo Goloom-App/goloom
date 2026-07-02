@@ -435,6 +435,27 @@
       "defaultTeamName": "Mein Team",
       "createTeamButton": "Team anlegen & loslegen"
     },
+    "tour": {
+      "dashboardTitle": "Dashboard",
+      "dashboardText": "Das Dashboard zeigt dir, was heute wichtig ist: anstehende Beiträge, Entwürfe zur Freigabe und die letzte Aktivität deines Teams.",
+      "calendarTitle": "Kalender & Editor",
+      "calendarText": "Plane deine Inhalte im Kalender und schreibe Beiträge im Editor — einmal geplant, veröffentlicht goloom auf allen gewählten Konten.",
+      "accountsTitle": "Social-Konten",
+      "accountsText": "Verbinde Mastodon, Bluesky, Friendica und mehr unter Konten. Verbundene Konten stehen im Editor als Ziele zur Verfügung.",
+      "teamTitle": "Dein Team",
+      "teamText": "Alles gehört zu einem Team. In den Team-Einstellungen kannst du es umbenennen, eine Markenfarbe wählen, Mitglieder verwalten und per E-Mail einladen.",
+      "analyticsTitle": "Analytics",
+      "analyticsText": "Verfolge, wie deine Beiträge ankommen: Engagement, Follower-Wachstum, beste Posting-Zeiten und Hashtag-Auswertungen.",
+      "settingsTitle": "Einstellungen & KI",
+      "settingsText": "In den Einstellungen passt du Sprache und API-Zugriff an. Teams können außerdem den KI-Assistenten für Entwürfe und Automatisierung aktivieren. Viel Spaß!",
+      "next": "Weiter",
+      "back": "Zurück",
+      "skip": "Tour überspringen",
+      "done": "Los geht's!",
+      "restartTitle": "Plattform-Tour",
+      "restartHint": "Die kurze Einführung in die wichtigsten Bereiche von goloom erneut ansehen.",
+      "restartButton": "Tour erneut anzeigen"
+    },
     "teams": {
       "yourTeams": "Ihre Teams",
       "cardsHint": "Jede Karte zeigt Mitglieder, verbundene Konten und Beitragsaktivität für diesen Arbeitsbereich.",

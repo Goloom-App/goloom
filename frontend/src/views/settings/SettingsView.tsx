@@ -22,6 +22,7 @@ export function SettingsView({
   apiTokensLoading,
   currentTokenId,
   showBrowserSession,
+  onRestartTour,
 }: {
   settings: SettingsState
   setSettings: Dispatch<SetStateAction<SettingsState>>
@@ -38,6 +39,7 @@ export function SettingsView({
   currentTokenId: string | null
   // The backend-override panel is a dev/admin debug tool, hidden in production.
   showBrowserSession: boolean
+  onRestartTour: () => void
 }) {
   const { t: tr } = useTranslation()
 
@@ -63,6 +65,12 @@ export function SettingsView({
             </select>
           </label>
           <p className="hint">{tr('language.hint')}</p>
+        </SettingsCard>
+        <SettingsCard title={tr('tour.restartTitle')}>
+          <p className="hint">{tr('tour.restartHint')}</p>
+          <button type="button" className="btn btn--secondary btn--sm" onClick={onRestartTour} data-testid="restart-tour">
+            {tr('tour.restartButton')}
+          </button>
         </SettingsCard>
       </div>
 

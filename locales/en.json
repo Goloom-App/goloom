@@ -435,6 +435,27 @@
       "defaultTeamName": "My team",
       "createTeamButton": "Create team & get started"
     },
+    "tour": {
+      "dashboardTitle": "Dashboard",
+      "dashboardText": "The dashboard greets you with what matters today: upcoming posts, drafts waiting for review, and recent activity across your team.",
+      "calendarTitle": "Calendar & composer",
+      "calendarText": "Plan your content in the calendar and write posts in the composer — schedule them once and goloom publishes to all selected accounts.",
+      "accountsTitle": "Social accounts",
+      "accountsText": "Connect Mastodon, Bluesky, Friendica and more under Accounts. Connected accounts become publishing destinations in the composer.",
+      "teamTitle": "Your team",
+      "teamText": "Everything belongs to a team. In the team settings you can rename it, pick a brand color, manage members, and invite people by email.",
+      "analyticsTitle": "Analytics",
+      "analyticsText": "Track how your posts perform: engagement, follower growth, best posting times, and hashtag insights.",
+      "settingsTitle": "Settings & AI",
+      "settingsText": "Adjust language and API access in the settings. Teams can also enable the AI assistant for drafting and automating content. Enjoy!",
+      "next": "Next",
+      "back": "Back",
+      "skip": "Skip tour",
+      "done": "Let's go!",
+      "restartTitle": "Platform tour",
+      "restartHint": "Replay the short introduction to goloom's main areas.",
+      "restartButton": "Show tour again"
+    },
     "teams": {
       "yourTeams": "Your teams",
       "cardsHint": "Each card shows members, connected accounts, and post activity for that workspace.",

@@ -13,6 +13,7 @@ import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
 import { CreateTeamModal } from './components/Shell/CreateTeamModal'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
+import { PlatformTour } from './components/onboarding/PlatformTour'
 import { Sun, Moon, Edit, Trash2, Copy, X } from 'lucide-react'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
@@ -50,7 +51,7 @@ import {
   type BackendPostVersion,
   type BackendTeam,
 } from './api'
-import { loadInitialSection, loadInitialTeamId, loadStoredSettings, writeStoredSettings, LAST_SECTION_STORAGE_KEY, LAST_TEAM_STORAGE_KEY } from './appStorage'
+import { isTourDone, loadInitialSection, loadInitialTeamId, loadStoredSettings, markTourDone, resetTourDone, writeStoredSettings, LAST_SECTION_STORAGE_KEY, LAST_TEAM_STORAGE_KEY } from './appStorage'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { engagementForAccount } from './postMetrics'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
@@ -138,6 +139,7 @@ function App() {
   const [invitePending, setInvitePending] = useState(
     () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('invite'),
   )
+  const [tourOpen, setTourOpen] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -619,6 +621,17 @@ function App() {
       return () => window.clearTimeout(timer)
     }
   }, [api, authenticated, loadDashboard])
+
+  // Open the platform tour once per user, on the first sign-in with at least
+  // one team — right after onboarding, or immediately for invited users.
+  useEffect(() => {
+    if (!authenticated || !dashboardReady || invitePending || teams.length === 0) {
+      return
+    }
+    if (!isTourDone()) {
+      setTourOpen(true)
+    }
+  }, [authenticated, dashboardReady, invitePending, teams.length])
 
   useEffect(() => {
     if (!api) {
@@ -2066,6 +2079,10 @@ function App() {
             apiTokensLoading={apiTokensLoading}
             currentTokenId={currentTokenId}
             showBrowserSession={authStatus?.appEnv === 'development' && principalUser?.globalRole === 'admin'}
+            onRestartTour={() => {
+              resetTourDone()
+              setTourOpen(true)
+            }}
           />
         )}
 
@@ -2157,6 +2174,14 @@ function App() {
         setStatusMessage(t('teams.createdStatus', 'Team "{{name}}" created.', { name: created.name }))
       }}
     />
+    {tourOpen ? (
+      <PlatformTour
+        onClose={() => {
+          markTourDone()
+          setTourOpen(false)
+        }}
+      />
+    ) : null}
     </>
   )
 }
