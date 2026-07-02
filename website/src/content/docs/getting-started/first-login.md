@@ -42,7 +42,22 @@ https://your-goloom-host/?login=recovery
 The login screen also links to it ("Sign in with a recovery token"). Deployments
 **without** OIDC always show the token form directly.
 
-## 4. Create scoped API tokens
+## 4. Create your first team (onboarding)
+
+New users don't get a workspace automatically — everything in goloom lives in a
+[team](/guides/teams/), so the first sign-in runs a short **onboarding**:
+
+- **Create your team.** A welcome step asks for a team name (prefilled from
+  your profile) and an optional description. Use the team solo or invite
+  others later — there is no separate "personal" workspace kind.
+- **Invited users skip this step.** If you signed in through an
+  [invite link](/guides/teams/#inviting-people-by-email) (`?invite=<token>`),
+  you land directly in the team that invited you.
+- **Platform tour.** Afterwards a short tour walks through the main areas
+  (dashboard, calendar & composer, accounts, team, analytics, settings). Skip
+  it anytime; replay it later via **Settings → Platform tour**.
+
+## 5. Create scoped API tokens
 
 Use **Settings → API tokens → + New Token** for automation and AI agents. The
 modal lets you set:
@@ -81,13 +96,13 @@ removed. Re-create any existing AI/automation tokens with the scopes above —
 Your current browser sign-in appears in the token list marked **"this browser"**;
 it is created automatically and rolls over after 12 h of inactivity.
 
-## 5. Rotate the bootstrap secret
+## 6. Rotate the bootstrap secret
 
 After your admin and tokens exist, **rotate `BOOTSTRAP_ADMIN_TOKEN`** (or remove
 it) so it can no longer be used to gain admin access.
 
 ## Next steps
 
-- [Create a team](/guides/teams/) and invite members.
+- [Invite members](/guides/teams/#inviting-people-by-email) to your team.
 - [Connect accounts](/guides/accounts/) for Mastodon, Friendica or Bluesky.
 - [Explore the API](/api/) for automation and agents.
