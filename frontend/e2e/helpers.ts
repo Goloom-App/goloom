@@ -2,10 +2,6 @@ import { expect, type Page } from '@playwright/test'
 import { e2eBootstrapToken, E2E_REVIEW_POST_TITLE } from './constants'
 
 export async function signIn(page: Page) {
-  // The platform tour auto-opens once per browser profile; every spec uses a
-  // fresh profile, so mark it as seen to keep the dialogs out of the way.
-  // The tour itself is covered by onboarding.spec.ts.
-  await page.addInitScript(() => window.localStorage.setItem('goloom.tour_done.v1', '1'))
   await page.goto('/')
   const tokenField = page.getByLabel(/access token|administrator token/i)
   await expect(tokenField).toBeVisible({ timeout: 30_000 })
