@@ -14,6 +14,7 @@
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             go
+            gnumake
             gopls
             gotools
             go-tools
@@ -27,8 +28,7 @@
 
           shellHook = ''
             export CGO_ENABLED=0
-            echo "Entered goloom dev shell"
-            echo "Use: make tidy && make build && make frontend-build"
+            echo "goloom dev shell ready — run \`just\` for the task overview"
           '';
         };
       });
