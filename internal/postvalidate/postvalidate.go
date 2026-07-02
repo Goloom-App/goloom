@@ -4,7 +4,8 @@
 //
 // It mirrors the REST API's validatePostInput logic and is used by the MCP
 // server, which previously skipped this validation entirely. Both rely on
-// provider.Capabilities as the single source of truth for limits.
+// provider.Capabilities as the single source of truth for limits; lengths are
+// measured with the platform's own counting rules (see internal/textcount).
 package postvalidate
 
 import (
@@ -15,6 +16,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/textcount"
 )
 
 // Destination is the per-account validation outcome.
@@ -34,7 +36,8 @@ type Result struct {
 	Valid bool
 	// MaxChars is the smallest non-zero character limit across destinations.
 	MaxChars int
-	// ContentLength is the rune length of the base content.
+	// ContentLength is the grapheme length of the base content, without any
+	// provider-specific discounts (per-destination lengths carry those).
 	ContentLength int
 	Destinations  []Destination
 }
@@ -87,7 +90,7 @@ func CheckLimits(content string, overrides map[string]string, limits []AccountLi
 		if o, ok := overrides[l.AccountID]; ok && strings.TrimSpace(o) != "" {
 			effective = o
 		}
-		contentLen := len([]rune(effective))
+		contentLen := textcount.ProviderLength(l.Provider, effective)
 		valid := l.MaxChars == 0 || contentLen <= l.MaxChars
 		if !valid {
 			allValid = false
@@ -110,7 +113,7 @@ func CheckLimits(content string, overrides map[string]string, limits []AccountLi
 	return Result{
 		Valid:         allValid,
 		MaxChars:      maxChars,
-		ContentLength: len([]rune(content)),
+		ContentLength: textcount.Graphemes(content),
 		Destinations:  destinations,
 	}
 }
@@ -137,7 +140,7 @@ func Check(ctx context.Context, providers *provider.Registry, accounts []domain.
 		}
 
 		effectiveContent := input.EffectiveContent(account.ID)
-		contentLen := len([]rune(effectiveContent))
+		contentLen := textcount.ProviderLength(account.Provider, effectiveContent)
 		isValid := capabilities.MaxChars == 0 || contentLen <= capabilities.MaxChars
 
 		missingMedia := false
@@ -174,7 +177,7 @@ func Check(ctx context.Context, providers *provider.Registry, accounts []domain.
 	return Result{
 		Valid:         allValid,
 		MaxChars:      maxChars,
-		ContentLength: len([]rune(input.Content)),
+		ContentLength: textcount.Graphemes(input.Content),
 		Destinations:  destinations,
 	}, nil
 }

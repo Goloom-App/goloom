@@ -8,6 +8,7 @@ import type { AccountRecord, TeamSchedulingPreferences } from '../../types'
 import { ScheduleInsights } from './ScheduleInsights'
 import { DestinationAvatar } from '../post/DestinationAvatar'
 import { charCounterClass, pruneMediaExcludeAfterRemove } from './editorDraft'
+import { graphemeLength, providerPostLength } from '../../postLength'
 import { ComposerMedia } from './ComposerMedia'
 import { ComposerPreviews } from './ComposerPreviews'
 import {
@@ -126,7 +127,13 @@ export function PostComposer({
     return acc ? acc.maxChars : 0
   }, [activeTab, selectedAccounts])
 
-  const bodyLen = effectiveBody(draft, activeTab === 'default' ? null : activeTab).length
+  // Provider-aware count on an account tab; plain grapheme count on the
+  // shared tab (mixed destinations have no single counting rule).
+  const bodyLen = useMemo(() => {
+    const body = effectiveBody(draft, activeTab === 'default' ? null : activeTab)
+    const acc = activeTab === 'default' ? undefined : selectedAccounts.find((a) => a.id === activeTab)
+    return acc ? providerPostLength(acc.provider, body) : graphemeLength(body)
+  }, [draft, activeTab, selectedAccounts])
 
   const libraryById = useMemo(() => {
     const o: Record<string, Pick<BackendMediaItem, 'filename' | 'mime_type'>> = {}
@@ -174,10 +181,11 @@ export function PostComposer({
       const acc = teamAccounts.find((a) => a.id === id)
       if (!acc) continue
       const body = bodyForAccountLimit(draft, id)
+      const len = providerPostLength(acc.provider, body)
       status[id] = {
-        len: body.length,
+        len,
         max: acc.maxChars,
-        over: acc.maxChars > 0 && body.length > acc.maxChars,
+        over: acc.maxChars > 0 && len > acc.maxChars,
       }
     }
     return status
