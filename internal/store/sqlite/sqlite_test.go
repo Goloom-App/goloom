@@ -122,18 +122,12 @@ func TestSQLite_TeamsAndMemberships(t *testing.T) {
 		t.Fatal(err)
 	}
 	teams, err := s.ListTeamsForUser(ctx, owner.ID, false)
-	if err != nil || len(teams) != 2 {
-		t.Fatalf("owner teams (personal + shared): %v %#v", err, teams)
-	}
-	if !teams[0].IsPersonal || teams[0].PersonalForUserID != owner.ID {
-		t.Fatalf("expected personal workspace first: %#v", teams[0])
+	if err != nil || len(teams) != 1 || teams[0].ID != team.ID {
+		t.Fatalf("owner teams: %v %#v", err, teams)
 	}
 	allTeams, err := s.ListTeamsForUser(ctx, member.ID, true)
-	if err != nil || len(allTeams) != 1 {
-		t.Fatalf("member workspace list: %v %#v", err, allTeams)
-	}
-	if !allTeams[0].IsPersonal || allTeams[0].PersonalForUserID != member.ID {
-		t.Fatalf("expected member personal workspace only: %#v", allTeams[0])
+	if err != nil || len(allTeams) != 0 {
+		t.Fatalf("member should have no teams before being added: %v %#v", err, allTeams)
 	}
 	if _, err := s.AddTeamMember(ctx, team.ID, domain.AddTeamMemberInput{UserID: member.ID, Role: domain.RoleEditor}); err != nil {
 		t.Fatal(err)

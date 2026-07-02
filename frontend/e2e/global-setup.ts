@@ -25,9 +25,21 @@ export default async function globalSetup(config: FullConfig) {
     throw new Error(`globalSetup teams ${teamsRes.status}: ${await teamsRes.text()}`)
   }
   const teamsData = (await teamsRes.json()) as { items?: { id: string }[] }
-  const teamId = teamsData.items?.[0]?.id
+  let teamId = teamsData.items?.[0]?.id
   if (!teamId) {
-    throw new Error('globalSetup: no team returned')
+    // Fresh databases start without any team (users create their first team
+    // through onboarding); seed one for the specs. Teams are listed by name and
+    // the app defaults to the first one, so this name must sort before every
+    // team the specs create ("E2E AI Test …", "E2E Invite Team …", …).
+    const createRes = await fetch(`${baseURL}/v1/teams`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'E2E AA Seed Team', description: 'Seeded by Playwright global setup' }),
+    })
+    if (!createRes.ok) {
+      throw new Error(`globalSetup create team ${createRes.status}: ${await createRes.text()}`)
+    }
+    teamId = ((await createRes.json()) as { id: string }).id
   }
 
   const existing = await listPosts(baseURL, token, teamId)

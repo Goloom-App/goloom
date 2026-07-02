@@ -39,7 +39,6 @@ interface TeamSettingsViewProps {
   setMemberRoleEdits: Dispatch<SetStateAction<Record<string, TeamRole>>>
   addMemberUserId: string
   setAddMemberUserId: (value: string) => void
-  onSavePersonalAiSettings: () => void
   onUpdateTeam: () => void
   onSaveAiServiceConfig: () => void
   onSaveBrandColor: (color: string) => void
@@ -176,42 +175,10 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
         title={t('teams.settingsTitle')}
         subtitle={t('teams.settingsHint', { teamName: selectedTeam.name })}
       >
-        {selectedTeam.isPersonal ? (
-          <>
-            <p className="hint">{t('teams.personalNoMembers')}</p>
-            <p className="hint">{t('teams.personalWorkspaceHint')}</p>
-          </>
-        ) : !isOwner ? (
-          <p className="hint">{t('teams.personalWorkspaceHint')}</p>
-        ) : null}
+        {!isOwner ? <p className="hint">{t('teams.memberViewHint')}</p> : null}
       </SectionCard>
 
-      {selectedTeam.isPersonal ? (
-        <>
-          {brandingCard}
-          <SectionCard icon={<Bot size={18} />} title={t('teams.aiAgentTitle')} subtitle={t('teams.aiAgentHint')}>
-            <ToggleSwitch
-              checked={props.teamAiEnabled}
-              onChange={props.setTeamAiEnabled}
-              title={t('teams.aiFeaturesEnabled')}
-              testId="team-ai-toggle"
-            />
-            {props.teamAiEnabled ? aiConfigFields : null}
-            <div>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={props.onSavePersonalAiSettings}
-                disabled={syncing || (props.teamAiEnabled && !props.teamAiApiKey.trim() && !props.teamAiKeySet)}
-              >
-                {t('teams.saveChanges')}
-              </button>
-            </div>
-          </SectionCard>
-
-          {externalPostMonitorCard}
-        </>
-      ) : isOwner ? (
+      {isOwner ? (
         <>
           <SectionCard icon={<Settings size={18} />} title={t('common.general')}>
             <label className="field">

@@ -359,25 +359,6 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if team.IsPersonal {
-		if input.IsAIEnabled == nil && input.BrandColor == nil {
-			a.writeError(w, r, "personal_workspace_ai_only", http.StatusBadRequest)
-			return
-		}
-		updated, err := a.store.UpdateTeam(r.Context(), team.ID, domain.UpdateTeamInput{
-			Name:        team.Name,
-			Description: team.Description,
-			IsAIEnabled: input.IsAIEnabled,
-			BrandColor:  input.BrandColor,
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		auth.WriteJSON(w, http.StatusOK, updated)
-		return
-	}
-
 	input.Name = strings.TrimSpace(input.Name)
 	input.Description = strings.TrimSpace(input.Description)
 	if input.Name == "" {
@@ -643,13 +624,8 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
-	if err != nil {
+	if _, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if team.IsPersonal {
-		a.writeError(w, r, "cannot_add_members_personal", http.StatusBadRequest)
 		return
 	}
 
@@ -664,13 +640,8 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
-	team, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID"))
-	if err != nil {
+	if _, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if team.IsPersonal {
-		a.writeError(w, r, "cannot_remove_members_personal", http.StatusBadRequest)
 		return
 	}
 	if err := a.store.RemoveTeamMember(r.Context(), r.PathValue("teamID"), r.PathValue("userID")); err != nil {

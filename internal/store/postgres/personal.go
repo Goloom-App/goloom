@@ -16,69 +16,88 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (s *Store) EnsurePersonalTeam(ctx context.Context, userID string) (domain.Team, error) {
-	var existingID string
-	err := s.pool.QueryRow(ctx, `select id from teams where personal_for_user_id = $1`, userID).Scan(&existingID)
-	if err == nil {
-		return s.GetTeamByID(ctx, existingID)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return domain.Team{}, err
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return domain.Team{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	teamID := uuid.NewString()
-	name := fmt.Sprintf("Personal · %s", userID[:8])
-	if _, err := tx.Exec(ctx, `
-		insert into teams (id, name, description, is_personal, personal_for_user_id)
-		values ($1, $2, '', true, $3)`,
-		teamID, name, userID,
-	); err != nil {
-		return domain.Team{}, err
-	}
-
-	if _, err := tx.Exec(ctx, `insert into team_memberships (user_id, team_id, role) values ($1, $2, $3)`, userID, teamID, domain.RoleOwner); err != nil {
-		return domain.Team{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return domain.Team{}, err
-	}
-	return s.GetTeamByID(ctx, teamID)
-}
-
-func (s *Store) EnsurePersonalTeamsMigrated(ctx context.Context) error {
-	rows, err := s.pool.Query(ctx, `select id from users`)
+// MigratePersonalWorkspaces converts legacy auto-created personal workspaces
+// into regular teams: the personal markers are cleared and teams still named
+// with the generated "Personal · <uid8>" pattern are renamed after their owner
+// (display name, falling back to the email local part). Idempotent; runs at
+// startup.
+func (s *Store) MigratePersonalWorkspaces(ctx context.Context) error {
+	rows, err := s.pool.Query(ctx, `
+		select t.id, t.name, coalesce(t.personal_for_user_id::text, ''), coalesce(u.name, ''), coalesce(u.email, '')
+		from teams t
+		left join users u on u.id = t.personal_for_user_id
+		where t.is_personal or t.personal_for_user_id is not null`)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	var ids []string
+	type legacyTeam struct {
+		id, name, userID, userName, userEmail string
+	}
+	var teams []legacyTeam
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var lt legacyTeam
+		if err := rows.Scan(&lt.id, &lt.name, &lt.userID, &lt.userName, &lt.userEmail); err != nil {
 			return err
 		}
-		ids = append(ids, id)
+		teams = append(teams, lt)
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for _, id := range ids {
-		if _, err := s.EnsurePersonalTeam(ctx, id); err != nil {
+
+	for _, lt := range teams {
+		name := lt.name
+		if lt.userID != "" && lt.name == legacyPersonalTeamName(lt.userID) {
+			name = s.uniqueTeamName(ctx, lt.id, preferredTeamName(lt.userName, lt.userEmail, lt.name))
+		}
+		if _, err := s.pool.Exec(ctx,
+			`update teams set is_personal = false, personal_for_user_id = null, name = $1 where id = $2`,
+			name, lt.id,
+		); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func legacyPersonalTeamName(userID string) string {
+	if len(userID) < 8 {
+		return "Personal · " + userID
+	}
+	return "Personal · " + userID[:8]
+}
+
+// preferredTeamName picks the rename target for a migrated personal workspace.
+func preferredTeamName(userName, userEmail, fallback string) string {
+	if name := strings.TrimSpace(userName); name != "" {
+		return name
+	}
+	if at := strings.IndexByte(userEmail, '@'); at > 0 {
+		return userEmail[:at]
+	}
+	return fallback
+}
+
+// uniqueTeamName returns preferred, or "<preferred> 2", "<preferred> 3", …
+// when the name is already taken by another team (teams.name is unique).
+func (s *Store) uniqueTeamName(ctx context.Context, teamID, preferred string) string {
+	candidate := preferred
+	for n := 2; n < 100; n++ {
+		var count int
+		if err := s.pool.QueryRow(ctx,
+			`select count(*) from teams where name = $1 and id <> $2`, candidate, teamID,
+		).Scan(&count); err != nil || count == 0 {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s %d", preferred, n)
+	}
+	return preferred + " " + teamID[:8]
+}
+
 func (s *Store) GetTeamByID(ctx context.Context, teamID string) (domain.Team, error) {
 	return scanTeamRow(s.pool.QueryRow(ctx, `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+		select id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 		from teams where id = $1`,
 		teamID))
 }
@@ -190,22 +209,14 @@ func (s *Store) MigrateAccountToTeam(ctx context.Context, userID string, account
 	if err != nil {
 		return err
 	}
-	srcTeam, err := s.GetTeamByID(ctx, srcAccount.TeamID)
-	if err != nil {
+	if _, err := s.GetTeamByID(ctx, targetTeamID); err != nil {
 		return err
 	}
-	dstTeam, err := s.GetTeamByID(ctx, targetTeamID)
-	if err != nil {
-		return err
-	}
-	if dstTeam.IsPersonal {
-		return errors.New("cannot migrate into a personal workspace")
-	}
-	if !srcTeam.IsPersonal && !isAdmin {
-		return errors.New("only accounts in your personal workspace can be migrated (or admin)")
-	}
-	if srcTeam.IsPersonal && srcTeam.PersonalForUserID != userID && !isAdmin {
-		return errors.New("forbidden")
+	if !isAdmin {
+		ok, err := s.UserHasAnyTeamRole(ctx, userID, srcAccount.TeamID, domain.RoleOwner)
+		if err != nil || !ok {
+			return errors.New("only team owners can move accounts out of a team (or admin)")
+		}
 	}
 	ok, err := s.UserHasAnyTeamRole(ctx, userID, targetTeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !ok {
@@ -263,12 +274,8 @@ func (s *Store) MigrateAccountToTeam(ctx context.Context, userID string, account
 }
 
 func (s *Store) CreateTeamInvitation(ctx context.Context, teamID, createdByUserID string, input domain.CreateTeamInvitationInput) (domain.TeamInvitation, string, error) {
-	team, err := s.GetTeamByID(ctx, teamID)
-	if err != nil {
+	if _, err := s.GetTeamByID(ctx, teamID); err != nil {
 		return domain.TeamInvitation{}, "", err
-	}
-	if team.IsPersonal {
-		return domain.TeamInvitation{}, "", errors.New("cannot invite users to a personal workspace")
 	}
 	email := strings.TrimSpace(strings.ToLower(input.Email))
 	if email == "" {
@@ -289,7 +296,7 @@ func (s *Store) CreateTeamInvitation(ctx context.Context, teamID, createdByUserI
 	expires := time.Now().UTC().Add(7 * 24 * time.Hour)
 
 	var inv domain.TeamInvitation
-	err = s.pool.QueryRow(ctx, `
+	err := s.pool.QueryRow(ctx, `
 		insert into team_invitations (id, team_id, email, role, token_hash, expires_at, created_by_user_id)
 		values ($1, $2, $3, $4, $5, $6, $7)
 		returning id, team_id, email, role, expires_at, created_by_user_id, created_at`,

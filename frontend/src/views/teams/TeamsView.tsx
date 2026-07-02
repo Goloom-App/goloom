@@ -34,10 +34,7 @@ export function TeamsView({
                 className={`team-card ${team.id === effectiveSelectedTeamId ? 'team-card--active' : ''}`}
                 onClick={() => onSelectTeam(team.id)}
               >
-                <strong>
-                  {team.name}
-                  {team.isPersonal ? t('teams.personalSuffix') : ''}
-                </strong>
+                <strong>{team.name}</strong>
                 <small>
                   {t('common.membersCount', { count: team.members.length })} · {t('common.accountsCount', { count: team.accountIds.length })}
                 </small>
@@ -84,7 +81,6 @@ export function TeamsView({
               </div>
             )
           })()}
-          {selectedTeam.isPersonal ? <p className="hint mt-1">{t('teams.personalWorkspaceHint')}</p> : null}
         </div>
       ) : null}
     </div>

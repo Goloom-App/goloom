@@ -1084,33 +1084,8 @@ function App() {
     return result.imported
   }
 
-  async function handleSavePersonalAiSettings() {
-    if (!api || !selectedTeam || !selectedTeam.isPersonal) {
-      return
-    }
-    await runAction(async () => {
-      await api.updateTeam(selectedTeam.id, {
-        name: selectedTeam.name,
-        description: selectedTeam.description ?? '',
-        is_ai_enabled: teamAiEnabled,
-      })
-      if (teamAiEnabled && (teamAiApiKey.trim() || teamAiKeySet)) {
-        const cfg = await api.upsertAIServiceConfig(selectedTeam.id, {
-          provider: teamAiProvider,
-          model: teamAiModel.trim(),
-          base_url: teamAiBaseUrl.trim(),
-          api_key: teamAiApiKey.trim(),
-          description: 'team llm',
-        })
-        setTeamAiApiKey('')
-        setTeamAiKeySet(Boolean(cfg.api_key_set))
-      }
-      await loadDashboard({ silent: true })
-    }, t('status.teamSettingsUpdated'))
-  }
-
   async function handleUpdateTeam() {
-    if (!api || !selectedTeam || selectedTeam.isPersonal) {
+    if (!api || !selectedTeam) {
       return
     }
     const name = teamSettingsName.trim()
@@ -1129,7 +1104,7 @@ function App() {
   }
 
   async function handleSaveTeamBrandColor(color: string) {
-    if (!api || !selectedTeam || (!selectedTeam.isPersonal && myRoleInSelectedTeam !== 'owner')) {
+    if (!api || !selectedTeam || myRoleInSelectedTeam !== 'owner') {
       return
     }
     await runAction(async () => {
@@ -2015,7 +1990,6 @@ function App() {
             setMemberRoleEdits={setMemberRoleEdits}
             addMemberUserId={addMemberUserId}
             setAddMemberUserId={setAddMemberUserId}
-            onSavePersonalAiSettings={() => void handleSavePersonalAiSettings()}
             onUpdateTeam={() => void handleUpdateTeam()}
             onSaveAiServiceConfig={() => void handleSaveAiServiceConfig()}
             onSaveBrandColor={(color) => void handleSaveTeamBrandColor(color)}

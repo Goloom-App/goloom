@@ -98,9 +98,7 @@ export function toTeamRecord(team: BackendTeam, members: TeamMemberRecord[], acc
     description: team.description,
     members,
     accountIds,
-    isPersonal: Boolean(team.is_personal),
     isAiEnabled: Boolean(team.is_ai_enabled),
-    personalForUserId: team.personal_for_user_id,
     schedulingPreferences: scheduling,
     brandColor: team.brand_color ?? '',
   }

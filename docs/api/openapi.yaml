@@ -1141,13 +1141,8 @@ components:
           type: string
         description:
           type: string
-        is_personal:
-          type: boolean
         is_ai_enabled:
           type: boolean
-        personal_for_user_id:
-          type: string
-          format: uuid
         scheduling_preferences:
           type: object
         brand_color:

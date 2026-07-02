@@ -556,11 +556,7 @@ func (m *mockStore) EnsureBootstrapAdmin(ctx context.Context, email, name, token
 	return nil
 }
 
-func (m *mockStore) EnsurePersonalTeam(ctx context.Context, userID string) (domain.Team, error) {
-	return domain.Team{}, nil
-}
-
-func (m *mockStore) EnsurePersonalTeamsMigrated(ctx context.Context) error { return nil }
+func (m *mockStore) MigratePersonalWorkspaces(ctx context.Context) error { return nil }
 
 func (m *mockStore) GetTeamByID(ctx context.Context, teamID string) (domain.Team, error) {
 	return domain.Team{}, nil

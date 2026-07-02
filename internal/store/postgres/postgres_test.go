@@ -146,11 +146,8 @@ func TestPostgres_TeamsAndMemberships(t *testing.T) {
 		t.Fatal(err)
 	}
 	teams, err := s.ListTeamsForUser(ctx, owner.ID, false)
-	if err != nil || len(teams) != 2 {
-		t.Fatalf("owner teams (personal + shared): %v %#v", err, teams)
-	}
-	if !teams[0].IsPersonal || teams[0].PersonalForUserID != owner.ID {
-		t.Fatalf("expected personal workspace first: %#v", teams[0])
+	if err != nil || len(teams) != 1 || teams[0].ID != team.ID {
+		t.Fatalf("owner teams: %v %#v", err, teams)
 	}
 	if _, err := s.AddTeamMember(ctx, team.ID, domain.AddTeamMemberInput{UserID: member.ID, Role: domain.RoleEditor}); err != nil {
 		t.Fatal(err)

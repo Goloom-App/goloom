@@ -130,11 +130,7 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 		return err
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return err
-	}
-	_, err = s.EnsurePersonalTeam(ctx, userID)
-	return err
+	return tx.Commit(ctx)
 }
 
 func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {
@@ -163,9 +159,6 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 	)
 	if err != nil {
 		return user, err
-	}
-	if _, err := s.EnsurePersonalTeam(ctx, user.ID); err != nil {
-		return domain.User{}, err
 	}
 	return user, nil
 }
@@ -296,12 +289,12 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	_ = isAdmin
 	query := `
-		select id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+		select id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 		from teams
 	`
 	args := []any{userID}
 	query += ` where id in (select team_id from team_memberships where user_id = $1)`
-	query += ` order by is_personal desc, name asc`
+	query += ` order by name asc`
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -376,7 +369,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 				update teams
 				set name = $2, description = $3, scheduling_prefs = $4, is_ai_enabled = $5
 				where id = $1
-				returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+				returning id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 			`
 			return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, prefsJSON, *input.IsAIEnabled))
 		}
@@ -384,7 +377,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 			update teams
 			set name = $2, description = $3, scheduling_prefs = $4
 			where id = $1
-			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+			returning id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 		`
 		return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, prefsJSON))
 	}
@@ -393,7 +386,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 			update teams
 			set name = $2, description = $3, is_ai_enabled = $4
 			where id = $1
-			returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+			returning id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 		`
 		return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description, *input.IsAIEnabled))
 	}
@@ -401,7 +394,7 @@ func (s *Store) UpdateTeam(ctx context.Context, teamID string, input domain.Upda
 		update teams
 		set name = $2, description = $3
 		where id = $1
-		returning id, name, description, created_at, is_personal, is_ai_enabled, personal_for_user_id, scheduling_prefs, brand_color
+		returning id, name, description, created_at, is_ai_enabled, scheduling_prefs, brand_color
 	`
 	return scanTeamRow(s.pool.QueryRow(ctx, query, teamID, input.Name, input.Description))
 }
@@ -410,7 +403,6 @@ func scanTeamRow(row interface {
 	Scan(dest ...any) error
 }) (domain.Team, error) {
 	var team domain.Team
-	var personal sql.NullString
 	var schedulingPrefs sql.NullString
 	var brandColor sql.NullString
 	err := row.Scan(
@@ -418,17 +410,12 @@ func scanTeamRow(row interface {
 		&team.Name,
 		&team.Description,
 		&team.CreatedAt,
-		&team.IsPersonal,
 		&team.IsAIEnabled,
-		&personal,
 		&schedulingPrefs,
 		&brandColor,
 	)
 	if err != nil {
 		return domain.Team{}, err
-	}
-	if personal.Valid {
-		team.PersonalForUserID = personal.String
 	}
 	team.BrandColor = brandColor.String
 	if schedulingPrefs.Valid && strings.TrimSpace(schedulingPrefs.String) != "" {

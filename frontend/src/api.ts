@@ -36,9 +36,7 @@ export interface BackendTeam {
   name: string
   description: string
   created_at: string
-  is_personal: boolean
   is_ai_enabled?: boolean
-  personal_for_user_id?: string
   scheduling_preferences?: BackendTeamSchedulingPreferences
   brand_color?: string
 }

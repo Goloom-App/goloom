@@ -102,7 +102,7 @@ func Run(ctx context.Context) error {
 		}
 	}
 
-	if err := dataStore.EnsurePersonalTeamsMigrated(ctx); err != nil {
+	if err := dataStore.MigratePersonalWorkspaces(ctx); err != nil {
 		return fmt.Errorf("personal workspace migration: %w", err)
 	}
 
