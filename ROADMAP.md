@@ -11,7 +11,9 @@ The goal is to transform Goloom from a basic social media scheduler into a robus
 *Goal: Ensure the database and core models support multi-tenancy, encryption, and secure account management.*
 
 - [x] **Account & Team Model Migration**
-    - Implement personal teams and multi-tenant isolation.
+    - Implement teams and multi-tenant isolation. (Auto-created personal
+      workspaces were later retired in favor of onboarding: new users create
+      their first team themselves or join via invitation.)
     - [Reference: docs/plan-account-model.md](docs/plan-account-model.md)
     - [Reference: docs/workflow-management.md](docs/workflow-management.md)
 - [x] **Security Hardening**
