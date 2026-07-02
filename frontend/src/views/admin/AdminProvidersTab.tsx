@@ -95,7 +95,7 @@ export function AdminProvidersTab({
 
   return (
     <div className="admin-tab-panel stack stack--lg">
-      <section className="admin-section glass-panel">
+      <section className="admin-section glass-panel" data-tour="admin-provider-form">
         <header className="admin-section__head">
           <div>
             <h2 className="admin-section__title">{t('admin.providerOnboarding')}</h2>

@@ -70,32 +70,54 @@ test('first sign-in without a team runs the onboarding wizard', async ({ page })
   await nameField.fill(teamName)
   await wizard.getByTestId('onboarding-create-team').click()
 
-  // Creating the team completes onboarding and starts the platform tour.
-  const tour = page.getByTestId('platform-tour')
+  // Creating the team completes onboarding and starts the guided tour.
+  // The bootstrap admin gets the admin flow: providers first, then accounts.
+  const tour = page.getByTestId('guided-tour')
   await expect(tour).toBeVisible({ timeout: 30_000 })
+  await expect(tour).toHaveAttribute('data-tour-step', 'welcome')
   await tour.getByTestId('tour-next').click()
-  await expect(tour.getByTestId('tour-back')).toBeVisible()
-  while (await tour.getByTestId('tour-next').isVisible()) {
-    await tour.getByTestId('tour-next').click()
-  }
+
+  // Interactive step: open the user menu and choose Admin.
+  await expect(tour).toHaveAttribute('data-tour-step', 'open-admin')
+  await page.getByTestId('user-menu-trigger').click()
+  await page.getByRole('menuitem', { name: 'Admin' }).click()
+
+  // Interactive step: the spotlighted providers tab must be clicked for real.
+  await expect(tour).toHaveAttribute('data-tour-step', 'admin-providers', { timeout: 15_000 })
+  await page.getByRole('tab', { name: 'Providers' }).click()
+
+  await expect(tour).toHaveAttribute('data-tour-step', 'provider-form', { timeout: 15_000 })
+  await tour.getByTestId('tour-next').click()
+
+  // Interactive step: navigate to the accounts section via the sidebar.
+  await expect(tour).toHaveAttribute('data-tour-step', 'nav-accounts')
+  await page.getByRole('button', { name: 'Accounts', exact: true }).click()
+
+  await expect(tour).toHaveAttribute('data-tour-step', 'accounts-connect', { timeout: 15_000 })
+  await tour.getByTestId('tour-next').click()
+
+  await expect(tour).toHaveAttribute('data-tour-step', 'new-post')
+  await tour.getByTestId('tour-next').click()
+
+  await expect(tour).toHaveAttribute('data-tour-step', 'finish')
   await tour.getByTestId('tour-done').click()
   await expect(tour).toBeHidden()
 
-  // Dashboard with the new team.
-  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 30_000 })
+  // The tour walked us into the accounts section; the team is set up.
   await expect(page.locator('.sidebar-team-selector')).toContainText(teamName, { timeout: 15_000 })
 
   // Reloading brings back neither the wizard nor the tour — both are done.
+  // (The app restores the last visited section, so don't assert a heading.)
   await page.reload()
-  await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.sidebar-team-selector')).toContainText(teamName, { timeout: 30_000 })
   await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
-  await expect(page.getByTestId('platform-tour')).toHaveCount(0)
+  await expect(page.getByTestId('guided-tour')).toHaveCount(0)
 
   // The tour can be replayed from the settings.
   await page.getByTestId('user-menu-trigger').click()
   await page.getByRole('menuitem', { name: 'Settings' }).click()
   await page.getByTestId('restart-tour').click()
-  await expect(page.getByTestId('platform-tour')).toBeVisible()
+  await expect(page.getByTestId('guided-tour')).toBeVisible()
   await page.getByTestId('tour-skip').click()
-  await expect(page.getByTestId('platform-tour')).toBeHidden()
+  await expect(page.getByTestId('guided-tour')).toBeHidden()
 })

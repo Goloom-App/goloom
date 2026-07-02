@@ -231,7 +231,7 @@ export function AccountsView({
         {!canEditTeamAccounts && selectedTeam ? <p className="hint">{t('accounts.viewOnlyHint')}</p> : null}
       </div>
 
-      <div className="glass-panel">
+      <div className="glass-panel" data-tour="accounts-connect">
         {editingAccountForm ? (
           editingAccountForm
         ) : (

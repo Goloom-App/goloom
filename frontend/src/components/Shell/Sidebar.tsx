@@ -49,6 +49,7 @@ export function Sidebar({
       key={item.id}
       type="button"
       data-testid={item.id === 'reviewQueue' ? 'nav-review-queue' : undefined}
+      data-tour={`nav-${item.id}`}
       className={`sidebar-nav-item ${currentSection === item.id ? 'sidebar-nav-item--active' : ''}`}
       onClick={() => setSection(item.id)}
       title={collapsed ? item.label : undefined}
@@ -131,6 +132,7 @@ export function Sidebar({
 
       <button
         className="btn btn--primary btn--full sidebar-composer-cta"
+        data-tour="new-post"
         onClick={openComposer}
         title={collapsed ? t('sidebarShell.newPost') : undefined}
         aria-label={t('sidebarShell.newPost')}
