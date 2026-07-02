@@ -2,7 +2,8 @@ name: CI/CD Workflow
 
 on:
   push:
-    branches: [ "main" ]
+    # dev publishes a :dev image for testing; see publish-image tag logic.
+    branches: [ "main", "dev" ]
     tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
@@ -434,8 +435,12 @@ jobs:
           if [ "${REF_TYPE}" = "tag" ]; then
             release_tag="${REF_NAME}"
             tags="${image_repo}:${sha_tag} ${image_repo}:${release_tag} ${image_repo}:latest"
-          else
+          elif [ "${REF_NAME}" = "main" ]; then
             tags="${image_repo}:${sha_tag} ${image_repo}:latest"
+          else
+            # Non-main branches (e.g. dev) publish under their branch name so
+            # the build can be pulled for testing without touching :latest.
+            tags="${image_repo}:${sha_tag} ${image_repo}:${REF_NAME}"
           fi
 
           image_ref="${image_repo}:${sha_tag}"
