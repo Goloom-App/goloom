@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/Goloom-App/goloom/compare/v0.2.0...v0.2.1) (2026-07-03)
+
+
+### Bug Fixes
+
+* **api:** register the proactive-settings routes ([b6fd54d](https://github.com/Goloom-App/goloom/commit/b6fd54d967b82900b31980577a494a31ab6b555c))
+* **sqlite:** occurrence skip also suppresses the announcement post ([ed01c77](https://github.com/Goloom-App/goloom/commit/ed01c77029960da594704079ceba4233468211aa))
+
 ## [0.2.0](https://github.com/Goloom-App/goloom/compare/v0.1.3...v0.2.0) (2026-07-03)
 
 
