@@ -65,7 +65,7 @@ func TestIsForbiddenHostname(t *testing.T) {
 func TestIsNonPublicIP(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		ip       string
+		ip        string
 		nonPublic bool
 	}{
 		// Loopback

@@ -96,7 +96,7 @@ func TestEnsureMastodonFresh_NoProviderInstance(t *testing.T) {
 	exp := time.Now().Add(-time.Hour)
 	account := domain.SocialAccount{
 		Provider:             "mastodon",
-		ProviderInstanceID:  "",
+		ProviderInstanceID:   "",
 		AccessTokenExpiresAt: &exp,
 	}
 	got, err := socialtokens.EnsureMastodonFresh(context.Background(), nil, nil, account)
@@ -113,8 +113,8 @@ func TestEnsureMastodonFresh_NoProviderInstance(t *testing.T) {
 func TestEnsureMastodonFresh_NilExpiry(t *testing.T) {
 	t.Parallel()
 	account := domain.SocialAccount{
-		Provider:            "mastodon",
-		ProviderInstanceID: "inst-1",
+		Provider:             "mastodon",
+		ProviderInstanceID:   "inst-1",
 		AccessTokenExpiresAt: nil,
 	}
 	got, err := socialtokens.EnsureMastodonFresh(context.Background(), nil, nil, account)
@@ -134,7 +134,7 @@ func TestEnsureMastodonFresh_TokenFresh(t *testing.T) {
 	exp := time.Now().Add(10 * time.Minute)
 	account := domain.SocialAccount{
 		Provider:             "mastodon",
-		ProviderInstanceID:  "inst-1",
+		ProviderInstanceID:   "inst-1",
 		AccessTokenExpiresAt: &exp,
 	}
 	got, err := socialtokens.EnsureMastodonFresh(context.Background(), nil, nil, account)

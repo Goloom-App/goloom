@@ -53,11 +53,11 @@ func seedProviderInstance(t *testing.T, s *sqlitestore.Store, userID string) dom
 	ctx := context.Background()
 	inst, err := s.CreateProviderInstance(ctx, userID, domain.PreparedProviderInstance{
 		Provider:              "mastodon",
-		Name:                 "Test Instance",
-		InstanceURL:          "https://mastodon.example.test",
-		ClientID:             "client-id-123",
-		ClientSecret:         "client-secret-456",
-		Scopes:               []string{"read", "write"},
+		Name:                  "Test Instance",
+		InstanceURL:           "https://mastodon.example.test",
+		ClientID:              "client-id-123",
+		ClientSecret:          "client-secret-456",
+		Scopes:                []string{"read", "write"},
 		AuthorizationEndpoint: "https://mastodon.example.test/oauth/authorize",
 		TokenEndpoint:         "https://mastodon.example.test/oauth/token",
 	})
@@ -461,11 +461,11 @@ func TestUpdateProviderInstance_HappyPath(t *testing.T) {
 	}
 	inst, err := s.CreateProviderInstance(ctx, u.ID, domain.PreparedProviderInstance{
 		Provider:              "mastodon",
-		Name:                 "Before",
-		InstanceURL:          "http://127.0.0.1/",
-		ClientID:             "cid",
-		ClientSecret:         "csec",
-		Scopes:               []string{"read"},
+		Name:                  "Before",
+		InstanceURL:           "http://127.0.0.1/",
+		ClientID:              "cid",
+		ClientSecret:          "csec",
+		Scopes:                []string{"read"},
 		AuthorizationEndpoint: "http://127.0.0.1/oauth/authorize",
 		TokenEndpoint:         "http://127.0.0.1/oauth/token",
 	})

@@ -2,8 +2,8 @@ package scheduler
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -1320,20 +1320,20 @@ func TestService_materializePostTemplates_shift(t *testing.T) {
 func TestService_materializePostTemplates_announcement(t *testing.T) {
 	now := time.Date(2026, 5, 27, 10, 0, 0, 0, time.UTC)
 	parent := domain.PostTemplate{
-		ID:                     "parent1",
-		TeamID:                 "team1",
-		AuthorUserID:           "user1",
-		Title:                  "main event",
-		Content:                "main post {counter}",
-		RecurrenceJSON:         `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
-		TargetAccountIDs:       []string{"acc1"},
-		Enabled:                true,
-		NextMaterializeAt:      &now,
-		CounterNext:            7,
-		AnnouncementEnabled:    true,
-		AnnouncementTitle:      "announcement",
-		AnnouncementContent:    "episode #{main_counter} on {main_month}/{main_day} ({main_weekday_name})",
-		AnnouncementDaysBefore: 2,
+		ID:                      "parent1",
+		TeamID:                  "team1",
+		AuthorUserID:            "user1",
+		Title:                   "main event",
+		Content:                 "main post {counter}",
+		RecurrenceJSON:          `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
+		TargetAccountIDs:        []string{"acc1"},
+		Enabled:                 true,
+		NextMaterializeAt:       &now,
+		CounterNext:             7,
+		AnnouncementEnabled:     true,
+		AnnouncementTitle:       "announcement",
+		AnnouncementContent:     "episode #{main_counter} on {main_month}/{main_day} ({main_weekday_name})",
+		AnnouncementDaysBefore:  2,
 		AnnouncementCounterNext: 1,
 	}
 

@@ -125,13 +125,13 @@ func TestParseMastodonOAuthState_Expired(t *testing.T) {
 func TestParseMastodonOAuthState_IncompleteFields(t *testing.T) {
 	a := testOAuthAPI()
 	incomplete := mastodonOAuthState{
-		Version:       1,
-		Provider:      "mastodon",
-		UserID:        "", // missing
-		TeamID:        "t1",
+		Version:            1,
+		Provider:           "mastodon",
+		UserID:             "", // missing
+		TeamID:             "t1",
 		ProviderInstanceID: "i1",
-		ReturnTo:      "https://app.example.test/",
-		ExpiresAtUnix: time.Now().UTC().Add(10 * time.Minute).Unix(),
+		ReturnTo:           "https://app.example.test/",
+		ExpiresAtUnix:      time.Now().UTC().Add(10 * time.Minute).Unix(),
 	}
 	signed, err := a.signMastodonOAuthState(incomplete)
 	if err != nil {
