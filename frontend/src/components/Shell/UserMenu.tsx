@@ -33,6 +33,7 @@ export function UserMenu({ user, collapsed = false, setSection, onSignOut }: Use
           type="button"
           className={`user-menu-trigger ${collapsed ? 'user-menu-trigger--collapsed' : ''}`}
           data-testid="user-menu-trigger"
+          data-tour="user-menu"
           aria-label={t('sidebar.userMenu')}
           title={collapsed ? name : undefined}
         >

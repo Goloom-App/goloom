@@ -96,6 +96,7 @@ export function AdminView({
                 type="button"
                 role="tab"
                 aria-selected={activeTab === tab.id}
+                data-tour={`admin-tab-${tab.id}`}
                 className={`view-toggle__btn ${activeTab === tab.id ? 'view-toggle__btn--active' : ''}`}
                 onClick={() => setActiveTab(tab.id)}
               >

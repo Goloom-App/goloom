@@ -6933,3 +6933,95 @@ button.admin-instance-health {
   font: inherit;
   border-radius: 0.6rem;
 }
+
+/* ===== Guided onboarding tour ===== */
+
+.guided-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  /* The container is click-transparent; the dim panels re-enable pointer
+     events, leaving a click-through hole over the spotlighted element. */
+  pointer-events: none;
+}
+
+.guided-tour__dim {
+  position: absolute;
+  background: rgba(4, 6, 12, 0.62);
+  pointer-events: auto;
+}
+
+.guided-tour__dim--full {
+  inset: 0;
+}
+
+.guided-tour__ring {
+  position: absolute;
+  border: 2px solid var(--brand-primary, var(--accent, #7c3aed));
+  border-radius: var(--radius-lg, 12px);
+  pointer-events: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-primary, #7c3aed) 30%, transparent);
+  animation: guided-tour-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes guided-tour-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-primary, #7c3aed) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--brand-primary, #7c3aed) 14%, transparent);
+  }
+}
+
+.guided-tour__tooltip {
+  position: absolute;
+  z-index: 1;
+  pointer-events: auto;
+  width: 330px;
+  max-width: calc(100vw - 16px);
+  padding: var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.guided-tour__tooltip--centered {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 400px;
+}
+
+.guided-tour__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.guided-tour__text {
+  margin: 0;
+  color: var(--text-muted, #a1a1aa);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.guided-tour__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-2, 8px);
+}
+
+.guided-tour__hint {
+  font-size: 0.8rem;
+  color: var(--brand-primary, var(--accent, #7c3aed));
+  font-weight: 600;
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guided-tour__ring {
+    animation: none;
+  }
+}

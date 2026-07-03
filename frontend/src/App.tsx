@@ -13,7 +13,8 @@ import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
 import { CreateTeamModal } from './components/Shell/CreateTeamModal'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
-import { PlatformTour } from './components/onboarding/PlatformTour'
+import { GuidedTour } from './components/onboarding/GuidedTour'
+import { tourStepsForRole } from './components/onboarding/tourSteps'
 import { Sun, Moon, Edit, Trash2, Copy, X } from 'lucide-react'
 import { AnalyticsView } from './views/Analytics/AnalyticsView'
 import { ArchiveView } from './views/calendar/ArchiveView'
@@ -1662,6 +1663,18 @@ function App() {
     )
   }
 
+  // Don't flash the app shell while the first dashboard load is in flight —
+  // whether onboarding or the app renders is only known once teams are loaded.
+  if (!dashboardReady && loading) {
+    return (
+      <AuthShell theme={resolvedTheme}>
+        <p className="hint" data-testid="app-loading" role="status">
+          {t('common.loading')}
+        </p>
+      </AuthShell>
+    )
+  }
+
   // First sign-in without a team (and no invite being redeemed): the user
   // creates their team before entering the app.
   if (dashboardReady && !invitePending && teams.length === 0) {
@@ -2175,7 +2188,9 @@ function App() {
       }}
     />
     {tourOpen ? (
-      <PlatformTour
+      <GuidedTour
+        steps={tourStepsForRole(principalUser?.globalRole === 'admin')}
+        section={section}
         onClose={() => {
           markTourDone()
           setTourOpen(false)

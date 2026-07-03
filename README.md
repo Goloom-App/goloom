@@ -340,11 +340,17 @@ goloom follows [Semantic Versioning](https://semver.org/) and is intentionally
 still land between minor versions, so pin a version and read the notes before
 upgrading.
 
-- Releases are automated from [Conventional Commits](https://www.conventionalcommits.org/)
+- **Branching**: development happens on feature branches; after testing they are
+  merged into `main` (CI runs the full test suite on every PR).
+- **Nightly**: every push to `main` publishes `ghcr.io/goloom-app/goloom:nightly`,
+  always built from the latest `main` state (plus a per-commit `nightly-<sha>` tag).
+  Use it to try upcoming features; it is not a release.
+- **Releases** are automated from [Conventional Commits](https://www.conventionalcommits.org/)
   via [release-please](https://github.com/googleapis/release-please): a release PR
   maintains `CHANGELOG.md` and the version; merging it tags `vX.Y.Z`, publishes a
   [GitHub Release](https://github.com/Goloom-App/goloom/releases) with prebuilt
-  Linux binaries (amd64/arm64), and pushes the `ghcr.io/goloom-app/goloom` image.
+  Linux binaries (amd64/arm64), and pushes the versioned
+  `ghcr.io/goloom-app/goloom` image — `:latest` moves only on releases.
 - The running version is reported by `GET /healthz` and the agent discovery doc.
 - The REST API has its own contract version under `/v1`, independent of the app
   version; it changes only on breaking API changes.

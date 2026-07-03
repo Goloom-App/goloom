@@ -432,14 +432,16 @@ jobs:
           image_repo="${registry_host}/${REPOSITORY}"
           sha_tag="sha-${SHA}"
 
+          # Release model: feature branches are merged into main after testing;
+          # main publishes the :nightly image, :latest moves only on release tags.
           if [ "${REF_TYPE}" = "tag" ]; then
             release_tag="${REF_NAME}"
             tags="${image_repo}:${sha_tag} ${image_repo}:${release_tag} ${image_repo}:latest"
           elif [ "${REF_NAME}" = "main" ]; then
-            tags="${image_repo}:${sha_tag} ${image_repo}:latest"
+            tags="${image_repo}:${sha_tag} ${image_repo}:nightly"
           else
-            # Non-main branches (e.g. dev) publish under their branch name so
-            # the build can be pulled for testing without touching :latest.
+            # Long-lived test branches publish under their branch name so the
+            # build can be pulled for testing without touching :nightly.
             tags="${image_repo}:${sha_tag} ${image_repo}:${REF_NAME}"
           fi
 
