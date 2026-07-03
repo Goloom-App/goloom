@@ -62,6 +62,14 @@ type mockStore struct {
 
 	getPostTemplateFn           func(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error)
 	listPostTemplateLinkedPosts []domain.PostTemplateLinkedPost
+
+	// external post import hooks
+	listTeamAccountsFn         func(ctx context.Context, teamID string) ([]domain.SocialAccount, error)
+	createImportedPostFn       func(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error)
+	authorPostAlreadyTrackedFn func(ctx context.Context, accountID, remoteID, publishedURL string, metadata map[string]string) (bool, error)
+
+	// rss hooks
+	updateRSSFeedLastFetchedFn func(ctx context.Context, feedID string, lastFetchedAt time.Time) error
 }
 
 type advanceTemplateCall struct {
@@ -264,6 +272,12 @@ func (m *mockStore) IncrementRSSFeedCounter(ctx context.Context, feedID string) 
 }
 
 func (m *mockStore) UpdateRSSFeedLastFetched(ctx context.Context, feedID string, lastFetchedAt time.Time) error {
+	m.mu.Lock()
+	fn := m.updateRSSFeedLastFetchedFn
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, feedID, lastFetchedAt)
+	}
 	return nil
 }
 
@@ -300,6 +314,12 @@ func (m *mockStore) TargetExistsByRemotePostID(ctx context.Context, accountID, r
 }
 
 func (m *mockStore) AuthorPostAlreadyTracked(ctx context.Context, accountID, remoteID, publishedURL string, metadata map[string]string) (bool, error) {
+	m.mu.Lock()
+	fn := m.authorPostAlreadyTrackedFn
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, accountID, remoteID, publishedURL, metadata)
+	}
 	return false, nil
 }
 
@@ -308,6 +328,12 @@ func (m *mockStore) DeleteRedundantImportedPosts(ctx context.Context, teamID str
 }
 
 func (m *mockStore) CreateImportedPost(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error) {
+	m.mu.Lock()
+	fn := m.createImportedPostFn
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, teamID, authorUserID, input)
+	}
 	return domain.ScheduledPost{}, nil
 }
 
@@ -354,6 +380,12 @@ func (m *mockStore) UserHasAnyTeamRole(ctx context.Context, userID, teamID strin
 }
 
 func (m *mockStore) ListTeamAccounts(ctx context.Context, teamID string) ([]domain.SocialAccount, error) {
+	m.mu.Lock()
+	fn := m.listTeamAccountsFn
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, teamID)
+	}
 	return nil, nil
 }
 
