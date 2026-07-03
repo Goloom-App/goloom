@@ -394,7 +394,8 @@ func (s *Store) IsPostTemplateAnnouncementSkipped(ctx context.Context, templateI
 	var n int
 	err := s.db.QueryRowContext(ctx, `
 		select count(*) from post_template_skips
-		where template_id = ? and occurrence_at = ? and skip_scope = 'announcement'`,
+		where template_id = ? and occurrence_at = ?
+		  and (skip_scope = 'announcement' or skip_scope = 'occurrence' or skip_scope = '' or skip_scope is null)`,
 		templateID, formatTime(occurrenceAt),
 	).Scan(&n)
 	return n > 0, err
