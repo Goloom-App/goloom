@@ -1134,3 +1134,49 @@ func TestAdminLogs_PruneWithBeforeFilter(t *testing.T) {
 		map[string]any{"older_than_days": 1})
 	requireStatus(t, rec, http.StatusOK)
 }
+
+// --- Proactive trigger settings ---
+
+func TestProactiveSettings_GetDefaultsAndUpsert(t *testing.T) {
+	f := newEndpointFixture(t)
+	base := "/v1/teams/" + f.team.ID + "/proactive-settings"
+
+	// GET before any upsert returns the defaults.
+	rec := f.do(t, http.MethodGet, base, nil)
+	requireStatus(t, rec, http.StatusOK)
+	defaults := decodeJSON[domain.ProactiveTriggerSettings](t, rec)
+	if defaults.MaxTriggersPerDay != 5 {
+		t.Errorf("default max_triggers_per_day = %d, want 5", defaults.MaxTriggersPerDay)
+	}
+	if defaults.CronSchedule == "" {
+		t.Error("default cron_schedule is empty")
+	}
+
+	// PUT stores new settings.
+	rec = f.do(t, http.MethodPut, base, map[string]any{
+		"content_gap_threshold_days": 7,
+		"auto_fill_enabled":          true,
+		"max_triggers_per_day":       2,
+		"cron_schedule":              "30 8 * * *",
+	})
+	requireStatus(t, rec, http.StatusOK)
+	saved := decodeJSON[domain.ProactiveTriggerSettings](t, rec)
+	if saved.ContentGapThresholdDays != 7 || !saved.AutoFillEnabled || saved.MaxTriggersPerDay != 2 || saved.CronSchedule != "30 8 * * *" {
+		t.Errorf("saved settings = %+v", saved)
+	}
+
+	// GET reflects the stored settings.
+	rec = f.do(t, http.MethodGet, base, nil)
+	requireStatus(t, rec, http.StatusOK)
+	got := decodeJSON[domain.ProactiveTriggerSettings](t, rec)
+	if got.ContentGapThresholdDays != 7 || got.MaxTriggersPerDay != 2 {
+		t.Errorf("get after upsert = %+v", got)
+	}
+}
+
+func TestProactiveSettings_UpsertInvalidBody(t *testing.T) {
+	f := newEndpointFixture(t)
+	// A JSON string is not decodable into the settings struct.
+	rec := f.do(t, http.MethodPut, "/v1/teams/"+f.team.ID+"/proactive-settings", "not-an-object")
+	requireStatus(t, rec, http.StatusBadRequest)
+}
