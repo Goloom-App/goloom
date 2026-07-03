@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.0](https://github.com/Goloom-App/goloom/compare/v0.1.3...v0.2.0) (2026-07-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **teams:** teams no longer carry is_personal / personal_for_user_id fields, and new users start without a team. Existing personal workspaces are migrated to regular teams (renamed after their owner) on first startup.
+
+### Features
+
+* **frontend:** guided platform tour after the first sign-in ([69dbbf3](https://github.com/Goloom-App/goloom/commit/69dbbf3dbc3fcf849afa1053ad211a9a547dbbf0))
+* **frontend:** onboarding wizard for the first sign-in ([75f2bdd](https://github.com/Goloom-App/goloom/commit/75f2bdd15246c3f817095f616531ffbd8adedc28))
+* **onboarding:** interactive guided tour and flash-free first sign-in ([cadac93](https://github.com/Goloom-App/goloom/commit/cadac93c9142e9bdab2595433a082aad973572de))
+* **teams:** manage team invitations with shareable invite links ([ff61219](https://github.com/Goloom-App/goloom/commit/ff61219327abb728ed8964c438bca5036acc8eed))
+* **teams:** retire personal workspaces, every team is a regular team ([1833782](https://github.com/Goloom-App/goloom/commit/18337826dd35396796c2f76c8b201721af0be2e8))
+
+
+### Bug Fixes
+
+* **posts:** count post length the way each platform does ([a68d869](https://github.com/Goloom-App/goloom/commit/a68d86981a2412a41928e6b1c8e98d0b40710d58)), closes [#22](https://github.com/Goloom-App/goloom/issues/22)
+
 ## [0.1.3](https://github.com/Goloom-App/goloom/compare/v0.1.2...v0.1.3) (2026-06-27)
 
 
