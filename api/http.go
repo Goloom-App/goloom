@@ -117,6 +117,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("POST /v1/admin/sync-external-posts", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncExternalPosts))))
 	mux.Handle("POST /v1/admin/sync-rss-feeds", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncRSSFeeds))))
 	mux.Handle("POST /v1/admin/e2e/automation-draft", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSeedAutomationDraft))))
+	mux.Handle("POST /v1/admin/e2e/demo-seed", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSeedDemoData))))
 	mux.Handle("POST /v1/admin/repair-future-posted", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminRepairFuturePosted))))
 	mux.Handle("GET /v1/admin/logs", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListLogEntries))))
 	mux.Handle("POST /v1/admin/logs/{id}/archive", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleArchiveLogEntry))))

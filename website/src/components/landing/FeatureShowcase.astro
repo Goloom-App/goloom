@@ -1,0 +1,224 @@
+---
+import { Image } from 'astro:assets';
+import dashboard from '../../assets/screenshots/dashboard.png';
+import calendar from '../../assets/screenshots/content-calendar.png';
+import composer from '../../assets/screenshots/composer.png';
+import analytics from '../../assets/screenshots/analytics.png';
+import reviewQueue from '../../assets/screenshots/review-queue.png';
+import automation from '../../assets/screenshots/automation.png';
+
+const sections = [
+	{
+		id: 'dashboard',
+		eyebrow: 'Overview',
+		title: 'Start the day with a clear picture',
+		body: 'The dashboard pulls your whole workspace onto one screen — what happened, what is scheduled, and whether every account is still healthy.',
+		points: [
+			'Recent engagement across all connected networks',
+			'Account health with reconnect prompts before tokens expire',
+			'Upcoming posts with one-click access to editing',
+		],
+		src: dashboard,
+	},
+	{
+		id: 'calendar',
+		eyebrow: 'Plan',
+		title: 'Your whole month, one calendar',
+		body: 'Every draft, scheduled and published post across all accounts lives in a single timezone-aware calendar. Move things around until the month makes sense.',
+		points: [
+			'Drag-and-drop rescheduling across accounts',
+			'Grid and list views for planning and triage',
+			'Select any post to preview it per platform',
+		],
+		src: calendar,
+	},
+	{
+		id: 'composer',
+		eyebrow: 'Compose',
+		title: 'Write once, tailor it per network',
+		body: 'One draft goes to every destination — with per-account versions where the wording should differ, and live previews that show exactly what each network will render.',
+		points: [
+			'Per-account content versions and character limits',
+			'Live previews for every selected destination',
+			'Attach media once, exclude it per network if needed',
+		],
+		src: composer,
+	},
+	{
+		id: 'analytics',
+		eyebrow: 'Measure',
+		title: 'Know what actually worked',
+		body: 'Engagement, follower trends and per-post metrics are synced from every network into one report — no external analytics service, no tracking pixels.',
+		points: [
+			'Likes, reposts and replies aggregated across providers',
+			'Follower trend and 30-day metric history',
+			'Per-post, per-account and hashtag breakdowns',
+		],
+		src: analytics,
+	},
+	{
+		id: 'review',
+		eyebrow: 'Collaborate',
+		title: 'Four eyes before it goes out',
+		body: 'Automation drafts and team posts can route through an approval step. Editors propose, owners approve — and the audit log remembers who did what.',
+		points: [
+			'Review queue for automation and RSS drafts',
+			'Owner, editor and viewer roles per team',
+			'Every action attributed in the team audit log',
+		],
+		src: reviewQueue,
+	},
+	{
+		id: 'automation',
+		eyebrow: 'Automate',
+		title: 'Keep channels alive on autopilot',
+		body: 'Recurring templates and RSS rules produce posts on schedule, so the channels stay active while you do something else.',
+		points: [
+			'Weekly and monthly recurring post templates',
+			'RSS feeds turned into drafts or scheduled posts',
+			'Optional AI enhancement in your team’s brand voice',
+		],
+		src: automation,
+	},
+];
+---
+
+<section class="lp-section" id="features">
+	<div class="lp-container">
+		<div class="lp-section__head">
+			<span class="lp-eyebrow">Features</span>
+			<h2>What working in goloom looks like</h2>
+			<p>Not a mockup in sight — every shot below is the real UI running on demo data.</p>
+		</div>
+
+		<div class="lp-showcase">
+			{sections.map((s) => (
+				<article class="lp-showcase__row" id={`feature-${s.id}`}>
+					<div class="lp-showcase__text">
+						<span class="lp-eyebrow">{s.eyebrow}</span>
+						<h3>{s.title}</h3>
+						<p>{s.body}</p>
+						<ul>
+							{s.points.map((p) => (
+								<li>{p}</li>
+							))}
+						</ul>
+					</div>
+					<a href={`#shot-${s.id}`} class="glass lp-showcase__shot" aria-label={`View ${s.title} full size`}>
+						<Image src={s.src} alt={s.title} widths={[640, 1180]} sizes="(max-width: 920px) 100vw, 58vw" />
+					</a>
+				</article>
+			))}
+		</div>
+	</div>
+</section>
+
+{sections.map((s) => (
+	<a href={`#feature-${s.id}`} class="lp-lightbox" id={`shot-${s.id}`} aria-label={`Close ${s.title}`}>
+		<Image src={s.src} alt={s.title} widths={[1024, 1600]} sizes="95vw" />
+	</a>
+))}
+
+<style>
+	.lp-showcase {
+		display: grid;
+		gap: clamp(4rem, 8vw, 7rem);
+	}
+	.lp-showcase__row {
+		display: grid;
+		grid-template-columns: 0.85fr 1.15fr;
+		gap: clamp(1.8rem, 4vw, 4rem);
+		align-items: center;
+	}
+	/* Alternate text/screenshot sides so the page has rhythm. */
+	.lp-showcase__row:nth-child(even) .lp-showcase__text {
+		order: 2;
+	}
+	.lp-showcase__row:nth-child(even) .lp-showcase__shot {
+		order: 1;
+	}
+	@media (max-width: 920px) {
+		.lp-showcase__row {
+			grid-template-columns: 1fr;
+		}
+		.lp-showcase__row:nth-child(even) .lp-showcase__text {
+			order: 1;
+		}
+		.lp-showcase__row:nth-child(even) .lp-showcase__shot {
+			order: 2;
+		}
+	}
+	.lp-showcase__text h3 {
+		font-size: clamp(1.45rem, 3vw, 2rem);
+		line-height: 1.12;
+		letter-spacing: -0.025em;
+		margin: 0.55rem 0 0.8rem;
+	}
+	.lp-showcase__text p {
+		color: var(--sl-color-gray-2);
+		line-height: 1.65;
+		margin: 0 0 1.2rem;
+	}
+	.lp-showcase__text ul {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: grid;
+		gap: 0.65rem;
+	}
+	.lp-showcase__text li {
+		display: flex;
+		gap: 0.65rem;
+		align-items: flex-start;
+		color: var(--sl-color-gray-2);
+		line-height: 1.5;
+		font-size: 0.97rem;
+	}
+	.lp-showcase__text li::before {
+		content: '✓';
+		flex: none;
+		font-weight: 700;
+		color: var(--brand-grad-from);
+	}
+	.lp-showcase__shot {
+		display: block;
+		padding: 0.6rem;
+		cursor: zoom-in;
+		transition: transform 0.18s ease, border-color 0.2s ease;
+	}
+	.lp-showcase__shot:hover {
+		transform: translateY(-3px);
+		border-color: var(--glass-border-strong);
+	}
+	.lp-showcase__shot img {
+		display: block;
+		width: 100%;
+		height: auto;
+		border-radius: 11px;
+		border: 1px solid var(--glass-border);
+	}
+	.lp-lightbox {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		display: none;
+		align-items: center;
+		justify-content: center;
+		padding: clamp(1rem, 4vw, 3rem);
+		background: rgba(5, 6, 10, 0.88);
+		backdrop-filter: blur(4px);
+		cursor: zoom-out;
+	}
+	.lp-lightbox:target {
+		display: flex;
+	}
+	.lp-lightbox img {
+		max-width: min(1600px, 95vw);
+		max-height: 90vh;
+		width: auto;
+		height: auto;
+		border-radius: 10px;
+		border: 1px solid var(--glass-border-strong);
+		box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.6);
+	}
+</style>
