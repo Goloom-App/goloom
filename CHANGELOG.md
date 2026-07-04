@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/Goloom-App/goloom/compare/v0.2.1...v0.2.2) (2026-07-04)
+
+
+### Features
+
+* **website:** stalw.art-style feature showcase with demo-data screenshots ([7a22798](https://github.com/Goloom-App/goloom/commit/7a22798ce69cc93ffb708bba6f199953f2fcb633))
+* **website:** stalw.art-style feature showcase with demo-data screenshots ([29f3cac](https://github.com/Goloom-App/goloom/commit/29f3cacc9b5bd22101637e75c69f82802b2bab6e))
+
 ## [0.2.1](https://github.com/Goloom-App/goloom/compare/v0.2.0...v0.2.1) (2026-07-03)
 
 
