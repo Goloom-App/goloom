@@ -1,52 +1,36 @@
 ---
 const features = [
 	{
-		title: 'Composer',
-		body: 'Write once, tailor per account. Per-account post versions, media attachments and validation before anything is scheduled.',
-	},
-	{
-		title: 'Content calendar',
-		body: 'A drag-and-drop, timezone-aware calendar to plan and reschedule posts across every connected account.',
-	},
-	{
-		title: 'Analytics',
-		body: 'Per-post and per-account metrics — reach, engagement and follower growth across providers.',
-	},
-	{
-		title: 'Automation',
-		body: 'Recurring post templates and RSS feed rules keep channels active without manual reposting.',
-	},
-	{
-		title: 'AI assist (optional)',
-		body: 'Off until you wire up a provider. When enabled, AI-assisted drafting follows a per-team brand voice.',
-	},
-	{
-		title: 'Review queue',
-		body: 'Route drafts through approval before they publish. Editors propose, owners approve, every step is logged.',
-	},
-	{
-		title: 'Media library',
-		body: 'A reusable per-team media library so images and assets are one click away in the composer.',
-	},
-	{
 		title: 'Built-in MCP server',
 		body: 'A Model Context Protocol server ships in the binary, so agents can drive goloom over the same tools you use by hand.',
 	},
 	{
-		title: 'API tokens & OIDC',
-		body: 'Bearer-token API access with a full token lifecycle, plus OIDC sign-in for the browser UI.',
+		title: 'REST API & tokens',
+		body: 'Everything in the UI is a team-scoped /v1 call. Bearer tokens with a full lifecycle, plus a validate-before-schedule endpoint.',
 	},
 	{
-		title: 'Audit log',
-		body: 'Every team action is attributed to a member or API key. Provider tokens encrypted, API tokens hashed at rest.',
+		title: 'OIDC sign-in',
+		body: 'Plug in your identity provider for the browser UI — Authentik, Keycloak or any OpenID Connect issuer.',
+	},
+	{
+		title: 'Media library',
+		body: 'A reusable per-team media library with deduplication, so images are one click away in the composer.',
+	},
+	{
+		title: 'AI assist (optional)',
+		body: 'Off until you wire up a provider. When enabled, drafting and enhancement follow a per-team brand voice.',
+	},
+	{
+		title: 'Audit log & encryption',
+		body: 'Every team action is attributed. Provider tokens are encrypted and API tokens hashed at rest.',
 	},
 ];
 ---
 
-<section class="lp-section" id="features">
+<section class="lp-section" id="more">
 	<div class="lp-container">
 		<div class="lp-section__head">
-			<h2>What it does</h2>
+			<h2>And the parts you’ll appreciate later</h2>
 			<p>Everything around scheduling posts to multiple accounts — and not much you have to grow into.</p>
 		</div>
 		<div class="lp-features">
