@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.3](https://github.com/Goloom-App/goloom/compare/v0.2.2...v0.2.3) (2026-07-05)
+
+
+### Features
+
+* **scheduler:** per-feed summary logging for rss imports ([a46f942](https://github.com/Goloom-App/goloom/commit/a46f9426b794dca0f421e7eff6f2cbb4795c16f3))
+* **scheduler:** per-feed summary logging for RSS imports ([04cac8a](https://github.com/Goloom-App/goloom/commit/04cac8a0a99c37f592f75e1f60bed291194cb802))
+
+
+### Bug Fixes
+
+* **api:** allowlist demo_seed in the post-creation guard ([dbd1797](https://github.com/Goloom-App/goloom/commit/dbd1797d84a58d19981f8ea0463911eff982542f))
+* **deps:** update frontend non-major dependencies ([9b54ea7](https://github.com/Goloom-App/goloom/commit/9b54ea7770d60339f3a5d37eca556c7557cdea7e))
+* **deps:** update frontend non-major dependencies ([93d0faf](https://github.com/Goloom-App/goloom/commit/93d0faf3039d6b8065fb61398023f9c6f51b5ca9))
+* **scheduler:** import rss items that appear in the feed after their pubDate ([afbcd27](https://github.com/Goloom-App/goloom/commit/afbcd27a436507f3cf8ce2da9a3cd92df743efc6))
+* **scheduler:** import RSS items that appear in the feed after their pubDate ([3b7fc90](https://github.com/Goloom-App/goloom/commit/3b7fc908b96b92fe4baee6cee35e1116175764cd))
+* **webui:** persist the guided-tour flag on the user account ([461771c](https://github.com/Goloom-App/goloom/commit/461771c8eb2ced2f81ebfb9d29862231fe714d23))
+* **webui:** persist the guided-tour flag on the user account ([e7c6325](https://github.com/Goloom-App/goloom/commit/e7c6325b0eefe130723690f7d4aea15f934a4837))
+
 ## [0.2.2](https://github.com/Goloom-App/goloom/compare/v0.2.1...v0.2.2) (2026-07-04)
 
 
