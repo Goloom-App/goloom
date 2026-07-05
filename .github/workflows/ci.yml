@@ -1,0 +1,246 @@
+name: CI
+
+# PR gate ported from the old Forgejo CI (.forgejo/workflows/ci.yaml), minus
+# the image/deploy jobs — on GitHub those live in nightly-image.yml and
+# release.yml. Runs on every PR against main and on pushes to main
+# (post-merge verification).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Detect which parts of the repo changed so downstream jobs can be skipped.
+  # Implemented with plain git (no third-party action) — a docs-only change
+  # leaves every output 'false', so only this tiny job and the secret scan run.
+  changes:
+    runs-on: ubuntu-latest
+    name: "Detect changed paths"
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed files
+        id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          full_run() {
+            for k in backend frontend e2e; do
+              echo "$k=true" >> "$GITHUB_OUTPUT"
+              echo "$k=true"
+            done
+          }
+
+          if [ "$EVENT" = "pull_request" ]; then
+            base="$BASE_SHA"
+          else
+            base="$BEFORE"
+          fi
+
+          # New branch / unknown base / first commit → no usable diff base: run all.
+          if [ -z "${base:-}" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "No usable base ref ('${base:-}'); running all suites"
+            full_run
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$base" HEAD)"
+          echo "Base: $base"
+          echo "Changed files:"
+          echo "$changed"
+
+          match() {
+            if printf '%s\n' "$changed" | grep -Eq "$1"; then echo true; else echo false; fi
+          }
+
+          ci='^\.github/workflows/ci\.yml$'
+          backend=$(match "\.go$|^go\.(mod|sum)$|^db/|^locales/|$ci")
+          frontend=$(match "^frontend/|$ci")
+          e2e=$(match "\.go$|^go\.(mod|sum)$|^db/|^locales/|^frontend/|$ci")
+
+          for k in backend frontend e2e; do
+            eval "v=\$$k"
+            echo "$k=$v" >> "$GITHUB_OUTPUT"
+            echo "$k=$v"
+          done
+
+  test-backend:
+    runs-on: ubuntu-latest
+    name: "Test Backend (Go)"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Run Go tests
+        run: go test -count=1 ./...
+
+  # The postgres store tests skip without TEST_POSTGRES_URL, so 'go test ./...'
+  # alone never exercises them — this job is the gate for the Postgres backend
+  # (fresh schema apply + full store suite against a real server).
+  test-postgres:
+    runs-on: ubuntu-latest
+    name: "Test Postgres Store"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: goloom_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Run Postgres store tests
+        env:
+          TEST_POSTGRES_URL: postgres://postgres:test@localhost:5432/goloom_test?sslmode=disable
+        run: go test -count=1 ./internal/store/postgres/
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    name: "Test Frontend (Node.js)"
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      # corepack picks the exact pnpm version from frontend/package.json's
+      # packageManager field.
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Frontend install, lint and build
+        run: |
+          pnpm --dir frontend install --frozen-lockfile
+          pnpm --dir frontend lint
+          pnpm --dir frontend build
+
+  test-e2e:
+    runs-on: ubuntu-latest
+    name: "E2E (Playwright + Go)"
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install frontend deps
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      - name: Playwright Chromium + OS dependencies
+        run: pnpm --dir frontend exec playwright install --with-deps chromium
+
+      # test:e2e builds the frontend and the Go server before running the suite.
+      - name: Playwright tests
+        run: pnpm --dir frontend test:e2e
+
+  # Go vulnerability scan (govulncheck) + static security analysis (gosec).
+  # govulncheck only reports advisories reachable from code actually used, so it
+  # blocks the build on real exposure. gosec blocks only on high-severity findings.
+  security-go:
+    runs-on: ubuntu-latest
+    name: "Security (Go: govulncheck + gosec)"
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
+      - name: gosec (block on high severity)
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          # -severity high: only high-severity issues fail the build.
+          "$(go env GOPATH)/bin/gosec" -severity high -confidence medium ./...
+
+  # Secret scan runs on every change (cheap, repo-wide) — not path-gated, since a
+  # leaked credential can land in any file. Fails the build on any detected secret.
+  secret-scan:
+    runs-on: ubuntu-latest
+    name: "Security (Secrets: gitleaks)"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.21.2
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan git history for secrets
+        run: gitleaks detect --source=. --redact

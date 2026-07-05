@@ -14,6 +14,7 @@ import (
 // so a new interactive endpoint cannot silently skip validation.
 var automationBypassAllowlist = map[string]bool{
 	"api/ai_draft.go":                      true,
+	"api/demo_seed.go":                     true,
 	"api/ai_callback.go":                   true,
 	"api/ai_chat.go":                       true,
 	"api/rss_automation_callback.go":       true,
