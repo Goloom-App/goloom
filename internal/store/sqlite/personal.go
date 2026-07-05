@@ -83,6 +83,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table ai_service_configs add column base_url text not null default ''`,
 		`alter table ai_service_configs add column api_key_ciphertext text not null default ''`,
 		`alter table ai_service_configs drop column service_url`,
+		`alter table users add column tour_done integer not null default 0`,
 	}
 	for _, s := range stmts {
 		_, err := db.ExecContext(ctx, s)

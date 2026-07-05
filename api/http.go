@@ -98,6 +98,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.HandleFunc("GET /v1/oauth/mastodon/callback", a.handleMastodonOAuthCallback)
 
 	mux.Handle("GET /v1/me", a.auth.RequireAuth(http.HandlerFunc(a.handleMe)))
+	mux.Handle("PUT /v1/me/tour", a.auth.RequireAuth(http.HandlerFunc(a.handleSetTourDone)))
 	mux.Handle("GET /v1/me/api-tokens", a.auth.RequireAuth(http.HandlerFunc(a.handleListMyAPITokens)))
 	mux.Handle("POST /v1/me/api-tokens", a.auth.RequireAuth(http.HandlerFunc(a.handleCreateMyAPIToken)))
 	mux.Handle("DELETE /v1/me/api-tokens/{tokenID}", a.auth.RequireAuth(http.HandlerFunc(a.handleRevokeMyAPIToken)))
@@ -301,6 +302,31 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, principal)
+}
+
+// handleSetTourDone persists the guided-tour flag on the authenticated user so
+// it follows the account across browsers and devices.
+func (a *API) handleSetTourDone(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var input struct {
+		Done bool `json:"done"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	user, err := a.store.SetUserTourDone(r.Context(), principal.User.ID, input.Done)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, user)
 }
 
 func (a *API) handleListTeams(w http.ResponseWriter, r *http.Request) {

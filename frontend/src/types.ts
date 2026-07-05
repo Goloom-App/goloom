@@ -104,6 +104,8 @@ export interface UserRecord {
   email: string
   globalRole: GlobalRole
   title: string
+  /** Whether this account has finished (or skipped) the platform tour. */
+  tourDone: boolean
   /** ISO timestamp from the server */
   createdAt: string
 }

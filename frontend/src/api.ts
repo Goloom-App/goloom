@@ -22,6 +22,7 @@ export interface BackendUser {
   name: string
   subject: string
   is_admin: boolean
+  tour_done: boolean
   created_at: string
 }
 
@@ -627,6 +628,14 @@ export function createApiClient(options: ApiClientOptions) {
     me() {
       return request<{ user: BackendUser; kind: string; token_id?: string }>(options, '/v1/me', {
         headers: buildHeaders(options.token, false),
+      })
+    },
+    // Persist the guided-tour flag on the account so it follows the user across browsers.
+    setTourDone(done: boolean) {
+      return request<BackendUser>(options, '/v1/me/tour', {
+        method: 'PUT',
+        headers: buildHeaders(options.token, true),
+        body: JSON.stringify({ done }),
       })
     },
     // Exchange a bearer token (bootstrap/recovery or API token) for a cookie session.

@@ -53,6 +53,7 @@ import {
   type BackendTeam,
 } from './api'
 import { isTourDone, loadInitialSection, loadInitialTeamId, loadStoredSettings, markTourDone, resetTourDone, writeStoredSettings, LAST_SECTION_STORAGE_KEY, LAST_TEAM_STORAGE_KEY } from './appStorage'
+import { tourGate } from './components/onboarding/tourGate'
 import { toAccountRecord, toAuthStatusRecord, toPostRecord, toProviderInstanceRecord, toRuntimeConfigRecord, toTeamMemberRecord, toTeamRecord, toUserRecord } from './mappers'
 import { engagementForAccount } from './postMetrics'
 import { postsForTeam, resolveScheduleChange, sharedAccountLabels } from './schedule'
@@ -624,15 +625,27 @@ function App() {
   }, [api, authenticated, loadDashboard])
 
   // Open the platform tour once per user, on the first sign-in with at least
-  // one team — right after onboarding, or immediately for invited users.
+  // one team — right after onboarding, or immediately for invited users. The
+  // seen-state lives on the account (/v1/me tour_done); a pre-existing
+  // localStorage marker is migrated to the account instead of replaying.
   useEffect(() => {
-    if (!authenticated || !dashboardReady || invitePending || teams.length === 0) {
+    const decision = tourGate({
+      authenticated,
+      dashboardReady,
+      invitePending,
+      teamCount: teams.length,
+      serverTourDone: principalUser?.tourDone ?? false,
+      legacyLocalDone: isTourDone(),
+    })
+    if (decision.syncLegacyDone) {
+      setPrincipalUser((prev) => (prev ? { ...prev, tourDone: true } : prev))
+      void api?.setTourDone(true).catch(() => {})
       return
     }
-    if (!isTourDone()) {
+    if (decision.open) {
       setTourOpen(true)
     }
-  }, [authenticated, dashboardReady, invitePending, teams.length])
+  }, [api, authenticated, dashboardReady, invitePending, teams.length, principalUser?.tourDone])
 
   useEffect(() => {
     if (!api) {
@@ -2094,6 +2107,8 @@ function App() {
             showBrowserSession={authStatus?.appEnv === 'development' && principalUser?.globalRole === 'admin'}
             onRestartTour={() => {
               resetTourDone()
+              setPrincipalUser((prev) => (prev ? { ...prev, tourDone: false } : prev))
+              void api?.setTourDone(false).catch(() => {})
               setTourOpen(true)
             }}
           />
@@ -2193,6 +2208,8 @@ function App() {
         section={section}
         onClose={() => {
           markTourDone()
+          setPrincipalUser((prev) => (prev ? { ...prev, tourDone: true } : prev))
+          void api?.setTourDone(true).catch(() => {})
           setTourOpen(false)
         }}
       />
