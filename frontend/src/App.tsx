@@ -70,7 +70,7 @@ const OIDC_AUTO_ATTEMPTED_KEY = 'goloom.oidc.auto_attempted'
 // straight back into the IdP. Cleared once a session is established.
 const OIDC_SUPPRESS_AUTO_KEY = 'goloom.oidc.suppress_auto'
 
-const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics']
+const CONTENT_REFRESH_SECTIONS: AppSection[] = ['dashboard', 'calendar', 'archive', 'contentCalendar', 'analytics', 'reviewQueue']
 
 function App() {
   const { t } = useTranslation()
@@ -819,7 +819,7 @@ function App() {
     [contentCalendarMonth, plannedPostsForContentCalendar],
   )
 
-  const showPreviewColumn = (section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer') && !isMobile
+  const showPreviewColumn = (section === 'calendar' || section === 'archive' || section === 'contentCalendar' || section === 'composer' || section === 'reviewQueue') && !isMobile
 
   const isComposer = section === 'composer'
   const pullToRefreshDisabled = !isMobile || !CONTENT_REFRESH_SECTIONS.includes(section)
@@ -1001,8 +1001,28 @@ function App() {
     setSection('composer')
   }
 
+  // Automation drafts can appear (via the 30s review-queue poll) after the
+  // posts cache was loaded; fetch them on demand and merge them into the cache
+  // so editing and the preview sidebar work without a full dashboard reload.
+  async function ensurePostLoaded(postId: string): Promise<PostRecord | undefined> {
+    const cached = teamPosts.find((post) => post.id === postId)
+    if (cached) {
+      return cached
+    }
+    if (!api || !effectiveSelectedTeamId) {
+      return undefined
+    }
+    try {
+      const fetched = toPostRecord(await api.getPost(effectiveSelectedTeamId, postId))
+      setPosts((prev) => (prev.some((post) => post.id === fetched.id) ? prev : [...prev, fetched]))
+      return fetched
+    } catch {
+      return undefined
+    }
+  }
+
   async function openEditor(postId: string) {
-    const targetPost = teamPosts.find((post) => post.id === postId)
+    const targetPost = await ensurePostLoaded(postId)
     if (!targetPost || targetPost.source === 'imported') {
       return
     }
@@ -1783,6 +1803,13 @@ function App() {
             </div>
             <div className="preview-content">
               {selectedPost ? (
+                sharedAccountLabels(selectedPost, accounts).length === 0 ? (
+                  // Automation drafts may not have target accounts yet; show the
+                  // raw text instead of an empty account-preview list.
+                  <div className="glass-panel glass-panel--compact" data-testid="preview-plain-content">
+                    <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{selectedPost.content}</p>
+                  </div>
+                ) : (
                 sharedAccountLabels(selectedPost, accounts).map((account) => (
                     <SocialPreview
                       key={account.id}
@@ -1803,6 +1830,7 @@ function App() {
                     }
                   />
                 ))
+                )
               ) : (
                 <div className="empty-state">
                   <p className="hint">{t('common.selectPostPreview')}</p>
@@ -1965,6 +1993,11 @@ function App() {
             team={selectedTeam}
             accounts={teamAccounts}
             canEdit={canEditScheduledPosts}
+            selectedPostId={expandedPostId}
+            onSelect={(postId) => {
+              setExpandedPostId(postId)
+              void ensurePostLoaded(postId)
+            }}
             onEdit={openEditor}
             onPublishNow={async (item) => {
               await api.updatePost(selectedTeam.id, item.id, {

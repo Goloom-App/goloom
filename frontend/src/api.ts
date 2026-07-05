@@ -910,6 +910,11 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    getPost(teamID: string, postID: string) {
+      return request<BackendPost>(options, `/v1/teams/${teamID}/posts/${postID}`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
     createPost(
       teamID: string,
       payload: {

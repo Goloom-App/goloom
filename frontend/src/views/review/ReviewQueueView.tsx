@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { useTranslation } from 'react-i18next'
-import { Clock, Inbox, Pencil, Send, Trash2 } from 'lucide-react'
+import { Clock, Eye, Inbox, Pencil, Send, Trash2 } from 'lucide-react'
 
 import { DestinationStack } from '../../components/post/DestinationAvatar'
 import { SectionCard } from '../../components/ui'
@@ -13,6 +13,8 @@ interface ReviewQueueViewProps {
   team: TeamRecord
   accounts: AccountRecord[]
   canEdit: boolean
+  selectedPostId: string | null
+  onSelect: (postId: string) => void
   onEdit: (postId: string) => void
   onPublishNow: (item: ReviewQueueItem) => Promise<void>
   onSchedule: (item: ReviewQueueItem, scheduledAt: string) => Promise<void>
@@ -29,6 +31,8 @@ export function ReviewQueueView({
   team,
   accounts,
   canEdit,
+  selectedPostId,
+  onSelect,
   onEdit,
   onPublishNow,
   onSchedule,
@@ -75,92 +79,104 @@ export function ReviewQueueView({
           {items.map((item) => (
             <article
               key={item.id}
-              className="glass-panel glass-panel--compact stack stack--sm"
+              className={`review-card glass-panel glass-panel--compact ${selectedPostId === item.id ? 'review-card--selected' : ''}`}
               data-testid="review-queue-item"
               data-post-id={item.id}
+              onClick={() => onSelect(item.id)}
             >
-              <div className="flex-row--between flex-wrap gap-2">
-                <div className="stack stack--xs">
-                  <div className="flex-row--center gap-2 flex-wrap">
-                    <span className="badge">{t('review.automationBadge')}</span>
-                    {item.isOverdue ? (
-                      <span className="badge badge--warning" data-testid="review-overdue-badge">
-                        {t('review.overdue')}
-                      </span>
-                    ) : null}
-                    {item.rssFeedName ? <span className="hint">{item.rssFeedName}</span> : null}
-                  </div>
-                  <h3 className="subsection-title">{item.title || t('common.untitledPost')}</h3>
-                  <p className="hint" style={{ fontSize: '0.85rem' }}>
-                    {item.content}
-                  </p>
+              <div className="review-card__header">
+                <div className="flex-row--center gap-2 flex-wrap">
+                  <span className="badge">{t('review.automationBadge')}</span>
+                  {item.isOverdue ? (
+                    <span className="badge badge--warning" data-testid="review-overdue-badge">
+                      {t('review.overdue')}
+                    </span>
+                  ) : null}
+                  {item.rssFeedName ? <span className="hint">{item.rssFeedName}</span> : null}
                 </div>
-                <DestinationStack accounts={sharedAccountLabels(item, accounts)} />
+                <div className="flex-row--center gap-2">
+                  <DestinationStack accounts={sharedAccountLabels(item, accounts)} />
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm review-card__preview-btn"
+                    data-testid="review-open-preview"
+                    aria-label={t('review.openPreview')}
+                    title={t('review.openPreview')}
+                    onClick={() => onSelect(item.id)}
+                  >
+                    <Eye size={14} />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-row--center gap-1 hint" style={{ fontSize: '0.8rem' }}>
-                <Clock size={12} />
-                <span>
+              <h3 className="subsection-title review-card__title">{item.title || t('common.untitledPost')}</h3>
+              <p className="review-card__content">{item.content}</p>
+
+              <div className="review-card__footer">
+                <span className="flex-row--center gap-1 hint review-card__meta">
+                  <Clock size={12} />
                   {t('review.suggested')}: {format(parseISO(item.scheduledAt), 'PPp')}
                 </span>
-              </div>
 
-              {canEdit ? (
-                <div className="flex-row--center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    className="btn btn--secondary btn--sm"
-                    data-testid="review-edit"
-                    disabled={busyId === item.id}
-                    onClick={() => onEdit(item.id)}
-                  >
-                    <Pencil size={14} /> {t('review.edit')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--primary btn--sm"
-                    data-testid="review-publish-now"
-                    disabled={busyId === item.id}
-                    onClick={() => handle(item.id, () => onPublishNow(item))}
-                  >
-                    <Send size={14} /> {t('review.publishNow')}
-                  </button>
-                  <label className="field" style={{ marginBottom: 0 }}>
-                    <span className="sr-only">{t('review.scheduleAt')}</span>
-                    <input
-                      type="datetime-local"
-                      data-testid="review-schedule-at"
-                      value={scheduleAt[item.id] ?? toInputDateTime(item.scheduledAt)}
-                      onChange={(e) => setScheduleAt((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn--secondary btn--sm"
-                    data-testid="review-schedule"
-                    disabled={busyId === item.id}
-                    onClick={() =>
-                      handle(item.id, () =>
-                        onSchedule(item, new Date(scheduleAt[item.id] ?? toInputDateTime(item.scheduledAt)).toISOString()),
-                      )
-                    }
-                  >
-                    {t('review.schedule')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    data-testid="review-discard"
-                    disabled={busyId === item.id}
-                    onClick={() => {
-                      if (!window.confirm(t('review.discardConfirm'))) return
-                      void handle(item.id, () => onDiscard(item.id))
-                    }}
-                  >
-                    <Trash2 size={14} /> {t('review.discard')}
-                  </button>
-                </div>
-              ) : null}
+                {canEdit ? (
+                  <div className="review-card__actions">
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      data-testid="review-edit"
+                      disabled={busyId === item.id}
+                      onClick={() => onEdit(item.id)}
+                    >
+                      <Pencil size={14} /> {t('review.edit')}
+                    </button>
+                    <span className="review-card__schedule">
+                      <label className="field review-card__schedule-field">
+                        <span className="sr-only">{t('review.scheduleAt')}</span>
+                        <input
+                          type="datetime-local"
+                          data-testid="review-schedule-at"
+                          value={scheduleAt[item.id] ?? toInputDateTime(item.scheduledAt)}
+                          onChange={(e) => setScheduleAt((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--sm"
+                        data-testid="review-schedule"
+                        disabled={busyId === item.id}
+                        onClick={() =>
+                          handle(item.id, () =>
+                            onSchedule(item, new Date(scheduleAt[item.id] ?? toInputDateTime(item.scheduledAt)).toISOString()),
+                          )
+                        }
+                      >
+                        {t('review.schedule')}
+                      </button>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      data-testid="review-publish-now"
+                      disabled={busyId === item.id}
+                      onClick={() => handle(item.id, () => onPublishNow(item))}
+                    >
+                      <Send size={14} /> {t('review.publishNow')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm review-card__discard"
+                      data-testid="review-discard"
+                      disabled={busyId === item.id}
+                      onClick={() => {
+                        if (!window.confirm(t('review.discardConfirm'))) return
+                        void handle(item.id, () => onDiscard(item.id))
+                      }}
+                    >
+                      <Trash2 size={14} /> {t('review.discard')}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </article>
           ))}
         </div>

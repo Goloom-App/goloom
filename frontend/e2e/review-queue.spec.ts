@@ -22,7 +22,9 @@ test.describe('review queue', () => {
 
     page.once('dialog', (dialog) => dialog.accept())
     await item.getByTestId('review-discard').click()
-    await expect(page.getByTestId('review-queue-empty')).toBeVisible({ timeout: 15_000 })
+    // Other specs seed their own uniquely-titled drafts into the same queue,
+    // so assert this item disappeared rather than the whole queue being empty.
+    await expect(item).toHaveCount(0, { timeout: 15_000 })
   })
 
   test('edit works for a draft that arrived after the dashboard load', async ({ page, baseURL }) => {

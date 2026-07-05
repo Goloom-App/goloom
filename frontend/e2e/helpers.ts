@@ -21,6 +21,14 @@ export async function signIn(page: Page) {
       await tokenField.fill(e2eBootstrapToken())
       await signInBtn.click()
     }
+    // A 401 race during session establishment can bounce the app through
+    // clearAuthenticatedState, which parks the (re-)authenticated session on
+    // the calendar section. If the shell is up but we are not on the
+    // dashboard, navigate home instead of failing the whole spec.
+    const homeButton = page.getByRole('button', { name: 'Home' })
+    if (!(await dashboard.isVisible().catch(() => false)) && (await homeButton.isVisible().catch(() => false))) {
+      await homeButton.click()
+    }
     await expect(dashboard).toBeVisible({ timeout: 30_000 })
   }
   await expect(page.getByText(/too many requests|rate limit/i)).toHaveCount(0, { timeout: 30_000 })
