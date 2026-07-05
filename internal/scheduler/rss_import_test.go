@@ -1,7 +1,10 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -254,6 +257,117 @@ func TestHandleRSSFirstFetch_baselinesAllItems(t *testing.T) {
 	}
 	if !recorded["item-a"] || !recorded["item-b"] {
 		t.Fatalf("expected both items baselined, got %+v", st.recordRSSImportedItemCalls)
+	}
+}
+
+// captureLogger returns a logger writing JSON lines into the returned buffer.
+func captureLogger() (*slog.Logger, *bytes.Buffer) {
+	buf := &bytes.Buffer{}
+	return slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug})), buf
+}
+
+func logLine(t *testing.T, buf *bytes.Buffer, msg string) map[string]any {
+	t.Helper()
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var entry map[string]any
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("invalid log line %q: %v", line, err)
+		}
+		if entry["msg"] == msg {
+			return entry
+		}
+	}
+	t.Fatalf("log line %q not found in:\n%s", msg, buf.String())
+	return nil
+}
+
+func TestImportRSSFeed_logsPerFeedSummary(t *testing.T) {
+	feed := testRSSFeed(ptrTime(time.Now().UTC().Add(-5 * time.Minute)))
+
+	st := rssOwnerStore()
+	st.rssItemAlreadyImportedFn = func(_ context.Context, _ string, itemKey string) (bool, error) {
+		return itemKey == "seen-item", nil
+	}
+	st.createScheduledPostFn = func(_ context.Context, _ string, _ domain.AuthenticatedPrincipal, _ domain.CreatePostInput) (domain.ScheduledPost, error) {
+		return domain.ScheduledPost{ID: "post-1", Status: domain.PostStatusPending}, nil
+	}
+
+	logger, buf := captureLogger()
+	svc := New(logger, st, nil, time.Minute, 1, 0, 0, 0, 0, nil)
+	svc.importRSSFeed(context.Background(), stubRSSFetcher{items: []rss.Item{
+		{GUID: "seen-item", Link: "https://example.com/seen", Title: "Seen", PublishedAt: time.Now().UTC().Add(-3 * time.Hour)},
+		{GUID: "fresh-item", Link: "https://example.com/fresh", Title: "Fresh", PublishedAt: time.Now().UTC().Add(-2 * time.Hour)},
+	}}, feed)
+
+	entry := logLine(t, buf, "rss import: feed processed")
+	if entry["level"] != "INFO" {
+		t.Fatalf("summary level = %v", entry["level"])
+	}
+	checks := map[string]float64{
+		"items_in_feed":    2,
+		"candidates":       2,
+		"created":          1,
+		"already_imported": 1,
+		"failed":           0,
+	}
+	for key, want := range checks {
+		if got, _ := entry[key].(float64); got != want {
+			t.Fatalf("summary %s = %v, want %v (entry: %v)", key, entry[key], want, entry)
+		}
+	}
+	if entry["feed_id"] != feed.ID {
+		t.Fatalf("summary feed_id = %v", entry["feed_id"])
+	}
+}
+
+func TestImportRSSFeed_logsDailyLimitAtInfo(t *testing.T) {
+	feed := testRSSFeed(ptrTime(time.Now().UTC().Add(-5 * time.Minute)))
+	feed.MaxPostsPerDay = 2
+
+	st := rssOwnerStore()
+	st.countRSSFeedPostsTodayFn = func(_ context.Context, _ string) (int, error) {
+		return 2, nil
+	}
+
+	logger, buf := captureLogger()
+	svc := New(logger, st, nil, time.Minute, 1, 0, 0, 0, 0, nil)
+	svc.importRSSFeed(context.Background(), stubRSSFetcher{items: nil}, feed)
+
+	entry := logLine(t, buf, "rss import: daily limit reached")
+	if entry["level"] != "INFO" {
+		t.Fatalf("daily limit level = %v, want INFO", entry["level"])
+	}
+	if got, _ := entry["created_today"].(float64); got != 2 {
+		t.Fatalf("created_today = %v", entry["created_today"])
+	}
+	if got, _ := entry["max_posts_per_day"].(float64); got != 2 {
+		t.Fatalf("max_posts_per_day = %v", entry["max_posts_per_day"])
+	}
+}
+
+func TestHandleRSSFirstFetch_logsBaselineSummary(t *testing.T) {
+	feed := testRSSFeed(nil)
+	feed.InitialSyncMode = domain.RSSInitialSyncBaseline
+
+	logger, buf := captureLogger()
+	svc := New(logger, rssOwnerStore(), nil, time.Minute, 1, 0, 0, 0, 0, nil)
+	svc.importRSSFeed(context.Background(), stubRSSFetcher{items: []rss.Item{
+		{GUID: "item-a", Link: "https://example.com/a", Title: "A", PublishedAt: time.Now().UTC().Add(-2 * time.Hour)},
+		{GUID: "item-b", Link: "https://example.com/b", Title: "B", PublishedAt: time.Now().UTC().Add(-1 * time.Hour)},
+	}}, feed)
+
+	entry := logLine(t, buf, "rss import: first fetch baselined")
+	if entry["level"] != "INFO" {
+		t.Fatalf("baseline level = %v, want INFO", entry["level"])
+	}
+	if got, _ := entry["baselined"].(float64); got != 2 {
+		t.Fatalf("baselined = %v", entry["baselined"])
+	}
+	if entry["initial_sync_mode"] != string(domain.RSSInitialSyncBaseline) {
+		t.Fatalf("initial_sync_mode = %v", entry["initial_sync_mode"])
 	}
 }
 

@@ -77,7 +77,11 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 	}
 	remaining := feed.NormalizedMaxPostsPerDay() - createdToday
 	if remaining <= 0 {
-		s.logger.DebugContext(ctx, "rss import: daily limit reached", "feed_id", feed.ID)
+		s.logger.InfoContext(ctx, "rss import: daily limit reached",
+			"feed_id", feed.ID,
+			"feed_name", feed.Name,
+			"created_today", createdToday,
+			"max_posts_per_day", feed.NormalizedMaxPostsPerDay())
 		return
 	}
 
@@ -98,20 +102,39 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 		return candidates[i].PublishedAt.Before(candidates[j].PublishedAt)
 	})
 
-	processed := 0
+	processed, alreadyImported, failed := 0, 0, 0
 	for _, item := range candidates {
 		if processed >= remaining {
 			break
 		}
 		created, err := s.createPostFromRSSItem(ctx, feed, item)
 		if err != nil {
+			failed++
 			s.logger.WarnContext(ctx, "rss import: create post failed", "feed_id", feed.ID, "item_link", item.Link, "error", err)
 			continue
 		}
 		if created {
 			processed++
+		} else {
+			alreadyImported++
 		}
 	}
+
+	// One summary per feed and poll: INFO when there was anything to decide,
+	// DEBUG for the common all-quiet case.
+	summaryLevel := s.logger.DebugContext
+	if len(candidates) > 0 {
+		summaryLevel = s.logger.InfoContext
+	}
+	summaryLevel(ctx, "rss import: feed processed",
+		"feed_id", feed.ID,
+		"feed_name", feed.Name,
+		"items_in_feed", len(items),
+		"candidates", len(candidates),
+		"created", processed,
+		"already_imported", alreadyImported,
+		"failed", failed,
+		"remaining_daily_budget", remaining-processed)
 
 	if err := s.store.UpdateRSSFeedLastFetched(ctx, feed.ID, now); err != nil {
 		s.logger.WarnContext(ctx, "rss import: update last fetched failed", "feed_id", feed.ID, "error", err)
@@ -136,6 +159,7 @@ func (s *Service) handleRSSFirstFetch(ctx context.Context, feed domain.RSSFeedCo
 	}
 	// Baseline every current item so the lookback window in later polls does
 	// not import the feed's backlog.
+	baselined := 0
 	for _, item := range items {
 		key := rss.ItemKey(item)
 		if key == "" || key == publishedKey {
@@ -143,8 +167,17 @@ func (s *Service) handleRSSFirstFetch(ctx context.Context, feed domain.RSSFeedCo
 		}
 		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, key, ""); err != nil {
 			s.logger.WarnContext(ctx, "rss import: baseline item failed", "feed_id", feed.ID, "item_key", key, "error", err)
+			continue
 		}
+		baselined++
 	}
+	s.logger.InfoContext(ctx, "rss import: first fetch baselined",
+		"feed_id", feed.ID,
+		"feed_name", feed.Name,
+		"items_in_feed", len(items),
+		"baselined", baselined,
+		"published_latest", publishedKey != "",
+		"initial_sync_mode", string(feed.InitialSyncMode))
 	if err := s.store.UpdateRSSFeedLastFetched(ctx, feed.ID, now); err != nil {
 		s.logger.WarnContext(ctx, "rss import: baseline feed failed", "feed_id", feed.ID, "error", err)
 	}
