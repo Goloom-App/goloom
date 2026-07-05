@@ -70,6 +70,12 @@ type mockStore struct {
 
 	// rss hooks
 	updateRSSFeedLastFetchedFn func(ctx context.Context, feedID string, lastFetchedAt time.Time) error
+	rssItemAlreadyImportedFn   func(ctx context.Context, feedID, itemKey string) (bool, error)
+	recordRSSImportedItemCalls []recordRSSImportedItemCall
+}
+
+type recordRSSImportedItemCall struct {
+	feedID, itemKey, postID string
 }
 
 type advanceTemplateCall struct {
@@ -256,10 +262,19 @@ func (m *mockStore) CountRSSFeedPostsToday(ctx context.Context, feedID string) (
 }
 
 func (m *mockStore) RSSItemAlreadyImported(ctx context.Context, feedID, itemKey string) (bool, error) {
+	m.mu.Lock()
+	fn := m.rssItemAlreadyImportedFn
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(ctx, feedID, itemKey)
+	}
 	return false, nil
 }
 
 func (m *mockStore) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, postID string) error {
+	m.mu.Lock()
+	m.recordRSSImportedItemCalls = append(m.recordRSSImportedItemCalls, recordRSSImportedItemCall{feedID: feedID, itemKey: itemKey, postID: postID})
+	m.mu.Unlock()
 	return nil
 }
 
