@@ -25,6 +25,54 @@ test.describe('review queue', () => {
     await expect(page.getByTestId('review-queue-empty')).toBeVisible({ timeout: 15_000 })
   })
 
+  test('edit works for a draft that arrived after the dashboard load', async ({ page, baseURL }) => {
+    // Automation drafts routinely land while the app is already open: the
+    // queue polls every 30s, but the posts cache stays stale. Edit must not
+    // silently no-op for such drafts.
+    test.setTimeout(90_000)
+    const token = e2eBootstrapToken()
+    if (!baseURL) {
+      throw new Error('baseURL missing')
+    }
+    const teamId = await getFirstTeamId(baseURL, token)
+    const title = `E2E late draft ${Date.now()}`
+
+    await signIn(page)
+    await openReviewQueue(page)
+    await seedAutomationReviewDraft(baseURL, token, teamId, title, 'Arrived after the dashboard load.')
+    // Nudge react-query's focus refetch instead of waiting out the 30s poll.
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+
+    const item = page.getByTestId('review-queue-item').filter({ hasText: title })
+    await expect(item).toBeVisible({ timeout: 45_000 })
+    await item.getByTestId('review-edit').click()
+    await expect(page.getByTestId('composer-view')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByLabel(/title/i)).toHaveValue(title)
+  })
+
+  test('selecting a card shows the full text in the preview sidebar', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    const token = e2eBootstrapToken()
+    if (!baseURL) {
+      throw new Error('baseURL missing')
+    }
+    const teamId = await getFirstTeamId(baseURL, token)
+    const title = `E2E preview draft ${Date.now()}`
+    const longContent = 'A very long automation draft body that the compact card clamps. '.repeat(8).trim()
+    await seedAutomationReviewDraft(baseURL, token, teamId, title, longContent)
+
+    await signIn(page)
+    await openReviewQueue(page)
+
+    const item = page.getByTestId('review-queue-item').filter({ hasText: title })
+    await expect(item).toBeVisible({ timeout: 15_000 })
+    await item.getByTestId('review-open-preview').click()
+    await expect(page.getByTestId('live-preview-title')).toHaveText(title)
+    await expect(page.locator('.preview-content')).toContainText(longContent)
+  })
+
   test('edit opens composer with review draft', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
     const token = e2eBootstrapToken()
