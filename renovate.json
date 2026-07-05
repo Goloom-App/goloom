@@ -8,11 +8,9 @@
   },
   "packageRules": [
     {
+      "description": "Both pnpm apps (frontend, website): pin-style ranges and dedupe the lockfile after every update.",
       "matchManagers": [
         "npm"
-      ],
-      "matchFileNames": [
-        "frontend/package.json"
       ],
       "rangeStrategy": "replace",
       "postUpdateOptions": [
@@ -40,13 +38,15 @@
       "matchFileNames": [
         "website/package.json"
       ],
-      "rangeStrategy": "replace",
-      "postUpdateOptions": [
-        "pnpmDedupe"
-      ]
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "website non-major dependencies"
     },
     {
-      "description": "Astro and Starlight are locked together by peer dependencies (Starlight requires a matching Astro major), so they must be updated in a single PR - majors included - to avoid a build that cannot install.",
+      "description": "Astro and Starlight are locked together by peer dependencies (Starlight requires a matching Astro major), so they must be updated in a single PR - majors included - to avoid a build that cannot install. Kept last: packageRules apply in order and the last match wins, so this overrides the website non-major group for astro packages.",
       "matchManagers": [
         "npm"
       ],
@@ -58,20 +58,6 @@
         "@astrojs/**"
       ],
       "groupName": "astro ecosystem"
-    },
-    {
-      "matchManagers": [
-        "npm"
-      ],
-      "matchFileNames": [
-        "website/package.json"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "digest"
-      ],
-      "groupName": "website non-major dependencies"
     }
   ]
 }
