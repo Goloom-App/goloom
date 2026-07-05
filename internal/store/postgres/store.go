@@ -145,7 +145,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 		set email = excluded.email,
 		    name = excluded.name,
 		    updated_at = now()
-		returning id, email, name, subject, is_admin, created_at
+		returning id, email, name, subject, is_admin, tour_done, created_at
 	`
 
 	var user domain.User
@@ -155,6 +155,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 		&user.Name,
 		&user.Subject,
 		&user.IsAdmin,
+		&user.TourDone,
 		&user.CreatedAt,
 	)
 	if err != nil {
@@ -165,7 +166,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 
 func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error) {
 	const query = `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.created_at, t.scopes, t.team_id, t.name, t.id
+		select u.id, u.email, u.name, u.subject, u.is_admin, u.tour_done, u.created_at, t.scopes, t.team_id, t.name, t.id
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = $1
@@ -185,6 +186,7 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		&principal.User.Name,
 		&principal.User.Subject,
 		&principal.User.IsAdmin,
+		&principal.User.TourDone,
 		&principal.User.CreatedAt,
 		&rawScopes,
 		&teamID,
@@ -236,7 +238,7 @@ func parseTokenScopes(raw string) ([]string, error) {
 
 func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
 	const query = `
-		select id, email, name, subject, is_admin, created_at
+		select id, email, name, subject, is_admin, tour_done, created_at
 		from users
 		order by name asc, email asc
 	`
@@ -256,6 +258,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
 			&user.Name,
 			&user.Subject,
 			&user.IsAdmin,
+			&user.TourDone,
 			&user.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -271,7 +274,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 		set is_admin = $1,
 		    updated_at = now()
 		where id = $2
-		returning id, email, name, subject, is_admin, created_at
+		returning id, email, name, subject, is_admin, tour_done, created_at
 	`
 
 	var user domain.User
@@ -281,6 +284,29 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 		&user.Name,
 		&user.Subject,
 		&user.IsAdmin,
+		&user.TourDone,
+		&user.CreatedAt,
+	)
+	return user, err
+}
+
+func (s *Store) SetUserTourDone(ctx context.Context, userID string, done bool) (domain.User, error) {
+	const query = `
+		update users
+		set tour_done = $1,
+		    updated_at = now()
+		where id = $2
+		returning id, email, name, subject, is_admin, tour_done, created_at
+	`
+
+	var user domain.User
+	err := s.pool.QueryRow(ctx, query, done, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&user.Subject,
+		&user.IsAdmin,
+		&user.TourDone,
 		&user.CreatedAt,
 	)
 	return user, err

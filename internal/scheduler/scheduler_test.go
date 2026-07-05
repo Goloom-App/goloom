@@ -121,6 +121,10 @@ func (m *mockStore) SetUserAdmin(ctx context.Context, userID string, isAdmin boo
 	return domain.User{}, nil
 }
 
+func (m *mockStore) SetUserTourDone(ctx context.Context, userID string, done bool) (domain.User, error) {
+	return domain.User{}, nil
+}
+
 func (m *mockStore) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
 	return nil, nil
 }

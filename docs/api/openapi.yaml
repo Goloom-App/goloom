@@ -79,6 +79,26 @@ paths:
                 $ref: "#/components/schemas/Principal"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /v1/me/tour:
+    put:
+      tags: [Auth]
+      summary: Set the guided-tour flag on the authenticated user
+      description: Persists tour completion on the account so it follows the user across browsers and devices.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                done:
+                  type: boolean
+              required: [done]
+      responses:
+        "200":
+          description: Updated user
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /v1/teams:
     get:
       tags: [Teams]
@@ -1131,6 +1151,9 @@ components:
               type: string
             is_admin:
               type: boolean
+            tour_done:
+              type: boolean
+              description: Whether this account has finished (or skipped) the guided platform tour.
     Team:
       type: object
       properties:

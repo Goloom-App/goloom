@@ -4,6 +4,7 @@ create table if not exists users (
     email text not null,
     name text not null,
     is_admin integer not null default 0,
+    tour_done integer not null default 0,
     created_at text not null,
     updated_at text not null
 );

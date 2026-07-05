@@ -203,6 +203,7 @@ type User struct {
 	Name      string    `json:"name"`
 	Subject   string    `json:"subject"`
 	IsAdmin   bool      `json:"is_admin"`
+	TourDone  bool      `json:"tour_done"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
