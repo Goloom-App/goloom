@@ -15,6 +15,13 @@ type rssFeedFetcher interface {
 	Fetch(ctx context.Context, feedURL string) ([]rss.Item, error)
 }
 
+// rssImportLookback bounds how far an item's pubDate may lie behind the last
+// fetch and still count as new. Static-site feeds are often deployed hours
+// after the declared pubDate of their newest item, so the pubDate alone cannot
+// decide novelty — the rss_imported_items dedupe does. The window only keeps
+// the dedupe from re-considering a feed's entire backlog on every poll.
+const rssImportLookback = 7 * 24 * time.Hour
+
 func (s *Service) runRSSImportLoop(ctx context.Context) {
 	s.rssImportJob(ctx)
 
@@ -85,7 +92,7 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 		return
 	}
 
-	since := feed.LastFetchedAt.UTC()
+	since := feed.LastFetchedAt.UTC().Add(-rssImportLookback)
 	candidates := filterRSSItemsSince(items, since)
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].PublishedAt.Before(candidates[j].PublishedAt)
@@ -96,11 +103,14 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 		if processed >= remaining {
 			break
 		}
-		if err := s.createPostFromRSSItem(ctx, feed, item); err != nil {
+		created, err := s.createPostFromRSSItem(ctx, feed, item)
+		if err != nil {
 			s.logger.WarnContext(ctx, "rss import: create post failed", "feed_id", feed.ID, "item_link", item.Link, "error", err)
 			continue
 		}
-		processed++
+		if created {
+			processed++
+		}
 	}
 
 	if err := s.store.UpdateRSSFeedLastFetched(ctx, feed.ID, now); err != nil {
@@ -109,6 +119,7 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 }
 
 func (s *Service) handleRSSFirstFetch(ctx context.Context, feed domain.RSSFeedConfig, items []rss.Item, now time.Time, remaining int) {
+	publishedKey := ""
 	if feed.InitialSyncMode == domain.RSSInitialSyncPublishLatest && len(items) > 0 && remaining > 0 {
 		latest := items[0]
 		for _, item := range items[1:] {
@@ -116,8 +127,22 @@ func (s *Service) handleRSSFirstFetch(ctx context.Context, feed domain.RSSFeedCo
 				latest = item
 			}
 		}
-		if err := s.createPostFromRSSItem(ctx, feed, latest); err != nil {
+		// The published item records itself via createPostFromRSSItem; on
+		// failure it stays unrecorded so the next poll can retry it.
+		publishedKey = rss.ItemKey(latest)
+		if _, err := s.createPostFromRSSItem(ctx, feed, latest); err != nil {
 			s.logger.WarnContext(ctx, "rss import: publish latest failed", "feed_id", feed.ID, "error", err)
+		}
+	}
+	// Baseline every current item so the lookback window in later polls does
+	// not import the feed's backlog.
+	for _, item := range items {
+		key := rss.ItemKey(item)
+		if key == "" || key == publishedKey {
+			continue
+		}
+		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, key, ""); err != nil {
+			s.logger.WarnContext(ctx, "rss import: baseline item failed", "feed_id", feed.ID, "item_key", key, "error", err)
 		}
 	}
 	if err := s.store.UpdateRSSFeedLastFetched(ctx, feed.ID, now); err != nil {
@@ -135,22 +160,25 @@ func filterRSSItemsSince(items []rss.Item, since time.Time) []rss.Item {
 	return out
 }
 
-func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) error {
+// createPostFromRSSItem imports one feed item. It reports whether a post (or
+// AI job) was actually created: already-imported items return (false, nil) so
+// they do not count against the daily budget.
+func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) (bool, error) {
 	itemKey := rss.ItemKey(item)
 	if itemKey == "" {
-		return fmt.Errorf("rss item has no guid or link")
+		return false, fmt.Errorf("rss item has no guid or link")
 	}
 	exists, err := s.store.RSSItemAlreadyImported(ctx, feed.ID, itemKey)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if exists {
-		return nil
+		return false, nil
 	}
 
 	ownerID, err := s.teamOwnerUserID(ctx, feed.TeamID)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	fields := rss.ItemFields{
@@ -164,7 +192,7 @@ func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeed
 	content := rss.ExpandContent(feed.NormalizedContentTemplate(), fields)
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return fmt.Errorf("rendered rss content is empty")
+		return false, fmt.Errorf("rendered rss content is empty")
 	}
 
 	scheduledAt, draft := rssOutputSchedule(feed.OutputMode, item.PublishedAt)
@@ -180,11 +208,14 @@ func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeed
 		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
 			s.logger.WarnContext(ctx, "rss import: ai enhancement unavailable, using template", "feed_id", feed.ID, "error", err)
 		} else {
-			return nil
+			return true, nil
 		}
 	}
 
-	return s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID)
+	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func rssOutputSchedule(mode domain.AutomationOutputMode, publishedAt time.Time) (time.Time, bool) {
