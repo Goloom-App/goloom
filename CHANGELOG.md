@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.4](https://github.com/Goloom-App/goloom/compare/v0.2.3...v0.2.4) (2026-07-06)
+
+
+### Bug Fixes
+
+* **webui:** review queue — edit for late drafts, preview sidebar, card layout ([e46e67d](https://github.com/Goloom-App/goloom/commit/e46e67d92ed86e8aa4fca61d1811af49c563b76b))
+* **webui:** review queue edit for late drafts, preview sidebar, card layout ([9e437e7](https://github.com/Goloom-App/goloom/commit/9e437e70310063d09fd08565a50fb6f81c47fade))
+
 ## [0.2.3](https://github.com/Goloom-App/goloom/compare/v0.2.2...v0.2.3) (2026-07-05)
 
 
