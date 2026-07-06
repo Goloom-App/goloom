@@ -21,6 +21,14 @@ export async function signIn(page: Page) {
       await tokenField.fill(e2eBootstrapToken())
       await signInBtn.click()
     }
+    // A 401 race during session establishment can bounce the app through
+    // clearAuthenticatedState, which parks the (re-)authenticated session on
+    // the calendar section. If the shell is up but we are not on the
+    // dashboard, navigate home instead of failing the whole spec.
+    const homeButton = page.getByRole('button', { name: 'Home' })
+    if (!(await dashboard.isVisible().catch(() => false)) && (await homeButton.isVisible().catch(() => false))) {
+      await homeButton.click()
+    }
     await expect(dashboard).toBeVisible({ timeout: 30_000 })
   }
   await expect(page.getByText(/too many requests|rate limit/i)).toHaveCount(0, { timeout: 30_000 })
@@ -67,7 +75,13 @@ export async function getFirstTeamId(baseURL: string, token: string): Promise<st
   return teamId
 }
 
-export async function seedAutomationReviewDraft(baseURL: string, token: string, teamId: string) {
+export async function seedAutomationReviewDraft(
+  baseURL: string,
+  token: string,
+  teamId: string,
+  title = E2E_REVIEW_POST_TITLE,
+  content = 'Automation draft waiting for review.',
+) {
   const listRes = await apiFetch(`${baseURL}/v1/teams/${teamId}/review-queue`, {
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -75,7 +89,7 @@ export async function seedAutomationReviewDraft(baseURL: string, token: string, 
     throw new Error(`list review queue ${listRes.status}: ${await listRes.text()}`)
   }
   const existing = (await listRes.json()) as { items?: { title?: string }[] }
-  if (existing.items?.some((item) => item.title === E2E_REVIEW_POST_TITLE)) {
+  if (existing.items?.some((item) => item.title === title)) {
     return
   }
 
@@ -87,8 +101,8 @@ export async function seedAutomationReviewDraft(baseURL: string, token: string, 
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       team_id: teamId,
-      title: E2E_REVIEW_POST_TITLE,
-      content: 'Automation draft waiting for review.',
+      title,
+      content,
       target_accounts: [],
       scheduled_at: scheduled.toISOString(),
     }),

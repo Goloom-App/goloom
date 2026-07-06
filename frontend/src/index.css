@@ -2947,6 +2947,76 @@ select {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
+/* Review queue cards: clickable, clamped body (full text lives in the preview
+   sidebar), meta left / grouped actions right in the footer. */
+.review-card {
+  cursor: pointer;
+}
+
+.review-card--selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.review-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.review-card__title {
+  margin: 0.35rem 0 0.15rem;
+}
+
+.review-card__content {
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.review-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.review-card__meta {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.review-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.review-card__schedule {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.review-card__schedule-field {
+  margin-bottom: 0;
+}
+
+.review-card__discard {
+  color: var(--danger);
+}
+
 .post-card__header {
   display: flex;
   justify-content: space-between;
