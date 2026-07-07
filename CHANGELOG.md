@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.5](https://github.com/Goloom-App/goloom/compare/v0.2.4...v0.2.5) (2026-07-07)
+
+
+### Features
+
+* **ui:** show version and update hint in sidebar footer ([3fde08e](https://github.com/Goloom-App/goloom/commit/3fde08eaf091bf9dc06595975640e9d8f7c55709))
+* **ui:** show version and update hint in sidebar footer ([b94df4d](https://github.com/Goloom-App/goloom/commit/b94df4d80b50fd9f5dd7d042c0cf4406dfaa1c31))
+* **website:** add GDPR privacy policy page ([89c8773](https://github.com/Goloom-App/goloom/commit/89c877376136f82d998fff739a2d1e9d6be1559d))
+* **website:** add GDPR privacy policy page ([eae447d](https://github.com/Goloom-App/goloom/commit/eae447d867ec310cce2e470e4e6239ec7daa15d3))
+* **website:** tri-hue brand palette + self-hosted typography ([972c37c](https://github.com/Goloom-App/goloom/commit/972c37cfc5374b194f2a9456435351256b63bd9f))
+* **website:** tri-hue brand palette, self-hosted type, richer atmosphere ([90607c4](https://github.com/Goloom-App/goloom/commit/90607c427469ff1769a3569e4df2c690ca007b4c))
+
 ## [0.2.4](https://github.com/Goloom-App/goloom/compare/v0.2.3...v0.2.4) (2026-07-06)
 
 
