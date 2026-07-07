@@ -2,16 +2,51 @@
  * Shared design tokens + Starlight overrides.
  * Loaded by Starlight (docs) and imported by the landing layout. */
 
+@import './fonts.css';
+
 :root {
-	/* Brand accent: a calm single-hue cyan (no rainbow gradient) */
-	--brand-grad-from: #22d3ee;
-	--brand-grad-to: #38bdf8;
+	/* Type system — see fonts.css. Display carries the personality; body and
+	 * mono stay engineered and quiet. */
+	--font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+	--font-body: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Tri-hue brand palette — reclaimed from the logo mark (three stacked
+	 * squares: cyan, violet, amber). Cyan leads; violet and amber are used
+	 * sparingly to give the page rhythm and to tie the site to the app,
+	 * whose accent is violet. */
+	--brand-cyan-from: #22d3ee;
+	--brand-cyan-to: #38bdf8;
+	--brand-violet-from: #a78bfa;
+	--brand-violet-to: #7c3aed;
+	--brand-amber-from: #fbbf24;
+	--brand-amber-to: #ea580c;
+
+	/* Primary accent stays cyan; existing --brand-grad-* names kept so nothing
+	 * downstream breaks. */
+	--brand-grad-from: var(--brand-cyan-from);
+	--brand-grad-to: var(--brand-cyan-to);
 	--brand-grad: linear-gradient(120deg, var(--brand-grad-from), var(--brand-grad-to));
 	--brand-grad-soft: linear-gradient(
 		120deg,
 		color-mix(in oklab, var(--brand-grad-from) 18%, transparent),
 		color-mix(in oklab, var(--brand-grad-to) 18%, transparent)
 	);
+
+	/* Per-hue soft fills for accent tiles/markers */
+	--hue-cyan-soft: linear-gradient(135deg,
+		color-mix(in oklab, var(--brand-cyan-from) 26%, transparent),
+		color-mix(in oklab, var(--brand-cyan-to) 12%, transparent));
+	--hue-violet-soft: linear-gradient(135deg,
+		color-mix(in oklab, var(--brand-violet-from) 26%, transparent),
+		color-mix(in oklab, var(--brand-violet-to) 12%, transparent));
+	--hue-amber-soft: linear-gradient(135deg,
+		color-mix(in oklab, var(--brand-amber-from) 26%, transparent),
+		color-mix(in oklab, var(--brand-amber-to) 12%, transparent));
+
+	/* Starlight adopts the same type so docs and landing feel like one product */
+	--sl-font: var(--font-body);
+	--sl-font-mono: var(--font-mono);
 
 	/* Surfaces */
 	--surface-0: #0a0a0f;
@@ -63,11 +98,15 @@
 	--sl-color-bg-sidebar: rgba(248, 249, 252, 0.7);
 }
 
-/* Very subtle single glow, top-left only — flat, not a mesh */
+/* Calm three-point ambient — one faint pool per brand hue, placed at three
+ * corners so the page has depth and colour without becoming a rainbow mesh.
+ * Opacities stay low; cyan dominates. */
 body {
 	background-color: var(--surface-0);
 	background-image:
-		radial-gradient(70ch 45ch at 8% -12%, color-mix(in oklab, var(--brand-grad-from) 6%, transparent), transparent 70%);
+		radial-gradient(62ch 42ch at 6% -12%, color-mix(in oklab, var(--brand-cyan-from) 9%, transparent), transparent 62%),
+		radial-gradient(52ch 40ch at 100% 6%, color-mix(in oklab, var(--brand-violet-to) 8%, transparent), transparent 60%),
+		radial-gradient(64ch 46ch at 50% 116%, color-mix(in oklab, var(--brand-amber-to) 5%, transparent), transparent 62%);
 	background-attachment: fixed;
 	background-repeat: no-repeat;
 }
@@ -75,7 +114,19 @@ body {
 :root[data-theme='light'] body {
 	background-color: #fbfbfd;
 	background-image:
-		radial-gradient(70ch 45ch at 8% -12%, color-mix(in oklab, var(--brand-grad-from) 5%, transparent), transparent 70%);
+		radial-gradient(62ch 42ch at 6% -12%, color-mix(in oklab, var(--brand-cyan-from) 6%, transparent), transparent 62%),
+		radial-gradient(52ch 40ch at 100% 6%, color-mix(in oklab, var(--brand-violet-to) 5%, transparent), transparent 60%),
+		radial-gradient(64ch 46ch at 50% 116%, color-mix(in oklab, var(--brand-amber-to) 4%, transparent), transparent 62%);
+}
+
+/* Docs headings pick up the display voice so the two surfaces feel related. */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+h1#_top,
+.content-panel h1 {
+	font-family: var(--font-display);
+	letter-spacing: -0.02em;
 }
 
 /* Make the Starlight top nav glassy */
@@ -111,11 +162,14 @@ header.header {
 	line-height: 1;
 	text-decoration: none;
 	color: #04060a;
-	background: var(--brand-grad-from);
-	transition: background 0.15s ease;
+	background: linear-gradient(120deg, var(--brand-cyan-from), var(--brand-cyan-to));
+	box-shadow: 0 8px 24px -12px color-mix(in oklab, var(--brand-cyan-from) 75%, transparent);
+	transition: box-shadow 0.18s ease, transform 0.18s ease, filter 0.18s ease;
 }
 .glow-btn:hover {
-	background: color-mix(in oklab, var(--brand-grad-from) 85%, white);
+	transform: translateY(-1px);
+	filter: brightness(1.06);
+	box-shadow: 0 14px 32px -10px color-mix(in oklab, var(--brand-cyan-from) 85%, transparent);
 }
 
 .ghost-btn {

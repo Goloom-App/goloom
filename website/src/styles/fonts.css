@@ -1,0 +1,68 @@
+/* Self-hosted webfonts — no third-party CDN at runtime.
+ * Fitting for a self-hosted, privacy-minded product: the marketing site
+ * phones home to nobody. Files live in /public/fonts (latin subset, woff2).
+ *
+ * Bricolage Grotesque — display voice (headings, wordmark): a contemporary
+ *   grotesque with real character, avoids the anonymous system-sans look.
+ * IBM Plex Sans — body: engineered, legible, technical heritage.
+ * IBM Plex Mono — terminal/code: sibling of Plex Sans, ties the quickstart
+ *   card to the same identity. */
+
+@font-face {
+	font-family: 'Bricolage Grotesque';
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url('/fonts/bricolage-600.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Bricolage Grotesque';
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url('/fonts/bricolage-700.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'Bricolage Grotesque';
+	font-style: normal;
+	font-weight: 800;
+	font-display: swap;
+	src: url('/fonts/bricolage-800.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'IBM Plex Sans';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('/fonts/plex-sans-400.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'IBM Plex Sans';
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('/fonts/plex-sans-500.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'IBM Plex Sans';
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url('/fonts/plex-sans-600.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'IBM Plex Mono';
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url('/fonts/plex-mono-400.woff2') format('woff2');
+}
+@font-face {
+	font-family: 'IBM Plex Mono';
+	font-style: normal;
+	font-weight: 500;
+	font-display: swap;
+	src: url('/fonts/plex-mono-500.woff2') format('woff2');
+}
