@@ -5,6 +5,7 @@ import SiteFooter from '../../components/landing/SiteFooter.astro';
 
 const repo = 'https://github.com/Goloom-App/goloom';
 const license = `${repo}/blob/main/LICENSE`;
+const base = import.meta.env.BASE_URL;
 ---
 
 <LandingLayout title="goloom — license & legal">
@@ -36,6 +37,7 @@ const license = `${repo}/blob/main/LICENSE`;
 					and runs no analytics or tracking. As the host, GitHub may process
 					request data (such as IP addresses) under its own
 					<a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">privacy statement</a>.
+					For details, see the <a href={`${base}privacy/`}>privacy policy</a>.
 				</p>
 
 				<h2>Contact</h2>

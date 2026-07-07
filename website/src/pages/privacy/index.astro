@@ -1,0 +1,223 @@
+---
+import LandingLayout from '../../layouts/LandingLayout.astro';
+import Header from '../../components/landing/Header.astro';
+import SiteFooter from '../../components/landing/SiteFooter.astro';
+
+const repo = 'https://github.com/Goloom-App/goloom';
+// Keep this in sync with substantive changes to the policy below.
+const lastUpdated = '7 July 2026';
+---
+
+<LandingLayout
+	title="goloom — privacy policy"
+	description="How the goloom website handles data. No cookies, no analytics, no tracking — a short, honest privacy notice."
+>
+	<Header />
+	<main>
+		<section class="lp-section">
+			<div class="lp-container lp-legal">
+				<h1>Privacy policy</h1>
+				<p class="lp-legal__meta">Last updated: {lastUpdated}</p>
+
+				<p>
+					This notice explains what happens to data when you visit this
+					website. The short version: it sets no cookies, runs no analytics
+					and tracks nobody. The only processing is what any web host
+					unavoidably does to deliver a page.
+				</p>
+
+				<h2>1. Scope</h2>
+				<p>
+					This policy covers <strong>this website only</strong> (the goloom
+					marketing site and documentation). It does <strong>not</strong> cover
+					the goloom software itself: when you download goloom and run it on
+					your own infrastructure, <em>you</em> are the operator of that
+					instance and the data controller for the accounts and content it
+					processes. This site does not receive any data from self-hosted
+					instances.
+				</p>
+
+				<h2>2. Controller</h2>
+				<p>
+					The controller responsible for this website within the meaning of
+					the GDPR (Art. 4 No. 7) is:
+				</p>
+				<!-- TODO: replace with the responsible person or entity before publishing.
+				     Under Art. 13 GDPR the controller's identity and a contact must be
+				     given. This should be a single named person or legal entity (e.g. an
+				     association), not the list of code contributors. -->
+				<p class="lp-legal__box">
+					<strong>[TODO: Name / legal entity]</strong><br />
+					[TODO: Postal address]<br />
+					Email: [TODO: contact email]
+				</p>
+
+				<h2>3. Hosting (GitHub Pages)</h2>
+				<p>
+					This site is served as static files by <strong>GitHub Pages</strong>,
+					a service of GitHub, Inc. (88 Colin P. Kelly Jr. Street, San
+					Francisco, CA 94107, USA), part of Microsoft. To deliver the pages,
+					GitHub necessarily processes technical connection data — most
+					notably your <strong>IP address</strong> — and may record it in
+					server log files.
+				</p>
+				<p>
+					We do not operate our own web server for this site and have no access
+					to these logs. GitHub processes this data as our processor and under
+					its own responsibility; see the
+					<a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>.
+				</p>
+				<p>
+					<strong>Legal basis:</strong> Art. 6(1)(f) GDPR — our legitimate
+					interest in presenting this project on a reliable, secure and
+					low-maintenance platform.
+				</p>
+				<p>
+					<strong>International transfer:</strong> GitHub is based in the USA,
+					so data may be transferred there. GitHub relies on the EU Standard
+					Contractual Clauses and its certification under the EU–US Data
+					Privacy Framework as safeguards under Art. 44 ff. GDPR.
+				</p>
+
+				<h2>4. Server log data</h2>
+				<p>
+					When a page is requested, a web host typically processes: the
+					requesting IP address, the date and time of the request, the page or
+					file requested, the HTTP status, the referring page and the browser
+					user-agent string. This is used to deliver content and to keep the
+					service secure and functional. Retention and deletion of these logs
+					are governed by GitHub, not by us.
+				</p>
+
+				<h2>5. No cookies, no tracking, no analytics</h2>
+				<p>
+					This site stores nothing on your device: no cookies, no local
+					storage for tracking, no analytics or measurement tools, no
+					advertising, no social-media pixels, and no third-party embeds that
+					would profile you. Because nothing non-essential is stored or
+					tracked, there is no consent banner — there is nothing to consent
+					to.
+				</p>
+
+				<h2>6. Fonts and assets</h2>
+				<p>
+					Fonts and images are served from this same site, not from a
+					third-party font or asset CDN. Loading a page therefore does not
+					send your data to Google Fonts or any comparable service.
+				</p>
+
+				<h2>7. Contact by email</h2>
+				<p>
+					If you contact us by email, the address and the content of your
+					message are processed solely to handle your request. Legal basis:
+					Art. 6(1)(f) GDPR (answering enquiries), or Art. 6(1)(b) GDPR where
+					your request relates to a (pre-)contractual matter. The data is
+					deleted once it is no longer needed and no retention obligations
+					apply.
+				</p>
+
+				<h2>8. External links</h2>
+				<p>
+					This site links to external services such as the project on
+					<a href={repo}>GitHub</a> and the social networks goloom supports.
+					Once you follow such a link, the privacy policy of the respective
+					provider applies; we have no influence over their processing.
+				</p>
+
+				<h2>9. Your rights</h2>
+				<p>Under the GDPR you have the right to:</p>
+				<ul>
+					<li>access the data concerning you (Art. 15);</li>
+					<li>rectification (Art. 16) and erasure (Art. 17);</li>
+					<li>restriction of processing (Art. 18);</li>
+					<li>data portability (Art. 20);</li>
+					<li>object to processing based on legitimate interests (Art. 21).</li>
+				</ul>
+				<p>
+					To exercise these rights, contact the controller named above. Note
+					that for the hosting log data described in section 3, requests are
+					best directed to GitHub as the party that holds it.
+				</p>
+
+				<h2>10. Right to lodge a complaint</h2>
+				<p>
+					You have the right to lodge a complaint with a data-protection
+					supervisory authority, in particular in the EU member state of your
+					residence, place of work or the place of the alleged infringement,
+					if you consider that the processing of your data infringes the GDPR.
+				</p>
+
+				<h2>11. Changes to this policy</h2>
+				<p>
+					We may update this policy to reflect changes to the site or the
+					legal situation. The date at the top indicates the current version.
+				</p>
+
+				<p class="lp-legal__note">
+					This page is provided in good faith for transparency and is not legal
+					advice. The controller is responsible for its accuracy before
+					publication.
+				</p>
+			</div>
+		</section>
+	</main>
+	<SiteFooter />
+</LandingLayout>
+
+<style>
+	.lp-legal {
+		max-width: 48rem;
+	}
+	.lp-legal h1 {
+		font-size: clamp(2rem, 5vw, 3rem);
+		letter-spacing: -0.03em;
+		margin: 0 0 0.4rem;
+	}
+	.lp-legal__meta {
+		color: var(--sl-color-gray-3);
+		font-size: 0.9rem;
+		margin: 0 0 1.75rem;
+	}
+	.lp-legal h2 {
+		font-size: 1.2rem;
+		letter-spacing: -0.01em;
+		margin: 2.25rem 0 0.5rem;
+	}
+	.lp-legal p {
+		color: var(--sl-color-gray-2);
+		line-height: 1.65;
+		margin: 0 0 0.75rem;
+	}
+	.lp-legal ul {
+		color: var(--sl-color-gray-2);
+		line-height: 1.65;
+		margin: 0 0 0.75rem;
+		padding-left: 1.2rem;
+	}
+	.lp-legal li {
+		margin-bottom: 0.25rem;
+	}
+	.lp-legal strong {
+		color: var(--sl-color-white);
+	}
+	.lp-legal__box {
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg);
+		border-radius: 12px;
+		padding: 1rem 1.15rem;
+	}
+	.lp-legal__note {
+		margin-top: 2.5rem;
+		padding-top: 1.25rem;
+		border-top: 1px solid var(--glass-border);
+		font-size: 0.9rem;
+		color: var(--sl-color-gray-3);
+	}
+	.lp-legal a {
+		color: var(--brand-grad-from);
+		text-decoration: none;
+	}
+	.lp-legal a:hover {
+		text-decoration: underline;
+	}
+</style>
