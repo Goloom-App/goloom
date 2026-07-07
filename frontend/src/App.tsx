@@ -44,10 +44,12 @@ import {
   createApiClient,
   requestAuthStatus,
   requestStartOIDCLogin,
+  requestVersionInfo,
   type BackendAPIToken,
   type BackendAdminMetrics,
   type BackendAdminSyncStatus,
   type BackendPublishFailure,
+  type BackendVersionInfo,
   type BackendPostMetric,
   type BackendPostVersion,
   type BackendTeam,
@@ -102,6 +104,7 @@ function App() {
   }))
   const [authStatus, setAuthStatus] = useState<AuthStatusRecord | null>(null)
   const [authStatusLoading, setAuthStatusLoading] = useState(true)
+  const [versionInfo, setVersionInfo] = useState<BackendVersionInfo | null>(null)
   const [authView, setAuthView] = useState<'bootstrap' | 'login'>('login')
   // Recovery mode (token/bootstrap sign-in) is reached via the ?login=recovery
   // fallback URL; it also suppresses the automatic OIDC redirect.
@@ -246,6 +249,27 @@ function App() {
       cancelled = true
     }
   }, [activeConnection.bearerToken, settings.general.apiBaseUrl])
+
+  // Resolve the running version (and any available update) once per connection.
+  // Public endpoint, best-effort: failures leave the footer without a version.
+  useEffect(() => {
+    let cancelled = false
+    const apiOrigin = settings.general.apiBaseUrl.trim() || (typeof window !== 'undefined' ? window.location.origin : '')
+    requestVersionInfo(apiOrigin)
+      .then((info) => {
+        if (!cancelled) {
+          setVersionInfo(info)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setVersionInfo(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [settings.general.apiBaseUrl])
 
   useEffect(() => {
     const teamID = new URLSearchParams(window.location.search).get('team')
@@ -1749,6 +1773,7 @@ function App() {
       pullToRefreshDisabled={pullToRefreshDisabled}
       reviewQueueCount={reviewQueueCount}
       reviewQueueOverdueCount={reviewQueueOverdueCount}
+      versionInfo={versionInfo}
       previewColumn={
         section === 'composer' && !isMobile ? (
           <div className="preview-content">

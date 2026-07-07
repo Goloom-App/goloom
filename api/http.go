@@ -35,6 +35,20 @@ type API struct {
 	i18n        *i18n.Catalog
 	jobManager  *aijobs.Manager
 	hub         *sse.Hub
+	release     releaseStatusProvider
+}
+
+// releaseStatusProvider supplies the cached update-check state for GET /v1/version.
+// It is optional: when nil (update check disabled) the endpoint reports the
+// running version with no upstream comparison.
+type releaseStatusProvider interface {
+	Status() version.ReleaseStatus
+}
+
+// SetReleaseChecker wires the update-check source. Kept as a setter so the
+// widely-called New signature stays stable.
+func (a *API) SetReleaseChecker(r releaseStatusProvider) {
+	a.release = r
 }
 
 type validationResponse struct {
@@ -88,6 +102,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.handleHealth)
+	mux.HandleFunc("GET /v1/version", a.handleVersion)
 	mux.HandleFunc("GET /v1/discovery", a.handleDiscovery)
 	mux.HandleFunc("GET /v1/providers", a.handleProviders)
 	mux.HandleFunc("GET /v1/auth/status", a.handleAuthStatus)
@@ -259,6 +274,16 @@ func (s *statusRecorder) WriteHeader(code int) {
 
 func (a *API) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	auth.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": version.String()})
+}
+
+// handleVersion reports the running version plus, when the update check is
+// enabled, the newest upstream release and whether an upgrade is available.
+func (a *API) handleVersion(w http.ResponseWriter, _ *http.Request) {
+	status := version.ReleaseStatus{Current: version.String()}
+	if a.release != nil {
+		status = a.release.Status()
+	}
+	auth.WriteJSON(w, http.StatusOK, status)
 }
 
 func (a *API) handleProviders(w http.ResponseWriter, _ *http.Request) {

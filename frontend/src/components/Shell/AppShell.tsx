@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar'
 import { BottomNav, MobileDrawer } from './MobileNav'
 import { PullToRefresh } from '../ui/PullToRefresh'
 import type { AppSection, TeamRecord, UserRecord } from '../../types'
+import type { BackendVersionInfo } from '../../api'
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'goloom.sidebar.collapsed.v1'
 
@@ -32,6 +33,7 @@ interface AppShellProps {
   pullToRefreshDisabled?: boolean
   reviewQueueCount?: number
   reviewQueueOverdueCount?: number
+  versionInfo?: BackendVersionInfo | null
 }
 
 export function AppShell({
@@ -53,6 +55,7 @@ export function AppShell({
   pullToRefreshDisabled = true,
   reviewQueueCount = 0,
   reviewQueueOverdueCount = 0,
+  versionInfo,
 }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed)
@@ -88,6 +91,7 @@ export function AppShell({
         openComposer={openComposer}
         collapsed={sidebarCollapsed}
         onToggleCollapsed={toggleSidebarCollapsed}
+        versionInfo={versionInfo}
       />
 
       <PullToRefresh

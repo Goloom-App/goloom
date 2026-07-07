@@ -1250,6 +1250,61 @@ code, .mono {
   gap: 1px;
 }
 
+.sidebar-version {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--text-soft);
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+
+.sidebar-version__icon {
+  flex-shrink: 0;
+}
+
+.sidebar-version__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-version__current {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Update available: accent-tinted, follows the brand color, gently pulses once. */
+.sidebar-version--update {
+  color: var(--accent);
+  background: var(--accent-soft);
+  transition: background var(--transition-fast);
+}
+
+.sidebar-version--update:hover {
+  background: var(--accent-glow);
+}
+
+.sidebar-version__badge {
+  font-weight: 600;
+  font-size: 0.68rem;
+}
+
+/* Collapsed rail: center the version/indicator, hide the text column. */
+.sidebar--collapsed .sidebar-version {
+  justify-content: center;
+  font-size: 0.62rem;
+  padding: 2px 0;
+}
+
+.sidebar--collapsed .sidebar-version__text {
+  display: none;
+}
+
 .sidebar-footer-item {
   display: flex;
   align-items: center;

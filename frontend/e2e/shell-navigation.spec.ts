@@ -39,6 +39,44 @@ test.describe('app shell navigation', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
   })
 
+  test('sidebar footer shows the running version', async ({ page }) => {
+    test.setTimeout(60_000)
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.route('**/v1/version', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ current: 'v9.9.9', latest: 'v9.9.9', update_available: false }),
+      }),
+    )
+    await signIn(page)
+
+    const version = page.getByTestId('sidebar-version')
+    await expect(version).toBeVisible({ timeout: 15_000 })
+    await expect(version).toContainText('v9.9.9')
+    // No update: it is plain text, not a link.
+    await expect(version).not.toHaveAttribute('href', /.+/)
+  })
+
+  test('sidebar footer surfaces an available update as a release link', async ({ page }) => {
+    test.setTimeout(60_000)
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page.route('**/v1/version', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ current: 'v0.1.0', latest: 'v9.9.9', update_available: true }),
+      }),
+    )
+    await signIn(page)
+
+    const version = page.getByTestId('sidebar-version')
+    await expect(version).toBeVisible({ timeout: 15_000 })
+    await expect(version).toContainText('Update available')
+    await expect(version).toHaveAttribute(
+      'href',
+      'https://github.com/Goloom-App/goloom/releases/tag/v9.9.9',
+    )
+  })
+
   test('team brand color can be saved and applies the accent variable', async ({ page }) => {
     test.setTimeout(60_000)
     await page.setViewportSize({ width: 1280, height: 720 })

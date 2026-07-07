@@ -76,7 +76,11 @@
       "signOutTitle": "Abmelden",
       "collapse": "Seitenleiste einklappen",
       "expand": "Seitenleiste ausklappen",
-      "userMenu": "Benutzermenü"
+      "userMenu": "Benutzermenü",
+      "version": "Version {{version}}",
+      "updateAvailable": "Update verfügbar",
+      "updateTo": "Auf {{version}} aktualisieren",
+      "upToDate": "Aktuell"
     },
     "sidebarApp": {
       "workspace": "Arbeitsbereich",

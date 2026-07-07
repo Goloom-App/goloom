@@ -362,6 +362,12 @@ export interface BackendAuthStatus {
   app_env?: string
 }
 
+export interface BackendVersionInfo {
+  current: string
+  latest: string
+  update_available: boolean
+}
+
 export interface BackendOAuthAuthorization {
   authorization_url: string
 }
@@ -607,6 +613,12 @@ async function request<T>(options: ApiClientOptions, path: string, init?: Reques
 
 export function requestAuthStatus(baseUrl: string) {
   return request<BackendAuthStatus>({ baseUrl, token: '' }, '/v1/auth/status', {
+    headers: buildHeaders('', false),
+  })
+}
+
+export function requestVersionInfo(baseUrl: string) {
+  return request<BackendVersionInfo>({ baseUrl, token: '' }, '/v1/version', {
     headers: buildHeaders('', false),
   })
 }
