@@ -11,12 +11,54 @@ html {
 body {
 	margin: 0;
 	color: var(--sl-color-white);
-	font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+	font-family: var(--font-body);
 	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+/* Fine film grain — barely there (~3.5%), fixed so it reads as paper texture
+ * rather than moving noise. Purely decorative, never intercepts clicks. */
+body::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
+	opacity: 0.035;
+	mix-blend-mode: overlay;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Keep real content above the grain layer */
+.lp-header,
+.lp-hero,
+.lp-section,
+.lp-footer {
+	position: relative;
+	z-index: 2;
 }
 
 a {
 	color: inherit;
+}
+
+::selection {
+	background: color-mix(in oklab, var(--brand-cyan-from) 30%, transparent);
+	color: var(--sl-color-white);
+}
+
+:focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--brand-cyan-from) 72%, transparent);
+	outline-offset: 3px;
+	border-radius: 4px;
+}
+
+/* Display voice for the wordmark and every headline */
+.lp-brand,
+.lp-hero h1,
+.lp-section__head h2,
+.lp-cta h2 {
+	font-family: var(--font-display);
 }
 
 .lp-container {
@@ -192,13 +234,13 @@ a {
 	margin-left: 0.6rem;
 	font-size: 0.8rem;
 	color: var(--sl-color-gray-3);
-	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-family: var(--font-mono);
 }
 .lp-terminal pre {
 	margin: 0;
 	padding: 1.2rem 1.3rem;
-	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	font-size: 0.86rem;
+	font-family: var(--font-mono);
+	font-size: 0.84rem;
 	line-height: 1.7;
 	color: var(--sl-color-gray-1);
 	overflow-x: auto;
@@ -220,10 +262,43 @@ a {
 	.lp-pillars { grid-template-columns: 1fr; }
 }
 .lp-pillar {
-	padding: 1.5rem;
+	position: relative;
+	padding: 1.65rem 1.5rem;
+	overflow: hidden;
+	transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+}
+/* Thin hue bar along the top edge — the tri-colour rhythm from the logo */
+.lp-pillar::before {
+	content: '';
+	position: absolute;
+	inset: 0 0 auto 0;
+	height: 2px;
+	background: var(--pillar-hue, var(--brand-grad));
+	opacity: 0.75;
+}
+.lp-pillar:hover {
+	transform: translateY(-3px);
+	border-color: var(--glass-border-strong);
+	box-shadow: 0 20px 44px -26px var(--pillar-glow, color-mix(in oklab, var(--brand-cyan-from) 55%, transparent));
+}
+.lp-pillar:nth-child(4n+1) {
+	--pillar-hue: linear-gradient(90deg, var(--brand-cyan-from), var(--brand-cyan-to));
+	--pillar-glow: color-mix(in oklab, var(--brand-cyan-from) 55%, transparent);
+}
+.lp-pillar:nth-child(4n+2) {
+	--pillar-hue: linear-gradient(90deg, var(--brand-violet-from), var(--brand-violet-to));
+	--pillar-glow: color-mix(in oklab, var(--brand-violet-from) 55%, transparent);
+}
+.lp-pillar:nth-child(4n+3) {
+	--pillar-hue: linear-gradient(90deg, var(--brand-amber-from), var(--brand-amber-to));
+	--pillar-glow: color-mix(in oklab, var(--brand-amber-from) 55%, transparent);
+}
+.lp-pillar:nth-child(4n+4) {
+	--pillar-hue: linear-gradient(90deg, var(--brand-cyan-to), var(--brand-violet-from));
+	--pillar-glow: color-mix(in oklab, var(--brand-cyan-to) 55%, transparent);
 }
 .lp-pillar h3 {
-	font-size: 1.05rem;
+	font-size: 1.08rem;
 	margin: 0.4rem 0 0.5rem;
 	letter-spacing: -0.01em;
 }
@@ -258,19 +333,35 @@ a {
 	.lp-features { grid-template-columns: 1fr; }
 }
 .lp-feature {
+	--feat-hue: var(--brand-cyan-from);
+	position: relative;
 	padding: 1.5rem;
-	transition: transform 0.18s ease, border-color 0.2s ease;
+	transition: transform 0.18s ease, border-color 0.2s ease, box-shadow 0.25s ease;
 }
+.lp-feature:nth-child(3n+1) { --feat-hue: var(--brand-cyan-from); }
+.lp-feature:nth-child(3n+2) { --feat-hue: var(--brand-violet-from); }
+.lp-feature:nth-child(3n+3) { --feat-hue: var(--brand-amber-from); }
 .lp-feature:hover {
 	transform: translateY(-3px);
-	border-color: var(--glass-border-strong);
+	border-color: color-mix(in oklab, var(--feat-hue) 40%, var(--glass-border-strong));
+	box-shadow: 0 20px 44px -28px color-mix(in oklab, var(--feat-hue) 60%, transparent);
 }
 .lp-feature h3 {
 	display: flex;
 	align-items: center;
-	gap: 0.55rem;
+	gap: 0.6rem;
 	font-size: 1.05rem;
 	margin: 0 0 0.5rem;
+}
+/* Small rounded square before each title — echoes the logo's stacked squares */
+.lp-feature h3::before {
+	content: '';
+	flex: none;
+	width: 9px;
+	height: 9px;
+	border-radius: 3px;
+	background: var(--feat-hue);
+	box-shadow: 0 0 12px -1px color-mix(in oklab, var(--feat-hue) 80%, transparent);
 }
 .lp-feature p {
 	margin: 0;
@@ -373,9 +464,14 @@ a {
 
 /* ---------- CTA ---------- */
 .lp-cta {
+	position: relative;
+	overflow: hidden;
 	text-align: center;
 	padding: clamp(2.5rem, 6vw, 4.5rem) 1.5rem;
-	background: var(--brand-grad-soft);
+	background:
+		radial-gradient(58ch 28ch at 12% -25%, color-mix(in oklab, var(--brand-cyan-from) 15%, transparent), transparent 60%),
+		radial-gradient(58ch 30ch at 88% 125%, color-mix(in oklab, var(--brand-violet-to) 13%, transparent), transparent 60%),
+		var(--brand-grad-soft);
 	border: 1px solid var(--glass-border-strong);
 	border-radius: 24px;
 }
