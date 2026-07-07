@@ -58,6 +58,13 @@ type Config struct {
 	// MCP server configuration
 	MCPEnabled            bool
 	MCPRateLimitPerMinute int
+
+	// UpdateCheckEnabled controls whether the server periodically queries GitHub
+	// for the latest goloom release to surface an update hint in the UI. Disable
+	// it to avoid any outbound "phone home" on self-hosted, air-gapped setups.
+	UpdateCheckEnabled bool
+	// UpdateCheckInterval is how often the latest release is refreshed.
+	UpdateCheckInterval time.Duration
 }
 
 func Load() (Config, error) {
@@ -94,6 +101,8 @@ func Load() (Config, error) {
 		MastodonDefaultScopes:            splitCSV(getEnv("MASTODON_DEFAULT_SCOPES", "read,write")),
 		MCPEnabled:                       parseBoolEnv("MCP_ENABLED", true),
 		MCPRateLimitPerMinute:            getInt("MCP_RATE_LIMIT_PER_MINUTE", 60),
+		UpdateCheckEnabled:               parseBoolEnv("UPDATE_CHECK_ENABLED", true),
+		UpdateCheckInterval:              getDuration("UPDATE_CHECK_INTERVAL", 24*time.Hour),
 	}
 
 	cfg.MastodonRedirectURI = getEnv("MASTODON_REDIRECT_URI", strings.TrimRight(cfg.PublicBaseURL, "/")+"/v1/oauth/mastodon/callback")

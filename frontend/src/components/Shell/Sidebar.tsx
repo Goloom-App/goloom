@@ -6,6 +6,8 @@ import { Plus, ChevronDown, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { NavReviewCount, NavReviewIcon } from './NavReviewIndicator'
 import { UserMenu } from './UserMenu'
+import { SidebarVersion } from './SidebarVersion'
+import type { BackendVersionInfo } from '../../api'
 
 interface SidebarProps {
   currentSection: AppSection
@@ -21,6 +23,7 @@ interface SidebarProps {
   openComposer: () => void
   collapsed: boolean
   onToggleCollapsed: () => void
+  versionInfo?: BackendVersionInfo | null
 }
 
 export function Sidebar({
@@ -37,6 +40,7 @@ export function Sidebar({
   openComposer,
   collapsed,
   onToggleCollapsed,
+  versionInfo,
 }: SidebarProps) {
   const { t } = useTranslation()
   const mainNav = localizeNav(MAIN_NAV_DEF, t)
@@ -161,6 +165,7 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
+        <SidebarVersion info={versionInfo ?? null} collapsed={collapsed} />
         <UserMenu user={user} collapsed={collapsed} setSection={setSection} onSignOut={onSignOut} />
       </div>
     </aside>

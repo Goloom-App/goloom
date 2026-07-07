@@ -76,7 +76,11 @@
       "signOutTitle": "Sign out",
       "collapse": "Collapse sidebar",
       "expand": "Expand sidebar",
-      "userMenu": "User menu"
+      "userMenu": "User menu",
+      "version": "Version {{version}}",
+      "updateAvailable": "Update available",
+      "updateTo": "Update to {{version}}",
+      "upToDate": "Up to date"
     },
     "sidebarApp": {
       "workspace": "Workspace",

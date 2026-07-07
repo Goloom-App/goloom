@@ -23,6 +23,7 @@ import (
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/sse"
 	"git.f4mily.net/goloom/internal/store"
+	"git.f4mily.net/goloom/internal/version"
 	"git.f4mily.net/goloom/internal/webui"
 )
 
@@ -159,6 +160,14 @@ func Run(ctx context.Context) error {
 	sseHub := sse.NewHub()
 	defer sseHub.Close()
 	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog, jobManager, sseHub)
+
+	// Update check: one server-side, cached lookup instead of every browser
+	// reaching out to GitHub. Opt-out via UPDATE_CHECK_ENABLED=false.
+	if cfg.UpdateCheckEnabled {
+		releaseChecker := version.NewReleaseChecker(version.String(), version.DefaultRepo, cfg.UpdateCheckInterval, logger)
+		apiHandler.SetReleaseChecker(releaseChecker)
+		go releaseChecker.Run(ctx)
+	}
 	apiChain := apiHandler.Handler(security.NewLimiter(cfg.RateLimitPerMinute, cfg.RateLimitAuthenticatedPerMinute), cfg.AllowedOrigins)
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/healthz", apiChain)
