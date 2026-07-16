@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
@@ -12,6 +13,8 @@ import (
 
 // demoSeedTeamName identifies the demo workspace; seeding is idempotent per name.
 const demoSeedTeamName = "Solstice Roasters"
+
+const demoSeedWriteAttempts = 4
 
 // handleAdminSeedDemoData populates a realistic demo team (admin / E2E only).
 // It powers the website screenshots: connected accounts, a filled calendar,
@@ -168,12 +171,16 @@ func (a *API) seedDemoPublishedPosts(ctx context.Context, teamID string, princip
 		if err != nil {
 			return fmt.Errorf("create published post %q: %w", p.title, err)
 		}
-		if err := a.store.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+		if err := retryDemoSeedWrite(ctx, func() error {
+			return a.store.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil)
+		}); err != nil {
 			return fmt.Errorf("mark posted %q: %w", p.title, err)
 		}
 		for i, accountID := range accountIDs {
 			url := fmt.Sprintf("https://demo.invalid/%s/%d", post.ID, i)
-			if err := a.store.MarkPostTargetResult(ctx, post.ID, accountID, domain.PostStatusPosted, url, "", nil, fmt.Sprintf("demo-%s-%d", post.ID, i)); err != nil {
+			if err := retryDemoSeedWrite(ctx, func() error {
+				return a.store.MarkPostTargetResult(ctx, post.ID, accountID, domain.PostStatusPosted, url, "", nil, fmt.Sprintf("demo-%s-%d", post.ID, i))
+			}); err != nil {
 				return fmt.Errorf("mark target posted %q: %w", p.title, err)
 			}
 		}
@@ -189,7 +196,9 @@ func (a *API) seedDemoPublishedPosts(ctx context.Context, teamID string, princip
 					"reposts": (p.baseLike * share / 9) + growth/2,
 					"replies": (p.baseLike * share / 14) + growth/3,
 				}
-				if err := a.store.UpsertPostMetrics(ctx, post.ID, accountID, metrics, day); err != nil {
+				if err := retryDemoSeedWrite(ctx, func() error {
+					return a.store.UpsertPostMetrics(ctx, post.ID, accountID, metrics, day)
+				}); err != nil {
 					return fmt.Errorf("post metrics %q: %w", p.title, err)
 				}
 			}
@@ -298,12 +307,43 @@ func (a *API) seedDemoAccountMetrics(ctx context.Context, accountIDs []string, n
 				"following": base[i]["following"] + elapsed/9,
 				"posts":     base[i]["posts"] + elapsed/2,
 			}
-			if err := a.store.UpsertAccountMetrics(ctx, accountID, metrics, recordedAt); err != nil {
+			if err := retryDemoSeedWrite(ctx, func() error {
+				return a.store.UpsertAccountMetrics(ctx, accountID, metrics, recordedAt)
+			}); err != nil {
 				return fmt.Errorf("account metrics: %w", err)
 			}
 		}
 	}
 	return nil
+}
+
+func retryDemoSeedWrite(ctx context.Context, write func() error) error {
+	var err error
+	for attempt := 0; attempt < demoSeedWriteAttempts; attempt++ {
+		err = write()
+		if err == nil || !isSQLiteBusy(err) {
+			return err
+		}
+		if attempt == demoSeedWriteAttempts-1 {
+			return err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return err
+}
+
+func isSQLiteBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "SQLITE_BUSY") || strings.Contains(msg, "database is locked")
 }
 
 func (a *API) seedDemoAutomations(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, accountIDs []string) error {
