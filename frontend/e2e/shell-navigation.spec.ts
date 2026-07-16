@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
-import { signIn } from './helpers'
+import { e2eBootstrapToken } from './constants'
+import { createAITeam, signIn } from './helpers'
 
 test.describe('app shell navigation', () => {
   test('sidebar collapses to icons and restores from localStorage', async ({ page }) => {
@@ -77,10 +78,18 @@ test.describe('app shell navigation', () => {
     )
   })
 
-  test('team brand color can be saved and applies the accent variable', async ({ page }) => {
+  test('team brand color can be saved and applies the accent variable', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
+    const token = e2eBootstrapToken()
+    if (!baseURL) {
+      throw new Error('baseURL missing')
+    }
+    const teamId = await createAITeam(baseURL, token)
+
     await page.setViewportSize({ width: 1280, height: 720 })
     await signIn(page)
+    await page.goto(`/?team=${teamId}`)
+    await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 15_000 })
 
     await page.getByRole('button', { name: 'Team', exact: true }).click()
     const colorInput = page.getByTestId('team-brand-color-input')
