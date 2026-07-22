@@ -145,11 +145,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Keep this pinned to frontend/package.json's packageManager field.
-      - name: Enable corepack (pnpm)
-        run: |
-          corepack enable
-          corepack prepare pnpm@11.12.0 --activate
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -177,10 +176,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Enable corepack (pnpm)
-        run: |
-          corepack enable
-          corepack prepare pnpm@11.12.0 --activate
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
 
       - name: Set up Node
         uses: actions/setup-node@v7
