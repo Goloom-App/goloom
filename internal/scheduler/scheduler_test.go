@@ -62,6 +62,7 @@ type mockStore struct {
 
 	getPostTemplateFn           func(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error)
 	listPostTemplateLinkedPosts []domain.PostTemplateLinkedPost
+	hasRoleFn                   func(occurrenceAt time.Time, role string) bool
 
 	// external post import hooks
 	listTeamAccountsFn         func(ctx context.Context, teamID string) ([]domain.SocialAccount, error)
@@ -802,6 +803,12 @@ func (m *mockStore) AddPostTemplateAnnouncementSkip(ctx context.Context, teamID,
 }
 
 func (m *mockStore) HasPostTemplateRoleMaterialized(ctx context.Context, templateID string, occurrenceAt time.Time, role string) (bool, error) {
+	m.mu.Lock()
+	fn := m.hasRoleFn
+	m.mu.Unlock()
+	if fn != nil {
+		return fn(occurrenceAt, role), nil
+	}
 	return false, nil
 }
 

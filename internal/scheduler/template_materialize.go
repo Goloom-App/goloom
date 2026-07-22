@@ -87,19 +87,23 @@ func (s *Service) materializeTemplateOccurrence(ctx context.Context, tmpl *domai
 	if err != nil {
 		return false, err
 	}
-	var createAt time.Time
+	// Advance the counter only when we actually materialize a new round. When
+	// the occurrence was already materialized (e.g. next_materialize_at was reset
+	// backward by a template edit over horizon-materialized posts), we just step
+	// past it: bumping the counter here would inflate it without creating any
+	// post and drift it away from the announcement counter.
+	createAt := occ
+	nextCounter := tmpl.CounterNext
 	if !mainExists {
 		if err := s.createScheduledPostFromTemplate(ctx, tmpl, occ, occ, domain.TemplatePostRoleMain); err != nil {
 			return false, nil
 		}
-		createAt = occ
-	} else {
-		createAt = occ
+		nextCounter = tmpl.CounterNext + 1
 	}
-	if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, tmpl.CounterNext+1); err != nil {
+	if err := s.store.AdvancePostTemplateSchedule(ctx, tmpl.ID, &nextOcc, nextCounter); err != nil {
 		return false, err
 	}
-	if err := s.materializeAnnouncement(ctx, tmpl, createAt, true); err != nil {
+	if err := s.materializeAnnouncement(ctx, tmpl, createAt, !mainExists); err != nil {
 		s.logger.Error("announcement materialize failed", "template_id", tmpl.ID, "error", err)
 	}
 	return true, nil
