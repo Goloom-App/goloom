@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.6](https://github.com/Goloom-App/goloom/compare/v0.2.5...v0.2.6) (2026-07-23)
+
+
+### Bug Fixes
+
+* **ci:** pnpm setup via action-setup + bump off broken pnpm 11.12.0 ([#63](https://github.com/Goloom-App/goloom/issues/63)) ([b06992f](https://github.com/Goloom-App/goloom/commit/b06992f06d23e60cff93676e98c60b84e235fa8a))
+* **deps:** bump golang.org/x/text to v0.39.0 for GO-2026-5970 ([fc832c7](https://github.com/Goloom-App/goloom/commit/fc832c748d23da0af934f3c04db3473666ac602c))
+* **deps:** update module github.com/coreos/go-oidc/v3 to v3.20.0 ([44e01c7](https://github.com/Goloom-App/goloom/commit/44e01c732e6f23628970bcad39eacef766967297))
+* **deps:** update module github.com/coreos/go-oidc/v3 to v3.20.0 ([5b173c4](https://github.com/Goloom-App/goloom/commit/5b173c426ed8b2db3346455c9e25b3e8910c081e))
+* **deps:** update module github.com/mmcdole/gofeed to v1.4.0 ([fa1f427](https://github.com/Goloom-App/goloom/commit/fa1f4276629cac1488e2442e586f501a54389484))
+* **deps:** update module github.com/mmcdole/gofeed to v1.4.0 ([7f41d11](https://github.com/Goloom-App/goloom/commit/7f41d110c13d1c236681552ac9a7f12ebb6e709d))
+* **deps:** update module modernc.org/sqlite to v1.54.0 ([4eb70f0](https://github.com/Goloom-App/goloom/commit/4eb70f0727e37f62db52088bbcacceff52e9902c))
+* **deps:** update module modernc.org/sqlite to v1.54.0 ([5f152a7](https://github.com/Goloom-App/goloom/commit/5f152a749c7b4f14fb6d2e148d59ee0a5a16e755))
+* **scheduler:** don't advance edition counter when re-materializing ([7fb5311](https://github.com/Goloom-App/goloom/commit/7fb5311f7b64f342c71d6b38af395bd4c19c6994))
+* **scheduler:** don't advance edition counter when re-materializing ([61e92e8](https://github.com/Goloom-App/goloom/commit/61e92e8033272b7b3493dec946b966c6779643dc))
+
 ## [0.2.5](https://github.com/Goloom-App/goloom/compare/v0.2.4...v0.2.5) (2026-07-07)
 
 
