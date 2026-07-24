@@ -404,7 +404,8 @@ func (s *Store) IsPostTemplateAnnouncementSkipped(ctx context.Context, templateI
 func (s *Store) AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error {
 	res, err := s.db.ExecContext(ctx, `
 		insert into post_template_skips (template_id, occurrence_at, skip_scope)
-		select id, ?, 'occurrence' from post_templates where team_id = ? and id = ?`,
+		select id, ?, 'occurrence' from post_templates where team_id = ? and id = ?
+		on conflict(template_id, occurrence_at) do update set skip_scope = 'occurrence'`,
 		formatTime(occurrenceAt), teamID, templateID,
 	)
 	if err != nil {

@@ -82,3 +82,40 @@ func TestService_RegeneratePostTemplateOccurrence_blockedPosted(t *testing.T) {
 	}
 }
 
+func TestRegeneratePostTemplateHorizonIgnoresPastPostedPosts(t *testing.T) {
+	now := time.Now().UTC()
+	past := now.Add(-24 * time.Hour).Truncate(time.Second)
+	future := now.Add(24 * time.Hour).Truncate(time.Second)
+	pastCtr, futureCtr := 3, 4
+	tmpl := domain.PostTemplate{
+		ID:                     "tpl-h",
+		TeamID:                 "team1",
+		AuthorUserID:           "user1",
+		Title:                  "main #{counter}",
+		Content:                "body {counter}",
+		RecurrenceJSON:         `{"kind":"weekly","weekdays":[3],"hour":10,"minute":0,"timezone":"UTC"}`,
+		TargetAccountIDs:       []string{"acc1"},
+		Enabled:                true,
+		MaterializeHorizonDays: 7,
+		NextMaterializeAt:      ptrTime(future.Add(7 * 24 * time.Hour)),
+		CounterNext:            5,
+	}
+	st := &mockStore{
+		getPostTemplateFn: func(ctx context.Context, teamID, templateID string) (domain.PostTemplate, error) {
+			return tmpl, nil
+		},
+		listPostTemplateLinkedPosts: []domain.PostTemplateLinkedPost{
+			{ID: "old", Status: domain.PostStatusPosted, TemplateOccurrenceAt: past, TemplatePostRole: domain.TemplatePostRoleMain, TemplateCounter: &pastCtr},
+			{ID: "new", Status: domain.PostStatusPending, TemplateOccurrenceAt: future, TemplatePostRole: domain.TemplatePostRoleMain, TemplateCounter: &futureCtr},
+		},
+	}
+	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, nil)
+
+	result, err := svc.RegeneratePostTemplateHorizon(context.Background(), "team1", "tpl-h")
+	if err != nil {
+		t.Fatalf("RegeneratePostTemplateHorizon: %v", err)
+	}
+	if result.DeletedPosts != 1 || result.RegeneratedOccurrences != 1 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}

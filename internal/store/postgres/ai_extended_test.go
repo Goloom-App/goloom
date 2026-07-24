@@ -361,6 +361,21 @@ func TestPostgres_PostTemplate_CRUD(t *testing.T) {
 		t.Fatal("occurrence skip must imply announcement skip")
 	}
 
+	occAfterAnnouncementSkip := time.Date(2026, 8, 7, 9, 0, 0, 0, time.UTC)
+	if err := s.AddPostTemplateAnnouncementSkip(ctx, team.ID, tmpl.ID, occAfterAnnouncementSkip); err != nil {
+		t.Fatalf("AddPostTemplateAnnouncementSkip: %v", err)
+	}
+	if err := s.AddPostTemplateSkip(ctx, team.ID, tmpl.ID, occAfterAnnouncementSkip); err != nil {
+		t.Fatalf("AddPostTemplateSkip after announcement skip: %v", err)
+	}
+	skipped, err = s.IsPostTemplateOccurrenceSkipped(ctx, tmpl.ID, occAfterAnnouncementSkip)
+	if err != nil {
+		t.Fatalf("IsPostTemplateOccurrenceSkipped after upgrade: %v", err)
+	}
+	if !skipped {
+		t.Fatal("occurrence skip must replace announcement-only skip")
+	}
+
 	// DeletePostTemplate
 	if err := s.DeletePostTemplate(ctx, team.ID, tmpl.ID); err != nil {
 		t.Fatalf("DeletePostTemplate: %v", err)
