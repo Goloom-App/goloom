@@ -5,14 +5,21 @@ metadata:
   labels:
     {{- include "goloom.labels" . | nindent 4 }}
 spec:
+  {{- $singleWriterVolume := or (eq .Values.database.type "sqlite") (and .Values.persistence.enabled (ne .Values.persistence.accessMode "ReadWriteMany")) }}
   {{- if eq .Values.database.type "sqlite" }}
-  # SQLite is single-writer on a ReadWriteOnce volume: one replica, and Recreate
-  # so the volume is never mounted by two pods during a rollout.
+  # SQLite is single-writer: always one replica, regardless of persistence.
   replicas: 1
-  strategy:
-    type: Recreate
   {{- else }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  {{- if $singleWriterVolume }}
+  # A ReadWriteOnce (or SQLite) volume can only be attached to one node at a
+  # time. RollingUpdate would schedule the new pod before the old one
+  # releases the volume, so it gets stuck in ContainerCreating with a
+  # Multi-Attach error until the upgrade times out. Recreate tears the old
+  # pod down first instead.
+  strategy:
+    type: Recreate
   {{- end }}
   selector:
     matchLabels:
