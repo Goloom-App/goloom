@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.7](https://github.com/Goloom-App/goloom/compare/v0.2.6...v0.2.7) (2026-07-24)
+
+
+### Features
+
+* **ui:** link the sidebar version to its own GitHub release too ([#72](https://github.com/Goloom-App/goloom/issues/72)) ([874cbde](https://github.com/Goloom-App/goloom/commit/874cbde8a15dd37a085d58d4cbb5f1f556a20d22))
+
+
+### Bug Fixes
+
+* **deps:** update frontend non-major dependencies ([#66](https://github.com/Goloom-App/goloom/issues/66)) ([51b3793](https://github.com/Goloom-App/goloom/commit/51b379350c2d8d303af82769c74c5f8e4cb7c098))
+* **helm:** use Recreate strategy for any single-writer volume, not ju… ([#67](https://github.com/Goloom-App/goloom/issues/67)) ([b5bff19](https://github.com/Goloom-App/goloom/commit/b5bff1960c02846357b2a64f4980ad6b30cc155b))
+
 ## [0.2.6](https://github.com/Goloom-App/goloom/compare/v0.2.5...v0.2.6) (2026-07-23)
 
 
