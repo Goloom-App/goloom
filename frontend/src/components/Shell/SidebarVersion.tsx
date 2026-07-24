@@ -10,9 +10,10 @@ interface SidebarVersionProps {
   collapsed?: boolean
 }
 
-// SidebarVersion shows the running goloom version in the sidebar footer and,
-// when the server's update check found a newer release, turns into a link to
-// the release notes. Renders nothing until the version is known.
+// SidebarVersion shows the running goloom version in the sidebar footer,
+// linking to its GitHub release; when the server's update check found a newer
+// release, it turns into a link to that release's notes instead. Renders
+// nothing until the version is known.
 export function SidebarVersion({ info, collapsed = false }: SidebarVersionProps) {
   const { t } = useTranslation()
   if (!info?.current) {
@@ -45,13 +46,17 @@ export function SidebarVersion({ info, collapsed = false }: SidebarVersionProps)
     )
   }
 
+  const releaseHref = `${RELEASES_URL}/tag/${encodeURIComponent(info.current)}`
   return (
-    <div
+    <a
       className="sidebar-version"
+      href={releaseHref}
+      target="_blank"
+      rel="noreferrer noopener"
       data-testid="sidebar-version"
       title={collapsed ? label : t('sidebar.upToDate')}
     >
       {collapsed ? info.current : label}
-    </div>
+    </a>
   )
 }

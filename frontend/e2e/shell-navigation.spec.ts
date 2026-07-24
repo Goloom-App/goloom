@@ -54,8 +54,11 @@ test.describe('app shell navigation', () => {
     const version = page.getByTestId('sidebar-version')
     await expect(version).toBeVisible({ timeout: 15_000 })
     await expect(version).toContainText('v9.9.9')
-    // No update: it is plain text, not a link.
-    await expect(version).not.toHaveAttribute('href', /.+/)
+    // Up to date: still links to its own release.
+    await expect(version).toHaveAttribute(
+      'href',
+      'https://github.com/Goloom-App/goloom/releases/tag/v9.9.9',
+    )
   })
 
   test('sidebar footer surfaces an available update as a release link', async ({ page }) => {
