@@ -7,13 +7,9 @@
 
 * **ci:** pnpm setup via action-setup + bump off broken pnpm 11.12.0 ([#63](https://github.com/Goloom-App/goloom/issues/63)) ([b06992f](https://github.com/Goloom-App/goloom/commit/b06992f06d23e60cff93676e98c60b84e235fa8a))
 * **deps:** bump golang.org/x/text to v0.39.0 for GO-2026-5970 ([fc832c7](https://github.com/Goloom-App/goloom/commit/fc832c748d23da0af934f3c04db3473666ac602c))
-* **deps:** update module github.com/coreos/go-oidc/v3 to v3.20.0 ([44e01c7](https://github.com/Goloom-App/goloom/commit/44e01c732e6f23628970bcad39eacef766967297))
 * **deps:** update module github.com/coreos/go-oidc/v3 to v3.20.0 ([5b173c4](https://github.com/Goloom-App/goloom/commit/5b173c426ed8b2db3346455c9e25b3e8910c081e))
-* **deps:** update module github.com/mmcdole/gofeed to v1.4.0 ([fa1f427](https://github.com/Goloom-App/goloom/commit/fa1f4276629cac1488e2442e586f501a54389484))
 * **deps:** update module github.com/mmcdole/gofeed to v1.4.0 ([7f41d11](https://github.com/Goloom-App/goloom/commit/7f41d110c13d1c236681552ac9a7f12ebb6e709d))
-* **deps:** update module modernc.org/sqlite to v1.54.0 ([4eb70f0](https://github.com/Goloom-App/goloom/commit/4eb70f0727e37f62db52088bbcacceff52e9902c))
 * **deps:** update module modernc.org/sqlite to v1.54.0 ([5f152a7](https://github.com/Goloom-App/goloom/commit/5f152a749c7b4f14fb6d2e148d59ee0a5a16e755))
-* **scheduler:** don't advance edition counter when re-materializing ([7fb5311](https://github.com/Goloom-App/goloom/commit/7fb5311f7b64f342c71d6b38af395bd4c19c6994))
 * **scheduler:** don't advance edition counter when re-materializing ([61e92e8](https://github.com/Goloom-App/goloom/commit/61e92e8033272b7b3493dec946b966c6779643dc))
 
 ## [0.2.5](https://github.com/Goloom-App/goloom/compare/v0.2.4...v0.2.5) (2026-07-07)
@@ -21,11 +17,8 @@
 
 ### Features
 
-* **ui:** show version and update hint in sidebar footer ([3fde08e](https://github.com/Goloom-App/goloom/commit/3fde08eaf091bf9dc06595975640e9d8f7c55709))
 * **ui:** show version and update hint in sidebar footer ([b94df4d](https://github.com/Goloom-App/goloom/commit/b94df4d80b50fd9f5dd7d042c0cf4406dfaa1c31))
-* **website:** add GDPR privacy policy page ([89c8773](https://github.com/Goloom-App/goloom/commit/89c877376136f82d998fff739a2d1e9d6be1559d))
 * **website:** add GDPR privacy policy page ([eae447d](https://github.com/Goloom-App/goloom/commit/eae447d867ec310cce2e470e4e6239ec7daa15d3))
-* **website:** tri-hue brand palette + self-hosted typography ([972c37c](https://github.com/Goloom-App/goloom/commit/972c37cfc5374b194f2a9456435351256b63bd9f))
 * **website:** tri-hue brand palette, self-hosted type, richer atmosphere ([90607c4](https://github.com/Goloom-App/goloom/commit/90607c427469ff1769a3569e4df2c690ca007b4c))
 
 ## [0.2.4](https://github.com/Goloom-App/goloom/compare/v0.2.3...v0.2.4) (2026-07-06)
@@ -33,7 +26,6 @@
 
 ### Bug Fixes
 
-* **webui:** review queue — edit for late drafts, preview sidebar, card layout ([e46e67d](https://github.com/Goloom-App/goloom/commit/e46e67d92ed86e8aa4fca61d1811af49c563b76b))
 * **webui:** review queue edit for late drafts, preview sidebar, card layout ([9e437e7](https://github.com/Goloom-App/goloom/commit/9e437e70310063d09fd08565a50fb6f81c47fade))
 
 ## [0.2.3](https://github.com/Goloom-App/goloom/compare/v0.2.2...v0.2.3) (2026-07-05)
@@ -42,17 +34,13 @@
 ### Features
 
 * **scheduler:** per-feed summary logging for rss imports ([a46f942](https://github.com/Goloom-App/goloom/commit/a46f9426b794dca0f421e7eff6f2cbb4795c16f3))
-* **scheduler:** per-feed summary logging for RSS imports ([04cac8a](https://github.com/Goloom-App/goloom/commit/04cac8a0a99c37f592f75e1f60bed291194cb802))
 
 
 ### Bug Fixes
 
 * **api:** allowlist demo_seed in the post-creation guard ([dbd1797](https://github.com/Goloom-App/goloom/commit/dbd1797d84a58d19981f8ea0463911eff982542f))
-* **deps:** update frontend non-major dependencies ([9b54ea7](https://github.com/Goloom-App/goloom/commit/9b54ea7770d60339f3a5d37eca556c7557cdea7e))
 * **deps:** update frontend non-major dependencies ([93d0faf](https://github.com/Goloom-App/goloom/commit/93d0faf3039d6b8065fb61398023f9c6f51b5ca9))
 * **scheduler:** import rss items that appear in the feed after their pubDate ([afbcd27](https://github.com/Goloom-App/goloom/commit/afbcd27a436507f3cf8ce2da9a3cd92df743efc6))
-* **scheduler:** import RSS items that appear in the feed after their pubDate ([3b7fc90](https://github.com/Goloom-App/goloom/commit/3b7fc908b96b92fe4baee6cee35e1116175764cd))
-* **webui:** persist the guided-tour flag on the user account ([461771c](https://github.com/Goloom-App/goloom/commit/461771c8eb2ced2f81ebfb9d29862231fe714d23))
 * **webui:** persist the guided-tour flag on the user account ([e7c6325](https://github.com/Goloom-App/goloom/commit/e7c6325b0eefe130723690f7d4aea15f934a4837))
 
 ## [0.2.2](https://github.com/Goloom-App/goloom/compare/v0.2.1...v0.2.2) (2026-07-04)
@@ -60,7 +48,6 @@
 
 ### Features
 
-* **website:** stalw.art-style feature showcase with demo-data screenshots ([7a22798](https://github.com/Goloom-App/goloom/commit/7a22798ce69cc93ffb708bba6f199953f2fcb633))
 * **website:** stalw.art-style feature showcase with demo-data screenshots ([29f3cac](https://github.com/Goloom-App/goloom/commit/29f3cacc9b5bd22101637e75c69f82802b2bab6e))
 
 ## [0.2.1](https://github.com/Goloom-App/goloom/compare/v0.2.0...v0.2.1) (2026-07-03)
