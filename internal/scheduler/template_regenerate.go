@@ -81,7 +81,7 @@ func (s *Service) RegeneratePostTemplateHorizon(ctx context.Context, teamID, tem
 	if err != nil {
 		return domain.PostTemplateRegenerateResult{}, err
 	}
-	scope := filterLinkedPostsForHorizon(linked, horizonEnd)
+	scope := filterLinkedPostsForHorizon(linked, now, horizonEnd)
 	if len(scope) == 0 {
 		return domain.PostTemplateRegenerateResult{}, ErrRegenerateNoPosts
 	}
@@ -157,10 +157,10 @@ func filterLinkedPostsForOccurrence(posts []domain.PostTemplateLinkedPost, occ t
 	return out
 }
 
-func filterLinkedPostsForHorizon(posts []domain.PostTemplateLinkedPost, horizonEnd time.Time) []domain.PostTemplateLinkedPost {
+func filterLinkedPostsForHorizon(posts []domain.PostTemplateLinkedPost, horizonStart, horizonEnd time.Time) []domain.PostTemplateLinkedPost {
 	out := make([]domain.PostTemplateLinkedPost, 0, len(posts))
 	for _, p := range posts {
-		if !p.TemplateOccurrenceAt.After(horizonEnd) {
+		if !p.TemplateOccurrenceAt.Before(horizonStart) && !p.TemplateOccurrenceAt.After(horizonEnd) {
 			out = append(out, p)
 		}
 	}

@@ -22,6 +22,7 @@ func makePostTemplateFixture(t *testing.T) (context.Context, interface {
 	IsPostTemplateOccurrenceSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error)
 	IsPostTemplateAnnouncementSkipped(ctx context.Context, templateID string, occurrenceAt time.Time) (bool, error)
 	AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error
+	AddPostTemplateAnnouncementSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error
 }, domain.Team, domain.SocialAccount, domain.AuthenticatedPrincipal) {
 	t.Helper()
 	ctx := context.Background()
@@ -330,6 +331,37 @@ func TestSQLite_PostTemplate_AnnouncementSkip(t *testing.T) {
 	}
 	if !annSkipped {
 		t.Fatal("occurrence skip must imply announcement skip")
+	}
+}
+
+func TestSQLite_PostTemplate_OccurrenceSkipUpgradesAnnouncementSkip(t *testing.T) {
+	ctx, s, team, acc, principal := makePostTemplateFixture(t)
+
+	enabled := true
+	tmpl, err := s.CreatePostTemplate(ctx, team.ID, principal, domain.CreatePostTemplateInput{
+		Title:            "Skip Upgrade Test",
+		Content:          "announcement",
+		RecurrenceJSON:   weeklyRecurrence,
+		TargetAccountIDs: []string{acc.ID},
+		Enabled:          &enabled,
+	})
+	if err != nil {
+		t.Fatalf("CreatePostTemplate: %v", err)
+	}
+	occAt := time.Date(2026, 8, 7, 9, 0, 0, 0, time.UTC)
+
+	if err := s.AddPostTemplateAnnouncementSkip(ctx, team.ID, tmpl.ID, occAt); err != nil {
+		t.Fatalf("AddPostTemplateAnnouncementSkip: %v", err)
+	}
+	if err := s.AddPostTemplateSkip(ctx, team.ID, tmpl.ID, occAt); err != nil {
+		t.Fatalf("AddPostTemplateSkip after announcement skip: %v", err)
+	}
+	skipped, err := s.IsPostTemplateOccurrenceSkipped(ctx, tmpl.ID, occAt)
+	if err != nil {
+		t.Fatalf("IsPostTemplateOccurrenceSkipped: %v", err)
+	}
+	if !skipped {
+		t.Fatal("occurrence skip must replace announcement-only skip")
 	}
 }
 
