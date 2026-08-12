@@ -18,6 +18,14 @@ import (
 
 type regenerateStub struct {
 	horizonFn func(ctx context.Context, teamID, templateID string) (domain.PostTemplateRegenerateResult, error)
+	skipFn    func(ctx context.Context, teamID, templateID string, occurrenceAt time.Time, shiftTo *time.Time) (domain.PostTemplateRegenerateResult, error)
+}
+
+func (s *regenerateStub) SkipPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time, shiftTo *time.Time) (domain.PostTemplateRegenerateResult, error) {
+	if s.skipFn != nil {
+		return s.skipFn(ctx, teamID, templateID, occurrenceAt, shiftTo)
+	}
+	return domain.PostTemplateRegenerateResult{}, nil
 }
 
 func (s *regenerateStub) RegeneratePostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) (domain.PostTemplateRegenerateResult, error) {

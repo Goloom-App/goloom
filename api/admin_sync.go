@@ -19,6 +19,7 @@ type metricsSyncRunner interface {
 	ImportOldPosts(ctx context.Context, teamID string, input scheduler.ImportOldPostsInput) (scheduler.ImportOldPostsResult, error)
 	RegeneratePostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) (domain.PostTemplateRegenerateResult, error)
 	RegeneratePostTemplateHorizon(ctx context.Context, teamID, templateID string) (domain.PostTemplateRegenerateResult, error)
+	SkipPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time, shiftTo *time.Time) (domain.PostTemplateRegenerateResult, error)
 }
 
 func (a *API) handleAdminSyncStatus(w http.ResponseWriter, r *http.Request) {

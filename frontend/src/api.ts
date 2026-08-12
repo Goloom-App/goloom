@@ -1213,10 +1213,12 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    // Returns the tear-down result when a scheduler is present; 204 (undefined)
+    // when the skip could only be recorded.
     skipPostTemplateOccurrence(teamID: string, templateID: string, occurrenceAtIso: string, shiftToIso?: string) {
       const body: Record<string, string> = { occurrence_at: occurrenceAtIso }
       if (shiftToIso) body.shift_to = shiftToIso
-      return request<void>(options, `/v1/teams/${teamID}/post-templates/${templateID}/skip`, {
+      return request<{ deleted_posts: number; regenerated_occurrences: number } | undefined>(options, `/v1/teams/${teamID}/post-templates/${templateID}/skip`, {
         method: 'POST',
         headers: buildHeaders(options.token),
         body: JSON.stringify(body),

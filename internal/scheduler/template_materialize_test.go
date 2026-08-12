@@ -155,12 +155,14 @@ func TestMaterialize_reWalkDoesNotAdvanceCounter(t *testing.T) {
 	}
 }
 
-// "Skip next" in the UI posts next_materialize_at as the occurrence to skip.
-// On a template whose horizon already materialized several rounds ahead, that
-// pointer sits *behind* the horizon: it names an occurrence for which no post
-// exists yet, not the imminent one the user sees in the calendar. This test
-// pins down what actually happens so the gap is unambiguous.
-func TestSkipNext_skipsBeyondHorizonNotImminentOccurrence(t *testing.T) {
+// next_materialize_at is the materialization cursor, not "the next occurrence":
+// once the horizon has run it sits past every round already in the calendar, so
+// it names an occurrence for which no post exists yet. Anything acting on "the
+// next round" — skip, shift, the card's own next label — has to resolve the
+// occurrence from the linked posts instead. This test pins that gap down so the
+// cursor does not get mistaken for the imminent round again; see
+// SkipPostTemplateOccurrence for the behaviour that depends on it.
+func TestMaterialize_cursorRunsAheadOfMaterializedRounds(t *testing.T) {
 	firstOcc := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC) // Wed
 	tmpl := domain.PostTemplate{
 		ID:                      "tmpl1",

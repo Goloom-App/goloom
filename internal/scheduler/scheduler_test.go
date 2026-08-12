@@ -64,6 +64,13 @@ type mockStore struct {
 	listPostTemplateLinkedPosts []domain.PostTemplateLinkedPost
 	hasRoleFn                   func(occurrenceAt time.Time, role string) bool
 
+	deleteLinkedPostsCalls       [][]string
+	deleteLinkedPostsFn          func(postIDs []string) (int, error)
+	setMaterializationStateCalls []setMaterializationStateCall
+	setMaterializationStateFn    func(nextMaterialize *time.Time, counterNext, announcementCounterNext int)
+	addSkipFn                    func(occurrenceAt time.Time)
+	shiftOccurrenceFn            func(occurrenceAt, shiftTo time.Time)
+
 	// external post import hooks
 	listTeamAccountsFn         func(ctx context.Context, teamID string) ([]domain.SocialAccount, error)
 	createImportedPostFn       func(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error)
@@ -89,6 +96,13 @@ type advanceTemplateCall struct {
 type advanceAnnouncementCall struct {
 	templateID  string
 	counterNext int
+}
+
+type setMaterializationStateCall struct {
+	templateID              string
+	nextMaterialize         *time.Time
+	counterNext             int
+	announcementCounterNext int
 }
 
 type markTargetCall struct {
@@ -777,10 +791,27 @@ func (m *mockStore) ListPostTemplateLinkedPosts(ctx context.Context, teamID, tem
 }
 
 func (m *mockStore) DeletePostTemplateLinkedPosts(ctx context.Context, teamID, templateID string, postIDs []string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deleteLinkedPostsCalls = append(m.deleteLinkedPostsCalls, append([]string(nil), postIDs...))
+	if m.deleteLinkedPostsFn != nil {
+		return m.deleteLinkedPostsFn(postIDs)
+	}
 	return len(postIDs), nil
 }
 
 func (m *mockStore) SetPostTemplateMaterializationState(ctx context.Context, templateID string, nextMaterialize *time.Time, counterNext, announcementCounterNext int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.setMaterializationStateCalls = append(m.setMaterializationStateCalls, setMaterializationStateCall{
+		templateID:              templateID,
+		nextMaterialize:         nextMaterialize,
+		counterNext:             counterNext,
+		announcementCounterNext: announcementCounterNext,
+	})
+	if m.setMaterializationStateFn != nil {
+		m.setMaterializationStateFn(nextMaterialize, counterNext, announcementCounterNext)
+	}
 	return nil
 }
 
@@ -856,10 +887,20 @@ func (m *mockStore) IsPostTemplateOccurrenceSkipped(ctx context.Context, templat
 }
 
 func (m *mockStore) AddPostTemplateSkip(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.addSkipFn != nil {
+		m.addSkipFn(occurrenceAt.UTC())
+	}
 	return nil
 }
 
 func (m *mockStore) ShiftPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt, shiftTo time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.shiftOccurrenceFn != nil {
+		m.shiftOccurrenceFn(occurrenceAt.UTC(), shiftTo.UTC())
+	}
 	return nil
 }
 
