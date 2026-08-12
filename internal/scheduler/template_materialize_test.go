@@ -154,3 +154,96 @@ func TestMaterialize_reWalkDoesNotAdvanceCounter(t *testing.T) {
 			afterEdit.CounterNext, afterEdit.AnnouncementCounterNext)
 	}
 }
+
+// "Skip next" in the UI posts next_materialize_at as the occurrence to skip.
+// On a template whose horizon already materialized several rounds ahead, that
+// pointer sits *behind* the horizon: it names an occurrence for which no post
+// exists yet, not the imminent one the user sees in the calendar. This test
+// pins down what actually happens so the gap is unambiguous.
+func TestSkipNext_skipsBeyondHorizonNotImminentOccurrence(t *testing.T) {
+	firstOcc := time.Date(2026, 8, 5, 10, 0, 0, 0, time.UTC) // Wed
+	tmpl := domain.PostTemplate{
+		ID:                      "tmpl1",
+		TeamID:                  "team1",
+		AuthorUserID:            "user1",
+		Title:                   "Folge {counter}",
+		Content:                 "Folge {counter}",
+		RecurrenceJSON:          `{"kind":"monthly_ordinal_weekday","occurrences":[{"ordinal":1,"weekday":3},{"ordinal":3,"weekday":3}],"hour":10,"minute":0,"timezone":"UTC"}`,
+		TargetAccountIDs:        []string{"acc1"},
+		Enabled:                 true,
+		NextMaterializeAt:       &firstOcc,
+		MaterializeHorizonDays:  28,
+		CounterNext:             385,
+		AnnouncementEnabled:     true,
+		AnnouncementTitle:       "Ankündigung Folge {main_counter}",
+		AnnouncementContent:     "Folge #{main_counter} in 2 Tagen",
+		AnnouncementDaysBefore:  2,
+		AnnouncementCounterNext: 385,
+	}
+	h := newStatefulTemplateHarness(t, tmpl)
+
+	// Tick 1: horizon materializes the upcoming rounds (385, 386, ...).
+	h.tick(t)
+	afterHorizon := h.currentTemplate()
+
+	type materialized struct {
+		occ     time.Time
+		role    string
+		counter int
+	}
+	var created []materialized
+	h.st.mu.Lock()
+	for _, in := range h.st.createScheduledPostCalls {
+		ctr := 0
+		if in.TemplateCounter != nil {
+			ctr = *in.TemplateCounter
+		}
+		created = append(created, materialized{occ: in.TemplateOccurrenceAt.UTC(), role: in.TemplatePostRole, counter: ctr})
+	}
+	h.st.mu.Unlock()
+	if len(created) == 0 {
+		t.Fatalf("expected horizon to materialize posts, got none")
+	}
+	t.Logf("horizon materialized %d posts, next_materialize_at=%s counter_next=%d",
+		len(created), afterHorizon.NextMaterializeAt.Format(time.RFC3339), afterHorizon.CounterNext)
+	for _, c := range created {
+		t.Logf("  occ=%s role=%s counter=%d", c.occ.Format(time.RFC3339), c.role, c.counter)
+	}
+
+	// What the UI sends when the user clicks "Skip next".
+	skipTarget := afterHorizon.NextMaterializeAt.UTC()
+
+	// The imminent occurrence (folge 385) is materialized and NOT what gets skipped.
+	if skipTarget.Equal(firstOcc) {
+		t.Fatalf("precondition failed: next_materialize_at still points at the imminent occurrence")
+	}
+	imminentStillThere := false
+	for _, c := range created {
+		if c.occ.Equal(firstOcc) && c.role == domain.TemplatePostRoleMain && c.counter == 385 {
+			imminentStillThere = true
+		}
+	}
+	if !imminentStillThere {
+		t.Fatalf("expected folge 385 materialized for %s", firstOcc.Format(time.RFC3339))
+	}
+
+	// Now the skip lands and the scheduler ticks again.
+	h.st.mu.Lock()
+	h.st.isPostTemplateOccurrenceSkippedFn = func(templateID string, occurrenceAt time.Time) (bool, error) {
+		return occurrenceAt.UTC().Equal(skipTarget), nil
+	}
+	h.st.mu.Unlock()
+	h.resetCalls()
+	h.tick(t)
+	afterSkip := h.currentTemplate()
+
+	// Existing horizon posts are untouched: nothing deleted, nothing renumbered.
+	if got := h.newPosts(); got != 0 {
+		t.Logf("skip tick created %d new posts", got)
+	}
+	if afterSkip.CounterNext != afterHorizon.CounterNext {
+		t.Errorf("counter moved on skip: %d -> %d", afterHorizon.CounterNext, afterSkip.CounterNext)
+	}
+	t.Logf("after skip: next_materialize_at=%s counter_next=%d",
+		afterSkip.NextMaterializeAt.Format(time.RFC3339), afterSkip.CounterNext)
+}
