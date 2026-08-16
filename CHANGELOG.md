@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.8](https://github.com/Goloom-App/goloom/compare/v0.2.7...v0.2.8) (2026-08-16)
+
+
+### Bug Fixes
+
+* **deps:** update frontend non-major dependencies ([#74](https://github.com/Goloom-App/goloom/issues/74)) ([a36afb0](https://github.com/Goloom-App/goloom/commit/a36afb0e20ce782ebced1cf1430621335d86b5c0))
+* **deps:** update module github.com/mmcdole/gofeed to v1.4.1 ([#84](https://github.com/Goloom-App/goloom/issues/84)) ([26eab21](https://github.com/Goloom-App/goloom/commit/26eab21965952a8ca01b28edcf77764130f5fdf9))
+* **deps:** update module github.com/modelcontextprotocol/go-sdk to v1.7.0 ([#77](https://github.com/Goloom-App/goloom/issues/77)) ([4c051d5](https://github.com/Goloom-App/goloom/commit/4c051d5e86a0f2610a4a1f1ba3feaf54bcbed47a))
+* **deps:** update module modernc.org/sqlite to v1.55.0 ([#76](https://github.com/Goloom-App/goloom/issues/76)) ([ca715f8](https://github.com/Goloom-App/goloom/commit/ca715f85e9162a1481bf47ef0395a83489d666fb))
+* **recurring:** constrain horizon regenerate ([#73](https://github.com/Goloom-App/goloom/issues/73)) ([6e2dfef](https://github.com/Goloom-App/goloom/commit/6e2dfef261ce3ff4d32c8a4b6e022dfae759cc82))
+* **recurring:** make "skip next" drop the round the user actually sees ([#83](https://github.com/Goloom-App/goloom/issues/83)) ([a554c52](https://github.com/Goloom-App/goloom/commit/a554c523c51a1a5ffe684f19cfefc3267d485649))
+
 ## [0.2.7](https://github.com/Goloom-App/goloom/compare/v0.2.6...v0.2.7) (2026-07-24)
 
 
