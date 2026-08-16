@@ -248,6 +248,23 @@ func uniqueOccurrences(posts []domain.PostTemplateLinkedPost) []time.Time {
 }
 
 func (s *Service) cancelPendingRecurringAIJobs(ctx context.Context, teamID, templateID string, occurrenceAt *time.Time) error {
+	return s.cancelPendingRecurringAIJobsMatching(ctx, teamID, templateID, func(occ *time.Time) bool {
+		if occurrenceAt == nil {
+			return true
+		}
+		return occ != nil && occ.Equal(occurrenceAt.UTC())
+	})
+}
+
+// cancelPendingRecurringAIJobsFrom cancels in-flight enhancement for every round
+// at or after from, matching the tear-down scope of a skip or shift.
+func (s *Service) cancelPendingRecurringAIJobsFrom(ctx context.Context, teamID, templateID string, from time.Time) error {
+	return s.cancelPendingRecurringAIJobsMatching(ctx, teamID, templateID, func(occ *time.Time) bool {
+		return occ != nil && !occ.Before(from.UTC())
+	})
+}
+
+func (s *Service) cancelPendingRecurringAIJobsMatching(ctx context.Context, teamID, templateID string, match func(occurrenceAt *time.Time) bool) error {
 	jobs, err := s.store.ListAIJobs(ctx, teamID, 200)
 	if err != nil {
 		return err
@@ -260,10 +277,8 @@ func (s *Service) cancelPendingRecurringAIJobs(ctx context.Context, teamID, temp
 		if meta == nil || meta.TemplateID != templateID {
 			continue
 		}
-		if occurrenceAt != nil {
-			if meta.TemplateOccurrenceAt == nil || !meta.TemplateOccurrenceAt.Equal(occurrenceAt.UTC()) {
-				continue
-			}
+		if !match(meta.TemplateOccurrenceAt) {
+			continue
 		}
 		if err := s.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
 			return err

@@ -161,18 +161,39 @@ func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Re
 		a.writeError(w, r, "occurrence_at_required", http.StatusBadRequest)
 		return
 	}
+	var shiftTo *time.Time
 	if !body.ShiftTo.IsZero() {
-		if err := a.store.ShiftPostTemplateOccurrence(r.Context(), teamID, templateID, body.OccurrenceAt.UTC(), body.ShiftTo.UTC()); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	} else {
-		if err := a.store.AddPostTemplateSkip(r.Context(), teamID, templateID, body.OccurrenceAt.UTC()); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+		u := body.ShiftTo.UTC()
+		shiftTo = &u
 	}
-	w.WriteHeader(http.StatusNoContent)
+
+	// Without a scheduler there is nothing to re-materialize, so recording the
+	// skip is all that can be done.
+	if a.metricsSync == nil {
+		var err error
+		if shiftTo != nil {
+			err = a.store.ShiftPostTemplateOccurrence(r.Context(), teamID, templateID, body.OccurrenceAt.UTC(), *shiftTo)
+		} else {
+			err = a.store.AddPostTemplateSkip(r.Context(), teamID, templateID, body.OccurrenceAt.UTC())
+		}
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	result, err := a.metricsSync.SkipPostTemplateOccurrence(r.Context(), teamID, templateID, body.OccurrenceAt.UTC(), shiftTo)
+	if err != nil {
+		if errors.Is(err, scheduler.ErrRegenerateBlocked) {
+			a.writeError(w, r, "skip_blocked_posted", http.StatusConflict)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	auth.WriteJSON(w, http.StatusOK, result)
 }
 
 type regenerateTemplateBody struct {

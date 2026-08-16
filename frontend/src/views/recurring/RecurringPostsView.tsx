@@ -358,13 +358,38 @@ export function RecurringPostsView({
     }
   }
 
-  async function skipNext(id: string, nextIso?: string) {
-    if (!nextIso) {
+  // next_materialize_at is the materialization cursor: with a horizon active it
+  // points past every round already in the calendar. Skipping or shifting "the
+  // next one" has to target the earliest round the user can actually see, so
+  // resolve it from the linked posts and fall back to the cursor only when
+  // nothing is materialized yet.
+  async function resolveNextOccurrence(id: string, cursorIso?: string): Promise<string | undefined> {
+    try {
+      const { items } = await api.listPostTemplateLinkedPosts(teamId, id)
+      const pending = items
+        .filter((p) => p.status === 'pending' || p.status === 'draft' || p.status === 'failed')
+        .map((p) => p.template_occurrence_at)
+        .sort()
+      if (pending.length > 0) {
+        return pending[0]
+      }
+    } catch {
+      // Fall through to the cursor below.
+    }
+    return cursorIso
+  }
+
+  async function skipNext(id: string, cursorIso?: string) {
+    const occurrence = await resolveNextOccurrence(id, cursorIso)
+    if (!occurrence) {
       onStatus(t('status.noOccurrenceToSkip'))
       return
     }
+    if (!window.confirm(t('recurring.skipNextConfirm'))) {
+      return
+    }
     try {
-      await api.skipPostTemplateOccurrence(teamId, id, nextIso)
+      await api.skipPostTemplateOccurrence(teamId, id, occurrence)
       await refresh()
       onStatus(t('status.occurrenceSkipped'))
     } catch (e) {
@@ -440,18 +465,19 @@ export function RecurringPostsView({
     }
   }
 
-  async function shiftNext(id: string, nextIso?: string) {
-    if (!nextIso) {
-      onStatus(t('status.noOccurrenceToSkip'))
-      return
-    }
+  async function shiftNext(id: string, cursorIso?: string) {
     const shiftVal = shiftInputs[id]
     if (!shiftVal) {
       setShiftInputs((cur) => ({ ...cur, [id]: '' }))
       return
     }
+    const occurrence = await resolveNextOccurrence(id, cursorIso)
+    if (!occurrence) {
+      onStatus(t('status.noOccurrenceToSkip'))
+      return
+    }
     try {
-      await api.skipPostTemplateOccurrence(teamId, id, nextIso, new Date(shiftVal).toISOString())
+      await api.skipPostTemplateOccurrence(teamId, id, occurrence, new Date(shiftVal).toISOString())
       setShiftInputs((cur) => { const c = { ...cur }; delete c[id]; return c })
       await refresh()
       onStatus(t('status.occurrenceShifted'))

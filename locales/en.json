@@ -595,6 +595,7 @@
       "regenerateIrreversibleWarning": "This cannot be undone. Existing scheduled or draft posts in scope will be permanently deleted and recreated from the current template.",
       "regenerateHorizonConfirm": "Regenerate all posts within the materialize horizon from the current template?\n\nThis cannot be undone.",
       "regenerateOccurrenceConfirm": "Regenerate the selected occurrence from the current template?\n\nThis cannot be undone.",
+      "skipNextConfirm": "Skip the next occurrence?\n\nIts scheduled posts (including the announcement) are deleted and every later round moves up one edition number.\n\nThis cannot be undone.",
       "regenerateNoOccurrences": "No regenerable occurrences found for this template.",
       "regenerateSelectOccurrence": "Occurrence to regenerate",
       "regenerateAiQueued": "AI is writing a fresh post… the calendar will update shortly.",
@@ -1155,6 +1156,7 @@
     "style_example_limit_reached": "style example limit reached",
     "ai_service_not_configured": "AI service is not configured",
     "regenerate_blocked_posted": "Cannot regenerate: one or more posts in scope are already published or publishing",
+    "skip_blocked_posted": "Cannot skip: one or more posts in this round or a later one are already published or publishing",
     "regenerate_no_posts": "No regenerable posts found in scope",
     "invalid_regenerate_mode": "mode must be occurrence or horizon",
     "template_regenerate_not_available": "template regenerate is not available"

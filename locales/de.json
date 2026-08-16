@@ -595,6 +595,7 @@
       "regenerateIrreversibleWarning": "Dies kann nicht rückgängig gemacht werden. Bestehende geplante oder Entwurfs-Beiträge im Umfang werden dauerhaft gelöscht und aus der aktuellen Vorlage neu erstellt.",
       "regenerateHorizonConfirm": "Alle Beiträge innerhalb des Materialisierungs-Horizonts aus der aktuellen Vorlage neu generieren?\n\nDies kann nicht rückgängig gemacht werden.",
       "regenerateOccurrenceConfirm": "Den ausgewählten Termin aus der aktuellen Vorlage neu generieren?\n\nDies kann nicht rückgängig gemacht werden.",
+      "skipNextConfirm": "Nächsten Termin überspringen?\n\nDessen geplante Beiträge (inklusive Ankündigung) werden gelöscht und alle späteren Folgen rücken um eine Nummer vor.\n\nDies kann nicht rückgängig gemacht werden.",
       "regenerateNoOccurrences": "Keine neu generierbaren Termine für diese Vorlage gefunden.",
       "regenerateSelectOccurrence": "Termin zum Neu-Generieren",
       "regenerateAiQueued": "KI erstellt neuen Beitrag… Kalender aktualisiert sich gleich.",
@@ -1155,6 +1156,7 @@
     "style_example_limit_reached": "Limit für Stilbeispiele erreicht",
     "ai_service_not_configured": "KI-Dienst ist nicht konfiguriert",
     "regenerate_blocked_posted": "Neu-Generieren nicht möglich: Mindestens ein Beitrag im Umfang ist bereits veröffentlicht oder wird veröffentlicht",
+    "skip_blocked_posted": "Überspringen nicht möglich: Mindestens ein Beitrag in dieser oder einer späteren Folge ist bereits veröffentlicht oder wird veröffentlicht",
     "regenerate_no_posts": "Keine neu generierbaren Beiträge im Umfang gefunden",
     "invalid_regenerate_mode": "mode muss occurrence oder horizon sein",
     "template_regenerate_not_available": "Neu-Generieren für Vorlagen ist nicht verfügbar"
