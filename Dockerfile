@@ -29,7 +29,7 @@ RUN mkdir -p /src/internal/webui && \
 # to 1.26.3, and that image pins GOTOOLCHAIN=local, so an in-build toolchain
 # upgrade is blocked; use the official Docker Hub image that ships 1.26.5
 # directly (the runner already pulls Docker Hub library images, e.g. postgres).
-FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine3.24 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine3.24 AS builder
 
 WORKDIR /src
 
