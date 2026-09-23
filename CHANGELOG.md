@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.9](https://github.com/Goloom-App/goloom/compare/v0.2.8...v0.2.9) (2026-09-23)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @astrojs/starlight to ^0.42.0 ([#92](https://github.com/Goloom-App/goloom/issues/92)) ([78fffd0](https://github.com/Goloom-App/goloom/commit/78fffd08cd5c3a1b3f9dfd7883ede12e7896cd27))
+* **deps:** update module github.com/coreos/go-oidc/v3 to v3.21.0 ([#91](https://github.com/Goloom-App/goloom/issues/91)) ([f2bfa1d](https://github.com/Goloom-App/goloom/commit/f2bfa1d89e5056fae535926905800c5d1e2062be))
+* **deps:** update module github.com/go-jose/go-jose/v4 to v4.1.5 ([#97](https://github.com/Goloom-App/goloom/issues/97)) ([ce8c51f](https://github.com/Goloom-App/goloom/commit/ce8c51fe66f402458daf585de3d74a07a882b7c8))
+* **deps:** update module github.com/jackc/pgx/v5 to v5.11.0 ([#98](https://github.com/Goloom-App/goloom/issues/98)) ([7564193](https://github.com/Goloom-App/goloom/commit/7564193821a5c48e692da4cc5d9c959799fb1ea8))
+* **deps:** update module github.com/mmcdole/gofeed to v1.4.2 ([#89](https://github.com/Goloom-App/goloom/issues/89)) ([79f4e8a](https://github.com/Goloom-App/goloom/commit/79f4e8abb14d73f1ec5ea92e15ad7bdd9d8548d9))
+* **deps:** update module github.com/modelcontextprotocol/go-sdk to v1.8.0 ([#99](https://github.com/Goloom-App/goloom/issues/99)) ([416dafa](https://github.com/Goloom-App/goloom/commit/416dafa3f35a2168bb9fcfea2f2b5a6ec9ce82db))
+* **deps:** update module github.com/puerkitobio/goquery to v1.13.0 ([#90](https://github.com/Goloom-App/goloom/issues/90)) ([28f1fbf](https://github.com/Goloom-App/goloom/commit/28f1fbf3fee14f2d8cd64c614e5c8ef87d568adb))
+* **deps:** update module golang.org/x/oauth2 to v0.37.0 ([#100](https://github.com/Goloom-App/goloom/issues/100)) ([1dda24a](https://github.com/Goloom-App/goloom/commit/1dda24a7f280a6546eea9d6e2ff85cf8d2ca29b4))
+* **deps:** update module golang.org/x/time to v0.16.0 ([#103](https://github.com/Goloom-App/goloom/issues/103)) ([104a389](https://github.com/Goloom-App/goloom/commit/104a38998911942021af5085eba1f0a4bfa0853c))
+* **deps:** update module modernc.org/sqlite to v1.59.0 ([#82](https://github.com/Goloom-App/goloom/issues/82)) ([88948dc](https://github.com/Goloom-App/goloom/commit/88948dc857129b794bd8e42fae269e8df1847df9))
+* **review-queue:** atomic stale-safe review transition ([#102](https://github.com/Goloom-App/goloom/issues/102)) ([9fc2a21](https://github.com/Goloom-App/goloom/commit/9fc2a21895d16a042a5e67128fca74fb75e1fa59))
+
 ## [0.2.8](https://github.com/Goloom-App/goloom/compare/v0.2.7...v0.2.8) (2026-08-16)
 
 
