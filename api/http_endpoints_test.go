@@ -388,6 +388,213 @@ func TestPostScopeAndTeamBindingEnforcement(t *testing.T) {
 	}
 }
 
+// TestUpdatePostScopeCoversTargetDraftState locks the escalation fix: the
+// required scope must consider the patch's TARGET draft state, so a
+// write:draft-only token cannot publish_now (or un-draft) a draft while
+// write:schedule may, and write:draft may still edit a draft in place.
+func TestUpdatePostScopeCoversTargetDraftState(t *testing.T) {
+	f := newEndpointFixture(t)
+	ctx := context.Background()
+
+	createBody, _ := json.Marshal(map[string]any{
+		"title":           "scoped draft",
+		"draft":           true,
+		"content":         "draft body",
+		"scheduled_at":    time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339),
+		"target_accounts": []string{f.account.ID},
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/teams/"+f.team.ID+"/posts", bytes.NewReader(createBody))
+	createReq.Header.Set("Authorization", "Bearer "+f.bearer)
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	f.handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create draft: got %d, body %s", createRec.Code, createRec.Body.String())
+	}
+	draft := decodeJSON[domain.ScheduledPost](t, createRec)
+	if draft.Status != domain.PostStatusDraft {
+		t.Fatalf("created status = %q, want %q", draft.Status, domain.PostStatusDraft)
+	}
+
+	patch := func(token string, body map[string]any) *httptest.ResponseRecorder {
+		raw, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPatch, "/v1/teams/"+f.team.ID+"/posts/"+draft.ID, bytes.NewReader(raw))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	draftOnly, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "draftonly-up", nil, `["write:draft"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// write:draft may still edit the draft in place (stays draft).
+	if rec := patch(draftOnly, map[string]any{"content": "draft body v2"}); rec.Code != http.StatusOK {
+		t.Fatalf("write:draft content edit: got %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+	// write:draft may NOT promote the draft via publish_now (needs write:schedule).
+	if rec := patch(draftOnly, map[string]any{"publish_now": true}); rec.Code != http.StatusForbidden {
+		t.Fatalf("write:draft publish_now: got %d, want 403 (%s)", rec.Code, rec.Body.String())
+	}
+	// write:schedule may promote the draft.
+	schedule, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "schedule-up", nil, `["write:schedule"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishRec := patch(schedule, map[string]any{"publish_now": true})
+	if publishRec.Code != http.StatusOK {
+		t.Fatalf("write:schedule publish_now: got %d, want 200 (%s)", publishRec.Code, publishRec.Body.String())
+	}
+	published := decodeJSON[domain.ScheduledPost](t, publishRec)
+	if published.Status == domain.PostStatusDraft {
+		t.Fatalf("status after publish_now = %q, want non-draft", published.Status)
+	}
+}
+
+// TestReviewCompleteAlwaysRequiresWriteSchedule locks the security fix: the
+// review_complete signal always promotes draft → pending (the store's
+// completeReview ignores the Draft flag), so a write:draft-only token must
+// never be able to complete a review — not even via a crafted contradictory
+// patch that sets draft:true to keep the target-draft scope low (400
+// review_complete_draft_conflict). Review_complete must also map to exactly one
+// explicit action — publish_now:true, or draft:false with an explicitly
+// supplied scheduled_at — so signal-only or incomplete patches are rejected
+// (400) before Prepare and can never implicitly publish at the draft's
+// possibly-past timestamp.
+func TestReviewCompleteAlwaysRequiresWriteSchedule(t *testing.T) {
+	f := newEndpointFixture(t)
+	ctx := context.Background()
+
+	createDraft := func() *domain.ScheduledPost {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{
+			"title":           "review scoped draft",
+			"draft":           true,
+			"content":         "draft body",
+			"scheduled_at":    time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339),
+			"target_accounts": []string{f.account.ID},
+		})
+		req := httptest.NewRequest(http.MethodPost, "/v1/teams/"+f.team.ID+"/posts", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+f.bearer)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create draft: got %d, body %s", rec.Code, rec.Body.String())
+		}
+		p := decodeJSON[domain.ScheduledPost](t, rec)
+		if p.Status != domain.PostStatusDraft {
+			t.Fatalf("created status = %q, want %q", p.Status, domain.PostStatusDraft)
+		}
+		return &p
+	}
+
+	patch := func(token string, postID string, body map[string]any) *httptest.ResponseRecorder {
+		t.Helper()
+		raw, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPatch, "/v1/teams/"+f.team.ID+"/posts/"+postID, bytes.NewReader(raw))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		f.handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	draftOnly, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "draftonly-rc", nil, `["write:draft"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schedule, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "schedule-rc", nil, `["write:schedule"]`, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	writeSchedule := func(token string, postID string, scheduledAt time.Time) *httptest.ResponseRecorder {
+		t.Helper()
+		return patch(token, postID, map[string]any{
+			"review_complete": true,
+			"draft":           false,
+			"scheduled_at":    scheduledAt.UTC().Format(time.RFC3339),
+		})
+	}
+
+	// write:draft must not complete a review — valid future scheduled action.
+	d1 := createDraft()
+	if rec := writeSchedule(draftOnly, d1.ID, time.Now().UTC().Add(48*time.Hour)); rec.Code != http.StatusForbidden {
+		t.Fatalf("write:draft review_complete schedule: got %d, want 403 (%s)", rec.Code, rec.Body.String())
+	}
+	if got, _ := f.store.GetScheduledPost(ctx, f.team.ID, d1.ID); got.Status != domain.PostStatusDraft {
+		t.Fatalf("write:draft review_complete promoted draft to %q", got.Status)
+	}
+
+	// write:draft must not complete a review via publish_now hint either.
+	d2 := createDraft()
+	if rec := patch(draftOnly, d2.ID, map[string]any{"review_complete": true, "publish_now": true}); rec.Code != http.StatusForbidden {
+		t.Fatalf("write:draft review_complete+publish_now: got %d, want 403 (%s)", rec.Code, rec.Body.String())
+	}
+	if got, _ := f.store.GetScheduledPost(ctx, f.team.ID, d2.ID); got.Status != domain.PostStatusDraft {
+		t.Fatalf("review_complete+publish_now promoted draft to %q via write:draft", got.Status)
+	}
+
+	assertRejected := func(name string, body map[string]any, wantCode string) *domain.ScheduledPost {
+		t.Helper()
+		d := createDraft()
+		rec := patch(f.bearer, d.ID, body)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: got %d, want 400 (%s)", name, rec.Code, rec.Body.String())
+		}
+		if got := rec.Header().Get("X-Error-Code"); got != wantCode {
+			t.Fatalf("%s: X-Error-Code = %q, want %q", name, got, wantCode)
+		}
+		p, err := f.store.GetScheduledPost(ctx, f.team.ID, d.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Status != domain.PostStatusDraft {
+			t.Fatalf("%s left the draft: status = %q", name, p.Status)
+		}
+		return &p
+	}
+
+	// review_complete with no action at all must not implicitly publish at the
+	// draft's (possibly past) scheduled_at.
+	assertRejected("review_complete alone", map[string]any{"review_complete": true}, "review_complete_action_required")
+	// Incomplete scheduled action: draft:false without a supplied scheduled_at.
+	assertRejected("incomplete schedule (no scheduled_at)", map[string]any{"review_complete": true, "draft": false}, "review_complete_action_required")
+	// Incomplete scheduled action: scheduled_at without the explicit draft:false.
+	assertRejected("incomplete schedule (no draft:false)", map[string]any{"review_complete": true, "scheduled_at": time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339)}, "review_complete_action_required")
+	// Contradictory action: publish_now mixed with a scheduled_at.
+	assertRejected("publish_now + scheduled_at", map[string]any{
+		"review_complete": true,
+		"publish_now":     true,
+		"scheduled_at":    time.Now().UTC().Add(48 * time.Hour).Format(time.RFC3339),
+	}, "review_complete_conflicting_action")
+
+	// Contradictory draft:true is rejected as 400 before any scope could apply —
+	// it must never promote, for any scope including write:schedule.
+	d3 := createDraft()
+	if rec := patch(schedule, d3.ID, map[string]any{"review_complete": true, "draft": true}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("contradictory review_complete+draft:true: got %d, want 400 (%s)", rec.Code, rec.Body.String())
+	} else if got := rec.Header().Get("X-Error-Code"); got != "review_complete_draft_conflict" {
+		t.Fatalf("X-Error-Code = %q, want review_complete_draft_conflict", got)
+	}
+	if got, _ := f.store.GetScheduledPost(ctx, f.team.ID, d3.ID); got.Status != domain.PostStatusDraft {
+		t.Fatalf("contradictory patch promoted draft to %q", got.Status)
+	}
+
+	// Normal queue requests still work with write:schedule: schedule + signal.
+	d4 := createDraft()
+	future := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
+	if rec := writeSchedule(schedule, d4.ID, future); rec.Code != http.StatusOK {
+		t.Fatalf("write:schedule review_complete: got %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+	if got, _ := f.store.GetScheduledPost(ctx, f.team.ID, d4.ID); got.Status != domain.PostStatusPending {
+		t.Fatalf("normal queue schedule did not promote to %q, got %q", domain.PostStatusPending, got.Status)
+	}
+}
+
 func TestScopeGatesOnHTTPRoutes(t *testing.T) {
 	f := newEndpointFixture(t)
 	ctx := context.Background()

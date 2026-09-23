@@ -133,6 +133,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("POST /v1/admin/sync-external-posts", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncExternalPosts))))
 	mux.Handle("POST /v1/admin/sync-rss-feeds", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncRSSFeeds))))
 	mux.Handle("POST /v1/admin/e2e/automation-draft", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSeedAutomationDraft))))
+	mux.Handle("POST /v1/admin/e2e/account", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSeedE2EAccount))))
 	mux.Handle("POST /v1/admin/e2e/demo-seed", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSeedDemoData))))
 	mux.Handle("POST /v1/admin/repair-future-posted", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminRepairFuturePosted))))
 	mux.Handle("GET /v1/admin/logs", a.auth.RequireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListLogEntries))))
@@ -910,6 +911,16 @@ func postWriteScope(status domain.PostStatus) string {
 	return auth.ScopeWriteSchedule
 }
 
+// postPrepareError maps a postservice.Prepare failure an API caller must see as
+// a structured, localized error. Returns true when it wrote the response.
+func (a *API) postPrepareError(w http.ResponseWriter, r *http.Request, err error) bool {
+	if errors.Is(err, domain.ErrPastScheduledAt) {
+		a.writeError(w, r, "past_scheduled_at", http.StatusUnprocessableEntity)
+		return true
+	}
+	return false
+}
+
 func postDeleteScope(status domain.PostStatus) string {
 	if status == domain.PostStatusDraft {
 		return auth.ScopeDeleteDraft
@@ -930,7 +941,10 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if input.ScheduledAt.IsZero() {
+	if input.PublishNow {
+		input.ScheduledAt = time.Now().UTC()
+		input.Draft = false
+	} else if input.ScheduledAt.IsZero() {
 		input.ScheduledAt = time.Now().UTC()
 	}
 
@@ -945,8 +959,11 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pathTeamID := strings.TrimSpace(r.PathValue("teamID"))
-	prepared, err := a.posts.Prepare(r.Context(), pathTeamID, input, postservice.Options{CheckLimits: !input.Draft, RequireTeam: true})
+	prepared, err := a.posts.Prepare(r.Context(), pathTeamID, input, postservice.Options{CheckLimits: !input.Draft, RequireTeam: true, RejectPastScheduledAt: !input.PublishNow})
 	if err != nil {
+		if a.postPrepareError(w, r, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -986,10 +1003,6 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "imported_post_read_only", http.StatusForbidden)
 		return
 	}
-	if !auth.PrincipalAllows(principal, postWriteScope(existing.Status)) {
-		a.writeError(w, r, "scope_required", http.StatusForbidden)
-		return
-	}
 	allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, existing.TeamID, domain.RoleEditor, domain.RoleOwner)
 	if err != nil || !allowed {
 		a.writeError(w, r, "forbidden", http.StatusForbidden)
@@ -999,6 +1012,75 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	var patch domain.UpdatePostPatch
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+		return
+	}
+
+	// The review-transition signal is exclusive: it must carry no content shape
+	// changes — the queue action only moves the review item out of the draft
+	// state, and the store guarantees (via the fast-path contract) that stored
+	// content is never replayed.
+	reviewComplete := patch.ReviewComplete.Set && patch.ReviewComplete.Value
+	if reviewComplete && (patch.Title.Set || patch.Content.Set || patch.Visibility.Set ||
+		patch.MediaIDs.Set || patch.MediaExcludeByAccount.Set || patch.TargetAccounts.Set ||
+		patch.AccountContentOverride.Set) {
+		a.writeError(w, r, "review_complete_exclusive", http.StatusBadRequest)
+		return
+	}
+	// review_complete always promotes draft → pending; Draft=true contradicts
+	// that and must never be allowed to keep the target-draft scope low, or a
+	// crafted patch could let a write:draft token promote a draft.
+	if reviewComplete && patch.Draft.Set && patch.Draft.Value {
+		a.writeError(w, r, "review_complete_draft_conflict", http.StatusBadRequest)
+		return
+	}
+	// review_complete must map to exactly one explicit action: either raw
+	// publish_now:true, or draft:false together with an explicitly supplied
+	// scheduled_at. Missing/incomplete/contradictory action fields are rejected
+	// before Prepare, so no implicit timestamp — e.g. the draft's possibly-past
+	// scheduled_at — can slip into an immediate publish without the explicit
+	// publish-now marker.
+	if reviewComplete {
+		hasPublishNow := patch.PublishNow.Set && patch.PublishNow.Value
+		hasSchedule := patch.ScheduledAt.Set && patch.Draft.Set && !patch.Draft.Value
+		switch {
+		case !hasPublishNow && !hasSchedule:
+			a.writeError(w, r, "review_complete_action_required", http.StatusBadRequest)
+			return
+		case hasPublishNow && patch.ScheduledAt.Set:
+			// publish_now is the only action in this request — an explicit
+			// scheduled_at alongside it is contradictory.
+			a.writeError(w, r, "review_complete_conflicting_action", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Publish-now is a request hint: schedule at the current time and clear
+	// draft. It must never resurrect a terminal post into an immediate publish.
+	publishNow := patch.PublishNow.Set && patch.PublishNow.Value
+	if publishNow {
+		if existing.Status == domain.PostStatusPosted || existing.Status == domain.PostStatusProcessing || existing.Status == domain.PostStatusCancelled {
+			a.writeError(w, r, "already_published", http.StatusConflict)
+			return
+		}
+		patch.ScheduledAt = domain.PatchField[time.Time]{Value: time.Now().UTC(), Set: true}
+		patch.Draft = domain.PatchField[bool]{Value: false, Set: true}
+	}
+
+	// Scope must cover the patch's TARGET draft state, not just the current one:
+	// a write:draft-only token must not promote a draft (publish_now or
+	// explicit un-draft), and write:schedule stays required once the post leaves
+	// the draft queue. review_complete unconditionally promotes (draft → pending)
+	// regardless of the patched Draft flag, so it always requires write:schedule.
+	targetDraft := existing.Status == domain.PostStatusDraft
+	if patch.Draft.Set {
+		targetDraft = patch.Draft.Value
+	}
+	required := postWriteScope(existing.Status)
+	if !targetDraft || reviewComplete {
+		required = auth.ScopeWriteSchedule
+	}
+	if !auth.PrincipalAllows(principal, required) {
+		a.writeError(w, r, "scope_required", http.StatusForbidden)
 		return
 	}
 
@@ -1015,8 +1097,11 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	// Targets must belong to the post's own team; the pipeline validates the
 	// patched post exactly as creation does.
-	prepared, err := a.posts.Prepare(r.Context(), existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft, RequireTeam: true})
+	prepared, err := a.posts.Prepare(r.Context(), existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft, RequireTeam: true, RejectPastScheduledAt: !publishNow})
 	if err != nil {
+		if a.postPrepareError(w, r, err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -1027,6 +1112,10 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	post, err := a.store.PatchScheduledPost(r.Context(), existing.TeamID, r.PathValue("postID"), patch)
 	if err != nil {
+		if errors.Is(err, domain.ErrReviewCompleteConflict) {
+			a.writeError(w, r, "review_conflict", http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

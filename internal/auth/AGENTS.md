@@ -22,6 +22,7 @@ Auth service in `auth.go`, feature flags in `feature_flags.go`, scopes in `scope
 - OIDC flow follows standard authorization code grant
 - Feature flags checked before new functionality
 - Scopes define granular permissions (read, write, admin)
+- Post updates enforce scope against the patch's TARGET state: a patch that publishes or schedules (moves the post out of draft) requires `write:schedule`, even when the post currently sits in draft as `write:draft`; a plain draft-save with `draft: true` stays on `write:draft`. The target state is derived before any `publish_now` resolution.
 - Bootstrap token generated on first run, single-use
 - JWT keyset refreshed from OIDC provider
 

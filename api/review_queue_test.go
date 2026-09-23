@@ -1,10 +1,12 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +61,59 @@ func TestReviewQueueListsAutomationDrafts(t *testing.T) {
 	}
 	if payload.Items[0].Content != "Draft from automation" {
 		t.Fatalf("content = %q", payload.Items[0].Content)
+	}
+}
+
+func TestAdminSeedE2EAccountCreatesUsableAccount(t *testing.T) {
+	ctx := context.Background()
+	s := newValidateE2EStore(t)
+	bearer, teamID, _, _ := seedValidateE2E(t, s)
+	h := validateE2EHandler(t, s)
+
+	body, _ := json.Marshal(map[string]any{"team_id": teamID})
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/e2e/account", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+bearer)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	accounts, err := s.ListTeamAccounts(ctx, teamID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, acc := range accounts {
+		if strings.HasPrefix(acc.Username, "e2e-") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("seeded account missing from team accounts: %#v", accounts)
+	}
+
+	// The seeded account must be usable as a real post target.
+	users, err := s.ListUsers(ctx)
+	if err != nil || len(users) == 0 {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	post, err := s.CreateScheduledPost(ctx, teamID, domain.AuthenticatedPrincipal{
+		User: domain.User{ID: users[0].ID},
+		Kind: "api_token",
+	}, domain.CreatePostInput{
+		Title:          "Targets seeded account",
+		Content:        "x",
+		ScheduledAt:    time.Now().UTC().Add(24 * time.Hour),
+		TargetAccounts: []string{accounts[0].ID},
+	})
+	if err != nil {
+		t.Fatalf("CreateScheduledPost with seeded account: %v", err)
+	}
+	if post.ID == "" {
+		t.Fatal("no post id")
 	}
 }
 

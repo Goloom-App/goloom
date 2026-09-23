@@ -13,6 +13,17 @@ var ErrProviderInstanceInUse = errors.New("provider instance still has connected
 // ErrProviderInstanceNotFound is returned when deleting a provider instance that does not exist.
 var ErrProviderInstanceNotFound = errors.New("provider instance not found")
 
+// ErrPastScheduledAt rejects scheduling a non-draft post in the past: the
+// scheduler publishes such posts immediately, so a request with a past
+// timestamp must fail instead of silently turning into an immediate publish.
+var ErrPastScheduledAt = errors.New("scheduled_at must be in the future")
+
+// ErrReviewCompleteConflict is returned when an explicit queue review-transition
+// (review_complete) targets a post that is no longer a draft — e.g. a composer
+// save scheduled it concurrently. The stale action must not overwrite the newer
+// state, so the caller gets a 409 conflict.
+var ErrReviewCompleteConflict = errors.New("post already left the review queue")
+
 // BootstrapAdminSubject is the fixed users.subject for the bootstrap / API-token administrator.
 const BootstrapAdminSubject = "local-admin"
 
@@ -1163,6 +1174,9 @@ type CreatePostInput struct {
 	MediaIDs              []string            `json:"media_ids,omitempty"`
 	MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account,omitempty"`
 	Draft                 bool                `json:"draft,omitempty"`
+	// PublishNow is a request hint (never persisted): schedule immediately at
+	// the current time and clear draft, bypassing the past-time guard.
+	PublishNow bool `json:"publish_now,omitempty"`
 	// AccountContentOverride allows per-account overrides for text validation and storage.
 	AccountContentOverride map[string]string `json:"account_content_override,omitempty"`
 	// UseVersions allows per-account content overrides to bypass global character limit validation.

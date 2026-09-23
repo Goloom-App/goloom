@@ -649,7 +649,8 @@
       "scheduleAt": "Planen am",
       "discard": "Verwerfen",
       "discardConfirm": "Diesen Entwurf verwerfen?",
-      "actionFailed": "Review-Aktion fehlgeschlagen."
+      "actionFailed": "Review-Aktion fehlgeschlagen.",
+      "pastTime": "Die gewählte Zeit liegt in der Vergangenheit. Korrigiere sie oder"
     },
     "automation": {
       "title": "Automation",
@@ -945,6 +946,8 @@
       "mediaForDestination": "Medien für dieses Ziel",
       "skipAttachmentHint": "Abwählen, um Anhang nur für dieses Konto zu überspringen.",
       "requiresMediaHint": "{{names}} benötigt mindestens ein Bild. Hänge Medien an, bevor du planst.",
+      "pastTimeHint": "Die geplante Zeit liegt in der Vergangenheit. Korrigiere sie oder",
+      "publishNow": "Jetzt veröffentlichen",
       "schedulePost": "Beitrag planen",
       "saveChanges": "Änderungen speichern",
       "saveDraft": "Entwurf speichern",
@@ -1159,6 +1162,8 @@
     "skip_blocked_posted": "Überspringen nicht möglich: Mindestens ein Beitrag in dieser oder einer späteren Folge ist bereits veröffentlicht oder wird veröffentlicht",
     "regenerate_no_posts": "Keine neu generierbaren Beiträge im Umfang gefunden",
     "invalid_regenerate_mode": "mode muss occurrence oder horizon sein",
-    "template_regenerate_not_available": "Neu-Generieren für Vorlagen ist nicht verfügbar"
+    "template_regenerate_not_available": "Neu-Generieren für Vorlagen ist nicht verfügbar",
+    "past_scheduled_at": "scheduled_at muss in der Zukunft liegen",
+    "already_published": "Beitrag ist bereits veröffentlicht oder abgebrochen"
   }
 }

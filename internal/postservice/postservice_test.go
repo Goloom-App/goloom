@@ -2,8 +2,10 @@ package postservice
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
@@ -120,6 +122,36 @@ func TestPrepare_RequireTeamRejectsEmpty(t *testing.T) {
 	// A mutating caller must not be able to persist with an inferred/empty team.
 	if _, err := s.Prepare(context.Background(), "", base("c", "bsky"), Options{RequireTeam: true}); err == nil {
 		t.Fatal("RequireTeam must reject an empty teamID")
+	}
+}
+
+func TestPrepare_RejectPastScheduledAt(t *testing.T) {
+	s := newService(acc("bsky", "bluesky", "team-1"))
+
+	in := base("short", "bsky")
+	in.ScheduledAt = time.Now().UTC().Add(-time.Hour)
+	if _, err := s.Prepare(context.Background(), "team-1", in, Options{RequireTeam: true, RejectPastScheduledAt: true}); !errors.Is(err, domain.ErrPastScheduledAt) {
+		t.Fatalf("past non-draft scheduled_at error = %v, want ErrPastScheduledAt", err)
+	}
+
+	// The validate preview (guard off) and drafts and publish_now requests stay
+	// exempt so the composer can still report limits and the review can publish.
+	if _, err := s.Prepare(context.Background(), "team-1", in, Options{RequireTeam: true}); err != nil {
+		t.Fatalf("preview must not reject past times: %v", err)
+	}
+	in.Draft = true
+	if _, err := s.Prepare(context.Background(), "team-1", in, Options{RequireTeam: true, RejectPastScheduledAt: true}); err != nil {
+		t.Fatalf("draft must be exempt from the past-time guard: %v", err)
+	}
+	in.Draft = false
+	in.PublishNow = true
+	if _, err := s.Prepare(context.Background(), "team-1", in, Options{RequireTeam: true, RejectPastScheduledAt: true}); err != nil {
+		t.Fatalf("publish_now must be exempt from the past-time guard: %v", err)
+	}
+	in.PublishNow = false
+	in.ScheduledAt = time.Now().UTC().Add(time.Hour)
+	if _, err := s.Prepare(context.Background(), "team-1", in, Options{RequireTeam: true, RejectPastScheduledAt: true}); err != nil {
+		t.Fatalf("future scheduled_at must pass: %v", err)
 	}
 }
 

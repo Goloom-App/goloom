@@ -299,7 +299,10 @@ paths:
             exist or belongs to another team, or a per-account override keyed by
             a non-target account.
         "422":
-          description: Content exceeds a destination's character limit (or omits required media)
+          description: >-
+            Content exceeds a destination's character limit (or omits required
+            media), or — for non-draft, non-publish_now requests — scheduled_at
+            is in the past (`X-Error-Code: past_scheduled_at`).
           content:
             application/json:
               schema:
@@ -363,6 +366,12 @@ paths:
                 $ref: "#/components/schemas/ScheduledPost"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "409":
+          description: >-
+            publish_now sent for a post that is already posted, processing, or
+            cancelled (`X-Error-Code: already_published`); or review_complete
+            for a post that already left the draft state
+            (`X-Error-Code: review_conflict`).
         "404":
           description: Post not found
     delete:
@@ -1325,6 +1334,14 @@ components:
           example: public
         draft:
           type: boolean
+          description: >-
+            When true, stores a draft (the past-time guard is skipped and the
+            post stays out of the scheduler).
+        publish_now:
+          type: boolean
+          description: >-
+            Request hint: publish immediately at the current time. The server
+            forces scheduled_at=now and clears draft; skipped for drafts.
         media_ids:
           type: array
           items:
@@ -1359,6 +1376,35 @@ components:
           type: string
         draft:
           type: boolean
+          description: >-
+            When true, stores a draft (the past-time guard is skipped and the
+            post stays out of the scheduler).
+        publish_now:
+          type: boolean
+          description: >-
+            Request hint: publish immediately at the current time. The server
+            forces scheduled_at=now and clears draft. Rejected with 409
+            (`already_published`) when the post is already posted, processing,
+            or cancelled. No other field is needed — the latest persisted
+            content is published.
+        review_complete:
+          type: boolean
+          description: >-
+            Explicit queue review-transition signal: moves a draft out of the
+            review queue atomically. Must map to exactly one explicit action —
+            either `publish_now: true`, or `draft: false` together with an
+            explicitly supplied `scheduled_at` — and must carry no
+            content/visibility/media/override changes; anything else (signal
+            alone, incomplete schedule, or a `scheduled_at` alongside
+            `publish_now`) is rejected with 400
+            (`review_complete_action_required` /
+            `review_complete_conflicting_action`), and `draft: true` is rejected
+            with 400 (`review_complete_draft_conflict`). Applies as a
+            status-guarded transition requiring `write:schedule` and is rejected
+            with 409 (`review_conflict`) when the post already left the draft
+            state — a stale queue action never overwrites newer (e.g.
+            composer-scheduled) state, and no implicit past timestamp is ever
+            published without the explicit publish-now marker.
         media_ids:
           type: array
           items:

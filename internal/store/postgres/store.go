@@ -1087,6 +1087,13 @@ func (s *Store) PatchScheduledPost(ctx context.Context, teamID, postID string, p
 		return domain.ScheduledPost{}, err
 	}
 	merged, flags := domain.ApplyPostPatch(existing, versions, patch)
+
+	// Explicit queue review-transition: applied as a status-guarded UPDATE so a
+	// stale action cannot transition a post that already left the draft state
+	// (e.g. a composer save scheduled it to pending with a newer timestamp).
+	if patch.ReviewComplete.Set && patch.ReviewComplete.Value {
+		return s.completeReview(ctx, teamID, postID, merged.ScheduledAt)
+	}
 	if !flags.Any() {
 		return existing, nil
 	}
@@ -1110,7 +1117,7 @@ func (s *Store) PatchScheduledPost(ctx context.Context, teamID, postID string, p
 			return domain.ScheduledPost{}, err
 		}
 		newStatus := domain.ResolvePostStatusOnUpdate(existing.Status, existing.Source, merged)
-		if flags.ScheduledAt && !flags.Title && !flags.Content && !flags.Visibility && !flags.MediaIDs && !flags.MediaExcludeByAccount && !flags.Draft {
+		if flags.ScheduledAt && !flags.Title && !flags.Content && !flags.Visibility && !flags.MediaIDs && !flags.MediaExcludeByAccount {
 			_, err = tx.Exec(ctx, `
 				update scheduled_posts
 				set scheduled_at = $1, status = $2, updated_at = now()
@@ -1160,6 +1167,38 @@ func (s *Store) PatchScheduledPost(ctx context.Context, teamID, postID string, p
 		}
 	}
 
+	if err := tx.Commit(ctx); err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	return s.GetScheduledPost(ctx, teamID, postID)
+}
+
+// completeReview applies the queue's explicit review-transition atomically: the
+// post may only leave the review queue while it is still a draft. The
+// status='draft' predicate makes the transition race-safe — if a concurrent
+// update (composer save, another queue action) already moved the post out of
+// draft, the UPDATE touches zero rows and the stale action fails with a
+// conflict instead of overwriting the newer state. Only scheduled_at and status
+// are written; content/visibility/media are never replayed.
+func (s *Store) completeReview(ctx context.Context, teamID, postID string, scheduledAt time.Time) (domain.ScheduledPost, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	res, err := tx.Exec(ctx, `
+		update scheduled_posts
+		set scheduled_at = $1, status = $2, updated_at = now()
+		where id = $3 and team_id = $4 and status = $5`,
+		scheduledAt, domain.PostStatusPending, postID, teamID, domain.PostStatusDraft,
+	)
+	if err != nil {
+		return domain.ScheduledPost{}, err
+	}
+	if res.RowsAffected() == 0 {
+		return domain.ScheduledPost{}, domain.ErrReviewCompleteConflict
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return domain.ScheduledPost{}, err
 	}
