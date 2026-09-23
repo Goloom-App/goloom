@@ -12,7 +12,7 @@ require (
 	github.com/mmcdole/gofeed v1.4.2
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/rivo/uniseg v0.4.7
-	golang.org/x/oauth2 v0.36.0
+	golang.org/x/oauth2 v0.37.0
 	golang.org/x/time v0.15.0
 	modernc.org/sqlite v1.59.0
 )
