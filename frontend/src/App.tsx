@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { addHours, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
@@ -42,6 +43,7 @@ import { useIsMobile, useResolvedTheme } from './hooks/useTheme'
 import {
   ApiError,
   createApiClient,
+  isPastScheduleError,
   requestAuthStatus,
   requestStartOIDCLogin,
   requestVersionInfo,
@@ -136,6 +138,10 @@ function App() {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [composerMode, setComposerMode] = useState<'create' | 'edit'>('create')
   const [editorDraft, setEditorDraft] = useState<EditorDraftState>(() => defaultEditorDraft(currentDate, []))
+  // Set when a save attempt failed because the scheduled time is in the past;
+  // PostComposer shows a "Publish now" offer instead of hiding the failure.
+  const [composerScheduleError, setComposerScheduleError] = useState(false)
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   // True once the first dashboard load delivered team data; gates onboarding.
   const [dashboardReady, setDashboardReady] = useState(false)
@@ -989,7 +995,7 @@ function App() {
     }
   }, [api, previewPostForMetrics])
 
-  async function runAction(work: () => Promise<void>, successMessage: string) {
+  async function runAction(work: () => Promise<void>, successMessage: string, onError?: (err: Error) => void) {
     setSyncing(true)
     setError(null)
     setStatusMessage(null)
@@ -999,6 +1005,9 @@ function App() {
     } catch (cause) {
       const raw = cause instanceof Error ? cause.message : t('auth.signInFailed')
       setError(translateApiError(raw, t))
+      if (onError && cause instanceof Error) {
+        onError(cause)
+      }
     } finally {
       setSyncing(false)
     }
@@ -1008,6 +1017,7 @@ function App() {
     prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
     setComposerMode('create')
     setEditingPostId(null)
+    setComposerScheduleError(false)
     setEditorDraft(defaultEditorDraft(currentDate, teamAccounts))
     setMobilePreviewPostId(null)
     setSection('composer')
@@ -1021,6 +1031,7 @@ function App() {
     scheduledAt?: string
   }) {
     const baseDraft = defaultEditorDraft(currentDate, teamAccounts)
+    setComposerScheduleError(false)
     setEditorDraft({
       title: payload.title?.trim() ?? '',
       content: payload.content,
@@ -1063,6 +1074,7 @@ function App() {
     if (!targetPost || targetPost.source === 'imported') {
       return
     }
+    setComposerScheduleError(false)
     let accountContentOverride: Record<string, string> = {}
     if (api) {
       try {
@@ -1546,7 +1558,7 @@ function App() {
     }, expired ? t('status.tokenDeleted') : t('status.apiTokenRevoked'))
   }
 
-  async function handleSavePost() {
+  async function handleSavePost(publishNow = false) {
     if (!api || !selectedTeam) {
       return
     }
@@ -1564,34 +1576,46 @@ function App() {
       }
     }
 
-    await runAction(async () => {
-      const mediaExclude = buildMediaExcludePayload(editorDraft.mediaExcludeByAccount, editorDraft.targetAccountIds, editorDraft.mediaIds)
-      const payload = {
-        title: editorDraft.title.trim(),
-        content: defaultContent,
-        scheduled_at: new Date(editorDraft.scheduledAt).toISOString(),
-        target_accounts: editorDraft.targetAccountIds,
-        media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
-        media_exclude_by_account: mediaExclude,
-        account_content_override: accountContentOverrideForSave(editorDraft),
-        draft: false,
-      }
+    setComposerScheduleError(false)
+    await runAction(
+      async () => {
+        const mediaExclude = buildMediaExcludePayload(editorDraft.mediaExcludeByAccount, editorDraft.targetAccountIds, editorDraft.mediaIds)
+        const payload = {
+          title: editorDraft.title.trim(),
+          content: defaultContent,
+          scheduled_at: new Date(editorDraft.scheduledAt).toISOString(),
+          target_accounts: editorDraft.targetAccountIds,
+          media_ids: editorDraft.mediaIds.length > 0 ? editorDraft.mediaIds : undefined,
+          media_exclude_by_account: mediaExclude,
+          account_content_override: accountContentOverrideForSave(editorDraft),
+          draft: false,
+          publish_now: publishNow || undefined,
+        }
 
-      if (composerMode === 'edit' && editTargetPost) {
-        await api.updatePost(selectedTeam.id, editTargetPost.id, payload)
-      } else {
-        await api.createPost(selectedTeam.id, payload)
-      }
+        if (composerMode === 'edit' && editTargetPost) {
+          await api.updatePost(selectedTeam.id, editTargetPost.id, payload)
+        } else {
+          await api.createPost(selectedTeam.id, payload)
+        }
 
-      closeComposer()
-      await loadDashboard({ silent: true })
-    }, composerMode === 'edit' ? t('status.postUpdated') : t('status.postScheduled'))
+        queryClient.invalidateQueries({ queryKey: ['team', selectedTeam.id, 'review-queue'] })
+        closeComposer()
+        await loadDashboard({ silent: true })
+      },
+      composerMode === 'edit' ? t('status.postUpdated') : t('status.postScheduled'),
+      (err) => {
+        if (isPastScheduleError(err)) {
+          setComposerScheduleError(true)
+        }
+      },
+    )
   }
 
   async function handleSaveDraft() {
     if (!api || !selectedTeam) {
       return
     }
+    setComposerScheduleError(false)
     await runAction(async () => {
       const defaultContent = editorDraft.content
       const mediaExclude = buildMediaExcludePayload(editorDraft.mediaExcludeByAccount, editorDraft.targetAccountIds, editorDraft.mediaIds)
@@ -1927,6 +1951,12 @@ function App() {
             syncing={syncing}
             onSave={() => void handleSavePost()}
             onSaveDraft={() => void handleSaveDraft()}
+            scheduleError={composerScheduleError}
+            onPublishNow={() => void handleSavePost(true)}
+            onScheduleDraftTime={(time) => {
+              setEditorDraft((prev) => ({ ...prev, scheduledAt: time }))
+              setComposerScheduleError(false)
+            }}
             onClose={closeComposer}
             teamId={selectedTeam?.id}
             api={api ?? undefined}
@@ -2038,24 +2068,27 @@ function App() {
             }}
             onEdit={openEditor}
             onPublishNow={async (item) => {
+              // Explicit review-transition: minimal patch carrying the
+              // review_complete signal — never resend stale edited content. The
+              // backend forces scheduled_at=now, atomically transitions the
+              // draft to pending and the scheduler publishes the latest
+              // persisted content; a post that already left the review queue
+              // conflicts instead of being overwritten.
               await api.updatePost(selectedTeam.id, item.id, {
-                title: item.title,
-                content: item.content,
-                scheduled_at: new Date().toISOString(),
-                target_accounts: item.targetAccountIds,
-                draft: false,
+                publish_now: true,
+                review_complete: true,
               })
+              queryClient.invalidateQueries({ queryKey: ['team', selectedTeam.id, 'review-queue'] })
               await loadDashboard({ silent: true })
               setStatusMessage(t('review.publishNow'))
             }}
             onSchedule={async (item, scheduledAt) => {
               await api.updatePost(selectedTeam.id, item.id, {
-                title: item.title,
-                content: item.content,
                 scheduled_at: scheduledAt,
-                target_accounts: item.targetAccountIds,
                 draft: false,
+                review_complete: true,
               })
+              queryClient.invalidateQueries({ queryKey: ['team', selectedTeam.id, 'review-queue'] })
               await loadDashboard({ silent: true })
               setStatusMessage(t('review.schedule'))
             }}

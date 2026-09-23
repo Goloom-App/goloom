@@ -141,7 +141,7 @@ func coreSchedulePost(ctx context.Context, d Deps, inv Invocation, in SchedulePo
 		TargetAccounts:         in.TargetAccounts,
 		Visibility:             in.Visibility,
 		AccountContentOverride: in.AccountContentOverride,
-	}, postservice.Options{CheckLimits: true, RequireTeam: true})
+	}, postservice.Options{CheckLimits: true, RequireTeam: true, RejectPastScheduledAt: true})
 	if err != nil {
 		return SchedulePostOutput{}, err
 	}
@@ -247,7 +247,7 @@ func coreModifyPost(ctx context.Context, d Deps, inv Invocation, in ModifyPostIn
 		merged.AccountContentOverride = in.AccountContentOverride
 	}
 
-	prepared, err := d.Posts.Prepare(ctx, existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft, RequireTeam: true})
+	prepared, err := d.Posts.Prepare(ctx, existing.TeamID, merged, postservice.Options{CheckLimits: !merged.Draft, RequireTeam: true, RejectPastScheduledAt: true})
 	if err != nil {
 		return ModifyPostOutput{}, err
 	}

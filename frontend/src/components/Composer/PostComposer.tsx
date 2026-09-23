@@ -52,6 +52,9 @@ export function PostComposer({
   isAiEnabled = false,
   standalone,
   previewColumnExternal,
+  scheduleError = false,
+  onPublishNow,
+  onScheduleDraftTime,
 }: {
   open: boolean
   mode: 'create' | 'edit'
@@ -73,6 +76,12 @@ export function PostComposer({
   isAiEnabled?: boolean
   standalone?: boolean
   previewColumnExternal?: boolean
+  /** True when the last save attempt was rejected because the scheduled time is in the past. */
+  scheduleError?: boolean
+  /** Publish immediately at the current time, bypassing the past-time rejection. */
+  onPublishNow?: () => void | Promise<void>
+  /** Called when the user picks a new schedule time (clears the past-time error). */
+  onScheduleDraftTime?: (time: string) => void
 }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
@@ -543,7 +552,11 @@ export function PostComposer({
             <input
               type="datetime-local"
               value={draft.scheduledAt}
-              onChange={(event) => setDraft((current) => ({ ...current, scheduledAt: event.target.value }))}
+              onChange={(event) => {
+                const next = event.target.value
+                setDraft((current) => ({ ...current, scheduledAt: next }))
+                onScheduleDraftTime?.(next)
+              }}
             />
           </label>
 
@@ -552,7 +565,10 @@ export function PostComposer({
               teamId={teamId}
               api={api}
               scheduledAt={draft.scheduledAt}
-              setScheduledAt={(v) => setDraft((c) => ({ ...c, scheduledAt: v }))}
+              setScheduledAt={(v) => {
+                setDraft((c) => ({ ...c, scheduledAt: v }))
+                onScheduleDraftTime?.(v)
+              }}
               schedulingPreferences={schedulingPreferences ?? undefined}
             />
           ) : null}
@@ -562,6 +578,23 @@ export function PostComposer({
               {t('composer.requiresMediaHint', {
                 names: missingMediaAccounts.map((a) => a.name).join(', '),
               })}
+            </p>
+          ) : null}
+
+          {scheduleError ? (
+            <p className="hint composer-past-warning" data-testid="composer-past-warning">
+              {t('composer.pastTimeHint')}
+              {onPublishNow ? (
+                <button
+                  type="button"
+                  className="inline-link"
+                  disabled={syncing}
+                  onClick={() => void onPublishNow()}
+                  data-testid="composer-publish-now"
+                >
+                  {t('composer.publishNow')}
+                </button>
+              ) : null}
             </p>
           ) : null}
 

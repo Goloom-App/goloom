@@ -2,6 +2,7 @@ package agenttools
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -260,7 +261,9 @@ func TestGetAnalyticsTimeslotsCore(t *testing.T) {
 	principal := f.principal(t, `["read"]`)
 	inv := Invocation{Principal: principal, Transport: TransportMCP}
 
-	mon := time.Date(2026, 6, 8, 10, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+	mon := now.AddDate(0, 0, -int(now.Weekday()+6)%7)
+	mon = time.Date(mon.Year(), mon.Month(), mon.Day(), 10, 0, 0, 0, time.UTC)
 	for i, likes := range []int64{8, 4} {
 		post, err := f.store.CreateScheduledPost(bg(), f.team.ID, principal, domain.CreatePostInput{
 			Content: "x", ScheduledAt: mon.Add(time.Duration(i) * time.Minute), TargetAccounts: []string{f.account.ID},
@@ -371,6 +374,24 @@ func TestGetMetricHistoryCore(t *testing.T) {
 
 	if _, err := coreGetMetricHistory(bg(), f.deps, inv, GetMetricHistoryInput{TeamID: f.team.ID}); err == nil {
 		t.Fatal("empty metric must error")
+	}
+}
+
+func TestSchedulePost_RejectsPastTime(t *testing.T) {
+	f := newFixture(t)
+	inv := f.inv(t, `["write"]`)
+	bsky := f.blueskyAccount(t)
+
+	if _, err := coreSchedulePost(bg(), f.deps, inv, SchedulePostInput{
+		TeamID: f.team.ID, Title: "test", Content: "body",
+		ScheduledAt:    time.Now().UTC().Add(-time.Hour).Format(time.RFC3339),
+		TargetAccounts: []string{bsky.ID},
+	}); err == nil || !errors.Is(err, domain.ErrPastScheduledAt) {
+		t.Fatalf("past scheduled_at error = %v, want ErrPastScheduledAt", err)
+	}
+	posts, _ := f.store.ListTeamPosts(bg(), f.team.ID)
+	if len(posts) != 0 {
+		t.Fatalf("no post must be saved for a past time, got %d", len(posts))
 	}
 }
 

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -60,4 +61,44 @@ func (a *API) handleAdminSeedAutomationDraft(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	auth.WriteJSON(w, http.StatusCreated, post)
+}
+
+type adminSeedE2EAccountRequest struct {
+	TeamID string `json:"team_id"`
+}
+
+// handleAdminSeedE2EAccount creates a fake connected account on the team so
+// queue/composer E2E specs can save a post targeting a real account id, without
+// a network call to the provider (admin / E2E only).
+func (a *API) handleAdminSeedE2EAccount(w http.ResponseWriter, r *http.Request) {
+	principal, err := a.auth.CurrentPrincipal(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if !principal.User.IsAdmin {
+		a.writeError(w, r, "forbidden", http.StatusForbidden)
+		return
+	}
+	var input adminSeedE2EAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+		return
+	}
+	if input.TeamID == "" {
+		a.writeError(w, r, "team_id_required", http.StatusBadRequest)
+		return
+	}
+	account, err := a.store.CreateAccount(r.Context(), input.TeamID, domain.ConnectedAccount{
+		Provider:     "mastodon",
+		AuthType:     domain.AccountAuthTypeOAuthToken,
+		InstanceURL:  "https://e2e.invalid",
+		Username:     fmt.Sprintf("e2e-%d", time.Now().UnixNano()),
+		AccessToken:  "e2e-token",
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	auth.WriteJSON(w, http.StatusCreated, account)
 }

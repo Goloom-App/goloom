@@ -121,7 +121,10 @@ func (c *Catalog) Message(lang, key string) string {
 	return key
 }
 
-// WriteError writes a localized plain-text HTTP error body.
+// WriteError writes a localized plain-text HTTP error body. The machine-readable
+// key is mirrored onto the X-Error-Code header so clients can branch on the
+// error (e.g. to offer a corrective action) without parsing localized text.
 func (c *Catalog) WriteError(w http.ResponseWriter, r *http.Request, key string, status int) {
+	w.Header().Set("X-Error-Code", key)
 	http.Error(w, c.Message(LanguageFromRequest(r), key), status)
 }

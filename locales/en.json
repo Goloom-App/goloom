@@ -649,7 +649,8 @@
       "scheduleAt": "Schedule at",
       "discard": "Discard",
       "discardConfirm": "Discard this draft?",
-      "actionFailed": "Review action failed."
+      "actionFailed": "Review action failed.",
+      "pastTime": "The chosen time is in the past. Adjust it or"
     },
     "automation": {
       "title": "Automation",
@@ -953,6 +954,8 @@
       "mediaForDestination": "Media for this destination",
       "skipAttachmentHint": "Uncheck to skip an attachment only for this account.",
       "requiresMediaHint": "{{names}} requires at least one image. Attach media before scheduling.",
+      "pastTimeHint": "The scheduled time is in the past. Adjust it or",
+      "publishNow": "Publish now",
       "schedulePost": "Schedule post",
       "saveChanges": "Save changes",
       "saveDraft": "Save draft",
@@ -1159,6 +1162,8 @@
     "skip_blocked_posted": "Cannot skip: one or more posts in this round or a later one are already published or publishing",
     "regenerate_no_posts": "No regenerable posts found in scope",
     "invalid_regenerate_mode": "mode must be occurrence or horizon",
-    "template_regenerate_not_available": "template regenerate is not available"
+    "template_regenerate_not_available": "template regenerate is not available",
+    "past_scheduled_at": "scheduled_at must be in the future",
+    "already_published": "post is already published or cancelled"
   }
 }

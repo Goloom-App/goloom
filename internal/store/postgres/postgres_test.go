@@ -386,7 +386,8 @@ func TestPostgres_ListTeamPostEngagement(t *testing.T) {
 		}
 	}
 
-	mon := time.Date(2026, 6, 8, 10, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
+	mon := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, time.UTC).AddDate(0, 0, -3)
 	newPosted(mon, masto, 12)
 	newPosted(mon.AddDate(0, 0, 1), bsky, 5)
 

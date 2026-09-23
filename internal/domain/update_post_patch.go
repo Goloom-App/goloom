@@ -16,6 +16,16 @@ type UpdatePostPatch struct {
 	MediaExcludeByAccount  PatchField[map[string][]string] `json:"media_exclude_by_account"`
 	AccountContentOverride PatchField[map[string]string]   `json:"account_content_override"`
 	Draft                  PatchField[bool]                `json:"draft"`
+	// PublishNow is a request hint (never persisted): schedule immediately at
+	// the current time and clear draft, bypassing the past-time guard.
+	PublishNow PatchField[bool] `json:"publish_now"`
+	// ReviewComplete is the explicit queue review-transition signal (never
+	// persisted): the caller asserts the post is still a draft and moves it out
+	// of the review queue atomically (publish-now or to the patched
+	// scheduled_at). The store applies it as a status='draft' guarded UPDATE and
+	// returns a conflict when the post already left the draft state, so a stale
+	// queue action can never overwrite a newer (e.g. composer-scheduled) state.
+	ReviewComplete PatchField[bool] `json:"review_complete"`
 }
 
 // PostPatchFieldsSet records which logical groups should be written to storage.
@@ -92,6 +102,9 @@ func ApplyPostPatch(existing ScheduledPost, versions []PostVersion, patch Update
 	if patch.Draft.Set {
 		merged.Draft = patch.Draft.Value
 		flags.Draft = true
+	}
+	if patch.PublishNow.Set {
+		merged.PublishNow = patch.PublishNow.Value
 	}
 
 	if patch.AccountContentOverride.Set {

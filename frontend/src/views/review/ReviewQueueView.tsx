@@ -27,6 +27,10 @@ function toInputDateTime(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function nowMillis() {
+  return Date.now()
+}
+
 export function ReviewQueueView({
   team,
   accounts,
@@ -43,6 +47,7 @@ export function ReviewQueueView({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [scheduleAt, setScheduleAt] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+  const now = nowMillis()
 
   if (isLoading) {
     return <p className="hint">{t('review.loading')}</p>
@@ -76,7 +81,13 @@ export function ReviewQueueView({
         </p>
       ) : (
         <div className="stack stack--sm">
-          {items.map((item) => (
+          {items.map((item) => {
+            const inputValue = scheduleAt[item.id] ?? toInputDateTime(item.scheduledAt)
+            // Derived from the displayed input so an already-past suggestion
+            // shows the warning immediately on load, not only after a change.
+            const asDate = new Date(inputValue).getTime()
+            const isPast = !asDate || asDate <= now
+            return (
             <article
               key={item.id}
               className={`review-card glass-panel glass-panel--compact ${selectedPostId === item.id ? 'review-card--selected' : ''}`}
@@ -135,7 +146,8 @@ export function ReviewQueueView({
                         <input
                           type="datetime-local"
                           data-testid="review-schedule-at"
-                          value={scheduleAt[item.id] ?? toInputDateTime(item.scheduledAt)}
+                          className={isPast ? 'review-card__schedule-input--past' : ''}
+                          value={inputValue}
                           onChange={(e) => setScheduleAt((prev) => ({ ...prev, [item.id]: e.target.value }))}
                         />
                       </label>
@@ -143,16 +155,28 @@ export function ReviewQueueView({
                         type="button"
                         className="btn btn--secondary btn--sm"
                         data-testid="review-schedule"
-                        disabled={busyId === item.id}
+                        disabled={busyId === item.id || isPast}
                         onClick={() =>
-                          handle(item.id, () =>
-                            onSchedule(item, new Date(scheduleAt[item.id] ?? toInputDateTime(item.scheduledAt)).toISOString()),
-                          )
+                          handle(item.id, () => onSchedule(item, new Date(inputValue).toISOString()))
                         }
                       >
                         {t('review.schedule')}
                       </button>
                     </span>
+                    {isPast ? (
+                      <span className="review-card__past-warning" data-testid="review-past-warning">
+                        {t('review.pastTime')}
+                        <button
+                          type="button"
+                          className="inline-link"
+                          data-testid="review-past-publish-now"
+                          disabled={busyId === item.id}
+                          onClick={() => handle(item.id, () => onPublishNow(item))}
+                        >
+                          {t('review.publishNow')}
+                        </button>
+                      </span>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn--primary btn--sm"
@@ -178,7 +202,8 @@ export function ReviewQueueView({
                 ) : null}
               </div>
             </article>
-          ))}
+            )
+          })}
         </div>
       )}
       </SectionCard>

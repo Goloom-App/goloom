@@ -771,6 +771,20 @@ body,
   font-weight: 600;
 }
 
+.composer-past-warning {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  margin: 0;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.composer-past-warning .inline-link {
+  font-weight: 600;
+}
+
 .composer-tabs--mobile {
   flex-shrink: 0;
   margin: 0 calc(-1 * var(--space-4));
@@ -3070,6 +3084,23 @@ select {
 
 .review-card__discard {
   color: var(--danger);
+}
+
+.review-card__schedule-input--past {
+  border-color: var(--danger);
+}
+
+.review-card__past-warning {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.review-card__past-warning .inline-link {
+  font-weight: 600;
 }
 
 .post-card__header {

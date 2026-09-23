@@ -20,7 +20,7 @@ func TestHandleUpdatePost_PartialScheduledAt_Persists(t *testing.T) {
 	h := analyticsTestHandler(t, s)
 
 	ctx := context.Background()
-	when := time.Date(2026, 6, 10, 14, 30, 0, 0, time.UTC)
+	when := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
 	u, _ := s.UpsertOIDCUser(ctx, "patch-http", "ph@x", "PH")
 	principal := domain.AuthenticatedPrincipal{User: u}
 	post, err := s.CreateScheduledPost(ctx, teamID, principal, domain.CreatePostInput{
@@ -30,7 +30,7 @@ func TestHandleUpdatePost_PartialScheduledAt_Persists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newWhen := time.Date(2026, 6, 15, 14, 30, 0, 0, time.UTC)
+	newWhen := time.Now().UTC().Add(72 * time.Hour).Truncate(time.Second)
 	body, _ := json.Marshal(map[string]string{
 		"scheduled_at": newWhen.Format(time.RFC3339),
 	})

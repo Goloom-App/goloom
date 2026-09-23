@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/postvalidate"
@@ -45,6 +46,14 @@ type Options struct {
 	// read-only validate preview leaves it false to allow team inference from
 	// the destinations.
 	RequireTeam bool
+	// RejectPastScheduledAt fails a non-draft post whose scheduled time is not
+	// strictly in the future, so an interactive request cannot turn into an
+	// immediate publish. Mutating callers (create/update/schedule) set it; the
+	// validate preview leaves it false so the composer can still report
+	// per-destination limits without a hard failure, and automation paths that
+	// legitimately publish at the current time bypass Prepare entirely.
+	// Drafts and publish_now requests are always exempt.
+	RejectPastScheduledAt bool
 }
 
 // Result is the outcome of Prepare.
@@ -84,6 +93,10 @@ func (s *Service) Prepare(ctx context.Context, teamID string, input domain.Creat
 	input.Normalize()
 	if err := input.Validate(); err != nil {
 		return Result{}, err
+	}
+
+	if opts.RejectPastScheduledAt && !input.Draft && !input.PublishNow && !input.ScheduledAt.After(time.Now()) {
+		return Result{}, domain.ErrPastScheduledAt
 	}
 
 	accounts, effectiveTeam, err := s.ResolveTargets(ctx, teamID, input.TargetAccounts, rawOverrideKeys)

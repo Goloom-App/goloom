@@ -8,12 +8,20 @@ export interface ApiClientOptions {
 
 export class ApiError extends Error {
   status: number
+  /** Machine-readable backend error key (X-Error-Code header), e.g. "past_scheduled_at". */
+  code?: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
+}
+
+/** True when the backend rejected a scheduled time as being in the past. */
+export function isPastScheduleError(err: unknown): boolean {
+  return err instanceof ApiError && err.code === 'past_scheduled_at'
 }
 
 export interface BackendUser {
@@ -600,9 +608,11 @@ async function request<T>(options: ApiClientOptions, path: string, init?: Reques
         message = i18n.t('common.rateLimit')
       }
     }
+    const errorCode = response.headers.get('X-Error-Code') ?? undefined
     throw new ApiError(
       response.status,
       message || i18n.t('common.requestFailed', { status: response.status }),
+      errorCode,
     )
   }
   if (response.status === 204) {
@@ -947,6 +957,8 @@ export function createApiClient(options: ApiClientOptions) {
         media_exclude_by_account?: Record<string, string[]>
         account_content_override?: Record<string, string>
         draft?: boolean
+        /** Request hint: schedule immediately at the current time (bypasses the past-time guard). */
+        publish_now?: boolean
       },
     ) {
       return request<BackendPost>(options, `/v1/teams/${teamID}/posts`, {
@@ -967,6 +979,10 @@ export function createApiClient(options: ApiClientOptions) {
         media_exclude_by_account?: Record<string, string[]>
         account_content_override?: Record<string, string>
         draft?: boolean
+        /** Request hint: schedule immediately at the current time (bypasses the past-time guard). */
+        publish_now?: boolean
+        /** Explicit queue review-transition: moves a draft out of the review queue atomically (conflicts if it already left). */
+        review_complete?: boolean
       },
     ) {
       return request<BackendPost>(options, `/v1/teams/${teamID}/posts/${postID}`, {
