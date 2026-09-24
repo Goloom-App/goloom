@@ -1,6 +1,6 @@
 module git.f4mily.net/goloom
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
