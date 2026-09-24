@@ -71,6 +71,7 @@ func (a *API) createRSSAutomationPost(
 	if err != nil {
 		return
 	}
+	a.notifyReviewCreated(ctx, job.TeamID, post)
 	_ = a.store.UpdateRSSImportedItemPostID(ctx, meta.FeedID, meta.ItemKey, post.ID)
 	_ = a.store.IncrementRSSFeedCounter(ctx, meta.FeedID)
 }

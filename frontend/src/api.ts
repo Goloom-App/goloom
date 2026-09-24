@@ -509,6 +509,31 @@ export interface BackendReviewQueueItem extends BackendPost {
   rss_feed_name?: string
 }
 
+export interface BackendPushSubscription {
+  id: string
+  user_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface BackendTeamNotificationPref {
+  user_id: string
+  team_id: string
+  team_name?: string
+  enabled: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+export interface BackendReviewCounts {
+  total: number
+  by_team: Record<string, number>
+}
+
 export interface BackendRSSFeedConfig {
   id: string
   team_id: string
@@ -1530,6 +1555,59 @@ export function createApiClient(options: ApiClientOptions) {
     },
     listReviewQueue(teamID: string) {
       return request<{ items: BackendReviewQueueItem[] }>(options, `/v1/teams/${teamID}/review-queue`, {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    getMyVAPIDPublicKey() {
+      return request<{ public_key: string }>(options, '/v1/me/push/vapid-key', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    listMyPushSubscriptions() {
+      return request<{ items: BackendPushSubscription[] }>(options, '/v1/me/push-subscriptions', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    createMyPushSubscription(endpoint: string, keys: { p256dh: string; auth: string }) {
+      return request<{ item: BackendPushSubscription }>(options, '/v1/me/push-subscriptions', {
+        method: 'POST',
+        headers: buildHeaders(options.token, true),
+        body: JSON.stringify({ endpoint, keys }),
+      })
+    },
+    updateMyPushSubscription(subID: string, payload: { enabled: boolean }) {
+      return request<{ item: BackendPushSubscription }>(options, `/v1/me/push-subscriptions/${subID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token, true),
+        body: JSON.stringify(payload),
+      })
+    },
+    deleteMyPushSubscription(subID: string) {
+      return request<void>(options, `/v1/me/push-subscriptions/${subID}`, {
+        method: 'DELETE',
+        headers: buildHeaders(options.token, true),
+      })
+    },
+    sendMyPushTest(subID: string) {
+      return request<void>(options, `/v1/me/push-subscriptions/${subID}/test`, {
+        method: 'POST',
+        headers: buildHeaders(options.token, true),
+      })
+    },
+    listMyTeamNotificationPrefs() {
+      return request<{ items: BackendTeamNotificationPref[] }>(options, '/v1/me/team-notification-prefs', {
+        headers: buildHeaders(options.token, false),
+      })
+    },
+    setMyTeamNotificationPref(teamID: string, enabled: boolean) {
+      return request<{ item: BackendTeamNotificationPref }>(options, `/v1/me/team-notification-prefs/${teamID}`, {
+        method: 'PATCH',
+        headers: buildHeaders(options.token, true),
+        body: JSON.stringify({ enabled }),
+      })
+    },
+    myReviewCounts() {
+      return request<{ total: number; by_team: Record<string, number> }>(options, '/v1/me/review-counts', {
         headers: buildHeaders(options.token, false),
       })
     },

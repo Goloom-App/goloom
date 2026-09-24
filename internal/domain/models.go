@@ -24,6 +24,13 @@ var ErrPastScheduledAt = errors.New("scheduled_at must be in the future")
 // state, so the caller gets a 409 conflict.
 var ErrReviewCompleteConflict = errors.New("post already left the review queue")
 
+// ErrPushSubscriptionNotFound is returned when a push subscription does not
+// exist for the requesting user (or at all).
+var ErrPushSubscriptionNotFound = errors.New("push subscription not found")
+
+// ErrVAPIDKeysNotSet is returned when no VAPID key pair has been persisted yet.
+var ErrVAPIDKeysNotSet = errors.New("vapid keys not set")
+
 // BootstrapAdminSubject is the fixed users.subject for the bootstrap / API-token administrator.
 const BootstrapAdminSubject = "local-admin"
 
@@ -563,6 +570,41 @@ type TeamMembership struct {
 	TeamID    string    `json:"team_id"`
 	Role      TeamRole  `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// PushSubscription is a standards-based Web Push subscription registered for a
+// single authenticated user on a single device. Enabled is the per-device
+// master switch: when false, no notification is delivered to this device.
+type PushSubscription struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Endpoint  string    `json:"endpoint"`
+	P256dh    string    `json:"p256dh"`
+	Auth      string    `json:"auth"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// TeamNotificationPref is the per-user opt-in for review notifications of one
+// team. Only teams where the user holds the owner or editor role are eligible;
+// a missing row is treated as "enabled by default".
+type TeamNotificationPref struct {
+	UserID    string    `json:"user_id"`
+	TeamID    string    `json:"team_id"`
+	TeamName  string    `json:"team_name,omitempty"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// VAPIDKeys is the persisted application-server key pair (RFC 8292) used to
+// authorize Web Push deliveries. It is stored as a single row so a server
+// restart does not invalidate previously registered device subscriptions.
+type VAPIDKeys struct {
+	PublicKey  string    `json:"public_key"`
+	PrivateKey string    `json:"private_key"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type SocialAccount struct {

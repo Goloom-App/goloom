@@ -60,6 +60,7 @@ func (a *API) handleAdminSeedAutomationDraft(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.notifyReviewCreated(r.Context(), input.TeamID, post)
 	auth.WriteJSON(w, http.StatusCreated, post)
 }
 

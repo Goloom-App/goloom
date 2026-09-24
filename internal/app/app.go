@@ -150,7 +150,6 @@ func Run(ctx context.Context) error {
 		cfg.SchedulerRSSImportInterval,
 		jobManager,
 	)
-	go schedulerService.Start(ctx)
 
 	catalog, err := i18n.Load()
 	if err != nil {
@@ -160,6 +159,11 @@ func Run(ctx context.Context) error {
 	sseHub := sse.NewHub()
 	defer sseHub.Close()
 	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog, jobManager, sseHub)
+
+	// Review notifications: the scheduler shares the API's Web Push sender.
+	// Started only after wiring so no automation post races the missing sender.
+	schedulerService.SetPushSender(apiHandler.PushSender())
+	go schedulerService.Start(ctx)
 
 	// Update check: one server-side, cached lookup instead of every browser
 	// reaching out to GitHub. Opt-out via UPDATE_CHECK_ENABLED=false.
