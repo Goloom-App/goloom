@@ -59,6 +59,14 @@ type Config struct {
 	MCPEnabled            bool
 	MCPRateLimitPerMinute int
 
+	// Web Push (RFC 8030) VAPID configuration. When public/private keys are
+	// left empty a key pair is generated once and persisted server-side, so
+	// existing subscriptions survive restarts. VAPIDSubject is the contact
+	// (mailto: URL) announced to push services.
+	VAPIDSubject    string
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+
 	// UpdateCheckEnabled controls whether the server periodically queries GitHub
 	// for the latest goloom release to surface an update hint in the UI. Disable
 	// it to avoid any outbound "phone home" on self-hosted, air-gapped setups.
@@ -103,6 +111,9 @@ func Load() (Config, error) {
 		MCPRateLimitPerMinute:            getInt("MCP_RATE_LIMIT_PER_MINUTE", 60),
 		UpdateCheckEnabled:               parseBoolEnv("UPDATE_CHECK_ENABLED", true),
 		UpdateCheckInterval:              getDuration("UPDATE_CHECK_INTERVAL", 24*time.Hour),
+		VAPIDSubject:                     getEnv("VAPID_SUBJECT", ""),
+		VAPIDPublicKey:                   strings.TrimSpace(getEnv("VAPID_PUBLIC_KEY", "")),
+		VAPIDPrivateKey:                  strings.TrimSpace(getEnv("VAPID_PRIVATE_KEY", "")),
 	}
 
 	cfg.MastodonRedirectURI = getEnv("MASTODON_REDIRECT_URI", strings.TrimRight(cfg.PublicBaseURL, "/")+"/v1/oauth/mastodon/callback")

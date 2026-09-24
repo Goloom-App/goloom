@@ -86,10 +86,11 @@ func (a *API) createRecurringAutomationPost(
 		UseVersions:            len(normalizedOverrides) > 0,
 	}
 	recPost.EnsureTitle()
-	_, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, recPost)
+	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, recPost)
 	if err != nil {
 		a.log.ErrorContext(ctx, "recurring automation: create scheduled post failed",
 			"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind, "error", err)
 		return
 	}
+	a.notifyReviewCreated(ctx, job.TeamID, post)
 }

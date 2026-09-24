@@ -18,6 +18,7 @@ import (
 	"git.f4mily.net/goloom/internal/postservice"
 	"git.f4mily.net/goloom/internal/postvalidate"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/push"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/sse"
 	"git.f4mily.net/goloom/internal/store"
@@ -35,6 +36,7 @@ type API struct {
 	i18n        *i18n.Catalog
 	jobManager  *aijobs.Manager
 	hub         *sse.Hub
+	push        *push.Sender
 	release     releaseStatusProvider
 }
 
@@ -93,6 +95,12 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		i18n:        catalog,
 		jobManager:  jobManager,
 		hub:         hub,
+		push: push.New(store, push.Config{
+			Subject:    cfg.VAPIDSubject,
+			PublicKey:  cfg.VAPIDPublicKey,
+			PrivateKey: cfg.VAPIDPrivateKey,
+			Logger:     logger,
+		}),
 	}
 	// AI jobs execute in-process; the API applies their completion side effects.
 	jobManager.SetCompleter(api)
@@ -117,6 +125,15 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/me/api-tokens", a.auth.RequireAuth(http.HandlerFunc(a.handleListMyAPITokens)))
 	mux.Handle("POST /v1/me/api-tokens", a.auth.RequireAuth(http.HandlerFunc(a.handleCreateMyAPIToken)))
 	mux.Handle("DELETE /v1/me/api-tokens/{tokenID}", a.auth.RequireAuth(http.HandlerFunc(a.handleRevokeMyAPIToken)))
+	mux.Handle("GET /v1/me/push/vapid-key", a.auth.RequireAuth(http.HandlerFunc(a.handleGetMyVAPIDPublicKey)))
+	mux.Handle("GET /v1/me/push-subscriptions", a.auth.RequireAuth(http.HandlerFunc(a.handleListMyPushSubscriptions)))
+	mux.Handle("POST /v1/me/push-subscriptions", a.auth.RequireAuth(http.HandlerFunc(a.handleCreateMyPushSubscription)))
+	mux.Handle("PATCH /v1/me/push-subscriptions/{subID}", a.auth.RequireAuth(http.HandlerFunc(a.handleUpdateMyPushSubscription)))
+	mux.Handle("DELETE /v1/me/push-subscriptions/{subID}", a.auth.RequireAuth(http.HandlerFunc(a.handleDeleteMyPushSubscription)))
+	mux.Handle("POST /v1/me/push-subscriptions/{subID}/test", a.auth.RequireAuth(http.HandlerFunc(a.handleSendMyPushTest)))
+	mux.Handle("GET /v1/me/team-notification-prefs", a.auth.RequireAuth(http.HandlerFunc(a.handleListMyTeamNotificationPrefs)))
+	mux.Handle("PATCH /v1/me/team-notification-prefs/{teamID}", a.auth.RequireAuth(http.HandlerFunc(a.handleSetMyTeamNotificationPref)))
+	mux.Handle("GET /v1/me/review-counts", a.auth.RequireAuth(http.HandlerFunc(a.handleMyReviewCounts)))
 	mux.Handle("GET /v1/users", a.auth.RequireAuth(http.HandlerFunc(a.handleListUsers)))
 	mux.Handle("GET /v1/teams", a.auth.RequireAuth(http.HandlerFunc(a.handleListTeams)))
 	mux.Handle("POST /v1/teams", a.auth.RequireAuth(http.HandlerFunc(a.handleCreateTeam)))

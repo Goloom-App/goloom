@@ -586,3 +586,32 @@ create table if not exists rss_imported_items (
 );
 
 create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id);
+
+create table if not exists push_subscriptions (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references users(id) on delete cascade,
+    endpoint text not null unique,
+    p256dh text not null,
+    auth text not null,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_push_subscriptions_user on push_subscriptions(user_id);
+
+create table if not exists team_notification_prefs (
+    user_id uuid not null references users(id) on delete cascade,
+    team_id uuid not null references teams(id) on delete cascade,
+    enabled boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    primary key (user_id, team_id)
+);
+
+create table if not exists vapid_keys (
+    id integer primary key default 1 check (id = 1),
+    public_key text not null,
+    private_key text not null,
+    updated_at timestamptz not null default now()
+);

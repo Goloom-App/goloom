@@ -13,6 +13,7 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/hashtag"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/push"
 	"git.f4mily.net/goloom/internal/socialtokens"
 	"git.f4mily.net/goloom/internal/store"
 )
@@ -22,6 +23,7 @@ type Service struct {
 	store                      store.Store
 	providers                  *provider.Registry
 	jobManager                 *aijobs.Manager
+	push                       *push.Sender
 	pollInterval               time.Duration
 	metricSyncInterval         time.Duration
 	accountHealthInterval      time.Duration
@@ -52,6 +54,27 @@ func New(logger *slog.Logger, store store.Store, providers *provider.Registry, p
 		rssImportInterval:          rssImportInterval,
 		workers:                    workers,
 	}
+}
+
+// SetPushSender wires the Web Push notifier for new review items. Kept as a
+// setter so New's signature stays stable.
+func (s *Service) SetPushSender(sender *push.Sender) {
+	s.push = sender
+}
+
+// notifyReviewCreated pushes a "new review" notification when a created post
+// is a review item (draft automation post). It never fails the caller: push
+// failures are logged inside the sender, and a missing team is only logged.
+func (s *Service) notifyReviewCreated(ctx context.Context, teamID string, post domain.ScheduledPost) {
+	if s.push == nil || post.Status != domain.PostStatusDraft || post.Source != domain.PostSourceAutomation {
+		return
+	}
+	team, err := s.store.GetTeamByID(ctx, teamID)
+	if err != nil {
+		s.logger.Warn("push: team lookup for review notification", "team_id", teamID, "error", err)
+		return
+	}
+	s.push.SendNewReview(ctx, team, post)
 }
 
 func (s *Service) Start(ctx context.Context) {
@@ -721,9 +744,11 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
-	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
+	post, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input)
+	if err != nil {
 		s.logger.Error("materialize scheduled post from template failed", "template_id", tmpl.ID, "error", err)
 		return err
 	}
+	s.notifyReviewCreated(ctx, tmpl.TeamID, post)
 	return nil
 }

@@ -36,6 +36,10 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - New hooks go in `src/hooks/`
 - E2E test for every user interaction change
 - PWA manifest in `public/manifest.json`
+- Service-worker/push and badge E2E runs on Playwright's full managed
+  Chromium (`channel: 'chromium'`, the single project): chrome-headless-shell
+  has no Push API (`ServiceWorker.deliverPushMessage` never reaches a worker)
+  and crashes the renderer on the Badging API the badge sync calls on Settings
 
 ## Verification
 

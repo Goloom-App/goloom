@@ -40,6 +40,8 @@ function loadStoredSettings(): SettingsState {
   }
 }
 
+export { loadStoredSettings }
+
 export function getApiClient(): ApiClient {
   const settings = loadStoredSettings()
   return createApiClient({
