@@ -40,7 +40,17 @@ export default defineConfig({
       ],
     },
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // One project, Playwright's full managed Chromium (channel 'chromium') — not
+// chrome-headless-shell. The shell crashes the renderer on the Badging API
+// (navigator.setAppBadge, hit by the review badge sync on Settings) and ships
+// no Push API (subscribe reports "push service not available",
+// deliverPushMessage never reaches a worker), which the push spec needs.
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], channel: 'chromium' },
+    },
+  ],
   webServer: process.env.PLAYWRIGHT_SKIP_WEB_SERVER
     ? undefined
     : {

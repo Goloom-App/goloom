@@ -40,6 +40,7 @@ import { AutomationView } from './views/automation/AutomationView'
 import { ReviewQueueView } from './views/review/ReviewQueueView'
 import { useReviewQueueCount } from './hooks/useReviewQueue'
 import { useIsMobile, useResolvedTheme } from './hooks/useTheme'
+import { useReviewBadgeSync } from './hooks/usePushNotifications'
 import {
   ApiError,
   createApiClient,
@@ -124,6 +125,9 @@ function App() {
   // Auth is determined by a /v1/me probe (cookie session or dev bearer override),
   // not by a token stored client-side. authProbed gates the first render.
   const [authenticated, setAuthenticated] = useState(false)
+  // Badge sync follows the real session state (cookie or bearer), probed via
+  // /v1/me — never a stored bearer token, so OIDC cookie sessions sync too.
+  useReviewBadgeSync(authenticated)
   const [authProbed, setAuthProbed] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [authSubmitting, setAuthSubmitting] = useState(false)

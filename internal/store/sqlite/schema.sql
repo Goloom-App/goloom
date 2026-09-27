@@ -423,3 +423,31 @@ create table if not exists job_locks (
     locked_at text not null,
     expires_at text not null
 );
+
+create table if not exists push_subscriptions (
+    id text primary key,
+    user_id text not null references users(id) on delete cascade,
+    endpoint text not null unique,
+    p256dh text not null,
+    auth text not null,
+    enabled integer not null default 1,
+    created_at text not null,
+    updated_at text not null
+);
+create index if not exists idx_push_subscriptions_user on push_subscriptions(user_id);
+
+create table if not exists team_notification_prefs (
+    user_id text not null references users(id) on delete cascade,
+    team_id text not null references teams(id) on delete cascade,
+    enabled integer not null default 1,
+    created_at text not null,
+    updated_at text not null,
+    primary key (user_id, team_id)
+);
+
+create table if not exists vapid_keys (
+    id integer primary key check (id = 1),
+    public_key text not null,
+    private_key text not null,
+    updated_at text not null
+);

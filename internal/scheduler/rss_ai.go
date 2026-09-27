@@ -123,5 +123,6 @@ func (s *Service) createRSSPostDirect(
 		return err
 	}
 	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)
+	s.notifyReviewCreated(ctx, feed.TeamID, post)
 	return nil
 }

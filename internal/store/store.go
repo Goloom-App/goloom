@@ -90,6 +90,25 @@ type Store interface {
 	UpdateRSSFeedLastFetched(ctx context.Context, feedID string, lastFetchedAt time.Time) error
 	ListAutomationReviewDrafts(ctx context.Context, teamID string, limit int) ([]domain.ReviewQueueItem, error)
 
+	// Review notification methods
+	CountOpenReviewItems(ctx context.Context, teamID string) (int, error)
+	CountUserOpenReviewItems(ctx context.Context, userID string) (int, error)
+	CreatePushSubscription(ctx context.Context, userID string, sub domain.PushSubscription) (domain.PushSubscription, error)
+	ListPushSubscriptions(ctx context.Context, userID string) ([]domain.PushSubscription, error)
+	GetPushSubscription(ctx context.Context, userID, subID string) (domain.PushSubscription, error)
+	UpdatePushSubscriptionEnabled(ctx context.Context, userID, subID string, enabled bool) (domain.PushSubscription, error)
+	DeletePushSubscription(ctx context.Context, userID, subID string) error
+	// RetirePushSubscription removes a subscription by id regardless of user —
+	// used when the push service rejects the endpoint (404/410).
+	RetirePushSubscription(ctx context.Context, subID string) error
+	// ListPushTargets returns eligible subscriptions for open-review notifications of a team:
+	// subscribed owner/editor members with the device enabled and the team opt-in enabled.
+	ListPushTargets(ctx context.Context, teamID string) ([]domain.PushSubscription, error)
+	SetTeamNotificationPref(ctx context.Context, userID, teamID string, enabled bool) (domain.TeamNotificationPref, error)
+	ListTeamNotificationPrefs(ctx context.Context, userID string) ([]domain.TeamNotificationPref, error)
+	GetVAPIDKeys(ctx context.Context) (domain.VAPIDKeys, error)
+	UpsertVAPIDKeys(ctx context.Context, keys domain.VAPIDKeys) error
+
 	// ProactiveTriggerSettings methods
 	GetProactiveTriggerSettings(ctx context.Context, teamID string) (domain.ProactiveTriggerSettings, error)
 	UpsertProactiveTriggerSettings(ctx context.Context, teamID string, input domain.ProactiveTriggerSettings) (domain.ProactiveTriggerSettings, error)

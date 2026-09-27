@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { setAppLanguage, supportedLanguages, type SupportedLanguage } from '../../i18n'
 import { SettingsCard } from '../../components/settings/SettingsCard'
 import { ApiTokenManager, type ApiTokenManagerTeam, type CreateApiTokenPayload } from '../../components/settings/ApiTokenManager'
+import { PushNotificationSettings } from '../../components/settings/PushNotificationSettings'
 import type { BackendAPIToken } from '../../api'
 import type { SettingsState } from '../../types'
 
@@ -111,6 +112,12 @@ export function SettingsView({
         createToken={createApiToken}
         removeToken={onRemoveApiToken}
       />
+
+      {apiPresent ? (
+        <div className="glass-panel">
+          <PushNotificationSettings />
+        </div>
+      ) : null}
     </div>
   )
 }

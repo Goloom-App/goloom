@@ -326,6 +326,52 @@ func (m *mockStore) ListAutomationReviewDrafts(ctx context.Context, teamID strin
 	return nil, nil
 }
 
+func (m *mockStore) CountOpenReviewItems(ctx context.Context, teamID string) (int, error) {
+	return 0, nil
+}
+
+func (m *mockStore) CountUserOpenReviewItems(ctx context.Context, userID string) (int, error) {
+	return 0, nil
+}
+
+func (m *mockStore) CreatePushSubscription(ctx context.Context, userID string, sub domain.PushSubscription) (domain.PushSubscription, error) {
+	return sub, nil
+}
+
+func (m *mockStore) ListPushSubscriptions(ctx context.Context, userID string) ([]domain.PushSubscription, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetPushSubscription(ctx context.Context, userID, subID string) (domain.PushSubscription, error) {
+	return domain.PushSubscription{}, domain.ErrPushSubscriptionNotFound
+}
+
+func (m *mockStore) UpdatePushSubscriptionEnabled(ctx context.Context, userID, subID string, enabled bool) (domain.PushSubscription, error) {
+	return domain.PushSubscription{}, nil
+}
+
+func (m *mockStore) DeletePushSubscription(ctx context.Context, userID, subID string) error { return nil }
+
+func (m *mockStore) RetirePushSubscription(ctx context.Context, subID string) error { return nil }
+
+func (m *mockStore) ListPushTargets(ctx context.Context, teamID string) ([]domain.PushSubscription, error) {
+	return nil, nil
+}
+
+func (m *mockStore) SetTeamNotificationPref(ctx context.Context, userID, teamID string, enabled bool) (domain.TeamNotificationPref, error) {
+	return domain.TeamNotificationPref{UserID: userID, TeamID: teamID, Enabled: enabled}, nil
+}
+
+func (m *mockStore) ListTeamNotificationPrefs(ctx context.Context, userID string) ([]domain.TeamNotificationPref, error) {
+	return nil, nil
+}
+
+func (m *mockStore) GetVAPIDKeys(ctx context.Context) (domain.VAPIDKeys, error) {
+	return domain.VAPIDKeys{}, domain.ErrVAPIDKeysNotSet
+}
+
+func (m *mockStore) UpsertVAPIDKeys(ctx context.Context, keys domain.VAPIDKeys) error { return nil }
+
 func (m *mockStore) GetProactiveTriggerSettings(ctx context.Context, teamID string) (domain.ProactiveTriggerSettings, error) {
 	return domain.ProactiveTriggerSettings{}, nil
 }
