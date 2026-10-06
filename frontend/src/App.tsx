@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AuthPanel, AuthShell } from './components/auth/AuthViews'
 import { PostComposer } from './components/Composer/PostComposer'
 import { ComposerPreviews } from './components/Composer/ComposerPreviews'
-import { buildMediaExcludePayload, defaultEditorDraft, toInputDateTime } from './components/Composer/editorDraft'
+import { buildMediaExcludePayload, defaultEditorDraft, postTitleForSave, toInputDateTime } from './components/Composer/editorDraft'
 import { accountContentOverrideForSave, isAccountOverCharLimit } from './components/Composer/composerUtils'
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
@@ -1585,7 +1585,7 @@ function App() {
       async () => {
         const mediaExclude = buildMediaExcludePayload(editorDraft.mediaExcludeByAccount, editorDraft.targetAccountIds, editorDraft.mediaIds)
         const payload = {
-          title: editorDraft.title.trim(),
+          title: postTitleForSave(editorDraft.title, defaultContent),
           content: defaultContent,
           scheduled_at: new Date(editorDraft.scheduledAt).toISOString(),
           target_accounts: editorDraft.targetAccountIds,
@@ -1624,7 +1624,7 @@ function App() {
       const defaultContent = editorDraft.content
       const mediaExclude = buildMediaExcludePayload(editorDraft.mediaExcludeByAccount, editorDraft.targetAccountIds, editorDraft.mediaIds)
       const payload = {
-        title: editorDraft.title.trim(),
+        title: postTitleForSave(editorDraft.title, defaultContent),
         content: defaultContent.trim(),
         scheduled_at: new Date(editorDraft.scheduledAt || Date.now()).toISOString(),
         target_accounts: editorDraft.targetAccountIds,
