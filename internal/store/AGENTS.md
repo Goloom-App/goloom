@@ -11,6 +11,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 ## Local Contracts
 
 - Interface: `store.go` — all business logic depends on this contract
+- `LookupAPIToken` returns the authenticating token's persisted expiry in `AuthenticatedPrincipal.TokenExpiresAt`; non-expiring tokens return nil in both backends.
 - SQLite schema: `sqlite/schema.sql`
 - PostgreSQL schema: `postgres/schema.sql`
 - Top-level schema reference: `../../db/schema.sql`

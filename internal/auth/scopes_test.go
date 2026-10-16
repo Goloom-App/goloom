@@ -54,6 +54,34 @@ func TestPrincipalAllows(t *testing.T) {
 	}
 }
 
+func TestPrincipalCanManageAPITokenRestrictionsRegardlessOfKind(t *testing.T) {
+	teamA, teamB := "team-a", "team-b"
+	for _, kind := range []string{"api_token", "oidc", "session", ""} {
+		for _, tc := range []struct {
+			name                       string
+			callerScopes, targetScopes []string
+			callerTeam, targetTeam     *string
+			want                       bool
+		}{
+			{name: "unrestricted can bind", targetTeam: &teamA, want: true},
+			{name: "scoped cannot grant full access", callerScopes: []string{ScopeRead}},
+			{name: "scoped cannot broaden", callerScopes: []string{ScopeRead}, targetScopes: []string{ScopeWrite}},
+			{name: "scoped subset", callerScopes: []string{ScopeRead, ScopeWrite}, targetScopes: []string{ScopeRead}, want: true},
+			{name: "scope hierarchy", callerScopes: []string{ScopeWrite}, targetScopes: []string{ScopeWriteDraft}, want: true},
+			{name: "bound cannot unbind", callerTeam: &teamA},
+			{name: "bound cannot change team", callerTeam: &teamA, targetTeam: &teamB},
+			{name: "bound same team", callerTeam: &teamA, targetTeam: &teamA, want: true},
+		} {
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				p := domain.AuthenticatedPrincipal{Kind: kind, Scopes: tc.callerScopes, TokenTeamID: tc.callerTeam}
+				if got := PrincipalCanManageAPIToken(p, tc.targetScopes, tc.targetTeam); got != tc.want {
+					t.Fatalf("PrincipalCanManageAPIToken = %v, want %v", got, tc.want)
+				}
+			})
+		}
+	}
+}
+
 func TestRequireTokenScopeRejects(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/teams/x/posts", nil)
 	req = req.WithContext(security.WithPrincipal(req.Context(), domain.AuthenticatedPrincipal{

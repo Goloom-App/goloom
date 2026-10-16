@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 
 type createAPITokenRequest struct {
 	Name        string   `json:"name"`
-	Description  string   `json:"description,omitempty"`
+	Description string   `json:"description,omitempty"`
 	ExpiresAt   *string  `json:"expires_at,omitempty"`
 	Scopes      []string `json:"scopes,omitempty"`
 	TeamID      *string  `json:"team_id,omitempty"`
@@ -28,9 +29,13 @@ func (a *API) handleListMyAPITokens(w http.ResponseWriter, r *http.Request) {
 	}
 	tokens, err := a.store.ListUserAPITokens(r.Context(), principal.User.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.log.Error("list API tokens failed", "error", err)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
+	tokens = slices.DeleteFunc(tokens, func(token domain.APIToken) bool {
+		return !auth.PrincipalCanManageAPIToken(principal, token.Scopes, token.TeamID)
+	})
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(tokens)})
 }
 
@@ -69,6 +74,23 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	tokenTeamID := normalizeOptionalStringPtr(input.TeamID)
+	if !auth.PrincipalCanManageAPIToken(principal, normalizedScopes, tokenTeamID) {
+		a.writeError(w, r, "api_token_exceeds_authority", http.StatusForbidden)
+		return
+	}
+	if (len(principal.Scopes) > 0 || principal.TokenTeamID != nil) && principal.TokenExpiresAt != nil {
+		if expires == nil {
+			// Resolve the store's default before authorization, and persist this
+			// exact value so a second clock read cannot exceed the parent's cap.
+			defaultExpiry := time.Now().UTC().AddDate(0, 0, 90)
+			expires = &defaultExpiry
+		}
+		if expires.After(*principal.TokenExpiresAt) {
+			a.writeError(w, r, "api_token_exceeds_authority", http.StatusForbidden)
+			return
+		}
+	}
 	var encodedScopes string
 	if len(normalizedScopes) > 0 {
 		raw, err := json.Marshal(normalizedScopes)
@@ -78,7 +100,6 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		}
 		encodedScopes = string(raw)
 	}
-	tokenTeamID := normalizeOptionalStringPtr(input.TeamID)
 	plaintext, meta, err := a.store.CreateUserAPIToken(r.Context(), principal.User.ID, input.Name, expires, encodedScopes, tokenTeamID, strings.TrimSpace(input.Description))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -138,16 +159,28 @@ func (a *API) handleRevokeMyAPIToken(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenID := r.PathValue("tokenID")
 
-	// Look the token up before revoking so a team-scoped key can be audited
-	// under its team (best-effort; never blocks the revoke).
+	// Load the owned token before revoking: authorization and team auditing both
+	// depend on its metadata, so lookup failures must block the revoke.
 	var revoked *domain.APIToken
-	if tokens, listErr := a.store.ListUserAPITokens(r.Context(), principal.User.ID); listErr == nil {
-		for i := range tokens {
-			if tokens[i].ID == tokenID {
-				revoked = &tokens[i]
-				break
-			}
+	tokens, err := a.store.ListUserAPITokens(r.Context(), principal.User.ID)
+	if err != nil {
+		a.log.Error("list API tokens before revocation failed", "error", err)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+		return
+	}
+	for i := range tokens {
+		if tokens[i].ID == tokenID {
+			revoked = &tokens[i]
+			break
 		}
+	}
+	if revoked == nil {
+		a.writeError(w, r, "token_not_found", http.StatusNotFound)
+		return
+	}
+	if !auth.PrincipalCanManageAPIToken(principal, revoked.Scopes, revoked.TeamID) {
+		a.writeError(w, r, "api_token_exceeds_authority", http.StatusForbidden)
+		return
 	}
 
 	if err := a.store.RevokeUserAPIToken(r.Context(), principal.User.ID, tokenID); err != nil {
@@ -155,10 +188,11 @@ func (a *API) handleRevokeMyAPIToken(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, r, "token_not_found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.log.Error("revoke API token failed", "error", err)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
-	if revoked != nil && revoked.TeamID != nil {
+	if revoked.TeamID != nil {
 		id := revoked.ID
 		a.recordAudit(r, *revoked.TeamID, "api_token.revoke", "api_token", &id, "Revoked API key: "+revoked.Name)
 	}

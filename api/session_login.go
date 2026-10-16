@@ -8,9 +8,10 @@ import (
 	"git.f4mily.net/goloom/internal/auth"
 )
 
-// handleCreateSessionFromToken exchanges a valid bearer token (bootstrap/recovery
-// or API token) for a browser session cookie. This powers the token/recovery
-// login path so human sessions are cookie-based like the OIDC flow.
+// handleCreateSessionFromToken exchanges a valid, unscoped, team-unbound bearer
+// token (bootstrap/recovery or API token) for a browser session cookie. This
+// powers the token/recovery login path so human sessions are cookie-based like
+// the OIDC flow.
 func (a *API) handleCreateSessionFromToken(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Token string `json:"token"`
@@ -30,10 +31,15 @@ func (a *API) handleCreateSessionFromToken(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	if len(principal.Scopes) != 0 || principal.TokenTeamID != nil {
+		a.writeError(w, r, "api_token_session_requires_full_access", http.StatusForbidden)
+		return
+	}
 
 	sessionToken, _, err := a.store.CreateSessionAPIToken(r.Context(), principal.User.ID, 0)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.log.Error("create browser session from token failed", "user_id", principal.User.ID, "error", err)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
 	csrf, err := auth.NewCSRFToken()
