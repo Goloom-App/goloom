@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -41,6 +42,81 @@ func TestFetchURLBody_BlocksPrivateTargets(t *testing.T) {
 		if err == nil {
 			t.Fatalf("fetch of %s must be blocked, got body %q", target, body)
 		}
+	}
+}
+
+// An allowlisted (or public) host that redirects to a non-public address must
+// not be followed: the redirect target is re-checked against the policy.
+func TestFetchURLBody_RefusesRedirectToPrivateAddress(t *testing.T) {
+	var hit atomic.Bool
+	internal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit.Store(true)
+		_, _ = w.Write([]byte("internal secret"))
+	}))
+	defer internal.Close()
+	// 127.0.0.2 reaches the same listener but is not on the allowlist.
+	internalURL := strings.Replace(internal.URL, "127.0.0.1", "127.0.0.2", 1)
+
+	for _, target := range []string{internalURL, "http://169.254.169.254/latest/meta-data/"} {
+		redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target, http.StatusFound)
+		}))
+		allowLoopbackFetch(t)
+		body, err := fetchURLBody(context.Background(), redirector.URL)
+		redirector.Close()
+		if err == nil {
+			t.Fatalf("redirect to %s must be refused, got body %q", target, body)
+		}
+	}
+	if hit.Load() {
+		t.Fatal("redirect target was contacted despite the guard")
+	}
+}
+
+func TestFetchURLBody_RefusesDisallowedSchemesAndHosts(t *testing.T) {
+	for _, target := range []string{
+		"file:///etc/passwd",
+		"ftp://example.com/x",
+		"gopher://example.com/",
+		"http://localhost/",
+		"http://127.0.0.1:1/",
+		"http://[::1]/",
+		"http://10.0.0.1/",
+		"http://192.168.1.1/",
+		"http://169.254.169.254/",
+	} {
+		if body, err := fetchURLBody(context.Background(), target); err == nil {
+			t.Errorf("fetch of %q must be refused, got body %q", target, body)
+		}
+	}
+}
+
+// Environment proxies would hide the real target from the dial check, so the
+// fetch client must ignore them.
+func TestFetchURLBody_IgnoresEnvProxy(t *testing.T) {
+	var proxied atomic.Bool
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxied.Store(true)
+		_, _ = w.Write([]byte("via proxy"))
+	}))
+	defer proxy.Close()
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("direct"))
+	}))
+	defer target.Close()
+
+	t.Setenv("HTTP_PROXY", proxy.URL)
+	t.Setenv("http_proxy", proxy.URL)
+	t.Setenv("NO_PROXY", "")
+	t.Setenv("no_proxy", "")
+	allowLoopbackFetch(t)
+
+	body, err := fetchURLBody(context.Background(), target.URL)
+	if err != nil {
+		t.Fatalf("direct fetch failed: %v", err)
+	}
+	if body != "direct" || proxied.Load() {
+		t.Fatalf("request went through env proxy: body=%q proxied=%v", body, proxied.Load())
 	}
 }
 
