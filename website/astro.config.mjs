@@ -7,7 +7,7 @@ export default defineConfig({
 	integrations: [
 		starlight({
 			title: 'goloom',
-			tagline: 'Lightweight social planning for teams and AI agents',
+			description: 'Lightweight social planning for teams and AI agents',
 			logo: {
 				src: './public/favicon.svg',
 				alt: 'goloom',
