@@ -41,6 +41,9 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
   Chromium (`channel: 'chromium'`, the single project): chrome-headless-shell
   has no Push API (`ServiceWorker.deliverPushMessage` never reaches a worker)
   and crashes the renderer on the Badging API the badge sync calls on Settings
+- Push CDP E2E uses a worker-local notification store: headless Chromium may
+  resolve `showNotification` without retaining it; real `sw.js` push, click,
+  and badge handlers still run
 
 ## Verification
 

@@ -19,7 +19,8 @@ import { getFirstTeamId, signIn } from './helpers'
 //   2. Service worker — the sw.js push/navigation code is exercised with a
 //      real service worker. A decoded push is injected directly into the
 //      worker via CDP (ServiceWorker.enable / deliverPushMessage), the grouped
-//      notification is captured atomically in one evaluate, and
+//      notification is captured in a worker-local store because headless
+//      Chromium sometimes drops it after showNotification resolves, and
 //      notificationclick is dispatched inside the worker via its own evaluate
 //      so the deep-link navigation runs for real.
 //
@@ -239,6 +240,30 @@ async function neutralizeWorkerBadge(worker: Worker) {
   throw lastError
 }
 
+// Headless Chromium sometimes resolves showNotification but keeps no notification.
+// Keep the worker and push event real; replace only its browser notification store.
+async function installWorkerNotificationStore(worker: Worker) {
+  await worker.evaluate(() => {
+    const registration = Object.getPrototypeOf((self as unknown as { registration: ServiceWorkerRegistration }).registration) as ServiceWorkerRegistration
+    const notifications: Array<Pick<Notification, 'title' | 'body' | 'tag' | 'data' | 'close'>> = []
+    registration.showNotification = async (title, options) => {
+      if (options?.tag) notifications.find((notification) => notification.tag === options.tag)?.close()
+      const notification = {
+        title,
+        body: options?.body ?? '',
+        tag: options?.tag ?? '',
+        data: options?.data,
+        close() {
+          const index = notifications.indexOf(notification)
+          if (index >= 0) notifications.splice(index, 1)
+        },
+      }
+      notifications.push(notification)
+    }
+    registration.getNotifications = async () => [...notifications] as unknown as Notification[]
+  })
+}
+
 async function stubPushApis(page: Page, { stubServiceWorkerRegister = true } = {}) {
   await page.addInitScript(({ stubRegister }: { stubRegister: boolean }) => {
     const win = window as unknown as {
@@ -402,6 +427,7 @@ test('service worker: grouped push delivery and deep link via CDP', async ({ pag
   // push handler calls applyBadge before showNotification.
   const worker = await registerWorker(page, context)
   await neutralizeWorkerBadge(worker)
+  await installWorkerNotificationStore(worker)
 
   const session = await context.newCDPSession(page)
   await session.send('ServiceWorker.enable')
@@ -431,22 +457,19 @@ test('service worker: grouped push delivery and deep link via CDP', async ({ pag
       data: { team_id: teamId, team_name: 'Acme Team', count, post_id: 'seed', url: `/?team=${teamId}&section=reviewQueue` },
     })
     await session.send('ServiceWorker.deliverPushMessage', { origin: baseURL!, registrationId, data: payload })
+    await expect.poll(async () => worker.evaluate(async (tag) => {
+      const registration = (self as unknown as { registration: ServiceWorkerRegistration }).registration
+      const notifications = await registration.getNotifications()
+      return notifications.find((notification) => notification.tag === tag)?.body ?? null
+    }, `review-${teamId}`), { timeout: 15_000 }).toBe(`Acme Team · ${count} open`)
   }
 
-  // Capture the grouped notification atomically in one evaluate: wait until
-  // exactly one notification with the team tag exists, then read it out.
-  const snapshot = await page.evaluate(async (tag) => {
-    const registration = await navigator.serviceWorker.getRegistration()
-    const deadline = Date.now() + 15_000
-    while (Date.now() < deadline) {
-      const notifications = registration ? await registration.getNotifications() : []
-      const grouped = notifications.filter((n) => n.tag === tag)
-      if (grouped.length === 1) {
-        return { title: grouped[0].title, body: grouped[0].body, tag: grouped[0].tag, count: grouped.length }
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    }
-    return null
+  const snapshot = await worker.evaluate(async (tag) => {
+    const registration = (self as unknown as { registration: ServiceWorkerRegistration }).registration
+    const grouped = (await registration.getNotifications()).filter((notification) => notification.tag === tag)
+    return grouped.length === 1
+      ? { title: grouped[0].title, body: grouped[0].body, tag: grouped[0].tag, count: grouped.length }
+      : null
   }, `review-${teamId}`)
 
   if (!snapshot) {
@@ -487,11 +510,11 @@ test('service worker: grouped push delivery and deep link via CDP', async ({ pag
     })
   }, teamId)
 
-  const cleared = await page.evaluate(async (tag) => {
-    const registration = await navigator.serviceWorker.getRegistration()
+  const cleared = await worker.evaluate(async (tag) => {
+    const registration = (self as unknown as { registration: ServiceWorkerRegistration }).registration
     const deadline = Date.now() + 15_000
     while (Date.now() < deadline) {
-      const notifications = registration ? await registration.getNotifications() : []
+      const notifications = await registration.getNotifications()
       if (notifications.filter((n) => n.tag === tag).length === 0) {
         return true
       }
@@ -505,20 +528,20 @@ test('service worker: grouped push delivery and deep link via CDP', async ({ pag
 
   // Zero-total close-all (finding 5): a badge sync reporting total zero with no
   // eligible team left (empty teams list) must close every active review-*
-  // notification. Seed two tagged notifications deterministically through the
-  // page context — the CDP push delivery path is already exercised above, so a
+  // notification. Seed two tagged notifications through the worker's store;
+  // the CDP push delivery path is already exercised above, so a
   // second rapid push event is not needed here.
-  await page.evaluate(async () => {
-    const registration = await navigator.serviceWorker.getRegistration()
+  await worker.evaluate(async () => {
+    const registration = (self as unknown as { registration: ServiceWorkerRegistration }).registration
     for (const tag of ['review-extra-a', 'review-extra-b']) {
-      await registration?.showNotification(tag.replace('review-', ''), { tag, body: 'open' })
+      await registration.showNotification(tag.replace('review-', ''), { tag, body: 'open' })
     }
   })
-  const seeded = await page.evaluate(async (tags) => {
-    const registration = await navigator.serviceWorker.getRegistration()
+  const seeded = await worker.evaluate(async (tags) => {
+    const registration = (self as unknown as { registration: ServiceWorkerRegistration }).registration
     const deadline = Date.now() + 10_000
     while (Date.now() < deadline) {
-      const notifications = (await registration?.getNotifications()) ?? []
+      const notifications = await registration.getNotifications()
       const present = tags.filter((tag) => notifications.some((n) => n.tag === tag))
       if (present.length === tags.length) {
         return present
@@ -533,11 +556,11 @@ test('service worker: grouped push delivery and deep link via CDP', async ({ pag
     const registration = await navigator.serviceWorker.getRegistration()
     registration?.active?.postMessage({ type: 'review-badge', total: 0, teams: [] })
   })
-  const allClosed = await page.evaluate(async () => {
-    const registration = await navigator.serviceWorker.getRegistration()
+  const allClosed = await worker.evaluate(async () => {
+    const registration = (self as unknown as { registration: ServiceWorkerRegistration }).registration
     const deadline = Date.now() + 10_000
     while (Date.now() < deadline) {
-      const notifications = (await registration?.getNotifications()) ?? []
+      const notifications = await registration.getNotifications()
       if (notifications.every((n) => !n.tag.startsWith('review-'))) {
         return true
       }
