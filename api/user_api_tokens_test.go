@@ -358,6 +358,83 @@ func TestAPITokenManagementBrowserSession(t *testing.T) {
 	}
 }
 
+func TestAPITokenListOnlyManageableTokens(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		scopes         []string
+		bound, browser bool
+		want           []string
+	}{
+		{name: "read", scopes: []string{"read"}, want: []string{"caller", "reader"}},
+		{name: "write hierarchy", scopes: []string{"write"}, want: []string{"caller", "writer", "draft"}},
+		{name: "bound read", scopes: []string{"read"}, bound: true, want: []string{"caller", "team-reader"}},
+		{name: "team only", bound: true, want: []string{"caller", "team-reader", "team-writer", "team-full"}},
+		{name: "unrestricted"},
+		{name: "browser", browser: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newEndpointFixture(t)
+			ctx := context.Background()
+			otherTeam, err := f.store.CreateTeam(ctx, f.user.ID, domain.CreateTeamInput{Name: "other"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			session, _, err := f.store.CreateSessionAPIToken(ctx, f.user.ID, time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, token := range []struct {
+				name, scopes string
+				team         *string
+			}{
+				{"full", "", nil}, {"reader", `["read"]`, nil},
+				{"writer", `["write"]`, nil}, {"draft", `["write:draft"]`, nil},
+				{"team-reader", `["read"]`, &f.team.ID}, {"team-writer", `["write"]`, &f.team.ID},
+				{"team-full", "", &f.team.ID}, {"other-team-reader", `["read"]`, &otherTeam.ID},
+			} {
+				// Listing/revocation authority is independent of expiry.
+				longExpiry := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+				if _, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, token.name, &longExpiry, token.scopes, token.team, "private description"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var teamID *string
+			if tc.bound {
+				teamID = &f.team.ID
+			}
+			rawScopes, _ := json.Marshal(tc.scopes)
+			shortExpiry := time.Now().UTC().Add(time.Hour)
+			f.bearer, _, err = f.store.CreateUserAPIToken(ctx, f.user.ID, "caller", &shortExpiry, string(rawScopes), teamID, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var rec *httptest.ResponseRecorder
+			if tc.browser {
+				rec = doBrowserTokenRequest(f.handler, session, http.MethodGet, "/v1/me/api-tokens", nil)
+			} else {
+				rec = f.do(t, http.MethodGet, "/v1/me/api-tokens", nil)
+			}
+			requireStatus(t, rec, http.StatusOK)
+			listed := decodeJSON[struct {
+				Items []domain.APIToken `json:"items"`
+			}](t, rec)
+			got := make([]string, 0, len(listed.Items))
+			for _, token := range listed.Items {
+				got = append(got, token.Name)
+			}
+			want := tc.want
+			if want == nil {
+				want = []string{"endpoints", domain.WebSessionAPITokenName, "caller", "full", "reader", "writer", "draft", "team-reader", "team-writer", "team-full", "other-team-reader"}
+			}
+			slices.Sort(got)
+			slices.Sort(want)
+			if !slices.Equal(got, want) {
+				t.Fatalf("listed names = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 func doBrowserTokenRequest(handler http.Handler, session, method, path string, body []byte) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -371,7 +448,7 @@ func doBrowserTokenRequest(handler http.Handler, session, method, path string, b
 
 func TestAPITokenManagementUnauthenticated(t *testing.T) {
 	f := newEndpointFixture(t)
-	for _, method := range []string{http.MethodPost, http.MethodDelete} {
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
 		path := "/v1/me/api-tokens"
 		if method == http.MethodDelete {
 			path += "/unknown"
@@ -429,16 +506,23 @@ func (s *failingTokenManagementStore) RevokeUserAPIToken(context.Context, string
 	return errors.New("private database failure")
 }
 
-func TestAPITokenRevokeStoreFailures(t *testing.T) {
-	for _, failList := range []bool{true, false} {
-		t.Run(fmt.Sprint("list=", failList), func(t *testing.T) {
+func TestAPITokenManagementStoreFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name, method string
+		failList     bool
+	}{
+		{"list", http.MethodGet, true},
+		{"revoke lookup", http.MethodDelete, true},
+		{"revoke", http.MethodDelete, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			f := newEndpointFixture(t)
 			ctx := context.Background()
 			target, meta, err := f.store.CreateUserAPIToken(ctx, f.user.ID, "target", nil, "", nil, "")
 			if err != nil {
 				t.Fatal(err)
 			}
-			wrapped := &failingTokenManagementStore{Store: f.store, failList: failList}
+			wrapped := &failingTokenManagementStore{Store: f.store, failList: tc.failList}
 			authSvc, err := auth.New(ctx, config.Config{}, f.store)
 			if err != nil {
 				t.Fatal(err)
@@ -451,7 +535,11 @@ func TestAPITokenRevokeStoreFailures(t *testing.T) {
 			logger := slog.New(slog.NewTextHandler(&logs, nil))
 			f.handler = api.New(logger, wrapped, authSvc, provider.NewRegistry(), config.Config{}, nil, catalog, nil, nil).Handler(security.NewLimiter(1000, 1000), nil)
 
-			rec := f.do(t, http.MethodDelete, "/v1/me/api-tokens/"+meta.ID, nil)
+			path := "/v1/me/api-tokens"
+			if tc.method == http.MethodDelete {
+				path += "/" + meta.ID
+			}
+			rec := f.do(t, tc.method, path, nil)
 			requireStatus(t, rec, http.StatusInternalServerError)
 			if code := rec.Header().Get("X-Error-Code"); code != "internal_error" {
 				t.Fatalf("error code = %q", code)
@@ -459,8 +547,8 @@ func TestAPITokenRevokeStoreFailures(t *testing.T) {
 			if strings.Contains(rec.Body.String(), "private database failure") || !strings.Contains(logs.String(), "private database failure") {
 				t.Fatalf("failure must be logged without leaking into response: body=%q logs=%q", rec.Body.String(), logs.String())
 			}
-			if wrapped.revoked == failList {
-				t.Fatalf("revoke attempted = %v with list failure = %v", wrapped.revoked, failList)
+			if wrapped.revoked != (tc.method == http.MethodDelete && !tc.failList) {
+				t.Fatalf("revoke attempted = %v for %s", wrapped.revoked, tc.name)
 			}
 			if _, err := f.store.LookupAPIToken(ctx, target); err != nil {
 				t.Fatalf("failed revoke removed token: %v", err)

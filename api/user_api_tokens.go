@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,9 +29,13 @@ func (a *API) handleListMyAPITokens(w http.ResponseWriter, r *http.Request) {
 	}
 	tokens, err := a.store.ListUserAPITokens(r.Context(), principal.User.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.log.Error("list API tokens failed", "error", err)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
+	tokens = slices.DeleteFunc(tokens, func(token domain.APIToken) bool {
+		return !auth.PrincipalCanManageAPIToken(principal, token.Scopes, token.TeamID)
+	})
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(tokens)})
 }
 
