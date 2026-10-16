@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"git.f4mily.net/goloom/api"
 	"git.f4mily.net/goloom/internal/auth"
@@ -34,6 +35,126 @@ func TestScopedAPITokenCannotMintFullAccessToken(t *testing.T) {
 
 	rec := f.do(t, http.MethodPost, "/v1/me/api-tokens", map[string]any{"name": "x"})
 	requireStatus(t, rec, http.StatusForbidden)
+}
+
+func TestAPITokenChildExpiryCannotExceedRestrictedParent(t *testing.T) {
+	for _, restriction := range []string{"scopes", "team", "both", "renamed", "none", "browser"} {
+		for _, expiry := range []string{"later", "equal", "earlier", "omitted", "empty"} {
+			t.Run(restriction+"/"+expiry, func(t *testing.T) {
+				f := newEndpointFixture(t)
+				ctx := context.Background()
+				parentExpiry := time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second)
+				var scopes []string
+				var teamID *string
+				if restriction == "scopes" || restriction == "both" || restriction == "renamed" {
+					scopes = []string{"read"}
+				}
+				if restriction == "team" || restriction == "both" {
+					teamID = &f.team.ID
+				}
+				name := "parent"
+				if restriction == "browser" || restriction == "renamed" {
+					name = domain.WebSessionAPITokenName
+				}
+				rawScopes, _ := json.Marshal(scopes)
+				bearer, _, err := f.store.CreateUserAPIToken(ctx, f.user.ID, name, &parentExpiry, string(rawScopes), teamID, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				f.bearer = bearer
+				input := map[string]any{"name": "child", "scopes": scopes, "team_id": teamID}
+				switch expiry {
+				case "later":
+					input["expires_at"] = parentExpiry.Add(time.Second).Format(time.RFC3339)
+				case "equal":
+					input["expires_at"] = parentExpiry.Format(time.RFC3339)
+				case "earlier":
+					input["expires_at"] = parentExpiry.Add(-time.Hour).Format(time.RFC3339)
+				case "empty":
+					input["expires_at"] = ""
+				}
+				before, err := f.store.ListUserAPITokens(ctx, f.user.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rec := f.do(t, http.MethodPost, "/v1/me/api-tokens", input)
+				restricted := restriction != "none" && restriction != "browser"
+				if restricted && (expiry == "later" || expiry == "omitted" || expiry == "empty") {
+					requireStatus(t, rec, http.StatusForbidden)
+					if rec.Header().Get("X-Error-Code") != "api_token_exceeds_authority" {
+						t.Fatalf("error code = %q", rec.Header().Get("X-Error-Code"))
+					}
+					after, err := f.store.ListUserAPITokens(ctx, f.user.ID)
+					if err != nil || len(after) != len(before) {
+						t.Fatalf("rejected create changed tokens: before=%d after=%d err=%v", len(before), len(after), err)
+					}
+					return
+				}
+				requireStatus(t, rec, http.StatusCreated)
+				created := decodeJSON[struct {
+					APIToken domain.APIToken `json:"api_token"`
+				}](t, rec)
+				if created.APIToken.ExpiresAt == nil || restricted && created.APIToken.ExpiresAt.After(parentExpiry) {
+					t.Fatalf("child expiry = %v, parent = %v", created.APIToken.ExpiresAt, parentExpiry)
+				}
+			})
+		}
+	}
+}
+
+// Supply legacy principals that the token-creation API cannot mint today.
+type tokenPrincipalStore struct {
+	store.Store
+	principal domain.AuthenticatedPrincipal
+}
+
+func (s tokenPrincipalStore) LookupAPIToken(context.Context, string) (domain.AuthenticatedPrincipal, error) {
+	return s.principal, nil
+}
+
+func TestAPITokenChildExpiryLegacyPrincipal(t *testing.T) {
+	longExpiry := time.Now().UTC().AddDate(0, 0, 100)
+	for _, tc := range []struct {
+		name         string
+		parentExpiry *time.Time
+		childExpiry  string
+	}{
+		{name: "no expiry default"},
+		{name: "no expiry explicit", childExpiry: "2099-01-01T00:00:00Z"},
+		{name: "default within long parent", parentExpiry: &longExpiry},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newEndpointFixture(t)
+			principal := domain.AuthenticatedPrincipal{User: f.user, Kind: "oidc", Scopes: []string{"read"}, TokenExpiresAt: tc.parentExpiry}
+			authSvc, err := auth.New(context.Background(), config.Config{}, tokenPrincipalStore{Store: f.store, principal: principal})
+			if err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := i18n.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.handler = api.New(slog.Default(), f.store, authSvc, provider.NewRegistry(), config.Config{}, nil, catalog, nil, nil).Handler(security.NewLimiter(1000, 1000), nil)
+			input := map[string]any{"name": "child", "scopes": []string{"read"}}
+			if tc.childExpiry != "" {
+				input["expires_at"] = tc.childExpiry
+			}
+			rec := f.do(t, http.MethodPost, "/v1/me/api-tokens", input)
+			requireStatus(t, rec, http.StatusCreated)
+			created := decodeJSON[struct {
+				APIToken domain.APIToken `json:"api_token"`
+			}](t, rec)
+			if created.APIToken.ExpiresAt == nil {
+				t.Fatal("missing child expiry")
+			}
+			if tc.parentExpiry != nil && created.APIToken.ExpiresAt.After(*tc.parentExpiry) {
+				t.Fatal("child outlives parent")
+			}
+			if tc.childExpiry != "" && created.APIToken.ExpiresAt.Format(time.RFC3339) != tc.childExpiry {
+				t.Fatal("explicit expiry changed")
+			}
+		})
+	}
 }
 
 func TestScopedAPITokenCannotRevokeFullAccessToken(t *testing.T) {
@@ -111,6 +232,7 @@ func TestAPITokenManagementAuthority(t *testing.T) {
 				if action == "create" {
 					rec = f.do(t, http.MethodPost, "/v1/me/api-tokens", map[string]any{
 						"name": "child", "scopes": tc.targetScopes, "team_id": bindings[tc.targetTeam],
+						"expires_at": time.Now().UTC().Add(time.Hour).Format(time.RFC3339),
 					})
 				} else {
 					scopes, _ := json.Marshal(tc.targetScopes)
@@ -189,7 +311,7 @@ func TestAPITokenCreateNormalizesBeforeAuthorization(t *testing.T) {
 			if team == "same" {
 				team = " " + f.team.ID + " "
 			}
-			rec := f.do(t, http.MethodPost, "/v1/me/api-tokens", map[string]any{"name": "x", "scopes": tc.scopes, "team_id": team})
+			rec := f.do(t, http.MethodPost, "/v1/me/api-tokens", map[string]any{"name": "x", "scopes": tc.scopes, "team_id": team, "expires_at": time.Now().UTC().Add(time.Hour).Format(time.RFC3339)})
 			requireStatus(t, rec, tc.status)
 			if tc.status == http.StatusCreated {
 				created := decodeJSON[struct {

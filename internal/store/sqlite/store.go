@@ -193,8 +193,9 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	var teamID sql.NullString
 	var tokenName sql.NullString
 	var tokenID string
+	var expiresAt sql.NullString
 	row := s.db.QueryRowContext(ctx, `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.tour_done, u.created_at, t.scopes, t.team_id, t.name, t.id
+		select u.id, u.email, u.name, u.subject, u.is_admin, u.tour_done, u.created_at, t.scopes, t.team_id, t.name, t.id, t.expires_at
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = ?
@@ -213,6 +214,7 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		&teamID,
 		&tokenName,
 		&tokenID,
+		&expiresAt,
 	)
 	if tokenName.Valid && tokenName.String == domain.WebSessionAPITokenName {
 		principal.Kind = "oidc"
@@ -230,6 +232,10 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		principal.TokenName = &name
 	}
 	principal.User.CreatedAt = mustParseTime(createdAt)
+	if expiresAt.Valid && expiresAt.String != "" {
+		expires := mustParseTime(expiresAt.String)
+		principal.TokenExpiresAt = &expires
+	}
 	principal.Scopes, err = parseTokenScopes(rawScopes)
 	if err != nil {
 		return domain.AuthenticatedPrincipal{}, err

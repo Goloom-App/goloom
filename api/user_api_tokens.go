@@ -74,6 +74,18 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "api_token_exceeds_authority", http.StatusForbidden)
 		return
 	}
+	if (len(principal.Scopes) > 0 || principal.TokenTeamID != nil) && principal.TokenExpiresAt != nil {
+		if expires == nil {
+			// Resolve the store's default before authorization, and persist this
+			// exact value so a second clock read cannot exceed the parent's cap.
+			defaultExpiry := time.Now().UTC().AddDate(0, 0, 90)
+			expires = &defaultExpiry
+		}
+		if expires.After(*principal.TokenExpiresAt) {
+			a.writeError(w, r, "api_token_exceeds_authority", http.StatusForbidden)
+			return
+		}
+	}
 	var encodedScopes string
 	if len(normalizedScopes) > 0 {
 		raw, err := json.Marshal(normalizedScopes)

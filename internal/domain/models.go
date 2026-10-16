@@ -1072,10 +1072,11 @@ type APIToken struct {
 }
 
 type AuthenticatedPrincipal struct {
-	User        User     `json:"user"`
-	Kind        string   `json:"kind"`
-	Scopes      []string `json:"scopes,omitempty"`
-	TokenTeamID *string  `json:"token_team_id,omitempty"`
+	User           User       `json:"user"`
+	Kind           string     `json:"kind"`
+	Scopes         []string   `json:"scopes,omitempty"`
+	TokenTeamID    *string    `json:"token_team_id,omitempty"`
+	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
 	// TokenID/TokenName identify the API key used for the request. Set only for
 	// Kind=="api_token" (a tool/automation); nil for human browser sessions.
 	TokenID   *string `json:"token_id,omitempty"`
