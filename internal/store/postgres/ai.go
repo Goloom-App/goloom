@@ -480,15 +480,25 @@ func (s *Store) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJo
 	return s.listAIJobs(ctx, query, limit)
 }
 
-func (s *Store) ListUnfinishedAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error) {
+func (s *Store) MarkAIJobProcessing(ctx context.Context, id string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE ai_jobs SET status = 'processing', updated_at = now()
+		WHERE id = $1 AND status = 'pending'`, id)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+func (s *Store) ListUnfinishedAIJobs(ctx context.Context, olderThan time.Time, limit int) ([]domain.AIJob, error) {
 	const query = `
 		SELECT id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
 		FROM ai_jobs
-		WHERE status IN ('pending', 'processing')
+		WHERE status IN ('pending', 'processing') AND updated_at < $1
 		ORDER BY created_at ASC
-		LIMIT $1
+		LIMIT $2
 	`
-	return s.listAIJobs(ctx, query, limit)
+	return s.listAIJobs(ctx, query, olderThan, limit)
 }
 
 func (s *Store) listAIJobs(ctx context.Context, query string, args ...any) ([]domain.AIJob, error) {

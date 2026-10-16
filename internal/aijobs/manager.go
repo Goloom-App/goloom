@@ -30,6 +30,13 @@ const jobExecutionTimeout = 10 * time.Minute
 // the limit wait in status pending until a slot frees up.
 const DefaultMaxConcurrent = 4
 
+// staleMargin is added to jobExecutionTimeout before an unfinished job counts
+// as certainly dead (no live instance can still be running it).
+const staleMargin = 2 * time.Minute
+
+// recoveryInterval is how often RunRecovery sweeps for dead jobs.
+const recoveryInterval = 5 * time.Minute
+
 // InterruptedMessage is the error recorded on jobs orphaned by a restart.
 const InterruptedMessage = "interrupted by restart"
 
@@ -65,6 +72,8 @@ type Manager struct {
 	cancelMu sync.Mutex
 	cancels  map[string]context.CancelFunc
 
+	staleAfter time.Duration
+
 	// slots is the concurrency semaphore; replaced via SetMaxConcurrent.
 	slots chan struct{}
 }
@@ -78,6 +87,8 @@ func NewManager(store storepkg.Store, runner Runner) *Manager {
 		runner:  runner,
 		cancels: map[string]context.CancelFunc{},
 		slots:   make(chan struct{}, DefaultMaxConcurrent),
+
+		staleAfter: jobExecutionTimeout + staleMargin,
 	}
 }
 
@@ -131,11 +142,39 @@ func (m *Manager) Cancel(jobID string) bool {
 	return ok
 }
 
-// RecoverInterrupted fails jobs left pending/processing by a previous
-// process (their goroutines died with it). Call once at startup, after the
-// completer is registered so automation fallbacks and SSE events fire.
+// SetStaleAfter overrides the age after which an unfinished job counts as
+// dead (default jobExecutionTimeout + margin). Intended for tests.
+func (m *Manager) SetStaleAfter(d time.Duration) { m.staleAfter = d }
+
+// RunRecovery calls RecoverInterrupted now and then every recoveryInterval
+// (or the given interval) until ctx ends. Call after the completer is set.
+func (m *Manager) RunRecovery(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = recoveryInterval
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if n, err := m.RecoverInterrupted(ctx); err != nil {
+			m.log().Error("recover interrupted ai jobs failed", "error", err.Error())
+		} else if n > 0 {
+			m.log().Warn("failed interrupted ai jobs", "count", n)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// RecoverInterrupted fails jobs left pending/processing whose last update is
+// older than the execution timeout plus margin: their goroutines died with
+// their process. Younger jobs are left alone because another instance sharing
+// the database may still be running them. The completer must be registered
+// first so automation fallbacks and SSE events fire.
 func (m *Manager) RecoverInterrupted(ctx context.Context) (int, error) {
-	jobs, err := m.store.ListUnfinishedAIJobs(ctx, 1000)
+	jobs, err := m.store.ListUnfinishedAIJobs(ctx, time.Now().Add(-m.staleAfter), 1000)
 	if err != nil {
 		return 0, fmt.Errorf("Manager.RecoverInterrupted: list jobs: %w", err)
 	}
@@ -212,6 +251,10 @@ func (m *Manager) execute(jobCtx context.Context, cancelJob context.CancelFunc, 
 	select {
 	case slots <- struct{}{}:
 		defer func() { <-slots }()
+		if jobCtx.Err() != nil { // select may pick the slot although cancelled
+			m.finish(context.Background(), job.ID, domain.AIJobStatusFailed, nil, "cancelled")
+			return
+		}
 	case <-jobCtx.Done():
 		m.finish(context.Background(), job.ID, domain.AIJobStatusFailed, nil, "cancelled")
 		return
@@ -223,10 +266,17 @@ func (m *Manager) execute(jobCtx context.Context, cancelJob context.CancelFunc, 
 	ctx, cancel := context.WithTimeout(jobCtx, jobExecutionTimeout)
 	defer cancel()
 
-	if jobCtx.Err() == nil {
-		if err := m.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusProcessing, nil, ""); err != nil {
-			log.Warn("ai job: mark processing failed", "error", err.Error())
-		} else if n, ok := m.getCompleter().(StatusNotifier); ok {
+	// Conditional pending -> processing: a job cancelled in the meantime stays
+	// failed and must not run.
+	moved, err := m.store.MarkAIJobProcessing(ctx, job.ID)
+	if err != nil {
+		log.Warn("ai job: mark processing failed", "error", err.Error())
+	} else if !moved {
+		log.Info("ai job no longer pending, skipping")
+		return
+	}
+	if moved {
+		if n, ok := m.getCompleter().(StatusNotifier); ok {
 			n.NotifyAIJobStatus(ctx, job.ID)
 		}
 	}

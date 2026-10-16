@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/security"
@@ -423,7 +424,7 @@ func TestAISQLiteListUnfinishedJobs(t *testing.T) {
 	completedID := mk(domain.AIJobStatusCompleted)
 	failedID := mk(domain.AIJobStatusFailed)
 
-	got, err := s.ListUnfinishedAIJobs(ctx, 100)
+	got, err := s.ListUnfinishedAIJobs(ctx, time.Now().Add(time.Hour), 100)
 	if err != nil {
 		t.Fatalf("ListUnfinishedAIJobs: %v", err)
 	}
@@ -436,5 +437,61 @@ func TestAISQLiteListUnfinishedJobs(t *testing.T) {
 	}
 	if ids[completedID] || ids[failedID] {
 		t.Fatalf("finished jobs must not be listed, got %v", ids)
+	}
+}
+
+func TestAISQLiteListUnfinishedJobsCutoff(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, team := makeAITeam(t, s)
+	j, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	young, err := s.ListUnfinishedAIJobs(ctx, time.Now().Add(-time.Hour), 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range young {
+		if x.ID == j.ID {
+			t.Fatal("job younger than the cutoff must not be listed")
+		}
+	}
+}
+
+func TestAISQLiteListUnfinishedJobsMarkProcessing(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, team := makeAITeam(t, s)
+	mk := func() string {
+		j, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return j.ID
+	}
+
+	id := mk()
+	ok, err := s.MarkAIJobProcessing(ctx, id)
+	if err != nil || !ok {
+		t.Fatalf("pending -> processing: ok=%v err=%v", ok, err)
+	}
+	if got, _ := s.GetAIJobByID(ctx, team.ID, id); got.Status != domain.AIJobStatusProcessing {
+		t.Fatalf("status = %s, want processing", got.Status)
+	}
+	if ok, _ := s.MarkAIJobProcessing(ctx, id); ok {
+		t.Fatal("second transition must report false")
+	}
+
+	cancelled := mk()
+	if err := s.UpdateAIJobStatus(ctx, cancelled, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.MarkAIJobProcessing(ctx, cancelled); err != nil || ok {
+		t.Fatalf("failed job: ok=%v err=%v, want false,nil", ok, err)
+	}
+	got, _ := s.GetAIJobByID(ctx, team.ID, cancelled)
+	if got.Status != domain.AIJobStatusFailed || got.ErrorMessage != "cancelled" {
+		t.Fatalf("failed job overwritten: %s/%q", got.Status, got.ErrorMessage)
 	}
 }

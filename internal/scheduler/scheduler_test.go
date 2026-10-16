@@ -242,8 +242,12 @@ func (m *mockStore) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.
 	return nil, nil
 }
 
-func (m *mockStore) ListUnfinishedAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error) {
+func (m *mockStore) ListUnfinishedAIJobs(ctx context.Context, olderThan time.Time, limit int) ([]domain.AIJob, error) {
 	return nil, nil
+}
+
+func (m *mockStore) MarkAIJobProcessing(ctx context.Context, id string) (bool, error) {
+	return true, nil
 }
 
 func (m *mockStore) GetAIServiceConfig(ctx context.Context, teamID string) (domain.AIServiceConfig, error) {

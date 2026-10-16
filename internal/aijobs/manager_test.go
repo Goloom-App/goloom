@@ -474,6 +474,7 @@ func TestRecoverInterruptedFailsStaleJobs(t *testing.T) {
 	pending, processing, done := mk(domain.AIJobStatusPending), mk(domain.AIJobStatusProcessing), mk(domain.AIJobStatusCompleted)
 
 	manager := aijobs.NewManager(s, &fakeRunner{})
+	manager.SetStaleAfter(-time.Minute) // treat everything as stale
 	n, err := manager.RecoverInterrupted(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -498,6 +499,7 @@ func TestRecoverInterruptedUsesCompleter(t *testing.T) {
 	user, team := newJobTestTeam(t, s, true)
 	j, _ := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
 	manager := aijobs.NewManager(s, &fakeRunner{})
+	manager.SetStaleAfter(-time.Minute)
 	c := &recordingCompleter{}
 	manager.SetCompleter(c)
 	if _, err := manager.RecoverInterrupted(ctx); err != nil {
@@ -505,5 +507,79 @@ func TestRecoverInterruptedUsesCompleter(t *testing.T) {
 	}
 	if c.calls != 1 || c.jobID != j.ID || c.status != domain.AIJobStatusFailed || c.message != aijobs.InterruptedMessage {
 		t.Fatalf("completer got %+v", c)
+	}
+}
+
+func TestRecoverInterruptedLeavesYoungJobsAlone(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	j, _ := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
+	manager := aijobs.NewManager(s, &fakeRunner{}) // default cutoff: timeout + margin
+	n, err := manager.RecoverInterrupted(ctx)
+	if err != nil || n != 0 {
+		t.Fatalf("recovered=%d err=%v, want 0,nil (another instance may own the job)", n, err)
+	}
+	if got, _ := s.GetAIJobByID(ctx, team.ID, j.ID); got.Status != domain.AIJobStatusPending {
+		t.Fatalf("young job status = %s", got.Status)
+	}
+}
+
+func TestRunRecoveryFailsStaleJobsPeriodically(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	user, team := newJobTestTeam(t, s, true)
+	j, _ := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
+	manager := aijobs.NewManager(s, &fakeRunner{})
+	manager.SetStaleAfter(-time.Minute)
+	done := make(chan struct{})
+	go func() { manager.RunRecovery(ctx, 10*time.Millisecond); close(done) }()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if got, _ := s.GetAIJobByID(context.Background(), team.ID, j.ID); got.Status == domain.AIJobStatusFailed {
+			cancel()
+			select {
+			case <-done:
+				return
+			case <-time.After(time.Second):
+				t.Fatal("RunRecovery did not stop with its context")
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("stale job was not failed by the periodic recovery")
+}
+
+func TestJobCancelledBeforeStartIsNotRun(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	release := make(chan struct{})
+	var runs atomic.Int32
+	manager := aijobs.NewManager(s, funcRunner(func(ctx context.Context, _ domain.AIJob) (json.RawMessage, error) {
+		runs.Add(1)
+		<-release
+		return json.RawMessage(`{}`), nil
+	}))
+	manager.SetMaxConcurrent(1)
+	_, _ = manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine})
+	queued, err := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulates the cancel endpoint having marked the job failed (no Manager.Cancel,
+	// e.g. cancelled on another instance).
+	if err := s.UpdateAIJobStatus(ctx, queued.ID, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	manager.Wait()
+	if runs.Load() != 1 {
+		t.Fatalf("runner invoked %d times, want 1", runs.Load())
+	}
+	got, _ := s.GetAIJobByID(ctx, team.ID, queued.ID)
+	if got.Status != domain.AIJobStatusFailed || got.ErrorMessage != "cancelled" {
+		t.Fatalf("cancelled job overwritten: %s/%q", got.Status, got.ErrorMessage)
 	}
 }
