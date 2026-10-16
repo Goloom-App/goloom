@@ -124,7 +124,8 @@ type Store interface {
 	CreateImportedPost(ctx context.Context, teamID, authorUserID string, input domain.ImportedPostInput) (domain.ScheduledPost, error)
 
 	// AI Context aggregation
-	GetTeamAIContext(ctx context.Context, teamID string) (domain.AIContext, error)
+	ListRecentPostedPosts(ctx context.Context, teamID string, limit int) ([]domain.ScheduledPost, error)
+	ListUpcomingPosts(ctx context.Context, teamID string, from time.Time, limit int) ([]domain.ScheduledPost, error)
 
 	// Admin: list AI-enabled teams
 	ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error)

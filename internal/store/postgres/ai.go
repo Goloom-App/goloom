@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -821,38 +822,10 @@ func scanProactiveTriggerSettings(row interface{ Scan(dest ...any) error }) (dom
 	return pts, nil
 }
 
-func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIContext, error) {
-	team, err := s.GetTeamByID(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: get team: %w", err)
-	}
-
-	var profilePtr *domain.TeamProfile
-	profile, err := s.GetTeamProfile(ctx, teamID)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: get profile: %w", err)
-		}
-	} else {
-		profilePtr = &profile
-	}
-
-	formats, err := s.ListCampaignFormats(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list formats: %w", err)
-	}
-
-	examples, err := s.ListStyleExamples(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list style examples: %w", err)
-	}
-
-	knowledgeSources, err := s.ListKnowledgeSources(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list knowledge sources: %w", err)
-	}
-
-	const recentPostsQuery = `
+// ListRecentPostedPosts returns the team's newest posted, non-empty posts
+// (newest first, at most limit) including target account IDs.
+func (s *Store) ListRecentPostedPosts(ctx context.Context, teamID string, limit int) ([]domain.ScheduledPost, error) {
+	const query = `
 		SELECT p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
@@ -865,15 +838,17 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		ORDER BY p.scheduled_at DESC
 		LIMIT $2
 	`
-	recentPosts, err := s.listPosts(ctx, recentPostsQuery, teamID, domain.AIContextRecentPostsLimit)
+	posts, err := s.listPosts(ctx, query, teamID, limit)
 	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list recent posts: %w", err)
+		return nil, fmt.Errorf("ListRecentPostedPosts: %w", err)
 	}
-	if recentPosts == nil {
-		recentPosts = []domain.ScheduledPost{}
-	}
+	return posts, nil
+}
 
-	const upcomingPostsQuery = `
+// ListUpcomingPosts returns the team's pending/draft posts scheduled at or
+// after from (soonest first, at most limit) including target account IDs.
+func (s *Store) ListUpcomingPosts(ctx context.Context, teamID string, from time.Time, limit int) ([]domain.ScheduledPost, error) {
+	const query = `
 		SELECT p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
@@ -881,65 +856,16 @@ func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIC
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		FROM scheduled_posts p
 		LEFT JOIN scheduled_post_targets t ON t.post_id = p.id
-		WHERE p.team_id = $1 AND p.status IN ('pending', 'draft') AND p.scheduled_at >= now()
+		WHERE p.team_id = $1 AND p.status IN ('pending', 'draft') AND p.scheduled_at >= $2
 		GROUP BY p.id
 		ORDER BY p.scheduled_at ASC
-		LIMIT $2
+		LIMIT $3
 	`
-	upcomingPosts, err := s.listPosts(ctx, upcomingPostsQuery, teamID, domain.AIContextUpcomingPostsLimit)
+	posts, err := s.listPosts(ctx, query, teamID, from, limit)
 	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list upcoming posts: %w", err)
+		return nil, fmt.Errorf("ListUpcomingPosts: %w", err)
 	}
-	if upcomingPosts == nil {
-		upcomingPosts = []domain.ScheduledPost{}
-	}
-
-	accounts, err := s.ListTeamAccounts(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: list accounts: %w", err)
-	}
-	accountSummaries := make([]domain.AIAccountSummary, 0, len(accounts))
-	for _, acc := range accounts {
-		accountSummaries = append(accountSummaries, domain.AIAccountSummary{
-			ID:       acc.ID,
-			Provider: acc.Provider,
-			Username: acc.Username,
-			MaxChars: domain.MaxCharsForProvider(acc.Provider, acc.MaxCharsOverride),
-		})
-	}
-
-	engagementHours, err := s.GetTeamEngagementHourHistogram(ctx, teamID, 90)
-	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: engagement hours: %w", err)
-	}
-
-	topHashtags, err := s.ListTeamHashtagPerformance(ctx, teamID, 90, "", 20)
-	if err != nil {
-		return domain.AIContext{}, fmt.Errorf("GetTeamAIContext: top hashtags: %w", err)
-	}
-
-	if formats == nil {
-		formats = []domain.CampaignFormat{}
-	}
-	if examples == nil {
-		examples = []domain.StyleExample{}
-	}
-	if knowledgeSources == nil {
-		knowledgeSources = []domain.KnowledgeSource{}
-	}
-
-	return domain.AIContext{
-		Team:             team,
-		Profile:          profilePtr,
-		CampaignFormats:  formats,
-		StyleExamples:    examples,
-		KnowledgeSources: knowledgeSources,
-		RecentPosts:      recentPosts,
-		Accounts:         accountSummaries,
-		UpcomingPosts:    upcomingPosts,
-		EngagementHours:  engagementHours,
-		TopHashtags:      topHashtags,
-	}, nil
+	return posts, nil
 }
 
 func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {

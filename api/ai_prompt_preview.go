@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"git.f4mily.net/goloom/internal/ai"
+	"git.f4mily.net/goloom/internal/aicontext"
 	"git.f4mily.net/goloom/internal/auth"
 )
 
@@ -25,7 +26,7 @@ func (a *API) handleAIPromptPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	aiContext, err := a.store.GetTeamAIContext(r.Context(), teamID)
+	aiContext, err := aicontext.Build(r.Context(), a.store, teamID, aicontext.Full())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
