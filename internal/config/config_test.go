@@ -185,3 +185,24 @@ func TestLoad_productionRejectsDevelopmentDefaultKey(t *testing.T) {
 		t.Fatal("expected error when ENCRYPTION_KEY is the development default in production")
 	}
 }
+
+func TestLoad_AIAllowedPrivateHosts(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("AI_ALLOWED_PRIVATE_HOSTS", "ollama.lan, localhost ,")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.AIAllowedPrivateHosts) != 2 || cfg.AIAllowedPrivateHosts[0] != "ollama.lan" || cfg.AIAllowedPrivateHosts[1] != "localhost" {
+		t.Fatalf("AIAllowedPrivateHosts = %q", cfg.AIAllowedPrivateHosts)
+	}
+
+	t.Setenv("AI_ALLOWED_PRIVATE_HOSTS", "")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.AIAllowedPrivateHosts) != 0 {
+		t.Fatalf("default must allow no private hosts, got %q", cfg.AIAllowedPrivateHosts)
+	}
+}

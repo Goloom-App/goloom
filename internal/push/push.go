@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/netguard"
 	webpush "github.com/SherClockHolmes/webpush-go"
 )
 
@@ -122,55 +123,13 @@ type ReviewNotificationData struct {
 	URL      string `json:"url"`
 }
 
-// nonPublicPrefixes lists reserved, documentation, benchmarking and
-// special-use ranges the stdlib NetAddr getters do not flag but an SSRF guard
-// must still reject before a socket is opened. An endpoint may never resolve
-// into one of these: a compromised client could otherwise point the server at
-// an unreachable-but-local-ish target, making it an SSRF proxy. Sources: IANA
-// special-purpose registries (RFC 5737 TEST-NET, RFC 6890 reserved,
-// RFC 3849/RFC 9637 IPv6 documentation, RFC 2544/RFC 5180 benchmarking,
-// RFC 6598 CGNAT, RFC 7526 6to4 relay anycast, RFC 3879 site-local,
-// RFC 6666 discard-only). IPv4-mapped forms are normalized by Unmap before
-// this table is consulted.
-var nonPublicPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"),       // "this network" on this host
-	netip.MustParsePrefix("240.0.0.0/4"),     // reserved for future use (incl. broadcast)
-	netip.MustParsePrefix("100.64.0.0/10"),   // CGNAT shared address space
-	netip.MustParsePrefix("192.0.2.0/24"),    // TEST-NET-1
-	netip.MustParsePrefix("198.51.100.0/24"), // TEST-NET-2
-	netip.MustParsePrefix("203.0.113.0/24"),  // TEST-NET-3
-	netip.MustParsePrefix("198.18.0.0/15"),   // benchmarking
-	netip.MustParsePrefix("192.88.99.0/24"),  // 6to4 relay anycast (deprecated)
-	netip.MustParsePrefix("2001:db8::/32"),   // IPv6 documentation
-	netip.MustParsePrefix("2001::/23"),       // reserved protocol assignments (incl. benchmarking)
-	netip.MustParsePrefix("2001:ffff::/32"),  // reserved (deprecated overlay anycast)
-	netip.MustParsePrefix("2002::/16"),       // 6to4 (deprecated)
-	netip.MustParsePrefix("0100::/64"),       // discard-only
-	netip.MustParsePrefix("3fff::/20"),       // reserved for future documentation
-	netip.MustParsePrefix("fec0::/10"),       // site-local (deprecated)
-}
-
-// isPublicAddr reports whether addr is a routable public address. Loopback,
-// RFC1918/ULA private ranges, link-local, multicast and unspecified addresses
-// are non-public, as are the reserved/special-use ranges in nonPublicPrefixes:
-// a push endpoint must never resolve to any of them, or the server becomes an
-// SSRF proxy into an internal network (endpoints are stored capability URLs
+// isPublicAddr reports whether addr is a routable public address: a push
+// endpoint must never resolve to anything else, or the server becomes an SSRF
+// proxy into an internal network (endpoints are stored capability URLs
 // learned from browsers, so a compromised client could point the server at an
-// internal host otherwise).
+// internal host otherwise). The shared range table lives in netguard.
 func isPublicAddr(addr netip.Addr) bool {
-	// Unmap first so IPv4-in-IPv6 tuples are judged by their IPv4 value; a
-	// mapped 8.8.8.8 is public, a mapped 10.0.0.1 is still SSRF fuel.
-	addr = addr.Unmap()
-	if !addr.IsValid() || addr.IsUnspecified() || addr.IsLoopback() ||
-		addr.IsPrivate() || addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() || addr.IsMulticast() {
-		return false
-	}
-	for _, p := range nonPublicPrefixes {
-		if p.Contains(addr) {
-			return false
-		}
-	}
-	return addr.IsGlobalUnicast()
+	return netguard.IsPublicAddr(addr)
 }
 
 // resolveHostIPs returns the addresses for an endpoint host. Hosts that are

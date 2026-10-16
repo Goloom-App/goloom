@@ -43,6 +43,8 @@ The REST API is likewise designed for automation:
 
 ## Provider keys
 
-AI features require credentials for your chosen model provider, configured via
-environment variables. See [configuration](/getting-started/configuration/) and
-the [API reference](/api/) for details.
+AI features require credentials for your chosen model provider. Team owners
+set them in the team settings; changing the provider or base URL requires
+entering the key again. Private hosts (e.g. a local Ollama) must be allowed by
+the admin — see [configuration](/getting-started/configuration/#ai-provider) and
+the [API reference](/api/).
