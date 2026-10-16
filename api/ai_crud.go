@@ -1,13 +1,16 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/netguard"
 )
 
 func (a *API) handleUpsertTeamProfile(w http.ResponseWriter, r *http.Request) {
@@ -304,12 +307,39 @@ func (a *API) handleUpsertAIServiceConfig(w http.ResponseWriter, r *http.Request
 	if provider == "" {
 		provider = "openai"
 	}
+	baseURL := strings.TrimSpace(input.BaseURL)
+	if baseURL != "" {
+		if err := netguard.NewPolicy(a.config.AIAllowedPrivateHosts).CheckURL(r.Context(), baseURL); err != nil {
+			a.log.WarnContext(r.Context(), "rejected AI base_url", "team_id", teamID, "error", err)
+			a.writeError(w, r, "invalid_ai_base_url", http.StatusBadRequest)
+			return
+		}
+	}
+	apiKey := strings.TrimSpace(input.APIKey)
+	// The stored key is only kept for the endpoint it was entered for: a new
+	// provider or base_url must come with the key again, or the next LLM call
+	// would hand the existing key to whatever host was just configured.
+	if apiKey == "" {
+		existing, err := a.store.GetAIServiceConfig(r.Context(), teamID)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			// No stored key that could leak.
+		case err != nil:
+			// Fail closed: the upsert would keep a key we could not check.
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		case existing.APIKey != "" &&
+			(existing.Provider != provider || normalizeAIBaseURL(existing.BaseURL) != normalizeAIBaseURL(baseURL)):
+			a.writeError(w, r, "ai_api_key_required", http.StatusBadRequest)
+			return
+		}
+	}
 	cfg, err := a.store.UpsertAIServiceConfig(r.Context(), teamID, domain.AIServiceConfig{
 		Provider:    provider,
 		Model:       strings.TrimSpace(input.Model),
-		BaseURL:     strings.TrimSpace(input.BaseURL),
+		BaseURL:     baseURL,
 		Description: input.Description,
-		APIKey:      strings.TrimSpace(input.APIKey),
+		APIKey:      apiKey,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -318,6 +348,12 @@ func (a *API) handleUpsertAIServiceConfig(w http.ResponseWriter, r *http.Request
 	// Never include the API key in the audit summary.
 	a.recordAudit(r, teamID, "ai_config.update", "ai_config", nil, "Updated AI provider configuration ("+provider+")")
 	auth.WriteJSON(w, http.StatusOK, cfg)
+}
+
+// normalizeAIBaseURL compares base URLs the way the LLM clients use them
+// (they trim whitespace and trailing slashes before appending the path).
+func normalizeAIBaseURL(raw string) string {
+	return strings.TrimRight(strings.TrimSpace(raw), "/")
 }
 
 func (a *API) handleGetProactiveSettings(w http.ResponseWriter, r *http.Request) {
