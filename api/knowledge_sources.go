@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
@@ -108,7 +109,7 @@ func (a *API) checkKnowledgeInput(w http.ResponseWriter, r *http.Request, input 
 		a.writeError(w, r, "invalid_knowledge_source", http.StatusBadRequest)
 		return false
 	}
-	if len(input.Content) > maxKnowledgeContentSize {
+	if utf8.RuneCountInString(input.Content) > maxKnowledgeContentChars {
 		a.writeError(w, r, "knowledge_source_too_large", http.StatusBadRequest)
 		return false
 	}

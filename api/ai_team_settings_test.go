@@ -194,7 +194,7 @@ func TestKnowledgeSourceValidationLimitsAndAudit(t *testing.T) {
 	assertErr(t, doRequest(t, f.h, http.MethodPost, base, f.bearer, map[string]any{"type": "text", "name": "n"}), http.StatusBadRequest, "invalid_knowledge_source")
 	assertErr(t, doRequest(t, f.h, http.MethodPost, base, f.bearer, map[string]any{"type": "bogus", "name": "n", "content": "c"}), http.StatusBadRequest, "invalid_knowledge_source")
 	assertErr(t, doRequest(t, f.h, http.MethodPost, base, f.bearer, map[string]any{"type": "text", "name": strings.Repeat("n", 201), "content": "c"}), http.StatusBadRequest, "invalid_knowledge_source")
-	assertErr(t, doRequest(t, f.h, http.MethodPost, base, f.bearer, map[string]any{"type": "text", "name": "n", "content": strings.Repeat("x", 100_001)}), http.StatusBadRequest, "knowledge_source_too_large")
+	assertErr(t, doRequest(t, f.h, http.MethodPost, base, f.bearer, map[string]any{"type": "text", "name": "n", "content": strings.Repeat("ä", 20_001)}), http.StatusBadRequest, "knowledge_source_too_large")
 
 	var firstID string
 	for i := 0; i < 50; i++ {

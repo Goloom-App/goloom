@@ -1206,7 +1206,7 @@
     "invalid_campaign_format": "Ungültiges Kampagnenformat: Name (max. 120 Zeichen) und Struktur sind Pflicht, Wochentag 0-6, höchstens 30 Hashtags",
     "invalid_style_example": "Ungültiges Stilbeispiel: Inhalt ist Pflicht (max. 5000 Zeichen), Notizen max. 1000",
     "invalid_knowledge_source": "Ungültige Wissensquelle: Typ, Name (max. 200 Zeichen) und Inhalt oder source_url sind Pflicht",
-    "knowledge_source_too_large": "Inhalt der Wissensquelle ist zu groß (max. 100000 Bytes)",
+    "knowledge_source_too_large": "Inhalt der Wissensquelle ist zu lang (max. 20000 Zeichen)",
     "knowledge_source_limit_reached": "Limit für Wissensquellen erreicht (max. 50 pro Team)",
     "knowledge_source_not_found": "Wissensquelle nicht gefunden",
     "knowledge_url_fetch_failed": "Die URL der Wissensquelle konnte nicht abgerufen werden",
