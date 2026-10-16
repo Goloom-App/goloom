@@ -165,6 +165,11 @@ func Run(ctx context.Context) error {
 	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog, jobManager, sseHub)
 	apiHandler.SetAIService(aiService)
 
+	// Fail AI jobs orphaned by a dead process, now and periodically (stops with
+	// ctx). Only jobs older than the execution timeout are touched, so other
+	// replicas' live jobs are safe. Completer is registered by api.New above.
+	go jobManager.RunRecovery(ctx, 0)
+
 	// Review notifications: the scheduler shares the API's Web Push sender.
 	// Started only after wiring so no automation post races the missing sender.
 	schedulerService.SetPushSender(apiHandler.PushSender())

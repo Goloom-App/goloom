@@ -438,6 +438,32 @@ func (s *Store) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJo
 	return collectAIJobs(rows)
 }
 
+func (s *Store) MarkAIJobProcessing(ctx context.Context, id string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `
+		update ai_jobs set status = ?, updated_at = ?
+		where id = ? and status = ?`,
+		string(domain.AIJobStatusProcessing), nowString(), id, string(domain.AIJobStatusPending))
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+func (s *Store) ListUnfinishedAIJobs(ctx context.Context, olderThan time.Time, limit int) ([]domain.AIJob, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, team_id, author_user_id, job_type, status, payload, result, error_message, created_at, updated_at, completed_at
+		from ai_jobs
+		where status in (?, ?) and updated_at < ?
+		order by created_at asc
+		limit ?`, string(domain.AIJobStatusPending), string(domain.AIJobStatusProcessing), formatTime(olderThan), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectAIJobs(rows)
+}
+
 func scanAIJob(scanner rowScanner) (domain.AIJob, error) {
 	var (
 		job         domain.AIJob
