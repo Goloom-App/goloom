@@ -1,8 +1,27 @@
-import { test, expect } from '@playwright/test'
-import { signIn } from './helpers'
+import { test, expect, type APIRequestContext } from '@playwright/test'
+import { e2eBootstrapToken } from './constants'
+import { ensureE2EAccount, getFirstTeamId, signIn } from './helpers'
+
+async function deleteTemplatesByTitle(request: APIRequestContext, baseURL: string, teamId: string, title: string) {
+  const headers = { Authorization: `Bearer ${e2eBootstrapToken()}` }
+  const res = await request.get(`${baseURL}/v1/teams/${teamId}/post-templates`, { headers })
+  expect(res.ok()).toBeTruthy()
+  const { items = [] } = (await res.json()) as { items?: { id: string; title: string }[] }
+  for (const item of items.filter((i) => i.title === title)) {
+    const del = await request.delete(`${baseURL}/v1/teams/${teamId}/post-templates/${item.id}`, { headers })
+    expect(del.ok()).toBeTruthy()
+  }
+}
 
 test.describe('recurring posts form', () => {
-  test.beforeEach(async ({ page }) => {
+  let teamId = ''
+
+  test.beforeEach(async ({ page, baseURL }) => {
+    if (!baseURL) throw new Error('baseURL missing')
+    // Other specs share the database and may already have seeded an account;
+    // ensure one exists so saving is deterministic regardless of spec order.
+    teamId = await getFirstTeamId(baseURL, e2eBootstrapToken())
+    await ensureE2EAccount(baseURL, e2eBootstrapToken(), teamId)
     await signIn(page)
     await page.getByRole('button', { name: /^Automation$/i }).click()
     await expect(page.getByTestId('automation-view')).toBeVisible()
@@ -15,7 +34,7 @@ test.describe('recurring posts form', () => {
     await expect(page.getByRole('radio', { name: /monthly.*anchor|monatlich.*anker/i })).toBeVisible()
   })
 
-  test('weekly recurrence saves correctly', async ({ page }) => {
+  test('weekly recurrence saves correctly', async ({ page, request, baseURL }) => {
     await page.getByTestId('recurring-add-template').click()
 
     await page.getByLabel(/title|titel/i).fill('E2E Weekly Test')
@@ -36,19 +55,14 @@ test.describe('recurring posts form', () => {
     // select timezone
     await page.locator('.recurrence-form__field').filter({ hasText: /timezone|zeitzone/i }).locator('input').fill('Europe/Berlin')
 
-    // pick at least one account target
-    const targetBtns = page.locator('.composer-destination-toggle')
-    const count = await targetBtns.count()
-    if (count > 0) {
-      await targetBtns.first().click()
-    }
+    await page.locator('.composer-destination-toggle').first().click()
 
     await page.getByRole('button', { name: /create|erstellen/i }).evaluate(el => (el as HTMLButtonElement).click())
-    // validation shows required-fields error because no account targets exist in test env
-    await expect(page.getByText(/required|erforderlich/i)).toBeVisible()
+    await expect(page.getByText(/template created|vorlage erstellt/i)).toBeVisible()
+    await deleteTemplatesByTitle(request, baseURL!, teamId, 'E2E Weekly Test')
   })
 
-  test('monthly_dom recurrence saves correctly', async ({ page }) => {
+  test('monthly_dom recurrence saves correctly', async ({ page, request, baseURL }) => {
     await page.getByTestId('recurring-add-template').click()
 
     await page.getByLabel(/title|titel/i).fill('E2E Monthly Test')
@@ -63,15 +77,11 @@ test.describe('recurring posts form', () => {
     await page.locator('.recurrence-form__field').filter({ hasText: /minute/i }).locator('input').fill('0')
     await page.locator('.recurrence-form__field').filter({ hasText: /timezone|zeitzone/i }).locator('input').fill('UTC')
 
-    const targetBtns = page.locator('.composer-destination-toggle')
-    const count = await targetBtns.count()
-    if (count > 0) {
-      await targetBtns.first().click()
-    }
+    await page.locator('.composer-destination-toggle').first().click()
 
     await page.getByRole('button', { name: /create|erstellen/i }).evaluate(el => (el as HTMLButtonElement).click())
-    // validation shows required-fields error because no account targets exist in test env
-    await expect(page.getByText(/required|erforderlich/i)).toBeVisible()
+    await expect(page.getByText(/template created|vorlage erstellt/i)).toBeVisible()
+    await deleteTemplatesByTitle(request, baseURL!, teamId, 'E2E Monthly Test')
   })
 
   test('validates required fields', async ({ page }) => {

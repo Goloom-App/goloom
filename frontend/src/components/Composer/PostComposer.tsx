@@ -7,7 +7,7 @@ import { Icon } from '../../icons'
 import type { AccountRecord, TeamSchedulingPreferences } from '../../types'
 import { ScheduleInsights } from './ScheduleInsights'
 import { DestinationAvatar } from '../post/DestinationAvatar'
-import { charCounterClass, pruneMediaExcludeAfterRemove } from './editorDraft'
+import { charCounterClass, postTitleForSave, pruneMediaExcludeAfterRemove } from './editorDraft'
 import { graphemeLength, providerPostLength } from '../../postLength'
 import { ComposerMedia } from './ComposerMedia'
 import { ComposerPreviews } from './ComposerPreviews'
@@ -87,6 +87,7 @@ export function PostComposer({
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
   const [mobilePanel, setMobilePanel] = useState<'edit' | 'preview'>('edit')
   const [libraryItems, setLibraryItems] = useState<BackendMediaItem[]>([])
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open || !teamId || !api) {
@@ -239,9 +240,10 @@ export function PostComposer({
 
   const onSaveInternal = async () => {
     if (syncing || !onSave) return
+    setSubmitError(null)
     try {
       const payload = {
-        title: draft.title,
+        title: postTitleForSave(draft.title, draft.content),
         content: draft.content,
         scheduled_at: new Date(draft.scheduledAt).toISOString(),
         target_accounts: draft.targetAccountIds,
@@ -252,7 +254,7 @@ export function PostComposer({
       }
       const val = await api!.validatePost(teamId!, payload)
       if (!val.valid) {
-        // TODO: UI feedback for validation failure
+        setSubmitError(t('composer.validationFailed'))
         return
       }
       // When saving/scheduling, we always want to move out of draft
@@ -260,6 +262,7 @@ export function PostComposer({
       await onSave()
     } catch (err) {
       console.error('Failed to save post', err)
+      setSubmitError(err instanceof Error ? err.message : t('composer.scheduleFailed'))
     }
   }
 
@@ -578,6 +581,12 @@ export function PostComposer({
               {t('composer.requiresMediaHint', {
                 names: missingMediaAccounts.map((a) => a.name).join(', '),
               })}
+            </p>
+          ) : null}
+
+          {submitError ? (
+            <p className="hint composer-past-warning" role="alert">
+              {submitError}
             </p>
           ) : null}
 

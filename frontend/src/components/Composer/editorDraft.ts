@@ -16,6 +16,21 @@ export function toInputDateTime(date: Date) {
   return format(date, "yyyy-MM-dd'T'HH:mm")
 }
 
+export function postTitleForSave(title: string, content: string): string {
+  const explicit = title.trim()
+  if (explicit) {
+    return explicit
+  }
+
+  const normalizedContent = content.trim().replace(/\s+/g, ' ')
+  if (!normalizedContent) {
+    return 'Untitled post'
+  }
+
+  const characters = Array.from(normalizedContent)
+  return characters.length <= 80 ? normalizedContent : `${characters.slice(0, 77).join('')}…`
+}
+
 export function defaultEditorDraft(date: Date, teamAccounts: AccountRecord[]): EditorDraftState {
   const roundedDate = roundToNextSlot(date)
   return {
