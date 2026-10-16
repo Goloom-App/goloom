@@ -18,8 +18,8 @@ const (
 	ProviderOpenAI    = "openai"
 	ProviderAnthropic = "anthropic"
 
-	DefaultOpenAIModel    = "gpt-4o"
-	DefaultAnthropicModel = "claude-opus-4-8"
+	DefaultOpenAIModel    = "gpt-5"
+	DefaultAnthropicModel = "claude-sonnet-5-5"
 
 	defaultMaxTokens = 2048
 	// maxTokenBudget caps the growth of escalateBudget. Reasoning models can burn

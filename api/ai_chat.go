@@ -50,7 +50,7 @@ func (a *API) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := ai.NewClient(ai.SettingsFromConfig(config), nil)
+	client, err := a.aiService.ClientFor(config)
 	if err != nil {
 		a.writeError(w, r, "ai_service_not_configured", http.StatusUnprocessableEntity)
 		return

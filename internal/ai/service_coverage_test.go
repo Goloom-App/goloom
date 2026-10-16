@@ -50,7 +50,7 @@ func TestSettingsFromConfig_WithTeamID(t *testing.T) {
 	teamID := "team-abc"
 	cfg := domain.AIServiceConfig{
 		Provider: ProviderOpenAI,
-		Model:    "gpt-4o",
+		Model:    "gpt-5",
 		APIKey:   "sk-test",
 		BaseURL:  "https://api.example.com",
 		TeamID:   &teamID,
@@ -62,8 +62,8 @@ func TestSettingsFromConfig_WithTeamID(t *testing.T) {
 	if s.Provider != ProviderOpenAI {
 		t.Fatalf("Provider = %q, want openai", s.Provider)
 	}
-	if s.Model != "gpt-4o" {
-		t.Fatalf("Model = %q, want gpt-4o", s.Model)
+	if s.Model != "gpt-5" {
+		t.Fatalf("Model = %q, want gpt-5", s.Model)
 	}
 	if s.APIKey != "sk-test" {
 		t.Fatalf("APIKey = %q, want sk-test", s.APIKey)
@@ -90,7 +90,7 @@ func TestSettingsFromConfig_NilTeamIDYieldsEmptyTeam(t *testing.T) {
 
 func TestClientFor_MissingAPIKeyReturnsErrNotConfigured(t *testing.T) {
 	svc := NewService()
-	cfg := domain.AIServiceConfig{Provider: ProviderOpenAI, Model: "gpt-4o", APIKey: ""}
+	cfg := domain.AIServiceConfig{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: ""}
 	_, err := svc.ClientFor(cfg)
 	if !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("expected ErrNotConfigured, got %v", err)
@@ -99,7 +99,7 @@ func TestClientFor_MissingAPIKeyReturnsErrNotConfigured(t *testing.T) {
 
 func TestClientFor_ValidConfigReturnsClient(t *testing.T) {
 	svc := NewService()
-	cfg := domain.AIServiceConfig{Provider: ProviderOpenAI, Model: "gpt-4o", APIKey: "sk-test"}
+	cfg := domain.AIServiceConfig{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: "sk-test"}
 	client, err := svc.ClientFor(cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -151,7 +151,7 @@ func TestRunJob_ProfileAnalysisDispatches(t *testing.T) {
 	// dispatch through Service.RunJob -> runProfileAnalysis -> LLM.
 	analysisResponse := `{"tonality":"direct","formatting_rules":[],"banned_words":[],"preferred_language":"en","max_hashtags":2}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		io.WriteString(w, `{"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":`+
+		io.WriteString(w, `{"model":"gpt-5","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":`+
 			`"`+strings.ReplaceAll(analysisResponse, `"`, `\"`)+`"}}]}`)
 	}))
 	defer server.Close()
@@ -161,7 +161,7 @@ func TestRunJob_ProfileAnalysisDispatches(t *testing.T) {
 
 	cfg := domain.AIServiceConfig{
 		Provider: ProviderOpenAI,
-		Model:    "gpt-4o",
+		Model:    "gpt-5",
 		APIKey:   "sk-test",
 		BaseURL:  server.URL,
 	}
