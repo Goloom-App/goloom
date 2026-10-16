@@ -438,6 +438,20 @@ func (s *Store) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJo
 	return collectAIJobs(rows)
 }
 
+func (s *Store) ListUnfinishedAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		select id, team_id, author_user_id, job_type, status, payload, result, error_message, created_at, updated_at, completed_at
+		from ai_jobs
+		where status in (?, ?)
+		order by created_at asc
+		limit ?`, string(domain.AIJobStatusPending), string(domain.AIJobStatusProcessing), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectAIJobs(rows)
+}
+
 func scanAIJob(scanner rowScanner) (domain.AIJob, error) {
 	var (
 		job         domain.AIJob

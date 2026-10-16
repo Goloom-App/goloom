@@ -434,3 +434,41 @@ func TestAIServiceConfigUpsert(t *testing.T) {
 		t.Fatalf("GetAIServiceConfig: got provider %q, key set %v", got.Provider, got.APIKeySet)
 	}
 }
+
+func TestAIListUnfinishedJobs(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, team := newAITestTeam(t, s)
+
+	mk := func(status domain.AIJobStatus) string {
+		j, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
+		if err != nil {
+			t.Fatalf("CreateAIJob: %v", err)
+		}
+		if status != domain.AIJobStatusPending {
+			if err := s.UpdateAIJobStatus(ctx, j.ID, status, nil, ""); err != nil {
+				t.Fatalf("UpdateAIJobStatus: %v", err)
+			}
+		}
+		return j.ID
+	}
+	pendingID := mk(domain.AIJobStatusPending)
+	processingID := mk(domain.AIJobStatusProcessing)
+	completedID := mk(domain.AIJobStatusCompleted)
+	failedID := mk(domain.AIJobStatusFailed)
+
+	got, err := s.ListUnfinishedAIJobs(ctx, 100)
+	if err != nil {
+		t.Fatalf("ListUnfinishedAIJobs: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, j := range got {
+		ids[j.ID] = true
+	}
+	if !ids[pendingID] || !ids[processingID] {
+		t.Fatalf("pending and processing jobs must be listed, got %v", ids)
+	}
+	if ids[completedID] || ids[failedID] {
+		t.Fatalf("finished jobs must not be listed, got %v", ids)
+	}
+}

@@ -6,11 +6,14 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/security"
+	storepkg "git.f4mily.net/goloom/internal/store"
 	"git.f4mily.net/goloom/internal/store/sqlite"
 	"github.com/google/uuid"
 )
@@ -281,7 +284,226 @@ func TestCompleterReceivesCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Status != domain.AIJobStatusPending {
-		t.Fatalf("status persistence is the completer's job; store has %s", stored.Status)
+	if stored.Status != domain.AIJobStatusProcessing {
+		t.Fatalf("final status persistence is the completer's job; store has %s", stored.Status)
+	}
+}
+
+// failingContextStore makes loading the AI context fail.
+type failingContextStore struct {
+	storepkg.Store
+}
+
+func (failingContextStore) ListTeamAccounts(context.Context, string) ([]domain.SocialAccount, error) {
+	return nil, errors.New("context boom")
+}
+
+func TestSubmitJobContextFailureLeavesNoPendingJob(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	manager := aijobs.NewManager(failingContextStore{Store: s}, &fakeRunner{})
+
+	if _, err := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine}); err == nil {
+		t.Fatal("expected error when context load fails")
+	}
+	jobs, err := s.ListAIJobs(ctx, team.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("no job may be left behind, got %d (status %s)", len(jobs), jobs[0].Status)
+	}
+}
+
+type funcRunner func(ctx context.Context, job domain.AIJob) (json.RawMessage, error)
+
+func (f funcRunner) RunJob(ctx context.Context, job domain.AIJob, _ domain.AIServiceConfig, _ domain.AIContext) (json.RawMessage, error) {
+	return f(ctx, job)
+}
+
+func TestExecuteMarksJobProcessing(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	var seen atomic.Value
+	manager := aijobs.NewManager(s, funcRunner(func(ctx context.Context, job domain.AIJob) (json.RawMessage, error) {
+		stored, err := s.GetAIJobByID(ctx, team.ID, job.ID)
+		if err == nil {
+			seen.Store(stored.Status)
+		}
+		return json.RawMessage(`{}`), nil
+	}))
+	notifier := &recordingNotifier{}
+	manager.SetCompleter(notifier)
+
+	if _, err := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine}); err != nil {
+		t.Fatal(err)
+	}
+	manager.Wait()
+	if got, _ := seen.Load().(domain.AIJobStatus); got != domain.AIJobStatusProcessing {
+		t.Fatalf("status during run = %q, want processing", got)
+	}
+	if notifier.count() != 1 {
+		t.Fatalf("status notifier calls = %d, want 1", notifier.count())
+	}
+}
+
+type recordingNotifier struct {
+	recordingCompleter
+	n atomic.Int32
+}
+
+func (r *recordingNotifier) NotifyAIJobStatus(context.Context, string) { r.n.Add(1) }
+func (r *recordingNotifier) count() int                                { return int(r.n.Load()) }
+
+func TestCancelAbortsRunningJob(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	started := make(chan struct{})
+	var runErr atomic.Value
+	manager := aijobs.NewManager(s, funcRunner(func(ctx context.Context, _ domain.AIJob) (json.RawMessage, error) {
+		close(started)
+		select {
+		case <-ctx.Done():
+			runErr.Store(ctx.Err())
+			return nil, ctx.Err()
+		case <-time.After(5 * time.Second):
+			return json.RawMessage(`{}`), nil
+		}
+	}))
+
+	job, err := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	if !manager.Cancel(job.ID) {
+		t.Fatal("Cancel returned false for a running job")
+	}
+	manager.Wait()
+	if err, _ := runErr.Load().(error); !errors.Is(err, context.Canceled) {
+		t.Fatalf("runner ctx err = %v, want context.Canceled", err)
+	}
+	if manager.Cancel(job.ID) {
+		t.Fatal("Cancel must return false once the job finished")
+	}
+}
+
+func TestConcurrencyLimitQueuesExcessJobs(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	var running, peak atomic.Int32
+	manager := aijobs.NewManager(s, funcRunner(func(context.Context, domain.AIJob) (json.RawMessage, error) {
+		n := running.Add(1)
+		for {
+			p := peak.Load()
+			if n <= p || peak.CompareAndSwap(p, n) {
+				break
+			}
+		}
+		time.Sleep(30 * time.Millisecond)
+		running.Add(-1)
+		return json.RawMessage(`{}`), nil
+	}))
+	manager.SetMaxConcurrent(2)
+
+	for i := 0; i < 6; i++ {
+		if _, err := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manager.Wait()
+	if peak.Load() > 2 {
+		t.Fatalf("peak concurrency = %d, want <= 2", peak.Load())
+	}
+	jobs, _ := s.ListAIJobs(ctx, team.ID, 10)
+	for _, j := range jobs {
+		if j.Status != domain.AIJobStatusCompleted && j.Status != domain.AIJobStatusProcessing {
+			t.Fatalf("job %s status %s; queued jobs must wait, not fail", j.ID, j.Status)
+		}
+	}
+}
+
+func TestCancelAbortsQueuedJob(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	release := make(chan struct{})
+	var runs atomic.Int32
+	manager := aijobs.NewManager(s, funcRunner(func(ctx context.Context, _ domain.AIJob) (json.RawMessage, error) {
+		runs.Add(1)
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return json.RawMessage(`{}`), nil
+	}))
+	manager.SetMaxConcurrent(1)
+	first, _ := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine})
+	queued, err := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !manager.Cancel(queued.ID) {
+		t.Fatal("Cancel returned false for a queued job")
+	}
+	close(release)
+	manager.Wait()
+	if runs.Load() != 1 {
+		t.Fatalf("runner invoked %d times, queued cancelled job must not run (first=%s)", runs.Load(), first.ID)
+	}
+}
+
+func TestRecoverInterruptedFailsStaleJobs(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	mk := func(status domain.AIJobStatus) string {
+		j, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status != domain.AIJobStatusPending {
+			_ = s.UpdateAIJobStatus(ctx, j.ID, status, nil, "")
+		}
+		return j.ID
+	}
+	pending, processing, done := mk(domain.AIJobStatusPending), mk(domain.AIJobStatusProcessing), mk(domain.AIJobStatusCompleted)
+
+	manager := aijobs.NewManager(s, &fakeRunner{})
+	n, err := manager.RecoverInterrupted(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("recovered = %d, want 2", n)
+	}
+	for _, id := range []string{pending, processing} {
+		j, _ := s.GetAIJobByID(ctx, team.ID, id)
+		if j.Status != domain.AIJobStatusFailed || j.ErrorMessage != aijobs.InterruptedMessage {
+			t.Fatalf("job %s = %s/%q", id, j.Status, j.ErrorMessage)
+		}
+	}
+	if j, _ := s.GetAIJobByID(ctx, team.ID, done); j.Status != domain.AIJobStatusCompleted {
+		t.Fatalf("completed job changed to %s", j.Status)
+	}
+}
+
+func TestRecoverInterruptedUsesCompleter(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	j, _ := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{}`)})
+	manager := aijobs.NewManager(s, &fakeRunner{})
+	c := &recordingCompleter{}
+	manager.SetCompleter(c)
+	if _, err := manager.RecoverInterrupted(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if c.calls != 1 || c.jobID != j.ID || c.status != domain.AIJobStatusFailed || c.message != aijobs.InterruptedMessage {
+		t.Fatalf("completer got %+v", c)
 	}
 }

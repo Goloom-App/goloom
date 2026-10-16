@@ -33,6 +33,9 @@ func (a *API) handleCancelAIJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Abort the in-process LLM call (no-op if the job is not running here).
+	a.jobManager.Cancel(job.ID)
+
 	updatedJob, err := a.store.GetAIJobByID(r.Context(), teamID, jobID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

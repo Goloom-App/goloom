@@ -480,6 +480,17 @@ func (s *Store) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJo
 	return s.listAIJobs(ctx, query, limit)
 }
 
+func (s *Store) ListUnfinishedAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error) {
+	const query = `
+		SELECT id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
+		FROM ai_jobs
+		WHERE status IN ('pending', 'processing')
+		ORDER BY created_at ASC
+		LIMIT $1
+	`
+	return s.listAIJobs(ctx, query, limit)
+}
+
 func (s *Store) listAIJobs(ctx context.Context, query string, args ...any) ([]domain.AIJob, error) {
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {

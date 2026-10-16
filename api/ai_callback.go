@@ -76,6 +76,19 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 	}
 }
 
+// NotifyAIJobStatus implements aijobs.StatusNotifier: publishes the current
+// (non-final) job state, e.g. processing, to the team's SSE stream.
+func (a *API) NotifyAIJobStatus(ctx context.Context, jobID string) {
+	job, err := a.store.GetAIJobByIDGlobal(ctx, jobID)
+	if err != nil {
+		a.log.ErrorContext(ctx, "ai job status notify: job not found", "job_id", jobID, "error", err)
+		return
+	}
+	if event, evErr := aiJobStreamEvent(job); evErr == nil {
+		a.hub.Publish(job.TeamID, event)
+	}
+}
+
 func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {

@@ -70,6 +70,9 @@ type Store interface {
 	ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error)
 	UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) error
 	ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error)
+	// ListUnfinishedAIJobs returns pending and processing jobs (oldest first);
+	// used at startup to fail jobs orphaned by a restart.
+	ListUnfinishedAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error)
 
 	// AIServiceConfig methods
 	GetAIServiceConfig(ctx context.Context, teamID string) (domain.AIServiceConfig, error)
