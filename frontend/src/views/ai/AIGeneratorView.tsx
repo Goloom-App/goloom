@@ -203,7 +203,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
     try {
       const preview = await promptPreview.mutateAsync({
         teamId: team.id,
-        params: buildGenerationParams(true),
+        params: buildGenerationParams(false),
       })
       setPromptSystemText(preview.system_prompt || '')
       setPromptTaskText(preview.generation_prompt || '')

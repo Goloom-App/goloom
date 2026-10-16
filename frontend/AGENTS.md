@@ -15,7 +15,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - Entry: `index.html` → `src/main.tsx` → `src/App.tsx`
 - Domain types: `src/types.ts` (single source of truth)
 - API client: `src/api.ts`
-- AI Generator prompt preview uses current settings and the same refine params as “Neu generieren”, including the latest draft; covered by `e2e/ai-prompt-preview.spec.ts`
+- AI Generator prompt preview defaults to the plain “Generieren” action with current settings, even when an existing draft also offers “Neu generieren”; covered by `e2e/ai-prompt-preview.spec.ts`
 - Team AI setup: saving provider config in `App.tsx` enables a newly toggled team only after the config save succeeds; keep this sequence covered by `e2e/team-ai-setup.spec.ts`
 - Local-storage helpers: `src/appStorage.ts` (settings, last section/team keys)
 - Theming: CSS variables in `src/index.css`; the accent family derives from `--brand-primary` (team brand color, set inline on `<html>` by `App.tsx`; default purple fallback). Theme/breakpoint hooks in `src/hooks/useTheme.ts`

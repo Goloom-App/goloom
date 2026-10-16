@@ -331,7 +331,7 @@ func overrideHintFor(lower []domain.AIAccountSummary, emptyHint string) string {
 func buildMultiAccountPrompt(aiContext domain.AIContext, p params, selected []domain.AIAccountSummary, primaryLimit int, scheduledAt *time.Time, includeTitle bool) string {
 	primary := primaryAccount(selected)
 	primaryPlatform := orDefault(primary.Provider, "general")
-	basePrompt := buildGenerationPrompt(aiContext, p, primaryPlatform)
+	basePrompt := buildGenerationPrompt(aiContext, p, primaryPlatform, primaryLimit)
 
 	lower := lowerLimitAccounts(selected, primaryLimit)
 	overrideHint := overrideHintFor(lower, "No account_content_override entries are needed because every selected account shares the same limit.")
@@ -379,7 +379,7 @@ func buildRefinePrompt(aiContext domain.AIContext, p params, selected []domain.A
 		refineParams[key] = value
 	}
 	refineParams["prompt_hint"] = refinementHint
-	basePrompt := buildGenerationPrompt(aiContext, refineParams, primaryPlatform)
+	basePrompt := buildGenerationPrompt(aiContext, refineParams, primaryPlatform, primaryLimit)
 
 	lower := lowerLimitAccounts(selected, primaryLimit)
 	overrideHint := overrideHintFor(lower, "No account_content_override entries are needed when the refined primary text fits every account.")

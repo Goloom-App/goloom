@@ -68,7 +68,7 @@ func BuildGenerationPromptFromParams(context domain.AIContext, rawParams json.Ra
 			return "", fmt.Errorf("parse params: %w", err)
 		}
 	}
-	return buildGenerationPrompt(context, p, platform), nil
+	return buildGenerationPrompt(context, p, platform, 0), nil
 }
 
 func styleMetadata(context domain.AIContext) domain.StyleMetadata {
@@ -294,14 +294,13 @@ func formatKnowledgeSourceLimit(item domain.KnowledgeSource, limit int) string {
 	return prefix + "\n" + wrapUntrusted(content)
 }
 
-// buildGenerationPrompt renders the per-request task prompt.
-func buildGenerationPrompt(context domain.AIContext, p params, platform string) string {
+// buildGenerationPrompt renders the per-request task prompt. A positive charLimit
+// overrides the platform minimum for voice generation and refinement only.
+func buildGenerationPrompt(context domain.AIContext, p params, platform string, charLimit int) string {
 	style := styleMetadata(context)
 	constraints := applyPlatformConstraints(context, platform, style.MaxHashtags)
-	// Voice-engine content follows the selected primary; shorter targets get
-	// overrides. Without a selection, retain the team-wide platform minimum.
-	if selected, err := selectedAccounts(context, p); err == nil {
-		constraints.charLimit = primaryAccount(selected).MaxChars
+	if charLimit > 0 {
+		constraints.charLimit = charLimit
 	}
 
 	recentLimit := taskRecentPostLimit
