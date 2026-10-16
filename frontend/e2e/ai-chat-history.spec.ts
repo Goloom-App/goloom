@@ -31,6 +31,8 @@ test('AI chat sends tool result summaries back with the next request', async ({ 
           message: 'Created draft.',
           payload: { post_id: 'post-123', content: 'Hello world' },
         }) +
+        sse({ type: 'tool_call', tool_name: 'fetch_url', tool_args: { url: 'https://example.com' } }) +
+        sse({ type: 'tool_result', tool_name: 'fetch_url', message: 'INJECTED-PAGE-TEXT' }) +
         sse({ type: 'done' })
       : sse({ type: 'message', message: 'Done.' }) + sse({ type: 'done' })
     await route.fulfill({
@@ -68,5 +70,6 @@ test('AI chat sends tool result summaries back with the next request', async ({ 
   expect(assistant).toBeTruthy()
   expect(assistant?.tool_results?.[0].tool).toBe('draft_post')
   expect(assistant?.tool_results?.[0].summary).toContain('post-123')
+  expect(JSON.stringify(bodies[1])).not.toContain('INJECTED-PAGE-TEXT')
   expect(bodies[1].messages.at(-1)?.content).toBe('make it shorter')
 })

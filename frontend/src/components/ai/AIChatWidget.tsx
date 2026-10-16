@@ -323,7 +323,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
             event.payload && typeof event.payload === 'object'
               ? (event.payload as { confirmation?: { tool?: string; args?: Record<string, unknown>; summary?: string } }).confirmation
               : undefined
-          if (!isError && event.tool_name && event.tool_name !== 'fetch_url' && event.message) {
+          if (!isError && event.tool_name && ECHOED_TOOL_RESULTS.has(event.tool_name) && event.message) {
             recordToolResult(event.tool_name, summarizeToolResult(event.message, event.payload))
           }
           if (confirmation?.tool) {
@@ -413,7 +413,9 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
       setEntries((current) =>
         current.map((entry, i) => (i === index ? { ...entry, confirm: { ...data, resolved: 'confirmed' } } : entry)),
       )
-      recordToolResult(data.tool, summarizeToolResult(`confirmed by the user. ${res.summary ?? ''}`, res.payload))
+      if (ECHOED_TOOL_RESULTS.has(data.tool)) {
+        recordToolResult(data.tool, summarizeToolResult(`confirmed by the user. ${res.summary ?? ''}`, res.payload))
+      }
       const post =
         res.payload && typeof res.payload === 'object'
           ? (res.payload as { post_id?: string; content?: string; title?: string; target_accounts?: string[]; scheduled_at?: string })
@@ -784,6 +786,20 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
 }
 
 const TOOL_SUMMARY_MAX = 300
+
+// Only write/card tools echo their outcome (ids, status) back in the history.
+// Read tools such as fetch_url return untrusted text and must stay out. Keep in
+// sync with chatToolResultAllowlist in internal/ai/chat.go.
+const ECHOED_TOOL_RESULTS = new Set([
+  'draft_post',
+  'modify_post',
+  'revise_composer_post',
+  'create_campaign',
+  'schedule_post',
+  'delete_post',
+  'create_recurring',
+  'create_rss_feed',
+])
 
 // summarizeToolResult builds the short tool outcome sent back with the history:
 // the (capped) result text plus the post id when the payload carries one.

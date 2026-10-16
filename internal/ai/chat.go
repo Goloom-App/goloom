@@ -14,11 +14,10 @@ const (
 	chatMaxTokens     = 2000
 
 	// Limits for the client-held chat history (untrusted input).
-	chatHistoryMaxMessages    = 30
-	chatHistoryMaxChars       = 40000
-	chatToolResultsMaxPerMsg  = 20
-	chatToolResultSummaryMax  = 300
-	chatToolResultToolNameMax = 64
+	chatHistoryMaxMessages   = 30
+	chatHistoryMaxChars      = 40000
+	chatToolResultsMaxPerMsg = 20
+	chatToolResultSummaryMax = 300
 )
 
 // ChatEvent is one server-sent event emitted while the chat loop runs.
@@ -136,9 +135,24 @@ func ChatMessagesFromDomain(messages []domain.AIChatMessage) []Message {
 				content += note
 			}
 		}
-		out = append(out, Message{Role: role, Content: content})
+		out = append(out, Message{Role: role, Content: capRunes(content, chatHistoryMaxChars)})
 	}
 	return TrimChatHistory(out)
+}
+
+// chatToolResultAllowlist names the write/card tools whose summaries (ids,
+// status) may be echoed back. Read tools such as fetch_url carry untrusted text
+// and must never re-enter the history as assistant content. Keep in sync with
+// the frontend constant ECHOED_TOOL_RESULTS in AIChatWidget.tsx.
+var chatToolResultAllowlist = map[string]bool{
+	"draft_post":           true,
+	"modify_post":          true,
+	"revise_composer_post": true,
+	"create_campaign":      true,
+	"schedule_post":        true,
+	"delete_post":          true,
+	"create_recurring":     true,
+	"create_rss_feed":      true,
 }
 
 // toolResultsNote renders tool outcomes as one compact bracketed note.
@@ -148,9 +162,12 @@ func toolResultsNote(results []domain.AIChatToolResult) string {
 		if len(parts) >= chatToolResultsMaxPerMsg {
 			break
 		}
-		tool := truncateRunes(strings.TrimSpace(res.Tool), chatToolResultToolNameMax)
-		summary := truncateRunes(strings.Join(strings.Fields(res.Summary), " "), chatToolResultSummaryMax)
-		if tool == "" || summary == "" {
+		tool := strings.TrimSpace(res.Tool)
+		if !chatToolResultAllowlist[tool] {
+			continue
+		}
+		summary := truncateRunes(sanitizeUntrusted(strings.Join(strings.Fields(res.Summary), " ")), chatToolResultSummaryMax)
+		if summary == "" {
 			continue
 		}
 		parts = append(parts, tool+" → "+summary)
@@ -159,6 +176,14 @@ func toolResultsNote(results []domain.AIChatToolResult) string {
 		return ""
 	}
 	return "[Tool results: " + strings.Join(parts, "; ") + "]"
+}
+
+// capRunes cuts s to at most max runes without an ellipsis.
+func capRunes(s string, max int) string {
+	if r := []rune(s); len(r) > max {
+		return string(r[:max])
+	}
+	return s
 }
 
 func truncateRunes(s string, max int) string {
