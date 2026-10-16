@@ -1177,6 +1177,7 @@
     "expires_at_rfc3339": "expires_at muss RFC3339-Zeitstempel sein",
     "expires_at_future": "expires_at muss in der Zukunft liegen",
     "token_not_found": "Token nicht gefunden",
+    "api_token_exceeds_authority": "API-Token-Berechtigungen oder Teambindung überschreiten die Berechtigungen des aufrufenden Tokens",
     "content_required": "Inhalt ist erforderlich",
     "target_accounts_required": "target_accounts ist erforderlich",
     "instance_url_required": "instance_url ist erforderlich",

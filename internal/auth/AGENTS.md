@@ -13,6 +13,7 @@ Auth service in `auth.go`, feature flags in `feature_flags.go`, scopes in `scope
 - Auth service: `auth.go` — token validation, middleware, OIDC, bootstrap
 - Feature flags: `feature_flags.go` — runtime feature toggles
 - Scopes: `scopes.go` — permission scope definitions
+- `PrincipalCanManageAPIToken` governs API-token delegation and revocation: normalized target scopes must be satisfied by `PrincipalAllows`, an empty target scope list requires an unscoped caller, and team bindings must match exactly (including nil). Non-API principals bypass this check.
 - OIDC JWT: `oidc_jwt_keyset.go` — keyset handling
 - Bootstrap token lifecycle for initial admin setup
 

@@ -71,8 +71,13 @@ func TestTeamAuditLogEndpoint(t *testing.T) {
 
 func TestTeamAuditLogTokenLifecycle(t *testing.T) {
 	f := newEndpointFixture(t)
+	session, _, err := f.store.CreateSessionAPIToken(context.Background(), f.user.ID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.bearer = session
 
-	// Mint a team-scoped API key, then revoke it.
+	// Browser sessions may mint a team-scoped API key, then revoke it.
 	rec := f.do(t, http.MethodPost, "/v1/me/api-tokens", map[string]any{"name": "team-bot", "team_id": f.team.ID})
 	requireStatus(t, rec, http.StatusCreated)
 	created := decodeJSON[struct {
