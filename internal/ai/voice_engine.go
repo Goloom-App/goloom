@@ -39,16 +39,45 @@ type parsedVoiceResult struct {
 	overrides        map[string]string
 }
 
-// runVoiceEngine generates a multi-account post draft in the team's voice.
-func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiContext domain.AIContext, p params) (json.RawMessage, error) {
+// preparedVoicePrompt carries the initial prompts and execution policy together.
+type preparedVoicePrompt struct {
+	generateAttempt
+	scheduledAt   *time.Time
+	piiKinds      []string
+	injectionHits []string
+}
+
+// PrepareVoicePrompt renders the initial model prompts for current context and
+// params, using the same selection, scheduling, refinement and redaction as execution.
+func PrepareVoicePrompt(aiContext domain.AIContext, rawParams json.RawMessage) (system, task string, err error) {
+	p := params{}
+	if len(rawParams) > 0 {
+		if err := json.Unmarshal(rawParams, &p); err != nil {
+			return "", "", fmt.Errorf("parse params: %w", err)
+		}
+	}
+	prepared, err := prepareVoicePrompt(aiContext, p)
+	if err != nil {
+		return "", "", err
+	}
+	return prepared.systemPrompt, prepared.prompt, nil
+}
+
+func prepareVoicePrompt(aiContext domain.AIContext, p params) (preparedVoicePrompt, error) {
+	// Redaction changes only this request, never the caller's parameter map.
+	cleaned := make(params, len(p))
+	for key, value := range p {
+		cleaned[key] = value
+	}
+	p = cleaned
 	selected, err := selectedAccounts(aiContext, p)
 	if err != nil {
-		return nil, err
+		return preparedVoicePrompt{}, err
 	}
 
 	campaignFormat, err := optionalCampaignFormat(aiContext, p)
 	if err != nil {
-		return nil, err
+		return preparedVoicePrompt{}, err
 	}
 
 	var scheduledAt *time.Time
@@ -61,16 +90,8 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 	primaryAccountID := primary.ID
 
 	piiKinds := redactParamsPII(p)
-	if len(piiKinds) > 0 {
-		slog.Warn("ai request contained PII that was redacted before the model call",
-			"team", aiContext.Team.ID, "job_type", job.Type, "kinds", piiKinds)
-	}
 
 	injectionHits := scanParamsForInjection(p)
-	if len(injectionHits) > 0 {
-		slog.Warn("ai source material contains possible prompt injection",
-			"team", aiContext.Team.ID, "job_type", job.Type, "markers", injectionHits)
-	}
 
 	systemPrompt := BuildSystemPrompt(aiContext)
 	refineMode := isRefineMode(p)
@@ -84,22 +105,40 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 		prompt = buildMultiAccountPrompt(aiContext, p, selected, primaryLimit, scheduledAt, includeTitle)
 	}
 
-	parsed, err := generateWithRetries(ctx, client, generateAttempt{
-		prompt:              prompt,
-		systemPrompt:        systemPrompt,
-		primaryLimit:        primaryLimit,
-		primaryAccountID:    primaryAccountID,
-		selectedAccounts:    selected,
-		refineMode:          refineMode,
-		recurringGeneration: recurringGeneration,
-		includeTitle:        includeTitle,
-	})
+	return preparedVoicePrompt{
+		generateAttempt: generateAttempt{
+			prompt:              prompt,
+			systemPrompt:        systemPrompt,
+			primaryLimit:        primaryLimit,
+			primaryAccountID:    primaryAccountID,
+			selectedAccounts:    selected,
+			refineMode:          refineMode,
+			recurringGeneration: recurringGeneration,
+			includeTitle:        includeTitle,
+		},
+		scheduledAt: scheduledAt, piiKinds: piiKinds, injectionHits: injectionHits,
+	}, nil
+}
+
+// runVoiceEngine generates a multi-account post draft in the team's voice.
+func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiContext domain.AIContext, p params) (json.RawMessage, error) {
+	prepared, err := prepareVoicePrompt(aiContext, p)
+	if err != nil {
+		return nil, err
+	}
+	if len(prepared.piiKinds) > 0 {
+		slog.Warn("ai request contained PII that was redacted before the model call", "team", aiContext.Team.ID, "job_type", job.Type, "kinds", prepared.piiKinds)
+	}
+	if len(prepared.injectionHits) > 0 {
+		slog.Warn("ai source material contains possible prompt injection", "team", aiContext.Team.ID, "job_type", job.Type, "markers", prepared.injectionHits)
+	}
+	parsed, err := generateWithRetries(ctx, client, prepared.generateAttempt)
 	if err != nil {
 		return nil, err
 	}
 
-	normalizeMultiAccountResult(&parsed, selected, primaryAccountID, primaryLimit)
-	mergeHashtagsIntoContent(&parsed, maxHashtagsFromContext(aiContext), primaryLimit)
+	normalizeMultiAccountResult(&parsed, prepared.selectedAccounts, prepared.primaryAccountID, prepared.primaryLimit)
+	mergeHashtagsIntoContent(&parsed, maxHashtagsFromContext(aiContext), prepared.primaryLimit)
 
 	result := voiceEngineResult{
 		Title:                  parsed.title,
@@ -107,10 +146,10 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 		Hashtags:               orEmptyList(parsed.hashtags),
 		PlatformMetadata:       parsed.platformMetadata,
 		AccountContentOverride: parsed.overrides,
-		ScheduledAt:            formatDatetime(scheduledAt),
-		PrimaryAccountID:       primaryAccountID,
-		InjectionWarning:       injectionHits,
-		PIIWarning:             piiKinds,
+		ScheduledAt:            formatDatetime(prepared.scheduledAt),
+		PrimaryAccountID:       prepared.primaryAccountID,
+		InjectionWarning:       prepared.injectionHits,
+		PIIWarning:             prepared.piiKinds,
 	}
 	if result.PlatformMetadata == nil {
 		result.PlatformMetadata = map[string]any{}
@@ -292,7 +331,7 @@ func overrideHintFor(lower []domain.AIAccountSummary, emptyHint string) string {
 func buildMultiAccountPrompt(aiContext domain.AIContext, p params, selected []domain.AIAccountSummary, primaryLimit int, scheduledAt *time.Time, includeTitle bool) string {
 	primary := primaryAccount(selected)
 	primaryPlatform := orDefault(primary.Provider, "general")
-	basePrompt := buildGenerationPrompt(aiContext, p, primaryPlatform)
+	basePrompt := buildGenerationPrompt(aiContext, p, primaryPlatform, primaryLimit)
 
 	lower := lowerLimitAccounts(selected, primaryLimit)
 	overrideHint := overrideHintFor(lower, "No account_content_override entries are needed because every selected account shares the same limit.")
@@ -340,7 +379,7 @@ func buildRefinePrompt(aiContext domain.AIContext, p params, selected []domain.A
 		refineParams[key] = value
 	}
 	refineParams["prompt_hint"] = refinementHint
-	basePrompt := buildGenerationPrompt(aiContext, refineParams, primaryPlatform)
+	basePrompt := buildGenerationPrompt(aiContext, refineParams, primaryPlatform, primaryLimit)
 
 	lower := lowerLimitAccounts(selected, primaryLimit)
 	overrideHint := overrideHintFor(lower, "No account_content_override entries are needed when the refined primary text fits every account.")

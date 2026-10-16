@@ -496,7 +496,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
               onClick={() => void handleLoadPromptPreview()}
               disabled={promptPreview.isPending}
             >
-              {promptPreview.isPending ? <><Loader2 size={14} className="spin" /> Lade…</> : <><FileText size={14} /> Prompt-Vorschau</>}
+              {promptPreview.isPending ? <><Loader2 size={14} className="spin" /> Lade…</> : <><FileText size={14} /> Prompt-Vorschau (aktuelle Einstellungen)</>}
             </button>
           ) : null
         }

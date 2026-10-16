@@ -51,7 +51,7 @@ func TestPlatformCharLimit(t *testing.T) {
 
 func TestGenerationPromptHonorsAccountOverride(t *testing.T) {
 	ctx := domain.AIContext{Accounts: []domain.AIAccountSummary{{Provider: "mastodon", MaxChars: 1500}}}
-	prompt := buildGenerationPrompt(ctx, params{}, "mastodon")
+	prompt := buildGenerationPrompt(ctx, params{}, "mastodon", 0)
 	if !strings.Contains(prompt, "Character limit: 1500") {
 		t.Fatalf("expected override limit in prompt:\n%s", prompt)
 	}
@@ -75,7 +75,7 @@ func TestHashtagRuleConsistentAcrossPrompts(t *testing.T) {
 	}
 	for _, tc := range cases {
 		ctx := domain.AIContext{Profile: &domain.TeamProfile{StyleMetadata: domain.StyleMetadata{MaxHashtags: tc.maxHashtags}}}
-		task := buildGenerationPrompt(ctx, params{}, tc.platform)
+		task := buildGenerationPrompt(ctx, params{}, tc.platform, 0)
 		sys := BuildSystemPrompt(ctx)
 		if !strings.Contains(task, tc.taskWant) {
 			t.Errorf("%s: task prompt missing %q:\n%s", tc.name, tc.taskWant, task)

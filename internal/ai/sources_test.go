@@ -76,7 +76,7 @@ func TestGenerationPromptWrapsSource(t *testing.T) {
 		"rss_article_link":    "https://example.org/item",
 		"rss_article_content": "The launch is on May 3rd in Berlin.",
 	}
-	prompt := buildGenerationPrompt(testContext(), p, "mastodon")
+	prompt := buildGenerationPrompt(testContext(), p, "mastodon", 0)
 	if !strings.Contains(prompt, untrustedOpen) || !strings.Contains(prompt, untrustedClose) {
 		t.Fatalf("rss body not wrapped:\n%s", prompt)
 	}

@@ -40,7 +40,7 @@ func runCampaignAutopilot(ctx context.Context, client Client, job domain.AIJob, 
 	requiredHashtags := nonEmptyStrings(campaignFormat.RequiredHashtags)
 
 	systemPrompt := BuildSystemPrompt(aiContext)
-	basePrompt := buildGenerationPrompt(aiContext, campaignPromptParams(p, campaignFormat, renderedTemplate, requiredHashtags, suggestedScheduledAt), platform)
+	basePrompt := buildGenerationPrompt(aiContext, campaignPromptParams(p, campaignFormat, renderedTemplate, requiredHashtags, suggestedScheduledAt), platform, 0)
 
 	prompt := basePrompt
 	model := client.Model()

@@ -28,32 +28,24 @@ func (a *API) handleAIPromptPreview(w http.ResponseWriter, r *http.Request) {
 
 	aiContext, err := aicontext.Build(r.Context(), a.store, teamID, aicontext.Full())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "")
 		return
 	}
 
 	enrichedParams, err := enrichAIJobParams(r.Context(), ensureJSONObject(input.Params))
 	if err != nil {
-		a.writeError(w, r, err.Error(), http.StatusBadRequest)
+		a.writeError(w, r, "invalid_ai_prompt_params", http.StatusBadRequest)
 		return
 	}
 
-	platform := "mastodon"
-	var platformProbe struct {
-		Platform string `json:"platform"`
-	}
-	if err := json.Unmarshal(enrichedParams, &platformProbe); err == nil && platformProbe.Platform != "" {
-		platform = platformProbe.Platform
-	}
-
-	generationPrompt, err := ai.BuildGenerationPromptFromParams(aiContext, enrichedParams, platform)
+	systemPrompt, generationPrompt, err := ai.PrepareVoicePrompt(aiContext, enrichedParams)
 	if err != nil {
-		a.writeError(w, r, err.Error(), http.StatusBadRequest)
+		a.writeError(w, r, "invalid_ai_prompt_params", http.StatusBadRequest)
 		return
 	}
 
 	auth.WriteJSON(w, http.StatusOK, aiPromptPreviewResponse{
-		SystemPrompt:     ai.BuildSystemPrompt(aiContext),
+		SystemPrompt:     systemPrompt,
 		GenerationPrompt: generationPrompt,
 	})
 }

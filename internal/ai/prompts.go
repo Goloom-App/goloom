@@ -60,7 +60,7 @@ func BuildSystemPrompt(context domain.AIContext) string {
 }
 
 // BuildGenerationPromptFromParams renders the per-request task prompt from raw
-// JSON job params (used by the prompt preview endpoint).
+// JSON job params without voice-engine output rules.
 func BuildGenerationPromptFromParams(context domain.AIContext, rawParams json.RawMessage, platform string) (string, error) {
 	p := params{}
 	if len(rawParams) > 0 {
@@ -68,7 +68,7 @@ func BuildGenerationPromptFromParams(context domain.AIContext, rawParams json.Ra
 			return "", fmt.Errorf("parse params: %w", err)
 		}
 	}
-	return buildGenerationPrompt(context, p, platform), nil
+	return buildGenerationPrompt(context, p, platform, 0), nil
 }
 
 func styleMetadata(context domain.AIContext) domain.StyleMetadata {
@@ -294,10 +294,15 @@ func formatKnowledgeSourceLimit(item domain.KnowledgeSource, limit int) string {
 	return prefix + "\n" + wrapUntrusted(content)
 }
 
-// buildGenerationPrompt renders the per-request task prompt.
-func buildGenerationPrompt(context domain.AIContext, p params, platform string) string {
+// buildGenerationPrompt renders the per-request task prompt. A positive charLimit
+// overrides the platform minimum for voice generation and refinement only.
+func buildGenerationPrompt(context domain.AIContext, p params, platform string, charLimit int) string {
 	style := styleMetadata(context)
 	constraints := applyPlatformConstraints(context, platform, style.MaxHashtags)
+	if charLimit > 0 {
+		constraints.charLimit = charLimit
+	}
+
 	recentLimit := taskRecentPostLimit
 	if isRecurringKind(recurringPostKind(p)) {
 		recentLimit = recurringRecentPostLimit
