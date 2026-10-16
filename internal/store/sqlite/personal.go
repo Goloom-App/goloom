@@ -94,6 +94,21 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `create unique index if not exists idx_teams_personal_user on teams(personal_for_user_id) where personal_for_user_id is not null`); err != nil {
 		return fmt.Errorf("sqlite migrate index: %w", err)
 	}
+	// One AI config row per team: dedupe legacy rows (keep newest), then enforce.
+	if _, err := db.ExecContext(ctx, `
+		delete from ai_service_configs
+		where team_id is not null
+		  and exists (
+			select 1 from ai_service_configs b
+			where b.team_id = ai_service_configs.team_id
+			  and (b.created_at > ai_service_configs.created_at
+			       or (b.created_at = ai_service_configs.created_at and b.rowid > ai_service_configs.rowid))
+		  )`); err != nil {
+		return fmt.Errorf("sqlite migrate ai config dedupe: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `create unique index if not exists ux_ai_service_configs_team on ai_service_configs(team_id)`); err != nil {
+		return fmt.Errorf("sqlite migrate ai config unique index: %w", err)
+	}
 	if _, err := db.ExecContext(ctx, `create index if not exists idx_post_targets_metrics_sync on scheduled_post_targets(metrics_last_sync_at)`); err != nil {
 		return fmt.Errorf("sqlite migrate metrics sync index: %w", err)
 	}

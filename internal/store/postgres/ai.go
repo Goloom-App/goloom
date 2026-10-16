@@ -39,7 +39,7 @@ func (s *Store) GetTeamProfile(ctx context.Context, teamID string) (domain.TeamP
 	profile, err := scanTeamProfile(s.pool.QueryRow(ctx, query, teamID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.TeamProfile{}, fmt.Errorf("team profile not found: %w", pgx.ErrNoRows)
+			return domain.TeamProfile{}, fmt.Errorf("team profile: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 		}
 		return domain.TeamProfile{}, fmt.Errorf("GetTeamProfile: %w", err)
 	}
@@ -60,7 +60,7 @@ func (s *Store) UpdateTeamProfile(ctx context.Context, teamID string, input doma
 	profile, err := scanTeamProfile(s.pool.QueryRow(ctx, query, teamID, metaJSON, input.AutoPublishEnabled))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.TeamProfile{}, fmt.Errorf("team profile not found: %w", pgx.ErrNoRows)
+			return domain.TeamProfile{}, fmt.Errorf("team profile: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 		}
 		return domain.TeamProfile{}, fmt.Errorf("UpdateTeamProfile: %w", err)
 	}
@@ -148,7 +148,7 @@ func (s *Store) GetCampaignFormatByID(ctx context.Context, teamID string, id str
 	cf, err := scanCampaignFormat(s.pool.QueryRow(ctx, query, teamID, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.CampaignFormat{}, fmt.Errorf("campaign format not found: %w", pgx.ErrNoRows)
+			return domain.CampaignFormat{}, fmt.Errorf("campaign format: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 		}
 		return domain.CampaignFormat{}, fmt.Errorf("GetCampaignFormatByID: %w", err)
 	}
@@ -171,7 +171,7 @@ func (s *Store) UpdateCampaignFormat(ctx context.Context, teamID string, id stri
 	))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.CampaignFormat{}, fmt.Errorf("campaign format not found: %w", pgx.ErrNoRows)
+			return domain.CampaignFormat{}, fmt.Errorf("campaign format: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 		}
 		return domain.CampaignFormat{}, fmt.Errorf("UpdateCampaignFormat: %w", err)
 	}
@@ -309,7 +309,7 @@ func (s *Store) GetKnowledgeSourceByID(ctx context.Context, teamID string, id st
 	ks, err := scanKnowledgeSource(s.pool.QueryRow(ctx, query, teamID, id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.KnowledgeSource{}, fmt.Errorf("knowledge source not found: %w", pgx.ErrNoRows)
+			return domain.KnowledgeSource{}, fmt.Errorf("knowledge source: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 		}
 		return domain.KnowledgeSource{}, fmt.Errorf("GetKnowledgeSourceByID: %w", err)
 	}
@@ -540,7 +540,7 @@ func (s *Store) GetAIServiceConfig(ctx context.Context, teamID string) (domain.A
 	cfg, err := s.scanAIServiceConfig(s.pool.QueryRow(ctx, query, teamID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.AIServiceConfig{}, fmt.Errorf("ai service config not found: %w", pgx.ErrNoRows)
+			return domain.AIServiceConfig{}, fmt.Errorf("ai service config: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 		}
 		return domain.AIServiceConfig{}, fmt.Errorf("GetAIServiceConfig: %w", err)
 	}
@@ -557,38 +557,22 @@ func (s *Store) UpsertAIServiceConfig(ctx context.Context, teamID string, input 
 		}
 	}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	// Empty API key on update keeps the stored key.
-	if apiKeyCiphertext == "" {
-		var existing string
-		err := tx.QueryRow(ctx, `SELECT api_key_ciphertext FROM ai_service_configs WHERE team_id = $1 ORDER BY created_at DESC LIMIT 1`, teamID).Scan(&existing)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: read existing key: %w", err)
-		}
-		apiKeyCiphertext = existing
-	}
-
-	if _, err := tx.Exec(ctx, `DELETE FROM ai_service_configs WHERE team_id = $1`, teamID); err != nil {
-		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: delete: %w", err)
-	}
-
-	const insertQuery = `
+	// Single statement keyed on the unique team_id constraint: stable id, no
+	// delete+insert race. Empty API key on update keeps the stored key.
+	const query = `
 		INSERT INTO ai_service_configs (team_id, provider, model, base_url, api_key_ciphertext, description)
 		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (team_id) DO UPDATE
+		SET provider = EXCLUDED.provider,
+		    model = EXCLUDED.model,
+		    base_url = EXCLUDED.base_url,
+		    api_key_ciphertext = CASE WHEN EXCLUDED.api_key_ciphertext <> '' THEN EXCLUDED.api_key_ciphertext ELSE ai_service_configs.api_key_ciphertext END,
+		    description = EXCLUDED.description
 		RETURNING id, team_id, provider, model, base_url, api_key_ciphertext, description, created_at
 	`
-	cfg, err := s.scanAIServiceConfig(tx.QueryRow(ctx, insertQuery, teamID, input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description))
+	cfg, err := s.scanAIServiceConfig(s.pool.QueryRow(ctx, query, teamID, input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description))
 	if err != nil {
-		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: insert: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: commit: %w", err)
+		return domain.AIServiceConfig{}, fmt.Errorf("UpsertAIServiceConfig: %w", err)
 	}
 	return cfg, nil
 }
@@ -773,7 +757,7 @@ func (s *Store) GetProactiveTriggerSettings(ctx context.Context, teamID string) 
 	pts, err := scanProactiveTriggerSettings(s.pool.QueryRow(ctx, query, teamID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.ProactiveTriggerSettings{}, fmt.Errorf("proactive trigger settings not found: %w", pgx.ErrNoRows)
+			return domain.ProactiveTriggerSettings{}, fmt.Errorf("proactive trigger settings: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 		}
 		return domain.ProactiveTriggerSettings{}, fmt.Errorf("GetProactiveTriggerSettings: %w", err)
 	}

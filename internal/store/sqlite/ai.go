@@ -76,7 +76,7 @@ func scanTeamProfile(scanner rowScanner) (domain.TeamProfile, error) {
 	)
 	if err := scanner.Scan(&p.ID, &p.TeamID, &metaJSON, &autoPubl, &createdAt, &updatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.TeamProfile{}, fmt.Errorf("team profile not found: %w", sql.ErrNoRows)
+			return domain.TeamProfile{}, fmt.Errorf("team profile: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 		}
 		return domain.TeamProfile{}, err
 	}
@@ -169,7 +169,7 @@ func scanCampaignFormat(scanner rowScanner) (domain.CampaignFormat, error) {
 	)
 	if err := scanner.Scan(&cf.ID, &cf.TeamID, &cf.Name, &weekday, &structureRaw, &hashtagsRaw, &isActive, &createdAt, &updatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.CampaignFormat{}, fmt.Errorf("campaign format not found: %w", sql.ErrNoRows)
+			return domain.CampaignFormat{}, fmt.Errorf("campaign format: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 		}
 		return domain.CampaignFormat{}, err
 	}
@@ -327,7 +327,7 @@ func scanKnowledgeSource(scanner rowScanner) (domain.KnowledgeSource, error) {
 	)
 	if err := scanner.Scan(&ks.ID, &ks.TeamID, &sourceType, &ks.Name, &ks.Content, &ks.SourceURL, &ks.MediaID, &createdAt, &updatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.KnowledgeSource{}, fmt.Errorf("knowledge source not found: %w", sql.ErrNoRows)
+			return domain.KnowledgeSource{}, fmt.Errorf("knowledge source: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 		}
 		return domain.KnowledgeSource{}, err
 	}
@@ -510,7 +510,7 @@ func (s *Store) GetAIServiceConfig(ctx context.Context, teamID string) (domain.A
 	).Scan(&cfg.ID, &teamIDNull, &cfg.Provider, &cfg.Model, &cfg.BaseURL, &apiKeyCiphertext, &cfg.Description, &createdAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.AIServiceConfig{}, fmt.Errorf("ai service config not found: %w", sql.ErrNoRows)
+			return domain.AIServiceConfig{}, fmt.Errorf("ai service config: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 		}
 		return domain.AIServiceConfig{}, err
 	}
@@ -541,34 +541,19 @@ func (s *Store) UpsertAIServiceConfig(ctx context.Context, teamID string, input 
 		}
 	}
 
-	var existingID string
-	err := s.db.QueryRowContext(ctx, `select id from ai_service_configs where team_id = ?`, teamID).Scan(&existingID)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return domain.AIServiceConfig{}, err
-	}
-	if errors.Is(err, sql.ErrNoRows) {
-		newID := uuid.NewString()
-		_, err = s.db.ExecContext(ctx, `
-			insert into ai_service_configs (id, team_id, provider, model, base_url, api_key_ciphertext, description, created_at)
-			values (?, ?, ?, ?, ?, ?, ?, ?)`,
-			newID, teamID, input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description, now,
-		)
-	} else if apiKeyCiphertext != "" {
-		_, err = s.db.ExecContext(ctx, `
-			update ai_service_configs
-			set provider = ?, model = ?, base_url = ?, api_key_ciphertext = ?, description = ?
-			where team_id = ?`,
-			input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description, teamID,
-		)
-	} else {
-		// Empty API key on update keeps the stored key.
-		_, err = s.db.ExecContext(ctx, `
-			update ai_service_configs
-			set provider = ?, model = ?, base_url = ?, description = ?
-			where team_id = ?`,
-			input.Provider, input.Model, input.BaseURL, input.Description, teamID,
-		)
-	}
+	// Single statement keyed on the unique team_id index: stable id, no
+	// read-then-write race. Empty API key on update keeps the stored key.
+	_, err := s.db.ExecContext(ctx, `
+		insert into ai_service_configs (id, team_id, provider, model, base_url, api_key_ciphertext, description, created_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?)
+		on conflict(team_id) do update set
+			provider = excluded.provider,
+			model = excluded.model,
+			base_url = excluded.base_url,
+			api_key_ciphertext = case when excluded.api_key_ciphertext <> '' then excluded.api_key_ciphertext else ai_service_configs.api_key_ciphertext end,
+			description = excluded.description`,
+		uuid.NewString(), teamID, input.Provider, input.Model, input.BaseURL, apiKeyCiphertext, input.Description, now,
+	)
 	if err != nil {
 		return domain.AIServiceConfig{}, err
 	}
@@ -719,7 +704,7 @@ func (s *Store) GetProactiveTriggerSettings(ctx context.Context, teamID string) 
 	).Scan(&p.ID, &p.TeamID, &p.ContentGapThresholdDays, &autoFill, &p.MaxTriggersPerDay, &p.CronSchedule, &createdAt, &updatedAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.ProactiveTriggerSettings{}, fmt.Errorf("proactive trigger settings not found: %w", sql.ErrNoRows)
+			return domain.ProactiveTriggerSettings{}, fmt.Errorf("proactive trigger settings: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 		}
 		return domain.ProactiveTriggerSettings{}, err
 	}

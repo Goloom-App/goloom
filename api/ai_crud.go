@@ -21,17 +21,26 @@ func (a *API) handleUpsertTeamProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := validateTeamProfile(input); err != nil {
+		a.writeError(w, r, "invalid_team_profile", http.StatusBadRequest)
+		return
+	}
+
 	var profile domain.TeamProfile
 	var opErr error
 
 	_, err := a.store.GetTeamProfile(r.Context(), teamID)
-	if err != nil {
-		profile, opErr = a.store.CreateTeamProfile(r.Context(), teamID, input)
-	} else {
+	switch {
+	case err == nil:
 		profile, opErr = a.store.UpdateTeamProfile(r.Context(), teamID, input)
+	case errors.Is(err, domain.ErrNotFound):
+		profile, opErr = a.store.CreateTeamProfile(r.Context(), teamID, input)
+	default:
+		a.writeStoreError(w, r, err, "")
+		return
 	}
 	if opErr != nil {
-		http.Error(w, opErr.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, opErr, "")
 		return
 	}
 	a.recordAudit(r, teamID, "brand_profile.update", "brand_profile", nil, "Updated brand profile")
@@ -41,17 +50,19 @@ func (a *API) handleUpsertTeamProfile(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleGetTeamProfile(w http.ResponseWriter, r *http.Request) {
 	profile, err := a.store.GetTeamProfile(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		a.writeError(w, r, "profile_not_found", http.StatusNotFound)
+		a.writeStoreError(w, r, err, "team_profile_not_found")
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, profile)
 }
 
 func (a *API) handleDeleteTeamProfile(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.DeleteTeamProfile(r.Context(), r.PathValue("teamID")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	teamID := r.PathValue("teamID")
+	if err := a.store.DeleteTeamProfile(r.Context(), teamID); err != nil {
+		a.writeStoreError(w, r, err, "")
 		return
 	}
+	a.recordAudit(r, teamID, "brand_profile.delete", "brand_profile", nil, "Deleted brand profile")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -62,18 +73,23 @@ func (a *API) handleCreateCampaignFormat(w http.ResponseWriter, r *http.Request)
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
-	format, err := a.store.CreateCampaignFormat(r.Context(), teamID, input)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := validateCampaignFormat(input); err != nil {
+		a.writeError(w, r, "invalid_campaign_format", http.StatusBadRequest)
 		return
 	}
+	format, err := a.store.CreateCampaignFormat(r.Context(), teamID, input)
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
+	a.recordAudit(r, teamID, "campaign_format.create", "campaign_format", &format.ID, "Created campaign format: "+format.Name)
 	auth.WriteJSON(w, http.StatusCreated, format)
 }
 
 func (a *API) handleListCampaignFormats(w http.ResponseWriter, r *http.Request) {
 	formats, err := a.store.ListCampaignFormats(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "")
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(formats)})
@@ -82,7 +98,7 @@ func (a *API) handleListCampaignFormats(w http.ResponseWriter, r *http.Request) 
 func (a *API) handleGetCampaignFormat(w http.ResponseWriter, r *http.Request) {
 	format, err := a.store.GetCampaignFormatByID(r.Context(), r.PathValue("teamID"), r.PathValue("formatID"))
 	if err != nil {
-		a.writeError(w, r, "format_not_found", http.StatusNotFound)
+		a.writeStoreError(w, r, err, "campaign_format_not_found")
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, format)
@@ -96,19 +112,26 @@ func (a *API) handleUpdateCampaignFormat(w http.ResponseWriter, r *http.Request)
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
-	format, err := a.store.UpdateCampaignFormat(r.Context(), teamID, formatID, input)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := validateCampaignFormat(input); err != nil {
+		a.writeError(w, r, "invalid_campaign_format", http.StatusBadRequest)
 		return
 	}
+	format, err := a.store.UpdateCampaignFormat(r.Context(), teamID, formatID, input)
+	if err != nil {
+		a.writeStoreError(w, r, err, "campaign_format_not_found")
+		return
+	}
+	a.recordAudit(r, teamID, "campaign_format.update", "campaign_format", &formatID, "Updated campaign format: "+format.Name)
 	auth.WriteJSON(w, http.StatusOK, format)
 }
 
 func (a *API) handleDeleteCampaignFormat(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.DeleteCampaignFormat(r.Context(), r.PathValue("teamID"), r.PathValue("formatID")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	teamID, formatID := r.PathValue("teamID"), r.PathValue("formatID")
+	if err := a.store.DeleteCampaignFormat(r.Context(), teamID, formatID); err != nil {
+		a.writeStoreError(w, r, err, "")
 		return
 	}
+	a.recordAudit(r, teamID, "campaign_format.delete", "campaign_format", &formatID, "Deleted campaign format")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -119,28 +142,35 @@ func (a *API) handleCreateStyleExample(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
-	example, err := a.store.CreateStyleExample(r.Context(), teamID, input)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := validateStyleExample(input); err != nil {
+		a.writeError(w, r, "invalid_style_example", http.StatusBadRequest)
 		return
 	}
+	example, err := a.store.CreateStyleExample(r.Context(), teamID, input)
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
+	a.recordAudit(r, teamID, "style_example.create", "style_example", &example.ID, "Created style example")
 	auth.WriteJSON(w, http.StatusCreated, example)
 }
 
 func (a *API) handleListStyleExamples(w http.ResponseWriter, r *http.Request) {
 	examples, err := a.store.ListStyleExamples(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "")
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(examples)})
 }
 
 func (a *API) handleDeleteStyleExample(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.DeleteStyleExample(r.Context(), r.PathValue("teamID"), r.PathValue("exampleID")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	teamID, exampleID := r.PathValue("teamID"), r.PathValue("exampleID")
+	if err := a.store.DeleteStyleExample(r.Context(), teamID, exampleID); err != nil {
+		a.writeStoreError(w, r, err, "")
 		return
 	}
+	a.recordAudit(r, teamID, "style_example.delete", "style_example", &exampleID, "Deleted style example")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -275,7 +305,7 @@ func (a *API) handleDeleteRSSFeed(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleGetAIServiceConfig(w http.ResponseWriter, r *http.Request) {
 	cfg, err := a.store.GetAIServiceConfig(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		a.writeError(w, r, "ai_service_config_not_found", http.StatusNotFound)
+		a.writeStoreError(w, r, err, "ai_service_config_not_found")
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, cfg)
@@ -342,7 +372,7 @@ func (a *API) handleUpsertAIServiceConfig(w http.ResponseWriter, r *http.Request
 		APIKey:      apiKey,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "")
 		return
 	}
 	// Never include the API key in the audit summary.
@@ -359,7 +389,7 @@ func normalizeAIBaseURL(raw string) string {
 func (a *API) handleGetProactiveSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := a.store.GetProactiveTriggerSettings(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+		if errors.Is(err, domain.ErrNotFound) {
 			auth.WriteJSON(w, http.StatusOK, domain.ProactiveTriggerSettings{
 				TeamID:                  r.PathValue("teamID"),
 				ContentGapThresholdDays: 3,
@@ -369,7 +399,7 @@ func (a *API) handleGetProactiveSettings(w http.ResponseWriter, r *http.Request)
 			})
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "")
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, settings)
@@ -382,11 +412,17 @@ func (a *API) handleUpsertProactiveSettings(w http.ResponseWriter, r *http.Reque
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
-	settings, err := a.store.UpsertProactiveTriggerSettings(r.Context(), teamID, input)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	input.CronSchedule = strings.TrimSpace(input.CronSchedule)
+	if err := validateProactiveSettings(input); err != nil {
+		a.writeError(w, r, "invalid_proactive_settings", http.StatusBadRequest)
 		return
 	}
+	settings, err := a.store.UpsertProactiveTriggerSettings(r.Context(), teamID, input)
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
+	a.recordAudit(r, teamID, "proactive_settings.update", "proactive_settings", nil, "Updated proactive trigger settings")
 	auth.WriteJSON(w, http.StatusOK, settings)
 }
 

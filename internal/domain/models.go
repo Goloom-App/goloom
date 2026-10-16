@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// ErrNotFound marks a missing record. Stores wrap it (alongside the driver's
+// no-rows error) so callers can detect not-found independent of the backend.
+var ErrNotFound = errors.New("record not found")
+
 // ErrProviderInstanceInUse is returned when deleting a provider instance that still has social accounts linked.
 var ErrProviderInstanceInUse = errors.New("provider instance still has connected social accounts")
 
