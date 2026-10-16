@@ -508,7 +508,7 @@ func recentPostExcerpts(context domain.AIContext, limit int) []string {
 }
 
 func hasRSSSource(p params) bool {
-	return p.str("rss_article_title") != "" ||
+	return p.nested("rss_automation") != nil || p.str("rss_article_title") != "" ||
 		p.str("rss_article_content", "rss_article_summary") != "" ||
 		p.str("rss_article_link") != ""
 }

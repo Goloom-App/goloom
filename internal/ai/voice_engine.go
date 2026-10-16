@@ -114,6 +114,7 @@ func prepareVoicePrompt(aiContext domain.AIContext, p params) (preparedVoiceProm
 			selectedAccounts:    selected,
 			refineMode:          refineMode,
 			recurringGeneration: recurringGeneration,
+			rssGeneration:       hasRSSSource(p),
 			includeTitle:        includeTitle,
 		},
 		scheduledAt: scheduledAt, piiKinds: piiKinds, injectionHits: injectionHits,
@@ -220,7 +221,7 @@ func isRefineMode(p params) bool {
 	if isRecurringKind(recurringPostKind(p)) {
 		return explicitRefine
 	}
-	if p.nested("rss_automation") != nil || p.str("rss_article_title") != "" {
+	if hasRSSSource(p) {
 		return explicitRefine
 	}
 	if explicitRefine {
@@ -280,7 +281,7 @@ func recurringGenerationRules(p params) string {
 }
 
 func rssGenerationRules(p params) string {
-	if p.nested("rss_automation") == nil && p.str("rss_article_title") == "" {
+	if !hasRSSSource(p) {
 		return ""
 	}
 	return "RSS item rules:\n" +
@@ -345,12 +346,17 @@ func buildMultiAccountPrompt(aiContext domain.AIContext, p params, selected []do
 		primaryName = primary.ID
 	}
 
+	lengthRule := fmt.Sprintf("- Write \"content\" ONLY for the primary account. Make it as long and complete as possible, targeting roughly %d to %d characters.\n", primaryLimit-20, primaryLimit)
+	if hasRSSSource(p) {
+		lengthRule = fmt.Sprintf("- Write \"content\" ONLY for the primary account, as long as the source supports, max %d characters.\n", primaryLimit)
+	}
+
 	return basePrompt + "\n\n" +
 		rssGenerationRules(p) +
 		recurringGenerationRules(p) +
 		"Multi-account output rules:\n" +
 		fmt.Sprintf("- Primary account: %s (id=%s, %s, limit %d characters).\n", primaryName, primary.ID, primaryPlatform, primaryLimit) +
-		fmt.Sprintf("- Write \"content\" ONLY for the primary account. Make it as long and complete as possible, targeting roughly %d to %d characters.\n", primaryLimit-20, primaryLimit) +
+		lengthRule +
 		"- " + overrideHint + "\n" +
 		"- Do NOT create a separate version for every account.\n" +
 		"- Accounts with the same or higher limit than the primary use \"content\" unchanged.\n" +
@@ -423,6 +429,7 @@ type generateAttempt struct {
 	selectedAccounts    []domain.AIAccountSummary
 	refineMode          bool
 	recurringGeneration bool
+	rssGeneration       bool
 	includeTitle        bool
 }
 
@@ -470,6 +477,12 @@ func generateWithRetries(ctx context.Context, client Client, attempt generateAtt
 				"Fix this issue: " + lastError + ". " +
 				fmt.Sprintf("The primary content MUST be at most %d characters. ", attempt.primaryLimit) +
 				"Keep the refined primary text faithful to the source draft while improving quality. " +
+				"Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
+		case attempt.rssGeneration:
+			currentPrompt = attempt.prompt + "\n\nRevise the previous answer and return JSON only. " +
+				"Fix this issue: " + lastError + ". " +
+				fmt.Sprintf("Write primary content as long as the source supports, max %d characters. ", attempt.primaryLimit) +
+				"Do not invent facts or add filler. " +
 				"Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
 		case attempt.recurringGeneration:
 			currentPrompt = attempt.prompt + "\n\nRevise the previous answer and return JSON only. " +
@@ -605,7 +618,7 @@ func fillMissingOverrides(result *parsedVoiceResult, attempt generateAttempt) {
 func validateLengths(result parsedVoiceResult, attempt generateAttempt) error {
 	content := result.content
 	contentLen := len([]rune(content))
-	skipMin := attempt.refineMode || attempt.recurringGeneration
+	skipMin := attempt.refineMode || attempt.recurringGeneration || attempt.rssGeneration
 	if !attempt.refineMode && !skipMin {
 		minPrimary := minPrimaryLength(attempt.primaryLimit, attempt.selectedAccounts)
 		if contentLen < minPrimary {
