@@ -122,6 +122,35 @@ func doRequest(t *testing.T, h http.Handler, method, path, bearer string, body a
 	return rec
 }
 
+func TestAIServiceConfigCanBeSetBeforeTeamAIIsEnabled(t *testing.T) {
+	f := seedAICRUDTeam(t, false)
+	path := "/v1/teams/" + f.teamID + "/ai-service-config"
+
+	rec := doRequest(t, f.h, http.MethodPut, path, f.bearer, map[string]any{
+		"provider": "openai", "model": "gpt-test", "api_key": "sk-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("save config before enabling AI: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	rec = doRequest(t, f.h, http.MethodGet, path, f.bearer, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("read config before enabling AI: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg["api_key_set"] != true || cfg["api_key"] != nil {
+		t.Fatalf("unexpected config response: %v", cfg)
+	}
+
+	rec = doRequest(t, f.h, http.MethodPost, "/v1/teams/"+f.teamID+"/ai/chat", f.bearer, map[string]any{"message": "hello"})
+	if rec.Code != http.StatusForbidden || !bytes.Contains(rec.Body.Bytes(), []byte("ai_not_enabled")) {
+		t.Fatalf("AI use must stay disabled: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAICRUD(t *testing.T) {
 	t.Run("TeamProfileUpsertAndGet", func(t *testing.T) {
 		f := seedAICRUDTeam(t, true)
