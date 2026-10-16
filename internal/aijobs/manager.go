@@ -223,15 +223,15 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 		return domain.AIJob{}, fmt.Errorf("Manager.SubmitJob: create ai job: %w", err)
 	}
 
-	// The job intentionally outlives the submitting request, so it must not
-	// inherit the request context.
-	jobCtx, cancel := context.WithCancel(context.Background()) // #nosec G118 -- cancel is stored and called by execute/Cancel
+	// The job intentionally outlives the submitting request: it keeps the
+	// request's values but not its cancellation; Cancel/execute end it.
+	jobCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	m.cancelMu.Lock()
 	m.cancels[job.ID] = cancel
 	m.cancelMu.Unlock()
 
 	m.wg.Add(1)
-	go m.execute(jobCtx, cancel, m.slots, job, config, aiContext)
+	go m.execute(jobCtx, cancel, m.slots, job, config, aiContext) // #nosec G118 -- background job, decoupled from request lifecycle; cancelled via Cancel/execute
 
 	return job, nil
 }
