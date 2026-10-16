@@ -68,6 +68,7 @@ func (s *Service) submitRSSAIEnhancement(
 	}
 
 	job, err := s.jobManager.SubmitJob(ctx, domain.AIJob{
+		Origin:       domain.AIJobOriginAutomation,
 		TeamID:       feed.TeamID,
 		AuthorUserID: ownerID,
 		Type:         domain.AIJobTypeVoiceEngine,

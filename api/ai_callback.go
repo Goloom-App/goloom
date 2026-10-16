@@ -48,10 +48,17 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		return
 	}
 
+	rssMeta := parseRSSAutomationMeta(job.Payload)
+	recurringMeta := parseRecurringAutomationMeta(job.Payload)
+	if job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil) {
+		a.log.WarnContext(ctx, "ai job completion: ignoring automation metadata without server provenance; completing as normal job", "job_id", job.ID, "team_id", job.TeamID, "origin", job.Origin)
+		rssMeta, recurringMeta = nil, nil
+	}
+	automation := job.Type == domain.AIJobTypeVoiceEngine && (rssMeta != nil || recurringMeta != nil)
+
 	// Persist terminal status before side effects so a retry cannot create another post.
 	// Automation callbacks own their separate post/fallback lifecycle below.
-	if status == domain.AIJobStatusCompleted &&
-		!(job.Type == domain.AIJobTypeVoiceEngine && (parseRSSAutomationMeta(job.Payload) != nil || parseRecurringAutomationMeta(job.Payload) != nil)) {
+	if status == domain.AIJobStatusCompleted && !automation {
 		profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 		if profErr == nil && profile.AutoPublishEnabled {
 			if err := a.autoCreatePostFromCallbackResult(ctx, job, result); err != nil {
@@ -67,17 +74,19 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 	}
 
 	var automationErr error
-	if status == domain.AIJobStatusCompleted {
-		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			automationErr = a.finishRSSAutomationFromAI(ctx, job, result, meta)
-		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			automationErr = a.finishRecurringAutomationFromAI(ctx, job, result, meta)
-		}
-	} else {
-		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			automationErr = a.finishRSSAutomationFallback(ctx, job, meta)
-		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			automationErr = a.finishRecurringAutomationFallback(ctx, job, meta)
+	if automation {
+		if status == domain.AIJobStatusCompleted {
+			if rssMeta != nil {
+				automationErr = a.finishRSSAutomationFromAI(ctx, job, result, rssMeta)
+			} else {
+				automationErr = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
+			}
+		} else {
+			if rssMeta != nil {
+				automationErr = a.finishRSSAutomationFallback(ctx, job, rssMeta)
+			} else {
+				automationErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta)
+			}
 		}
 	}
 

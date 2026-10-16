@@ -104,7 +104,8 @@ func TestAITrigger(t *testing.T) {
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{
 			"type":   domain.AIJobTypeVoiceEngine,
-			"params": map[string]any{"prompt_hint": "ship it"},
+			"origin": "automation",
+			"params": map[string]any{"prompt_hint": "ship it", "origin": "automation"},
 		})
 		if rec.Code != http.StatusAccepted {
 			t.Fatalf("POST ai-trigger: got %d; body: %s", rec.Code, rec.Body.String())
@@ -134,6 +135,9 @@ func TestAITrigger(t *testing.T) {
 		job, err := fixture.store.GetAIJobByID(ctx, fixture.team.ID, got.JobID)
 		if err != nil {
 			t.Fatalf("GetAIJobByID: %v", err)
+		}
+		if job.Origin != domain.AIJobOriginUser {
+			t.Fatalf("API origin = %q, want user", job.Origin)
 		}
 		if job.AuthorUserID != fixture.user.ID {
 			t.Fatalf("author_user_id = %q, want %q", job.AuthorUserID, fixture.user.ID)

@@ -359,15 +359,19 @@ func (s *Store) CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 	if id == "" {
 		id = uuid.NewString()
 	}
+	origin := input.Origin
+	if origin == "" {
+		origin = domain.AIJobOriginUser
+	}
 	status := input.Status
 	if status == "" {
 		status = domain.AIJobStatusPending
 	}
 	now := nowString()
 	_, err := s.db.ExecContext(ctx, `
-		insert into ai_jobs (id, team_id, author_user_id, job_type, status, payload, created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, input.TeamID, input.AuthorUserID, string(input.Type), string(status), payloadJSON, now, now,
+		insert into ai_jobs (id, team_id, author_user_id, job_type, status, origin, payload, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, input.TeamID, input.AuthorUserID, string(input.Type), string(status), origin, payloadJSON, now, now,
 	)
 	if err != nil {
 		return domain.AIJob{}, err
@@ -377,7 +381,7 @@ func (s *Store) CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 
 func (s *Store) GetAIJobByID(ctx context.Context, teamID string, id string) (domain.AIJob, error) {
 	row := s.db.QueryRowContext(ctx, `
-		select id, team_id, author_user_id, job_type, status, payload, result, error_message, created_at, updated_at, completed_at
+		select id, team_id, author_user_id, job_type, status, origin, payload, result, error_message, created_at, updated_at, completed_at
 		from ai_jobs
 		where team_id = ? and id = ?`, teamID, id)
 	return scanAIJob(row)
@@ -385,7 +389,7 @@ func (s *Store) GetAIJobByID(ctx context.Context, teamID string, id string) (dom
 
 func (s *Store) GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob, error) {
 	row := s.db.QueryRowContext(ctx, `
-		select id, team_id, author_user_id, job_type, status, payload, result, error_message, created_at, updated_at, completed_at
+		select id, team_id, author_user_id, job_type, status, origin, payload, result, error_message, created_at, updated_at, completed_at
 		from ai_jobs
 		where id = ?`, id)
 	return scanAIJob(row)
@@ -393,7 +397,7 @@ func (s *Store) GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob
 
 func (s *Store) ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, author_user_id, job_type, status, payload, result, error_message, created_at, updated_at, completed_at
+		select id, team_id, author_user_id, job_type, status, origin, payload, result, error_message, created_at, updated_at, completed_at
 		from ai_jobs
 		where team_id = ?
 		order by created_at desc
@@ -426,7 +430,7 @@ func (s *Store) UpdateAIJobStatus(ctx context.Context, id string, status domain.
 
 func (s *Store) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, author_user_id, job_type, status, payload, result, error_message, created_at, updated_at, completed_at
+		select id, team_id, author_user_id, job_type, status, origin, payload, result, error_message, created_at, updated_at, completed_at
 		from ai_jobs
 		where status = ?
 		order by created_at asc
@@ -452,7 +456,7 @@ func (s *Store) MarkAIJobProcessing(ctx context.Context, id string) (bool, error
 
 func (s *Store) ListUnfinishedAIJobs(ctx context.Context, olderThan time.Time, limit int) ([]domain.AIJob, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, author_user_id, job_type, status, payload, result, error_message, created_at, updated_at, completed_at
+		select id, team_id, author_user_id, job_type, status, origin, payload, result, error_message, created_at, updated_at, completed_at
 		from ai_jobs
 		where status in (?, ?) and updated_at < ?
 		order by created_at asc
@@ -475,7 +479,7 @@ func scanAIJob(scanner rowScanner) (domain.AIJob, error) {
 		updatedAt   string
 	)
 	if err := scanner.Scan(
-		&job.ID, &job.TeamID, &job.AuthorUserID, &job.Type, &job.Status,
+		&job.ID, &job.TeamID, &job.AuthorUserID, &job.Type, &job.Status, &job.Origin,
 		&payloadRaw, &resultRaw, &errMsg,
 		&createdAt, &updatedAt, &completedAt,
 	); err != nil {

@@ -9,6 +9,7 @@ import (
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/rss"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store/sqlite"
 	"github.com/google/uuid"
@@ -88,6 +89,9 @@ func TestSubmitRecurringAIEnhancementQueuesJobWithMeta(t *testing.T) {
 	}
 	if len(jobs) != 1 {
 		t.Fatalf("expected 1 queued AI job, got %d", len(jobs))
+	}
+	if jobs[0].Origin != domain.AIJobOriginAutomation {
+		t.Fatalf("scheduler job origin = %q, want automation", jobs[0].Origin)
 	}
 	var payload struct {
 		Params struct {
@@ -255,5 +259,47 @@ func TestRegeneratePostTemplateHorizonBlockedByPostedPost(t *testing.T) {
 
 	if _, err := svc.RegeneratePostTemplateHorizon(context.Background(), "team1", "tpl-b"); err == nil {
 		t.Fatal("posted posts in scope must block horizon regenerate")
+	}
+}
+
+func TestSchedulerAIJobProvenance(t *testing.T) {
+	for _, kind := range []string{"rss", "recurring-main", "recurring-announcement", "user"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			s, manager, team, user := newRecurringAIFixture(t, true)
+			svc := New(testLogger(), s, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, manager)
+			at := time.Now().UTC().Add(time.Hour)
+			tmpl := recurringTestTemplate(team, user)
+			var err error
+			switch kind {
+			case "rss":
+				feed, createErr := s.CreateRSSFeedConfig(ctx, team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{"acc-1"}})
+				if createErr != nil {
+					t.Fatal(createErr)
+				}
+				err = svc.submitRSSAIEnhancement(ctx, feed, rss.Item{Title: "item", Content: "article"}, "item", "fallback", "title", at, false, user.ID)
+			case "recurring-main":
+				err = svc.submitRecurringAIEnhancement(ctx, tmpl, "fallback", "title", at, false, at)
+			case "recurring-announcement":
+				err = svc.submitRecurringAnnouncementAIEnhancement(ctx, tmpl, "announcement", "title", at, at)
+			case "user":
+				_, err = manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: json.RawMessage(`{"origin":"automation","params":{"origin":"automation"}}`)})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			manager.Wait()
+			jobs, err := s.ListAIJobs(ctx, team.ID, 10)
+			if err != nil || len(jobs) != 1 {
+				t.Fatalf("jobs=%d err=%v", len(jobs), err)
+			}
+			want := domain.AIJobOriginAutomation
+			if kind == "user" {
+				want = domain.AIJobOriginUser
+			}
+			if jobs[0].Origin != want {
+				t.Fatalf("origin=%q want=%q", jobs[0].Origin, want)
+			}
+		})
 	}
 }

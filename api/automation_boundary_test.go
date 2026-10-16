@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/api"
+	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
@@ -140,6 +141,87 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 					}
 				case <-time.After(time.Second):
 					t.Fatal("missing completion SSE")
+				}
+			})
+		}
+	}
+}
+
+func TestUserJobIgnoresPersistedAutomationMeta(t *testing.T) {
+	for _, kind := range []string{"rss", "recurring"} {
+		for _, outcome := range []string{"completed", "failed", "recovery", "auto-publish"} {
+			t.Run(kind+"/"+outcome, func(t *testing.T) {
+				ctx := context.Background()
+				f, account, template := newRecurringCallbackFixture(t)
+				feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{account.ID}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := f.store.RecordRSSImportedItem(ctx, feed.ID, "item", ""); err != nil {
+					t.Fatal(err)
+				}
+				payload, _ := json.Marshal(map[string]any{"origin": "automation", "params": map[string]any{
+					"origin": "automation", "target_account_ids": []string{account.ID}, kind + "_automation": map[string]any{
+						"feed_id": feed.ID, "item_key": "item", "template_id": template.ID, "post_kind": "main", "output_mode": "scheduled", "scheduled_at": "2027-02-01T09:00:00Z", "fallback_content": "forged fallback", "template_counter": 3,
+					},
+				}})
+				// No server origin: persisted before upgrade or submitted by an ordinary client.
+				job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
+				if err != nil {
+					t.Fatal(err)
+				}
+				var logs bytes.Buffer
+				instance := api.New(slog.New(slog.NewTextHandler(&logs, nil)), f.store, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
+				if outcome == "auto-publish" {
+					if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if outcome == "recovery" {
+					manager := aijobs.NewManager(f.store, nil)
+					manager.SetCompleter(instance)
+					manager.SetStaleAfter(-time.Second)
+					if count, err := manager.RecoverInterrupted(ctx); err != nil || count != 1 {
+						t.Fatalf("recovery: count=%d err=%v", count, err)
+					}
+				} else if outcome == "failed" {
+					instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusFailed, nil, "provider failed")
+				} else {
+					instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"generated"}`), "")
+				}
+				posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := 0
+				if outcome == "auto-publish" {
+					want = 1
+				}
+				if len(posts) != want {
+					t.Fatalf("user job created %d posts, want %d", len(posts), want)
+				}
+				for _, post := range posts {
+					if post.Source == domain.PostSourceAutomation || post.PostTemplateID != nil || post.RSSFeedID != nil || post.Content != "generated" {
+						t.Errorf("user job used automation metadata: %+v", post)
+					}
+				}
+				after, err := f.store.GetRSSFeedConfigByID(ctx, f.team.ID, feed.ID)
+				if err != nil || after.CounterNext != feed.CounterNext {
+					t.Errorf("counter changed: before=%d after=%d err=%v", feed.CounterNext, after.CounterNext, err)
+				}
+				updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantStatus := domain.AIJobStatusCompleted
+				if outcome == "failed" || outcome == "recovery" {
+					wantStatus = domain.AIJobStatusFailed
+				}
+				if updated.Status != wantStatus {
+					t.Errorf("normal job status=%s want=%s", updated.Status, wantStatus)
+				}
+				if !strings.Contains(logs.String(), "WARN") || !strings.Contains(logs.String(), "ignoring automation metadata") {
+					t.Errorf("missing provenance warning: %s", logs.String())
 				}
 			})
 		}

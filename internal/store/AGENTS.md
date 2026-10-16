@@ -10,6 +10,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Local Contracts
 
+- AI job `origin` is server-owned and immutable through status updates: omitted origin and legacy rows default to `user`; scheduler-created jobs explicitly persist `automation`. All job reads (including global, pending, unfinished) preserve provenance; `AIJob.Origin` is excluded from JSON
 - `LoadPostTargets` returns only unposted targets whose social account belongs to the scheduled post's team; persisted foreign-team target rows must never reach the publisher
 - RSS completion writes (`IncrementRSSFeedCounter`, `UpdateRSSImportedItemPostID`) require `teamID`; foreign/missing feeds or items return `domain.ErrNotFound`. Item links also require the scheduled post to belong to that team
 - Interface: `store.go` — all business logic depends on this contract

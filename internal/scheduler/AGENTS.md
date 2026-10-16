@@ -11,6 +11,7 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 ## Local Contracts
 
 - Scheduler core: `scheduler.go` — poll loop, worker pool, job dispatch
+- AI job submissions: RSS, recurring main posts, and recurring announcements set server-only `domain.AIJob.Origin=AIJobOriginAutomation` through `aijobs`; payload metadata alone never authorizes automation completion
 - Recurring AI: `recurring_ai.go` — recurring post generation via AI
 - RSS AI: `rss_ai.go` — RSS-triggered AI generation
 - RSS import: `rss_import.go` — RSS feed import jobs
