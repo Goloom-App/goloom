@@ -325,7 +325,8 @@ create table if not exists ai_service_configs (
     base_url text not null default '',
     api_key_ciphertext text not null default '',
     description text not null default '',
-    created_at timestamptz not null default now()
+    created_at timestamptz not null default now(),
+    constraint ai_service_configs_team_id_key unique (team_id)
 );
 
 alter table ai_service_configs add column if not exists provider text not null default 'openai';
@@ -333,6 +334,15 @@ alter table ai_service_configs add column if not exists model text not null defa
 alter table ai_service_configs add column if not exists base_url text not null default '';
 alter table ai_service_configs add column if not exists api_key_ciphertext text not null default '';
 alter table ai_service_configs drop column if exists service_url;
+
+-- Migration for databases created before team_id was unique: keep the newest
+-- row per team, then enforce uniqueness (same name as the constraint above, so
+-- fresh databases skip this).
+delete from ai_service_configs a
+using ai_service_configs b
+where a.team_id = b.team_id
+  and (a.created_at, a.id) < (b.created_at, b.id);
+create unique index if not exists ai_service_configs_team_id_key on ai_service_configs(team_id);
 
 create table if not exists rss_feed_configs (
     id uuid primary key default gen_random_uuid(),
