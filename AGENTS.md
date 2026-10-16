@@ -9,6 +9,7 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
 - Single Go module; server entry `cmd/server`, bootstrap `internal/app/app.go`
 - Frontend build output is embedded from `internal/webui/dist` (tracked: `index.html`, `manifest.json`, `sw.js` — tracked so a plain `go build` without a fresh frontend build still embeds the service worker)
 - Locales: `locales/de.json` + `locales/en.json` must stay key-identical
+- Team AI provider config (`GET`/`PUT /v1/teams/{teamID}/ai-service-config`) is accessible to authorized team members before AI is enabled; AI execution endpoints still require `is_ai_enabled=true`
 
 ## Work Guidance
 
