@@ -103,7 +103,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # The pinned golang container ships an older patch than go.mod requires
-      # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
+      # and the in-runner GOTOOLCHAIN=auto download of the required patch
       # fails — so acquire the exact toolchain from go.mod via setup-go, the
       # same mechanism the green E2E job already uses.
       - name: Set up Go
@@ -279,7 +279,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # The pinned golang container ships an older patch than go.mod requires
-      # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
+      # and the in-runner GOTOOLCHAIN=auto download of the required patch
       # fails — so acquire the exact toolchain from go.mod via setup-go, the
       # same mechanism the green E2E job already uses.
       - name: Set up Go
@@ -328,7 +328,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # The pinned golang container ships an older patch than go.mod requires
-      # (go 1.26.4), and the in-runner GOTOOLCHAIN=auto download of that patch
+      # and the in-runner GOTOOLCHAIN=auto download of the required patch
       # fails — so acquire the exact toolchain from go.mod via setup-go, the
       # same mechanism the green E2E job already uses.
       - name: Set up Go
