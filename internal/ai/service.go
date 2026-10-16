@@ -15,8 +15,10 @@ type Service struct {
 	observer   Observer
 }
 
-func NewService() *Service {
-	return &Service{httpClient: &http.Client{Timeout: requestTimeout}, observer: LogObserver{}}
+// NewService builds the job runner. LLM calls only reach public addresses
+// plus the admin-allowlisted private hosts (see NewHTTPClient).
+func NewService(allowedPrivateHosts ...string) *Service {
+	return &Service{httpClient: NewHTTPClient(allowedPrivateHosts), observer: LogObserver{}}
 }
 
 // SetObserver overrides the metrics observer used for every LLM call. Passing
