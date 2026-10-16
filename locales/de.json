@@ -1194,6 +1194,17 @@
     "invalid_regenerate_mode": "mode muss occurrence oder horizon sein",
     "template_regenerate_not_available": "Neu-Generieren für Vorlagen ist nicht verfügbar",
     "past_scheduled_at": "scheduled_at muss in der Zukunft liegen",
-    "already_published": "Beitrag ist bereits veröffentlicht oder abgebrochen"
+    "already_published": "Beitrag ist bereits veröffentlicht oder abgebrochen",
+    "internal_error": "interner Fehler",
+    "ai_service_config_not_found": "KI-Dienstkonfiguration nicht gefunden",
+    "invalid_team_profile": "Ungültiges Markenprofil: max_hashtags muss 0-30 sein, Textfelder innerhalb der Längenlimits",
+    "invalid_campaign_format": "Ungültiges Kampagnenformat: Name (max. 120 Zeichen) und Struktur sind Pflicht, Wochentag 0-6, höchstens 30 Hashtags",
+    "invalid_style_example": "Ungültiges Stilbeispiel: Inhalt ist Pflicht (max. 5000 Zeichen), Notizen max. 1000",
+    "invalid_knowledge_source": "Ungültige Wissensquelle: Typ, Name (max. 200 Zeichen) und Inhalt oder source_url sind Pflicht",
+    "knowledge_source_too_large": "Inhalt der Wissensquelle ist zu groß (max. 100000 Bytes)",
+    "knowledge_source_limit_reached": "Limit für Wissensquellen erreicht (max. 50 pro Team)",
+    "knowledge_source_not_found": "Wissensquelle nicht gefunden",
+    "knowledge_url_fetch_failed": "Die URL der Wissensquelle konnte nicht abgerufen werden",
+    "invalid_proactive_settings": "Ungültige Proaktiv-Einstellungen: Lückentage 1-365, Auslöser pro Tag 1-100, Cron-Ausdruck mit 5 Feldern"
   }
 }

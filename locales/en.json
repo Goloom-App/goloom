@@ -1194,6 +1194,17 @@
     "invalid_regenerate_mode": "mode must be occurrence or horizon",
     "template_regenerate_not_available": "template regenerate is not available",
     "past_scheduled_at": "scheduled_at must be in the future",
-    "already_published": "post is already published or cancelled"
+    "already_published": "post is already published or cancelled",
+    "internal_error": "internal error",
+    "ai_service_config_not_found": "AI service configuration not found",
+    "invalid_team_profile": "invalid brand profile: max_hashtags must be 0-30 and text fields within their length limits",
+    "invalid_campaign_format": "invalid campaign format: name (max 120 characters) and structure are required, weekday 0-6, at most 30 hashtags",
+    "invalid_style_example": "invalid style example: content is required (max 5000 characters), notes max 1000",
+    "invalid_knowledge_source": "invalid knowledge source: type, name (max 200 characters) and content or source_url are required",
+    "knowledge_source_too_large": "knowledge source content is too large (max 100000 bytes)",
+    "knowledge_source_limit_reached": "knowledge source limit reached (max 50 per team)",
+    "knowledge_source_not_found": "knowledge source not found",
+    "knowledge_url_fetch_failed": "could not fetch the knowledge source URL",
+    "invalid_proactive_settings": "invalid proactive settings: gap days 1-365, triggers per day 1-100, cron schedule with 5 fields"
   }
 }

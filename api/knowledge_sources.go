@@ -12,7 +12,7 @@ import (
 func (a *API) handleListKnowledgeSources(w http.ResponseWriter, r *http.Request) {
 	items, err := a.store.ListKnowledgeSources(r.Context(), r.PathValue("teamID"))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "")
 		return
 	}
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
@@ -36,16 +36,26 @@ func (a *API) handleCreateKnowledgeSource(w http.ResponseWriter, r *http.Request
 		input.Content = content
 	}
 
-	if err := input.Validate(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !a.checkKnowledgeInput(w, r, input) {
+		return
+	}
+
+	existing, err := a.store.ListKnowledgeSources(r.Context(), teamID)
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
+	if len(existing) >= maxKnowledgeSources {
+		a.writeError(w, r, "knowledge_source_limit_reached", http.StatusConflict)
 		return
 	}
 
 	created, err := a.store.CreateKnowledgeSource(r.Context(), teamID, input)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "")
 		return
 	}
+	a.recordAudit(r, teamID, "knowledge_source.create", "knowledge_source", &created.ID, "Created knowledge source: "+created.Name)
 	auth.WriteJSON(w, http.StatusCreated, created)
 }
 
@@ -68,24 +78,39 @@ func (a *API) handleUpdateKnowledgeSource(w http.ResponseWriter, r *http.Request
 		input.Content = content
 	}
 
-	if err := input.Validate(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !a.checkKnowledgeInput(w, r, input) {
 		return
 	}
 
 	updated, err := a.store.UpdateKnowledgeSource(r.Context(), teamID, sourceID, input)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeStoreError(w, r, err, "knowledge_source_not_found")
 		return
 	}
+	a.recordAudit(r, teamID, "knowledge_source.update", "knowledge_source", &sourceID, "Updated knowledge source: "+updated.Name)
 	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
 func (a *API) handleDeleteKnowledgeSource(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.DeleteKnowledgeSource(r.Context(), r.PathValue("teamID"), r.PathValue("sourceID")); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	teamID, sourceID := r.PathValue("teamID"), r.PathValue("sourceID")
+	if err := a.store.DeleteKnowledgeSource(r.Context(), teamID, sourceID); err != nil {
+		a.writeStoreError(w, r, err, "")
 		return
 	}
+	a.recordAudit(r, teamID, "knowledge_source.delete", "knowledge_source", &sourceID, "Deleted knowledge source")
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// checkKnowledgeInput validates a knowledge source (after any URL fetch filled
+// its content) and writes the 400 response itself when it is rejected.
+func (a *API) checkKnowledgeInput(w http.ResponseWriter, r *http.Request, input domain.KnowledgeSource) bool {
+	if err := validateKnowledgeSource(input); err != nil {
+		a.writeError(w, r, "invalid_knowledge_source", http.StatusBadRequest)
+		return false
+	}
+	if len(input.Content) > maxKnowledgeContentSize {
+		a.writeError(w, r, "knowledge_source_too_large", http.StatusBadRequest)
+		return false
+	}
+	return true
+}

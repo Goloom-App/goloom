@@ -10,6 +10,7 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
 - Go module requires Go 1.26.9 or newer
 - Frontend build output is embedded from `internal/webui/dist` (tracked: `index.html`, `manifest.json`, `sw.js` — tracked so a plain `go build` without a fresh frontend build still embeds the service worker)
 - Locales: `locales/de.json` + `locales/en.json` must stay key-identical
+- Team AI settings handlers (`api/ai_crud.go`, `api/knowledge_sources.go`) validate input against the limits in `api/ai_validation.go` (e.g. max_hashtags 0..30, 50 knowledge sources/team, 100 000 bytes/source), answer with `writeError` codes (never raw `err.Error()`), map store failures via `writeStoreError` (`domain.ErrNotFound` → 404, else logged + 500 `internal_error`) and call `recordAudit` for every create/update/delete
 - Team AI provider config (`GET`/`PUT /v1/teams/{teamID}/ai-service-config`) is accessible to authorized team members before AI is enabled; AI execution endpoints still require `is_ai_enabled=true`
 
 ## Work Guidance
