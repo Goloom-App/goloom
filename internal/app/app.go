@@ -136,7 +136,10 @@ func Run(ctx context.Context) error {
 		}),
 	)
 
-	jobManager := aijobs.NewManager(dataStore, ai.NewService(cfg.AIAllowedPrivateHosts...))
+	// One AI service for jobs and chat, so every LLM call shares one observer
+	// and the same outbound network guard.
+	aiService := ai.NewService(cfg.AIAllowedPrivateHosts...)
+	jobManager := aijobs.NewManager(dataStore, aiService)
 	jobManager.SetLogger(logger)
 
 	schedulerService := scheduler.New(
@@ -160,6 +163,7 @@ func Run(ctx context.Context) error {
 	sseHub := sse.NewHub()
 	defer sseHub.Close()
 	apiHandler := api.New(logger, dataStore, authService, providers, cfg, schedulerService, catalog, jobManager, sseHub)
+	apiHandler.SetAIService(aiService)
 
 	// Review notifications: the scheduler shares the API's Web Push sender.
 	// Started only after wiring so no automation post races the missing sender.

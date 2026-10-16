@@ -18,13 +18,13 @@ func (r *recordingObserver) ObserveCall(_ context.Context, m CallMetrics) {
 // non-failing metric to the observer.
 func TestObserverRecordsOpenAIUsage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		io.WriteString(w, `{"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"hi"}}],"usage":{"prompt_tokens":11,"completion_tokens":7}}`)
+		io.WriteString(w, `{"model":"gpt-5","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"hi"}}],"usage":{"prompt_tokens":11,"completion_tokens":7}}`)
 	}))
 	defer server.Close()
 
 	obs := &recordingObserver{}
 	client, err := NewClientWithObserver(
-		Settings{Provider: ProviderOpenAI, Model: "gpt-4o", APIKey: "k", BaseURL: server.URL, Team: "team-1"},
+		Settings{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: "k", BaseURL: server.URL, Team: "team-1"},
 		server.Client(), obs)
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestObserverRecordsFailure(t *testing.T) {
 
 	obs := &recordingObserver{}
 	client, _ := NewClientWithObserver(
-		Settings{Provider: ProviderOpenAI, Model: "gpt-4o", APIKey: "k", BaseURL: server.URL},
+		Settings{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: "k", BaseURL: server.URL},
 		server.Client(), obs)
 	if _, err := client.Complete(context.Background(), Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}}); err == nil {
 		t.Fatal("expected error from 500")

@@ -21,11 +21,11 @@ func TestOpenAIRequestsJSONResponseFormat(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		bodies = append(bodies, string(raw))
-		io.WriteString(w, `{"model":"gpt-4o","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"{\"ok\":true}"}}]}`)
+		io.WriteString(w, `{"model":"gpt-5","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"{\"ok\":true}"}}]}`)
 	}))
 	defer server.Close()
 
-	client, err := NewClient(Settings{Provider: ProviderOpenAI, Model: "gpt-4o", APIKey: "k", BaseURL: server.URL}, server.Client())
+	client, err := NewClient(Settings{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: "k", BaseURL: server.URL}, server.Client())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,11 +50,11 @@ func TestOpenAIRequestsJSONResponseFormat(t *testing.T) {
 // recognisable error instead of returning the broken content.
 func TestOpenAIReportsTruncation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		io.WriteString(w, `{"model":"gpt-4o","choices":[{"finish_reason":"length","message":{"role":"assistant","content":"{\"content\": \"half a sen"}}]}`)
+		io.WriteString(w, `{"model":"gpt-5","choices":[{"finish_reason":"length","message":{"role":"assistant","content":"{\"content\": \"half a sen"}}]}`)
 	}))
 	defer server.Close()
 
-	client, _ := NewClient(Settings{Provider: ProviderOpenAI, Model: "gpt-4o", APIKey: "k", BaseURL: server.URL}, server.Client())
+	client, _ := NewClient(Settings{Provider: ProviderOpenAI, Model: "gpt-5", APIKey: "k", BaseURL: server.URL}, server.Client())
 	_, err := client.Complete(context.Background(), Request{JSON: true, Messages: []Message{{Role: RoleUser, Content: "hi"}}})
 	if !errors.Is(err, ErrResponseTruncated) {
 		t.Fatalf("expected ErrResponseTruncated, got %v", err)

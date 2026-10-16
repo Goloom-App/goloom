@@ -376,7 +376,7 @@ func TestSQLite_AIServiceConfig_UpsertAndGet(t *testing.T) {
 	// Upsert (insert)
 	cfg, err := s.UpsertAIServiceConfig(ctx, team.ID, domain.AIServiceConfig{
 		Provider:    "openai",
-		Model:       "gpt-4o",
+		Model:       "gpt-5",
 		BaseURL:     "https://api.openai.com",
 		APIKey:      "sk-test-key",
 		Description: "Main AI config",
@@ -390,7 +390,7 @@ func TestSQLite_AIServiceConfig_UpsertAndGet(t *testing.T) {
 	if cfg.Provider != "openai" {
 		t.Fatalf("Provider: got %q", cfg.Provider)
 	}
-	if cfg.Model != "gpt-4o" {
+	if cfg.Model != "gpt-5" {
 		t.Fatalf("Model: got %q", cfg.Model)
 	}
 	if !cfg.APIKeySet {

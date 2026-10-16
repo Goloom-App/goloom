@@ -86,7 +86,7 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
         <input
           value={props.teamAiModel}
           onChange={(event) => props.setTeamAiModel(event.target.value)}
-          placeholder={props.teamAiProvider === 'anthropic' ? 'claude-opus-4-8' : 'gpt-4o'}
+          placeholder={props.teamAiProvider === 'anthropic' ? 'claude-sonnet-5-5' : 'gpt-5'}
         />
       </label>
       <label className="field">

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"git.f4mily.net/goloom/internal/ai"
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
@@ -38,6 +39,7 @@ type API struct {
 	hub         *sse.Hub
 	push        *push.Sender
 	release     releaseStatusProvider
+	aiService   *ai.Service
 }
 
 // releaseStatusProvider supplies the cached update-check state for GET /v1/version.
@@ -72,6 +74,14 @@ type destinationInfo struct {
 	MissingMedia bool `json:"missing_media,omitempty"`
 }
 
+// SetAIService replaces the AI service used for chat LLM clients. App wiring
+// passes the same service as the job manager so every call shares one observer.
+func (a *API) SetAIService(svc *ai.Service) {
+	if svc != nil {
+		a.aiService = svc
+	}
+}
+
 func New(logger *slog.Logger, store store.Store, authService *auth.Service, providers *provider.Registry, cfg config.Config, metricsSync metricsSyncRunner, catalog *i18n.Catalog, jobManager *aijobs.Manager, hub *sse.Hub) *API {
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
@@ -95,6 +105,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		i18n:        catalog,
 		jobManager:  jobManager,
 		hub:         hub,
+		aiService:   ai.NewService(cfg.AIAllowedPrivateHosts...),
 		push: push.New(store, push.Config{
 			Subject:    cfg.VAPIDSubject,
 			PublicKey:  cfg.VAPIDPublicKey,

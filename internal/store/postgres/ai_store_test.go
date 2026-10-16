@@ -396,14 +396,14 @@ func TestAIServiceConfigUpsert(t *testing.T) {
 
 	cfg, err := s.UpsertAIServiceConfig(ctx, team.ID, domain.AIServiceConfig{
 		Provider:    "openai",
-		Model:       "gpt-4o",
+		Model:       "gpt-5",
 		APIKey:      "secret-key-1",
 		Description: "Main AI backend",
 	})
 	if err != nil {
 		t.Fatalf("UpsertAIServiceConfig: %v", err)
 	}
-	if cfg.Provider != "openai" || cfg.Model != "gpt-4o" {
+	if cfg.Provider != "openai" || cfg.Model != "gpt-5" {
 		t.Fatalf("provider/model: got %q/%q", cfg.Provider, cfg.Model)
 	}
 	if !cfg.APIKeySet || cfg.APIKey != "secret-key-1" {
@@ -413,13 +413,13 @@ func TestAIServiceConfigUpsert(t *testing.T) {
 	// Empty APIKey on update keeps the stored key.
 	cfg2, err := s.UpsertAIServiceConfig(ctx, team.ID, domain.AIServiceConfig{
 		Provider:    "anthropic",
-		Model:       "claude-opus-4-8",
+		Model:       "claude-sonnet-5-5",
 		Description: "Updated backend",
 	})
 	if err != nil {
 		t.Fatalf("UpsertAIServiceConfig update: %v", err)
 	}
-	if cfg2.Provider != "anthropic" || cfg2.Model != "claude-opus-4-8" {
+	if cfg2.Provider != "anthropic" || cfg2.Model != "claude-sonnet-5-5" {
 		t.Fatalf("provider/model after update: got %q/%q", cfg2.Provider, cfg2.Model)
 	}
 	if !cfg2.APIKeySet || cfg2.APIKey != "secret-key-1" {
