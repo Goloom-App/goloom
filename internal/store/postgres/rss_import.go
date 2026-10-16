@@ -82,30 +82,32 @@ func (s *Store) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, post
 	return nil
 }
 
-func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error {
+func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE rss_imported_items
 		SET post_id = $3
-		WHERE feed_id = $1 AND item_key = $2`, feedID, itemKey, postID)
+		WHERE feed_id = $1 AND item_key = $2
+		  AND EXISTS (SELECT 1 FROM rss_feed_configs WHERE id = rss_imported_items.feed_id AND team_id = $4)
+		  AND EXISTS (SELECT 1 FROM scheduled_posts WHERE id = $3 AND team_id = $4)`, feedID, itemKey, postID, teamID)
 	if err != nil {
 		return fmt.Errorf("UpdateRSSImportedItemPostID: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("rss imported item not found: %w", pgx.ErrNoRows)
+		return fmt.Errorf("rss imported item not found: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 	}
 	return nil
 }
 
-func (s *Store) IncrementRSSFeedCounter(ctx context.Context, feedID string) error {
+func (s *Store) IncrementRSSFeedCounter(ctx context.Context, teamID, feedID string) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE rss_feed_configs
 		SET counter_next = counter_next + 1
-		WHERE id = $1`, feedID)
+		WHERE id = $1 AND team_id = $2`, feedID, teamID)
 	if err != nil {
 		return fmt.Errorf("IncrementRSSFeedCounter: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("rss feed config not found: %w", pgx.ErrNoRows)
+		return fmt.Errorf("rss feed config not found: %w: %w", domain.ErrNotFound, pgx.ErrNoRows)
 	}
 	return nil
 }

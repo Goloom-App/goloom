@@ -82,12 +82,14 @@ func (s *Store) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, post
 	return nil
 }
 
-func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error {
+func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
 	res, err := s.db.ExecContext(ctx, `
 		update rss_imported_items
 		set post_id = ?
-		where feed_id = ? and item_key = ?`,
-		postID, feedID, itemKey,
+		where feed_id = ? and item_key = ?
+		  and exists (select 1 from rss_feed_configs where id = rss_imported_items.feed_id and team_id = ?)
+		  and exists (select 1 from scheduled_posts where id = ? and team_id = ?)`,
+		postID, feedID, itemKey, teamID, postID, teamID,
 	)
 	if err != nil {
 		return fmt.Errorf("UpdateRSSImportedItemPostID: %w", err)
@@ -97,16 +99,16 @@ func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey
 		return fmt.Errorf("UpdateRSSImportedItemPostID: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("rss imported item not found: %w", sql.ErrNoRows)
+		return fmt.Errorf("rss imported item not found: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 	}
 	return nil
 }
 
-func (s *Store) IncrementRSSFeedCounter(ctx context.Context, feedID string) error {
+func (s *Store) IncrementRSSFeedCounter(ctx context.Context, teamID, feedID string) error {
 	res, err := s.db.ExecContext(ctx, `
 		update rss_feed_configs
 		set counter_next = counter_next + 1
-		where id = ?`, feedID)
+		where id = ? and team_id = ?`, feedID, teamID)
 	if err != nil {
 		return fmt.Errorf("IncrementRSSFeedCounter: %w", err)
 	}
@@ -115,7 +117,7 @@ func (s *Store) IncrementRSSFeedCounter(ctx context.Context, feedID string) erro
 		return fmt.Errorf("IncrementRSSFeedCounter: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("rss feed config not found: %w", sql.ErrNoRows)
+		return fmt.Errorf("rss feed config not found: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 	}
 	return nil
 }

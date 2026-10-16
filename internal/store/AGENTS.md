@@ -11,6 +11,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 ## Local Contracts
 
 - `LoadPostTargets` returns only unposted targets whose social account belongs to the scheduled post's team; persisted foreign-team target rows must never reach the publisher
+- RSS completion writes (`IncrementRSSFeedCounter`, `UpdateRSSImportedItemPostID`) require `teamID`; foreign/missing feeds or items return `domain.ErrNotFound`. Item links also require the scheduled post to belong to that team
 - Interface: `store.go` — all business logic depends on this contract
 - `LookupAPIToken` returns the authenticating token's persisted expiry in `AuthenticatedPrincipal.TokenExpiresAt`; non-expiring tokens return nil in both backends.
 - SQLite schema: `sqlite/schema.sql`

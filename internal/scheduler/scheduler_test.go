@@ -312,11 +312,11 @@ func (m *mockStore) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, 
 	return nil
 }
 
-func (m *mockStore) UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error {
+func (m *mockStore) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
 	return nil
 }
 
-func (m *mockStore) IncrementRSSFeedCounter(ctx context.Context, feedID string) error {
+func (m *mockStore) IncrementRSSFeedCounter(ctx context.Context, teamID, feedID string) error {
 	return nil
 }
 

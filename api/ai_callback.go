@@ -66,24 +66,36 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		}
 	}
 
+	var automationErr error
+	if status == domain.AIJobStatusCompleted {
+		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			automationErr = a.finishRSSAutomationFromAI(ctx, job, result, meta)
+		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			automationErr = a.finishRecurringAutomationFromAI(ctx, job, result, meta)
+		}
+	} else {
+		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			automationErr = a.finishRSSAutomationFallback(ctx, job, meta)
+		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
+			automationErr = a.finishRecurringAutomationFallback(ctx, job, meta)
+		}
+	}
+
+	if automationErr != nil {
+		a.log.ErrorContext(ctx, "ai job automation failed", "job_id", job.ID, "team_id", job.TeamID, "error", automationErr)
+		if errorMessage != "" {
+			errorMessage += "; "
+		}
+		errorMessage += "Automation failed: " + automationErr.Error()
+		if err := a.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusFailed, resultBytes, errorMessage); err != nil {
+			a.log.ErrorContext(ctx, "ai job automation: update failure status failed", "job_id", job.ID, "error", err)
+			return
+		}
+	}
 	updatedJob, err := a.store.GetAIJobByIDGlobal(ctx, job.ID)
 	if err != nil {
 		a.log.ErrorContext(ctx, "ai job completion: reload job failed", "job_id", jobID, "error", err)
 		return
-	}
-
-	if status == domain.AIJobStatusCompleted {
-		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRSSAutomationFromAI(ctx, job, result, meta)
-		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRecurringAutomationFromAI(ctx, job, result, meta)
-		}
-	} else {
-		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRSSAutomationFallback(ctx, job, meta)
-		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRecurringAutomationFallback(ctx, job, meta)
-		}
 	}
 
 	if event, evErr := aiJobStreamEvent(updatedJob); evErr == nil {
