@@ -55,6 +55,7 @@ Single Go module (`go.mod` at root). Packages follow standard Go conventions.
   get no badge for teams they only observe
 - Team role checks have no hierarchy: `UserHasAnyTeamRole` matches the stored role exactly. Always pass the complete allowed list — writes need `(RoleEditor, RoleOwner)`, reads `(RoleViewer, RoleEditor, RoleOwner)` — or owners get locked out
 - The first user in an empty database becomes admin (`UpsertOIDCUser`); test fixtures must burn that slot before creating regular test users
+- AI prompts (`ai/prompts.go`): social-media defaults (platform hashtag rules, tone/hook/CTA, language fallback) live only in `ai/defaults.go` and apply only where the brand profile is empty; the task prompt's char limit comes from `AIContext.Accounts` (honors per-account overrides). Truncate user text for prompts/API with `textcount.Truncate` (grapheme-safe, never `s[:n]`)
 
 ## Verification
 

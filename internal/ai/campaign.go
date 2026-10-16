@@ -34,7 +34,7 @@ func runCampaignAutopilot(ctx context.Context, client Client, job domain.AIJob, 
 	}
 
 	platform := orDefault(p.str("platform"), "mastodon")
-	constraints := applyPlatformConstraints(platform, 0)
+	constraints := applyPlatformConstraints(aiContext, platform, 0)
 	suggestedScheduledAt := resolveScheduledAt(p, campaignFormat, aiContext)
 	renderedTemplate := renderStructureTemplate(decodeStructure(campaignFormat.Structure), p, suggestedScheduledAt)
 	requiredHashtags := nonEmptyStrings(campaignFormat.RequiredHashtags)
