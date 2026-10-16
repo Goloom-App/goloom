@@ -1225,6 +1225,10 @@ function App() {
         api_key: teamAiApiKey.trim(),
         description: 'team llm',
       })
+      if (teamAiEnabled && !selectedTeam.isAiEnabled) {
+        await api.updateTeam(selectedTeam.id, { name: '', description: '', is_ai_enabled: true })
+        await loadDashboard({ silent: true })
+      }
       setTeamAiApiKey('')
       setTeamAiKeySet(Boolean(cfg.api_key_set))
       setStatusMessage(t('status.saved'))
