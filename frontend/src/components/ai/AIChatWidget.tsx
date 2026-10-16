@@ -5,8 +5,9 @@ import { Bot, Loader2, Send, Sparkles, X } from 'lucide-react'
 import type { BackendAIChatEvent, BackendAIChatMention, BackendAIChatMessage, createApiClient } from '../../api'
 import type { AccountRecord } from '../../types'
 import { composerContextEvent } from './composerChatBridge'
-import type { ComposerChatContext, ComposerChatTarget } from './composerChatBridge'
+import type { ComposerChatContext } from './composerChatBridge'
 import { getViewContext, setViewFocus, setViewVisible } from './viewContextBridge'
+import type { ViewContext } from './viewContextBridge'
 
 type ApiClient = ReturnType<typeof createApiClient>
 
@@ -83,7 +84,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
   const [input, setInput] = useState('')
   const [pendingMentions, setPendingMentions] = useState<BackendAIChatMention[]>([])
   const [busy, setBusy] = useState(false)
-  const [composerContext, setComposerContext] = useState<{ content: string; targets: ComposerChatTarget[] } | null>(null)
+  const [composerContext, setComposerContext] = useState<ComposerChatContext | null>(null)
   // Account ids the user toggled out of scope: edits then only touch the rest.
   const [deselectedAccountIds, setDeselectedAccountIds] = useState<string[]>([])
   const [mentionOptions, setMentionOptions] = useState<MentionOption[]>([])
@@ -113,9 +114,11 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     }
   }, [])
 
+  const [composerDetached, setComposerDetached] = useState(false)
+
   // Wipe the in-memory conversation and start a fresh agent session. Used by the
   // team switch and the /clear command; aborts any in-flight stream first.
-  const resetConversation = useCallback(() => {
+  const resetConversation = useCallback((detachComposer = true) => {
     abortRef.current?.abort()
     abortRef.current = null
     history.current = []
@@ -126,11 +129,14 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     setDeselectedAccountIds([])
     setSuggestions(null)
     setBusy(false)
+    setComposerDetached(detachComposer)
+    setViewFocus(undefined)
+    setViewVisible(undefined)
   }, [])
 
   useEffect(() => {
     // Reset the conversation when the team changes.
-    resetConversation()
+    resetConversation(false)
   }, [teamId, resetConversation])
 
   useEffect(() => {
@@ -144,8 +150,15 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
         setDeselectedAccountIds([])
         setViewFocus(undefined)
         setViewVisible(undefined)
+        setComposerDetached(false)
         return
       }
+      // Detach (including /clear) survives auto-sync edits until the composer
+      // closes, or its existing "Open AI chat" action explicitly re-attaches.
+      if (composerDetached && detail.auto) {
+        return
+      }
+      setComposerDetached(false)
       if (!detail.content.trim()) {
         // No text yet (e.g. an empty composer just opened): don't attach a chip,
         // but if the previous context is now empty, drop it.
@@ -154,7 +167,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
         setViewVisible(undefined)
         return
       }
-      setComposerContext({ content: detail.content, targets: detail.targets ?? [] })
+      setComposerContext({ content: detail.content, title: detail.title, targets: detail.targets ?? [] })
       // Mirror the open composer draft into the view context so the agent can see,
       // via get_current_view, which post is open and what it currently says.
       setViewFocus({ type: 'composerDraft', label: detail.title })
@@ -180,7 +193,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     }
     window.addEventListener(composerContextEvent, onComposerContext)
     return () => window.removeEventListener(composerContextEvent, onComposerContext)
-  }, [])
+  }, [composerDetached])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -462,10 +475,9 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
       return
     }
     const mentions = pendingMentions.filter((mention) => text.includes(`@${mention.name}`))
-    let modelText = text
-    if (composerContext) {
-      modelText += buildComposerNote(composerContext, deselectedAccountIds)
-    }
+    const viewContext = outgoingViewContext(getViewContext(), composerContext, deselectedAccountIds)
+    const scopedComposer = viewContext.visible?.composer
+    const modelText = scopedComposer ? text + buildComposerNote(scopedComposer) : text
     const userMessage: BackendAIChatMessage = {
       role: 'user',
       content: modelText,
@@ -480,7 +492,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     const controller = new AbortController()
     abortRef.current = controller
     try {
-      await api.streamAIChat(teamId, history.current, handleEvent, controller.signal, getViewContext())
+      await api.streamAIChat(teamId, history.current, handleEvent, controller.signal, viewContext)
     } catch (cause) {
       if (!controller.signal.aborted) {
         const message = cause instanceof Error ? cause.message : String(cause)
@@ -664,6 +676,9 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
                 onClick={() => {
                   setComposerContext(null)
                   setDeselectedAccountIds([])
+                  setComposerDetached(true)
+                  setViewFocus(undefined)
+                  setViewVisible(undefined)
                 }}
                 title={t('aiChat.composerContextDetach')}
               >
@@ -822,29 +837,37 @@ function providerLabel(provider: string, t: (key: string) => string): string {
   return label === key ? provider : label
 }
 
-// buildComposerNote describes the unsaved composer post to the model: the default
-// text, each account's current version, and which accounts are in scope for this
-// request, so it can revise one platform without touching the others.
-function buildComposerNote(
-  composerContext: { content: string; targets: ComposerChatTarget[] },
+// Derive both request snapshots from current scope, never stale bridge data.
+function outgoingViewContext(
+  base: ViewContext | undefined,
+  composer: ComposerChatContext | null,
   deselectedAccountIds: string[],
-): string {
-  const inScope = composerContext.targets.filter((target) => !deselectedAccountIds.includes(target.accountId))
-  const targets = inScope.length > 0 ? inScope : composerContext.targets
-  const lines = targets.map((target) => {
+): ViewContext & { visible?: Record<string, unknown> & { composer?: ComposerChatContext } } {
+  const context = { ...base }
+  const visible = { ...context.visible }
+  delete visible.composer
+  const targets = composer?.targets.filter((target) => !deselectedAccountIds.includes(target.accountId)) ?? []
+  if (composer && targets.length > 0) {
+    visible.composer = { content: composer.content, title: composer.title, targets }
+  } else if (context.focus?.type === 'composerDraft') {
+    delete context.focus
+  }
+  return { ...context, visible }
+}
+
+// Scope was already filtered with the outgoing view context; never restore
+// excluded accounts when no targets remain.
+function buildComposerNote(composerContext: ComposerChatContext): string {
+  const lines = composerContext.targets.map((target) => {
     const version = target.hasOverride ? `own version: ${target.text}` : 'uses the default text'
     return `- ${target.name} (id=${target.accountId}, ${target.provider}, max ${target.maxChars}): ${version}`
   })
-  const scoped = inScope.length > 0 && inScope.length < composerContext.targets.length
-  const scopeLine = scoped
-    ? '\nOnly revise the accounts listed above; leave every other account unchanged.'
-    : ''
   return (
     '\n\n[Composer context — the user is editing an UNSAVED post (it has NO id; use revise_composer_post, never create_draft or update_draft). ' +
     'The default text is the long version used by accounts without an override.]\n' +
     `Default text:\n${composerContext.content || '(empty)'}\n` +
     `Accounts in scope:\n${lines.join('\n')}` +
-    scopeLine
+    '\nOnly revise the accounts listed above; leave every other account unchanged.'
   )
 }
 
