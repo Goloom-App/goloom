@@ -159,15 +159,18 @@ func (s *Service) submitRecurringAIJob(ctx context.Context, in recurringAIJobInp
 		params["main_event_at"] = in.mainEventAt.UTC().Format(time.RFC3339)
 	}
 	params["recurring_automation"] = map[string]any{
-		"template_id":            in.tmpl.ID,
-		"post_kind":              in.postKind,
-		"output_mode":            string(outputMode),
-		"scheduled_at":           in.scheduledAt.UTC().Format(time.RFC3339),
-		"template_occurrence_at": in.occurrenceAt.UTC().Format(time.RFC3339),
-		"draft":                  in.draft,
-		"post_title":             in.expandedTitle,
-		"fallback_content":       in.expandedContent,
-		"template_counter":       in.templateCounter,
+		"template_id":              in.tmpl.ID,
+		"post_kind":                in.postKind,
+		"output_mode":              string(outputMode),
+		"scheduled_at":             in.scheduledAt.UTC().Format(time.RFC3339),
+		"template_occurrence_at":   in.occurrenceAt.UTC().Format(time.RFC3339),
+		"draft":                    in.draft,
+		"post_title":               in.expandedTitle,
+		"fallback_content":         in.expandedContent,
+		"template_counter":         in.templateCounter,
+		"visibility":               in.tmpl.Visibility,
+		"media_ids":                in.tmpl.MediaIDs,
+		"media_exclude_by_account": in.tmpl.MediaExcludeByAccount,
 	}
 	paramsRaw, err := json.Marshal(params)
 	if err != nil {

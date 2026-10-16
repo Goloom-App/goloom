@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -193,4 +194,72 @@ func TestRecurringAutomationCallback(t *testing.T) {
 			t.Fatalf("counter must default to 1, got %v", posts[0].TemplateCounter)
 		}
 	})
+}
+
+func TestRecurringAutomationPreservesPublicationSnapshot(t *testing.T) {
+	for _, visibility := range []string{domain.PostVisibilityPrivate, domain.PostVisibilityUnlisted} {
+		for _, kind := range []string{domain.TemplatePostRoleMain, domain.TemplatePostRoleAnnouncement} {
+			for _, outcome := range []struct {
+				name    string
+				status  domain.AIJobStatus
+				result  json.RawMessage
+				content string
+			}{
+				{"completed", domain.AIJobStatusCompleted, json.RawMessage(`{"content":"AI text","visibility":"public","media_ids":[],"media_exclude_by_account":{}}`), "AI text"},
+				{"failed", domain.AIJobStatusFailed, nil, "fallback text"},
+				{"empty", domain.AIJobStatusCompleted, json.RawMessage(`{"content":" "}`), "fallback text"},
+			} {
+				t.Run(visibility+"/"+kind+"/"+outcome.name, func(t *testing.T) {
+					ctx := context.Background()
+					f, acc, tmpl := newRecurringCallbackFixture(t)
+					at := time.Date(2027, 2, 1, 9, 0, 0, 0, time.UTC)
+					media := []string{"media-1", "media-2"}
+					exclusions := map[string][]string{acc.ID: {"media-2"}}
+					// Live template is public with no media. Queued snapshot must win.
+					payload, err := json.Marshal(map[string]any{"params": map[string]any{
+						"target_account_ids": []string{acc.ID},
+						"recurring_automation": map[string]any{
+							"template_id": tmpl.ID, "post_kind": kind, "scheduled_at": at.Format(time.RFC3339),
+							"fallback_content": "fallback text", "visibility": visibility,
+							"media_ids": media, "media_exclude_by_account": exclusions,
+						},
+					}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					job := makeRecurringJob(t, f, payload)
+					f.api.CompleteAIJob(ctx, job.ID, outcome.status, outcome.result, "test failure")
+					posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(posts) != 1 {
+						t.Fatalf("posts = %d, want 1", len(posts))
+					}
+					post := posts[0]
+					// Control uses the same publication fields as direct template scheduling.
+					direct, err := f.store.CreateScheduledPost(ctx, f.team.ID, domain.AuthenticatedPrincipal{User: f.user}, domain.CreatePostInput{
+						Title: "direct control", Content: "direct text", ScheduledAt: at,
+						TargetAccounts: []string{acc.ID}, Visibility: visibility,
+						MediaIDs: media, MediaExcludeByAccount: exclusions,
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if post.Visibility != direct.Visibility {
+						t.Errorf("visibility = %q, direct = %q", post.Visibility, direct.Visibility)
+					}
+					if !reflect.DeepEqual(post.MediaIDs, direct.MediaIDs) {
+						t.Errorf("media = %v, direct = %v", post.MediaIDs, direct.MediaIDs)
+					}
+					if !reflect.DeepEqual(post.MediaExcludeByAccount, direct.MediaExcludeByAccount) {
+						t.Errorf("exclusions = %v, direct = %v", post.MediaExcludeByAccount, direct.MediaExcludeByAccount)
+					}
+					if post.Content != outcome.content {
+						t.Errorf("content = %q, want %q", post.Content, outcome.content)
+					}
+				})
+			}
+		}
+	}
 }

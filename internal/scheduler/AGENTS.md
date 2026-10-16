@@ -13,6 +13,7 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 - Scheduler core: `scheduler.go` — poll loop, worker pool, job dispatch
 - AI job submissions: RSS, recurring main posts, and recurring announcements set server-only `domain.AIJob.Origin=AIJobOriginAutomation` through `aijobs`; payload metadata alone never authorizes automation completion
 - Recurring AI: `recurring_ai.go` — recurring post generation via AI
+- Recurring AI jobs snapshot template `visibility`, `media_ids`, and `media_exclude_by_account` in `params.recurring_automation` at queue time. The API callback uses that snapshot for main posts and announcements on success and template fallback; later template edits and AI output must not change those publication properties.
 - RSS AI: `rss_ai.go` — RSS-triggered AI generation
 - RSS import: `rss_import.go` — RSS feed import jobs
 - External post import: `external_post_import.go` — external post monitoring
