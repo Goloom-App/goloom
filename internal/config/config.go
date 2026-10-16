@@ -20,6 +20,10 @@ type Config struct {
 	// AllowPrivateProviderInstanceURLs disables SSRF-style host blocking for provider instance URLs (local dev only).
 	AllowPrivateProviderInstanceURLs bool
 	AllowedOrigins                   []string
+	// AIAllowedPrivateHosts lists hosts a team AI base_url may use although
+	// they resolve to private/loopback addresses (e.g. a local Ollama). Empty =
+	// LLM calls reach public addresses only (SSRF guard).
+	AIAllowedPrivateHosts            []string
 	RateLimitPerMinute               int
 	// RateLimitAuthenticatedPerMinute caps Bearer-authenticated API traffic (SPA, tokens). 0 = derive on load.
 	RateLimitAuthenticatedPerMinute int
@@ -84,6 +88,7 @@ func Load() (Config, error) {
 		EncryptionKey:                    strings.TrimSpace(getEnv("ENCRYPTION_KEY", "")),
 		AllowPrivateProviderInstanceURLs: parseBoolEnv("ALLOW_PRIVATE_PROVIDER_INSTANCE_URLS", false),
 		AllowedOrigins:                   splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
+		AIAllowedPrivateHosts:            splitCSV(getEnv("AI_ALLOWED_PRIVATE_HOSTS", "")),
 		RateLimitPerMinute:               getInt("RATE_LIMIT_PER_MINUTE", 120),
 		RateLimitAuthenticatedPerMinute:  getInt("RATE_LIMIT_AUTHENTICATED_PER_MINUTE", 0),
 		SchedulerPollInterval:               getDuration("SCHEDULER_POLL_INTERVAL", 15*time.Second),

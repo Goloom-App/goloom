@@ -59,6 +59,19 @@ The defaults are sensible for most deployments.
 Set the `OIDC_*` variables to let browser users sign in through your identity
 provider instead of API tokens.
 
+## AI provider
+
+Team owners configure the AI provider (key, model, optional base URL) in the
+team settings. For SSRF protection, a custom base URL must resolve to a public
+address. To use a model server on your own network (e.g. Ollama), allow its host:
+
+| Variable | Purpose |
+| --- | --- |
+| `AI_ALLOWED_PRIVATE_HOSTS` | Comma-separated hosts a team base URL may use although they resolve to private/loopback addresses. Prefer `host:port` (e.g. `localhost:11434,ollama.lan:11434`) — an entry without port allows every port of that host to all team owners. Default: none. |
+
+LLM calls ignore `HTTP(S)_PROXY` (a proxy would hide the real target from the
+address check) and do not follow redirects.
+
 ## Providers
 
 Some providers need app credentials. For Mastodon, `MASTODON_*` variables can

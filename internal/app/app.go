@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/api"
+	"git.f4mily.net/goloom/internal/ai"
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/config"
@@ -135,7 +136,7 @@ func Run(ctx context.Context) error {
 		}),
 	)
 
-	jobManager := aijobs.NewManager(dataStore, nil)
+	jobManager := aijobs.NewManager(dataStore, ai.NewService(cfg.AIAllowedPrivateHosts...))
 	jobManager.SetLogger(logger)
 
 	schedulerService := scheduler.New(
