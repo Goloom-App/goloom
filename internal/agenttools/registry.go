@@ -76,10 +76,13 @@ type coreFn[In, Out any] func(ctx context.Context, d Deps, inv Invocation, in In
 
 // spec is the static metadata for a tool.
 type spec struct {
-	name       string
-	desc       string
-	scope      string // "" means read (relies on the connection-level read gate)
-	confirm    bool   // chat: propose the action instead of executing it
+	name    string
+	desc    string
+	scope   string // "" means read (relies on the connection-level read gate)
+	confirm bool   // chat: propose the action instead of executing it
+	// confirmIf makes the chat gate conditional: the call is proposed only when
+	// it returns true (with a human-readable reason). Ignored when confirm is set.
+	confirmIf  confirmFn
 	transports []Transport
 }
 
@@ -93,9 +96,28 @@ type Tool struct {
 	Confirm     bool
 	Transports  []Transport
 
+	// confirmIf, when set, gates the chat call per invocation (see spec).
+	confirmIf confirmFn
+
 	inputSchema json.RawMessage
 	exec        func(ctx context.Context, d Deps, inv Invocation, raw json.RawMessage) (Result, error)
 	registerMCP func(server *mcp.Server, d Deps)
+}
+
+// confirmFn decides whether a specific chat invocation must be confirmed by the
+// user. It must fail closed: when it cannot tell, it returns true.
+type confirmFn func(ctx context.Context, d Deps, args json.RawMessage) (needs bool, reason string)
+
+// NeedsConfirmation reports whether a chat call with these args must be
+// proposed to the user instead of executed, plus a short reason for the card.
+func (t *Tool) NeedsConfirmation(ctx context.Context, d Deps, args json.RawMessage) (bool, string) {
+	if t.Confirm {
+		return true, ""
+	}
+	if t.confirmIf != nil {
+		return t.confirmIf(ctx, d, args)
+	}
+	return false, ""
 }
 
 // Exposes reports whether the tool is available on the given transport.
@@ -117,6 +139,7 @@ func define[In, Out any](s spec, core coreFn[In, Out]) *Tool {
 		Description: s.desc,
 		Scope:       s.scope,
 		Confirm:     s.confirm,
+		confirmIf:   s.confirmIf,
 		Transports:  s.transports,
 		inputSchema: mustSchema[In](s.name),
 	}

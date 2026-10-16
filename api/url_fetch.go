@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"git.f4mily.net/goloom/internal/netguard"
 	"io"
 	"net/http"
 	"strings"
@@ -11,6 +12,10 @@ import (
 
 	"git.f4mily.net/goloom/internal/htmltext"
 )
+
+// urlFetchPolicy guards page fetches: URLs come from users and the chat model
+// (injection-controllable), so only public addresses are reachable.
+var urlFetchPolicy = netguard.NewPolicy(nil)
 
 func fetchURLBody(ctx context.Context, rawURL string) (string, error) {
 	rawURL = strings.TrimSpace(rawURL)
@@ -42,7 +47,7 @@ func httpGetBody(ctx context.Context, rawURL string) (string, error) {
 	req.Header.Set("User-Agent", "goloom-page-fetch/1.0")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8")
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := urlFetchPolicy.HTTPClient(20 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err

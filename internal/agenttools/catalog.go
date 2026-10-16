@@ -92,7 +92,7 @@ func All() []*Tool {
 		}, coreGetTeams),
 
 		// ===== Writes =====
-		// Autonomous (no publish): drafts, in-place edits and campaign-format
+		// Autonomous (no publish): drafts, in-place draft edits and campaign-format
 		// definitions run immediately. Confirm=true actions (scheduling,
 		// deletion, auto-publishing automations) are only proposed in the chat and
 		// run after the user confirms; the MCP adapter ignores Confirm.
@@ -106,6 +106,7 @@ func All() []*Tool {
 			name:       "modify_post",
 			desc:       "Update an existing draft or scheduled post (content, schedule, targets, per-account overrides). Use this for changes to a post that already exists — never create a second draft.",
 			scope:      auth.ScopeWrite,
+			confirmIf:  confirmModifyPost,
 			transports: transportsShared,
 		}, coreModifyPost),
 		define[CreateCampaignInput, CreateCampaignOutput](spec{

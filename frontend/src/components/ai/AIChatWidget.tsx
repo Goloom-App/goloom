@@ -596,11 +596,29 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
               if (entry.kind === 'confirm' && entry.confirm) {
                 const c = entry.confirm
                 const proposedContent = typeof c.args.content === 'string' ? (c.args.content as string) : ''
+                const proposedAt = typeof c.args.scheduled_at === 'string' ? new Date(c.args.scheduled_at as string) : null
+                const proposedAtLabel = proposedAt && !Number.isNaN(proposedAt.getTime()) ? proposedAt.toLocaleString() : ''
+                const rawTargets = c.args.target_accounts ?? c.args.target_account_ids
+                const proposedTargets = Array.isArray(rawTargets)
+                  ? (rawTargets as unknown[])
+                      .filter((id): id is string => typeof id === 'string')
+                      .map((id) => teamAccounts.find((account) => account.id === id)?.name ?? id)
+                  : []
+                const proposedVisibility = typeof c.args.visibility === 'string' ? (c.args.visibility as string) : ''
                 return (
                   <article key={index} className="ai-chat-preview ai-chat-preview--confirm">
                     <p className="eyebrow">{t('aiChat.confirmTitle', { tool: toolLabel(c.tool, t) })}</p>
                     {c.summary ? <p className="ai-chat-preview__content">{c.summary}</p> : null}
                     {proposedContent ? <p className="ai-chat-preview__content">{proposedContent}</p> : null}
+                    {proposedAtLabel ? (
+                      <p className="hint">{t('aiChat.confirmScheduledAt', { time: proposedAtLabel })}</p>
+                    ) : null}
+                    {proposedTargets.length > 0 ? (
+                      <p className="hint">{t('aiChat.confirmTargets', { names: proposedTargets.join(', ') })}</p>
+                    ) : null}
+                    {proposedVisibility ? (
+                      <p className="hint">{t('aiChat.confirmVisibility', { value: proposedVisibility })}</p>
+                    ) : null}
                     {c.resolved ? (
                       <p className="hint">{t(c.resolved === 'confirmed' ? 'aiChat.confirmDone' : 'aiChat.confirmDeclined')}</p>
                     ) : (
@@ -808,7 +826,7 @@ function toolLabel(toolName: string, t: (key: string) => string): string {
     case 'draft_post':
       return t('aiChat.toolCreateDraft')
     case 'modify_post':
-      return t('aiChat.toolUpdateDraft')
+      return t('aiChat.toolModifyPost')
     case 'revise_composer_post':
       return t('aiChat.toolReviseComposer')
     case 'schedule_post':

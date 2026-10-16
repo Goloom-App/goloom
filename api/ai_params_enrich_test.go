@@ -54,6 +54,7 @@ func TestEnrichAIJobParams_fetchesLatestRSSItem(t *testing.T) {
 }
 
 func TestEnrichAIJobParams_fetchesWebPageWhenSourceContentMissing(t *testing.T) {
+	allowLoopbackFetch(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(`<!doctype html><html><head>

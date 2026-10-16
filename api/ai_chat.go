@@ -233,7 +233,8 @@ func (a *API) chatTools() []ai.ChatTool {
 				if title := htmltext.ExtractPageTitle(body); title != "" {
 					text = "Page title: " + title + "\n\n" + text
 				}
-				return text, nil, nil
+				// Fetched text is attacker-controllable: mark it as data.
+				return ai.WrapUntrusted(text), nil, nil
 			},
 		},
 	}

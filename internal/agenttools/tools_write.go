@@ -287,3 +287,25 @@ func coreDeletePost(ctx context.Context, d Deps, inv Invocation, in DeletePostIn
 	d.recordAudit(ctx, inv, existing.TeamID, "post.delete", "post", in.PostID, "Deleted post: "+existing.Title)
 	return DeletePostOutput{Success: true}, nil
 }
+
+// confirmModifyPost gates modify_post in the chat: only pure edits of a draft
+// (no schedule or target change) run autonomously. Anything touching a post
+// that is already queued, or moving the schedule/targets, needs the user's
+// confirmation. Fails closed when the post cannot be loaded. MCP ignores it.
+func confirmModifyPost(ctx context.Context, d Deps, args json.RawMessage) (bool, string) {
+	var in ModifyPostInput
+	if err := json.Unmarshal(args, &in); err != nil {
+		return true, "arguments could not be checked."
+	}
+	if in.ScheduledAt != nil || in.TargetAccounts != nil {
+		return true, "it changes the schedule or target accounts of a post."
+	}
+	existing, err := d.Store.GetScheduledPostByID(ctx, in.PostID)
+	if err != nil {
+		return true, "the post could not be checked."
+	}
+	if existing.Status != domain.PostStatusDraft {
+		return true, "the post is already scheduled."
+	}
+	return false, ""
+}
