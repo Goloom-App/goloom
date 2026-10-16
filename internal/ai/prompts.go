@@ -60,7 +60,7 @@ func BuildSystemPrompt(context domain.AIContext) string {
 }
 
 // BuildGenerationPromptFromParams renders the per-request task prompt from raw
-// JSON job params (used by the prompt preview endpoint).
+// JSON job params without voice-engine output rules.
 func BuildGenerationPromptFromParams(context domain.AIContext, rawParams json.RawMessage, platform string) (string, error) {
 	p := params{}
 	if len(rawParams) > 0 {
@@ -298,6 +298,12 @@ func formatKnowledgeSourceLimit(item domain.KnowledgeSource, limit int) string {
 func buildGenerationPrompt(context domain.AIContext, p params, platform string) string {
 	style := styleMetadata(context)
 	constraints := applyPlatformConstraints(context, platform, style.MaxHashtags)
+	// Voice-engine content follows the selected primary; shorter targets get
+	// overrides. Without a selection, retain the team-wide platform minimum.
+	if selected, err := selectedAccounts(context, p); err == nil {
+		constraints.charLimit = primaryAccount(selected).MaxChars
+	}
+
 	recentLimit := taskRecentPostLimit
 	if isRecurringKind(recurringPostKind(p)) {
 		recentLimit = recurringRecentPostLimit

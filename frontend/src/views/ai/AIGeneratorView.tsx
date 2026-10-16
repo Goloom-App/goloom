@@ -203,7 +203,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
     try {
       const preview = await promptPreview.mutateAsync({
         teamId: team.id,
-        params: buildGenerationParams(false),
+        params: buildGenerationParams(true),
       })
       setPromptSystemText(preview.system_prompt || '')
       setPromptTaskText(preview.generation_prompt || '')
@@ -496,7 +496,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
               onClick={() => void handleLoadPromptPreview()}
               disabled={promptPreview.isPending}
             >
-              {promptPreview.isPending ? <><Loader2 size={14} className="spin" /> Lade…</> : <><FileText size={14} /> Prompt-Vorschau</>}
+              {promptPreview.isPending ? <><Loader2 size={14} className="spin" /> Lade…</> : <><FileText size={14} /> Prompt-Vorschau (aktuelle Einstellungen)</>}
             </button>
           ) : null
         }

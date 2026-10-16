@@ -1193,6 +1193,7 @@
     "campaign_format_not_found": "Kampagnenformat nicht gefunden",
     "style_example_limit_reached": "Limit für Stilbeispiele erreicht",
     "ai_service_not_configured": "KI-Dienst ist nicht konfiguriert",
+    "invalid_ai_prompt_params": "Ungültige KI-Prompt-Parameter",
     "invalid_ai_base_url": "KI-Basis-URL ist ungültig oder zeigt auf eine private Netzwerkadresse (ein Admin kann Hosts über AI_ALLOWED_PRIVATE_HOSTS freigeben)",
     "ai_api_key_required": "Beim Wechsel von KI-Anbieter oder Basis-URL muss der API-Key erneut eingegeben werden",
     "regenerate_blocked_posted": "Neu-Generieren nicht möglich: Mindestens ein Beitrag im Umfang ist bereits veröffentlicht oder wird veröffentlicht",
