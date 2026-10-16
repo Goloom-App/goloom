@@ -490,10 +490,17 @@ export interface BackendAIChatMention {
   name: string
 }
 
+export interface BackendAIChatToolResult {
+  tool: string
+  summary: string
+}
+
 export interface BackendAIChatMessage {
   role: 'user' | 'assistant'
   content: string
   mentions?: BackendAIChatMention[]
+  // Compact outcomes of tools that ran during this assistant turn.
+  tool_results?: BackendAIChatToolResult[]
 }
 
 export interface BackendAIChatEvent {
