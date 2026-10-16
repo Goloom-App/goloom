@@ -7,9 +7,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/textcount"
 	"github.com/google/uuid"
 )
 
@@ -63,7 +65,7 @@ func TestAIContext(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		longContent := strings.Repeat("0123456789", 32)
+		longContent := strings.Repeat("Größe 😀 ", 40)
 		post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{
 			Content:     longContent,
 			ScheduledAt: time.Now().UTC(),
@@ -106,11 +108,15 @@ func TestAIContext(t *testing.T) {
 		if len(got.RecentPosts) != 1 {
 			t.Fatalf("recent posts = %d, want 1", len(got.RecentPosts))
 		}
-		if len(got.RecentPosts[0].Content) != 280 {
-			t.Fatalf("trimmed content length = %d, want 280", len(got.RecentPosts[0].Content))
+		gotContent := got.RecentPosts[0].Content
+		if !utf8.ValidString(gotContent) {
+			t.Fatalf("trimmed content is not valid UTF-8: %q", gotContent)
 		}
-		if got.RecentPosts[0].Content != longContent[len(longContent)-280:] {
-			t.Fatalf("trimmed content mismatch")
+		if want := textcount.Truncate(longContent, 280); gotContent != want {
+			t.Fatalf("trimmed content = %q, want %q", gotContent, want)
+		}
+		if !strings.HasPrefix(gotContent, "Größe 😀 ") || !strings.HasSuffix(gotContent, "…") {
+			t.Fatalf("trimmed content must keep the beginning and end with an ellipsis: %q", gotContent)
 		}
 	})
 }
