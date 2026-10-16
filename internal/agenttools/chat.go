@@ -46,8 +46,8 @@ func ChatTools(d Deps, bind ChatBinding) []ai.ChatTool {
 			},
 			Execute: func(ctx context.Context, args json.RawMessage) (string, json.RawMessage, error) {
 				args = injectField(args, "team_id", bind.TeamID)
-				if tool.Confirm {
-					return proposeConfirmation(tool, args)
+				if needs, reason := tool.NeedsConfirmation(ctx, d, args); needs {
+					return proposeConfirmation(tool, args, reason)
 				}
 				inv := Invocation{
 					Principal:   bind.Principal,
@@ -68,11 +68,15 @@ func ChatTools(d Deps, bind ChatBinding) []ai.ChatTool {
 // proposeConfirmation returns a confirmation payload instead of executing a
 // write. The args carry team_id stripped back out, because the confirm-action
 // endpoint re-injects it from the (re-validated) request path.
-func proposeConfirmation(tool *Tool, args json.RawMessage) (string, json.RawMessage, error) {
+func proposeConfirmation(tool *Tool, args json.RawMessage, reason string) (string, json.RawMessage, error) {
+	summary := fmt.Sprintf("Confirm before running %q.", tool.Name)
+	if reason != "" {
+		summary = fmt.Sprintf("Confirm before running %q: %s", tool.Name, reason)
+	}
 	req := ConfirmationRequest{
 		Tool:    tool.Name,
 		Args:    stripField(args, "team_id"),
-		Summary: fmt.Sprintf("Confirm before running %q.", tool.Name),
+		Summary: summary,
 	}
 	payload, _ := json.Marshal(map[string]any{"confirmation": req})
 	return fmt.Sprintf("Proposed %q; waiting for the user to confirm before it runs.", tool.Name), payload, nil
@@ -97,7 +101,7 @@ func RunConfirmed(ctx context.Context, d Deps, bind ChatBinding, name string, ar
 	if tool == nil {
 		return Result{}, fmt.Errorf("unknown tool %q", name)
 	}
-	if !tool.Confirm {
+	if !tool.Confirm && tool.confirmIf == nil {
 		return Result{}, fmt.Errorf("tool %q does not require confirmation", name)
 	}
 	args = injectField(args, "team_id", bind.TeamID)

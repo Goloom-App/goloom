@@ -49,6 +49,10 @@ func wrapUntrusted(content string) string {
 	return untrustedOpen + "\n" + sanitizeUntrusted(trimmed) + "\n" + untrustedClose
 }
 
+// WrapUntrusted is the exported form of wrapUntrusted for tool output that
+// comes from outside the system (fetched pages) and is fed back to the model.
+func WrapUntrusted(content string) string { return wrapUntrusted(content) }
+
 // injectionPatterns are case-insensitive markers of a prompt-injection attempt
 // embedded in source material. The list is intentionally conservative to keep
 // false positives low.

@@ -54,6 +54,7 @@ Single Go module (`go.mod` at root). Packages follow standard Go conventions.
   RoleEditor/RoleOwner) and the record is not a viewer membership — viewers
   get no badge for teams they only observe
 - Team role checks have no hierarchy: `UserHasAnyTeamRole` matches the stored role exactly. Always pass the complete allowed list — writes need `(RoleEditor, RoleOwner)`, reads `(RoleViewer, RoleEditor, RoleOwner)` — or owners get locked out
+- AI chat write gate (`agenttools`): the chat transport proposes a tool for user confirmation when `Tool.Confirm` is set or its `confirmIf` hook returns true (fail closed); `modify_post` is autonomous only for pure content edits of drafts (no `scheduled_at`/`target_accounts` change). `RunConfirmed` accepts only tools with `Confirm` or `confirmIf`. MCP ignores both. Tool output from external sources (e.g. `fetch_url`) must be wrapped with `ai.WrapUntrusted` before it reaches the model
 - The first user in an empty database becomes admin (`UpsertOIDCUser`); test fixtures must burn that slot before creating regular test users
 
 ## Verification
