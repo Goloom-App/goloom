@@ -39,7 +39,16 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		return
 	}
 
-	// Auto-publish must succeed before the job can be reported as completed.
+	var resultBytes []byte
+	if len(result) > 0 {
+		resultBytes = []byte(result)
+	}
+	if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, resultBytes, errorMessage); err != nil {
+		a.log.ErrorContext(ctx, "ai job completion: update status failed", "job_id", jobID, "error", err)
+		return
+	}
+
+	// Persist terminal status before side effects so a retry cannot create another post.
 	// Automation callbacks own their separate post/fallback lifecycle below.
 	if status == domain.AIJobStatusCompleted &&
 		!(job.Type == domain.AIJobTypeVoiceEngine && (parseRSSAutomationMeta(job.Payload) != nil || parseRecurringAutomationMeta(job.Payload) != nil)) {
@@ -49,17 +58,12 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 				a.log.ErrorContext(ctx, "ai job auto-publish failed", "job_id", job.ID, "team_id", job.TeamID, "error", err)
 				status = domain.AIJobStatusFailed
 				errorMessage = "Auto-publish failed: post could not be created"
+				if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, resultBytes, errorMessage); err != nil {
+					a.log.ErrorContext(ctx, "ai job auto-publish: update failure status failed", "job_id", job.ID, "error", err)
+					return
+				}
 			}
 		}
-	}
-
-	var resultBytes []byte
-	if len(result) > 0 {
-		resultBytes = []byte(result)
-	}
-	if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, resultBytes, errorMessage); err != nil {
-		a.log.ErrorContext(ctx, "ai job completion: update status failed", "job_id", jobID, "error", err)
-		return
 	}
 
 	updatedJob, err := a.store.GetAIJobByIDGlobal(ctx, job.ID)

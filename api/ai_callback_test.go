@@ -316,6 +316,50 @@ func TestCompleteAIJobAutoPublishTargets(t *testing.T) {
 
 type failingAutoPostStore struct{ store.Store }
 
+type failOnceAIStatusStore struct {
+	store.Store
+	failed bool
+}
+
+func (s *failOnceAIStatusStore) UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, message string) error {
+	if !s.failed {
+		s.failed = true
+		return errors.New("injected status write failure")
+	}
+	return s.Store.UpdateAIJobStatus(ctx, id, status, result, message)
+}
+
+func TestCompleteAIJobStatusWriteFailureRetry(t *testing.T) {
+	ctx := context.Background()
+	f := newAICompletionFixture(t)
+	if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	account := callbackAccount(t, f, f.team.ID)
+	payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}}})
+	job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := api.New(nil, &failOnceAIStatusStore{Store: f.store}, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
+	result := json.RawMessage(`{"content":"generated"}`)
+	instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, result, "")
+	posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 0 {
+		t.Errorf("failed status write created %d posts", len(posts))
+	}
+	for range 2 {
+		instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, result, "")
+	}
+	posts, err = f.store.ListTeamPosts(ctx, f.team.ID)
+	if err != nil || len(posts) != 1 {
+		t.Fatalf("retry: posts=%d err=%v; want exactly one", len(posts), err)
+	}
+}
+
 func (s failingAutoPostStore) CreateScheduledPost(context.Context, string, domain.AuthenticatedPrincipal, domain.CreatePostInput) (domain.ScheduledPost, error) {
 	return domain.ScheduledPost{}, errors.New("injected post insert failure")
 }
