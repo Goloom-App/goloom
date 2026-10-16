@@ -927,7 +927,13 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       tags: [AI]
-      summary: Create or update AI service config
+      summary: Create or update AI service config (owner only)
+      description: |
+        Only team owners may change the provider configuration. `base_url` must
+        be http(s) and resolve to a public address unless the host is listed in
+        `AI_ALLOWED_PRIVATE_HOSTS` (error `invalid_ai_base_url`). Changing
+        `provider` or `base_url` while a key is stored requires `api_key` again
+        (error `ai_api_key_required`).
       parameters:
         - $ref: "#/components/parameters/teamID"
       requestBody:
@@ -945,6 +951,8 @@ paths:
                 $ref: "#/components/schemas/AIServiceConfig"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Caller is not a team owner
   /v1/teams/{teamID}/external-post-monitor:
     get:
       tags: [Analytics]
@@ -1836,10 +1844,10 @@ components:
         base_url:
           type: string
           format: uri
-          description: Optional API base URL override.
+          description: Optional API base URL override (public http(s) host, or a host allowlisted via AI_ALLOWED_PRIVATE_HOSTS).
         api_key:
           type: string
-          description: Write-only. Empty keeps the stored key.
+          description: Write-only. Empty keeps the stored key, unless provider or base_url changes — then the key is required.
         description:
           type: string
     AIChatMention:

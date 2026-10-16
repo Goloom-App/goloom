@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"git.f4mily.net/goloom/internal/netguard"
 )
 
 const (
@@ -194,6 +196,18 @@ type Client interface {
 	Model() string
 }
 
+// NewHTTPClient returns the SSRF-guarded HTTP client for LLM calls: the
+// team-configured base URL may only reach public addresses, except hosts the
+// admin allowlisted (AI_ALLOWED_PRIVATE_HOSTS, e.g. a local Ollama). The dial
+// guard also covers DNS rebinding after the base URL was validated on save.
+// LLM APIs never redirect; following one would resend the POST body and the
+// x-api-key header (Go only strips Authorization) to the redirect target.
+func NewHTTPClient(allowedPrivateHosts []string) *http.Client {
+	client := netguard.NewPolicy(allowedPrivateHosts).HTTPClient(requestTimeout)
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return client
+}
+
 // NewClient builds a client for the configured provider, wrapped so every call
 // emits audit metrics via a default slog-backed observer.
 func NewClient(settings Settings, httpClient *http.Client) (Client, error) {
@@ -207,7 +221,7 @@ func NewClientWithObserver(settings Settings, httpClient *http.Client, obs Obser
 		return nil, fmt.Errorf("%w: missing api key", ErrNotConfigured)
 	}
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: requestTimeout}
+		httpClient = NewHTTPClient(nil)
 	}
 	var base Client
 	switch strings.ToLower(strings.TrimSpace(settings.Provider)) {

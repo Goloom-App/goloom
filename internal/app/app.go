@@ -136,8 +136,9 @@ func Run(ctx context.Context) error {
 		}),
 	)
 
-	// One AI service for jobs and chat, so every LLM call shares one observer.
-	aiService := ai.NewService()
+	// One AI service for jobs and chat, so every LLM call shares one observer
+	// and the same outbound network guard.
+	aiService := ai.NewService(cfg.AIAllowedPrivateHosts...)
 	jobManager := aijobs.NewManager(dataStore, aiService)
 	jobManager.SetLogger(logger)
 

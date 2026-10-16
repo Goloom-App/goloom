@@ -105,7 +105,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		i18n:        catalog,
 		jobManager:  jobManager,
 		hub:         hub,
-		aiService:   ai.NewService(),
+		aiService:   ai.NewService(cfg.AIAllowedPrivateHosts...),
 		push: push.New(store, push.Config{
 			Subject:    cfg.VAPIDSubject,
 			PublicKey:  cfg.VAPIDPublicKey,
@@ -248,7 +248,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("PATCH /v1/teams/{teamID}/rss-feeds/{feedID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdateRSSFeed))))
 	mux.Handle("DELETE /v1/teams/{teamID}/rss-feeds/{feedID}", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteRSSFeed))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-service-config", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIServiceConfig))))
-	mux.Handle("PUT /v1/teams/{teamID}/ai-service-config", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpsertAIServiceConfig))))
+	mux.Handle("PUT /v1/teams/{teamID}/ai-service-config", a.auth.RequireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpsertAIServiceConfig))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-context", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeRead)(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIContext))))))
 	mux.Handle("POST /v1/teams/{teamID}/posts/draft", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAIDraft))))))
 	mux.Handle("POST /v1/teams/{teamID}/ai-trigger", a.auth.RequireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAITrigger))))))

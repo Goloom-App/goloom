@@ -53,7 +53,7 @@ func TestAIChatUsesInjectedServiceObserver(t *testing.T) {
 	}
 
 	obs := &recordingObserver{}
-	svc := ai.NewService()
+	svc := ai.NewService("127.0.0.1") // the fake LLM listens on loopback
 	svc.SetObserver(obs)
 
 	authSvc, err := auth.New(ctx, config.Config{}, fx.store)
