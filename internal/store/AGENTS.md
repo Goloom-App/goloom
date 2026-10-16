@@ -19,6 +19,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Work Guidance
 
+- Store exposes primitives only; composed read models (e.g. the AI context in `internal/aicontext`) are built outside the store so the two backends cannot drift. Post list primitives must return `TargetAccounts` identically in both backends
 - Any new Store method must be added to the interface in `store.go`
 - Implement in both `sqlite/` and `postgres/` packages
 - New columns go into the `create table` statement of **both** schema files; `alter table … if not exists` is only the migration path for existing databases. The postgres schema must always apply cleanly on an empty database (indexes may not reference columns that only a later alter creates)

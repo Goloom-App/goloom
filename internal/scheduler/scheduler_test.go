@@ -424,8 +424,12 @@ func (m *mockStore) CreateImportedPost(ctx context.Context, teamID, authorUserID
 	return domain.ScheduledPost{}, nil
 }
 
-func (m *mockStore) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIContext, error) {
-	return domain.AIContext{}, nil
+func (m *mockStore) ListRecentPostedPosts(ctx context.Context, teamID string, limit int) ([]domain.ScheduledPost, error) {
+	return nil, nil
+}
+
+func (m *mockStore) ListUpcomingPosts(ctx context.Context, teamID string, from time.Time, limit int) ([]domain.ScheduledPost, error) {
+	return nil, nil
 }
 
 func (m *mockStore) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) { return nil, nil }

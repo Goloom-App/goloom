@@ -15,6 +15,7 @@ Single Go module (`go.mod` at root). Packages follow standard Go conventions.
 - Store interface: `store/store.go` (80+ methods, the persistence contract)
 - Auth middleware: `auth/auth.go`
 - Config: `config/config.go`
+- AI context: `aicontext.Build(ctx, store, teamID, opts)` is the only place that composes `domain.AIContext` from store primitives (never in a store backend); callers pick parts via `aicontext.Full()` / `aicontext.Chat()` / `Options{}`. Output is always well-formed: slices non-nil, `Profile` nil (no error) when the team has no brand profile — prompt code must fall back to defaults. Posts carry `TargetAccounts` in both backends
 - Embedded frontend: `webui/webui.go` (serves built Vite output)
 
 ## Work Guidance

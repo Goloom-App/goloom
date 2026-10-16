@@ -9,6 +9,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/agenttools"
 	"git.f4mily.net/goloom/internal/ai"
+	"git.f4mily.net/goloom/internal/aicontext"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/htmltext"
@@ -44,7 +45,7 @@ func (a *API) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	aiContext, err := a.store.GetTeamAIContext(r.Context(), teamID)
+	aiContext, err := aicontext.Build(r.Context(), a.store, teamID, aicontext.Chat())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

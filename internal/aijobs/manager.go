@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/ai"
+	"git.f4mily.net/goloom/internal/aicontext"
 	"git.f4mily.net/goloom/internal/domain"
 	storepkg "git.f4mily.net/goloom/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -111,7 +112,7 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 		return domain.AIJob{}, fmt.Errorf("Manager.SubmitJob: create ai job: %w", err)
 	}
 
-	aiContext, err := m.store.GetTeamAIContext(ctx, input.TeamID)
+	aiContext, err := aicontext.Build(ctx, m.store, input.TeamID, aicontext.Full())
 	if err != nil {
 		return job, fmt.Errorf("Manager.SubmitJob: get ai context: %w", err)
 	}

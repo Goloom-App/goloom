@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"github.com/google/uuid"
@@ -319,10 +320,10 @@ func (s *Store) DeleteKnowledgeSource(ctx context.Context, teamID string, id str
 
 func scanKnowledgeSource(scanner rowScanner) (domain.KnowledgeSource, error) {
 	var (
-		ks          domain.KnowledgeSource
-		sourceType  string
-		createdAt   string
-		updatedAt   string
+		ks         domain.KnowledgeSource
+		sourceType string
+		createdAt  string
+		updatedAt  string
 	)
 	if err := scanner.Scan(&ks.ID, &ks.TeamID, &sourceType, &ks.Name, &ks.Content, &ks.SourceURL, &ks.MediaID, &createdAt, &updatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -667,13 +668,13 @@ func (s *Store) DeleteRSSFeedConfig(ctx context.Context, teamID string, id strin
 
 func scanRSSFeedConfig(scanner rowScanner) (domain.RSSFeedConfig, error) {
 	var (
-		cfg               domain.RSSFeedConfig
-		isActive          int
-		aiEnhanceEnabled  int
-		targetRaw         string
-		lastFetchedAt     sql.NullString
-		createdAt         string
-		outputMode        string
+		cfg              domain.RSSFeedConfig
+		isActive         int
+		aiEnhanceEnabled int
+		targetRaw        string
+		lastFetchedAt    sql.NullString
+		createdAt        string
+		outputMode       string
 	)
 	var syncMode string
 	if err := scanner.Scan(
@@ -753,107 +754,54 @@ func (s *Store) UpsertProactiveTriggerSettings(ctx context.Context, teamID strin
 	return s.GetProactiveTriggerSettings(ctx, teamID)
 }
 
-func (s *Store) GetTeamAIContext(ctx context.Context, teamID string) (domain.AIContext, error) {
-	team, err := s.GetTeamByID(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, err
-	}
-
-	var aiCtxProfile *domain.TeamProfile
-	profile, profileErr := s.GetTeamProfile(ctx, teamID)
-	if profileErr != nil {
-		if !errors.Is(profileErr, sql.ErrNoRows) {
-			return domain.AIContext{}, profileErr
-		}
-	} else {
-		aiCtxProfile = &profile
-	}
-
-	formats, err := s.ListCampaignFormats(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, err
-	}
-
-	examples, err := s.ListStyleExamples(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, err
-	}
-
-	knowledgeSources, err := s.ListKnowledgeSources(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, err
-	}
-
-	recentRows, err := s.db.QueryContext(ctx, `
+// ListRecentPostedPosts returns the team's newest posted, non-empty posts
+// (newest first, at most limit) including target account IDs.
+func (s *Store) ListRecentPostedPosts(ctx context.Context, teamID string, limit int) ([]domain.ScheduledPost, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and status = 'posted' and trim(content) != ''
 		order by scheduled_at desc
-		limit ?`, teamID, domain.AIContextRecentPostsLimit)
+		limit ?`, teamID, limit)
 	if err != nil {
-		return domain.AIContext{}, err
+		return nil, err
 	}
-	defer recentRows.Close()
-	recentPosts, err := collectPosts(recentRows)
+	defer rows.Close()
+	posts, err := collectPosts(rows)
 	if err != nil {
-		return domain.AIContext{}, err
+		return nil, err
 	}
+	if err := s.attachTargetAccounts(ctx, posts); err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
 
-	upcomingRows, err := s.db.QueryContext(ctx, `
+// ListUpcomingPosts returns the team's pending/draft posts scheduled at or
+// after from (soonest first, at most limit) including target account IDs.
+func (s *Store) ListUpcomingPosts(ctx context.Context, teamID string, from time.Time, limit int) ([]domain.ScheduledPost, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
 		       post_template_id, template_counter, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and status in ('pending', 'draft') and scheduled_at >= ?
 		order by scheduled_at asc
-		limit ?`, teamID, nowString(), domain.AIContextUpcomingPostsLimit)
+		limit ?`, teamID, formatTime(from), limit)
 	if err != nil {
-		return domain.AIContext{}, err
+		return nil, err
 	}
-	defer upcomingRows.Close()
-	upcomingPosts, err := collectPosts(upcomingRows)
+	defer rows.Close()
+	posts, err := collectPosts(rows)
 	if err != nil {
-		return domain.AIContext{}, err
+		return nil, err
 	}
-
-	accounts, err := s.ListTeamAccounts(ctx, teamID)
-	if err != nil {
-		return domain.AIContext{}, err
+	if err := s.attachTargetAccounts(ctx, posts); err != nil {
+		return nil, err
 	}
-	accountSummaries := make([]domain.AIAccountSummary, 0, len(accounts))
-	for _, acc := range accounts {
-		accountSummaries = append(accountSummaries, domain.AIAccountSummary{
-			ID:       acc.ID,
-			Provider: acc.Provider,
-			Username: acc.Username,
-			MaxChars: domain.MaxCharsForProvider(acc.Provider, acc.MaxCharsOverride),
-		})
-	}
-
-	engagementHours, err := s.GetTeamEngagementHourHistogram(ctx, teamID, 90)
-	if err != nil {
-		return domain.AIContext{}, err
-	}
-
-	topHashtags, err := s.ListTeamHashtagPerformance(ctx, teamID, 90, "", 20)
-	if err != nil {
-		return domain.AIContext{}, err
-	}
-
-	return domain.AIContext{
-		Team:             team,
-		Profile:          aiCtxProfile,
-		CampaignFormats:  formats,
-		StyleExamples:    examples,
-		KnowledgeSources: knowledgeSources,
-		RecentPosts:      recentPosts,
-		Accounts:         accountSummaries,
-		UpcomingPosts:    upcomingPosts,
-		EngagementHours:  engagementHours,
-		TopHashtags:      topHashtags,
-	}, nil
+	return posts, nil
 }
 
 func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
