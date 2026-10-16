@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/postservice"
 )
 
 // aiCallbackResult is the shape of completed AI job results consumed by the
@@ -37,6 +39,20 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		return
 	}
 
+	// Auto-publish must succeed before the job can be reported as completed.
+	// Automation callbacks own their separate post/fallback lifecycle below.
+	if status == domain.AIJobStatusCompleted &&
+		!(job.Type == domain.AIJobTypeVoiceEngine && (parseRSSAutomationMeta(job.Payload) != nil || parseRecurringAutomationMeta(job.Payload) != nil)) {
+		profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
+		if profErr == nil && profile.AutoPublishEnabled {
+			if err := a.autoCreatePostFromCallbackResult(ctx, job, result); err != nil {
+				a.log.ErrorContext(ctx, "ai job auto-publish failed", "job_id", job.ID, "team_id", job.TeamID, "error", err)
+				status = domain.AIJobStatusFailed
+				errorMessage = "Auto-publish failed: post could not be created"
+			}
+		}
+	}
+
 	var resultBytes []byte
 	if len(result) > 0 {
 		resultBytes = []byte(result)
@@ -57,11 +73,6 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			a.finishRSSAutomationFromAI(ctx, job, result, meta)
 		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
 			a.finishRecurringAutomationFromAI(ctx, job, result, meta)
-		} else {
-			profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
-			if profErr == nil && profile.AutoPublishEnabled {
-				a.autoCreatePostFromCallbackResult(ctx, job, result)
-			}
 		}
 	} else {
 		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
@@ -89,15 +100,17 @@ func (a *API) NotifyAIJobStatus(ctx context.Context, jobID string) {
 	}
 }
 
-func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) {
+func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) error {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {
-		_ = json.Unmarshal(rawResult, &res)
+		if err := json.Unmarshal(rawResult, &res); err != nil {
+			return fmt.Errorf("decode auto-publish result: %w", err)
+		}
 	}
 
 	content := strings.TrimSpace(res.Content)
 	if content == "" {
-		return
+		return nil
 	}
 
 	scheduledAt := time.Now().UTC()
@@ -109,7 +122,6 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 	}
 
 	targetAccounts := targetAccountIDsFromJobPayload(job.Payload)
-	overrides := domain.NormalizeAccountContentOverride(res.AccountContentOverride, targetAccounts)
 
 	principal := domain.AuthenticatedPrincipal{
 		User: domain.User{ID: job.AuthorUserID},
@@ -120,14 +132,23 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
-		AccountContentOverride: overrides,
+		AccountContentOverride: res.AccountContentOverride,
 		ScheduledAt:            scheduledAt,
 		Draft:                  false,
 		AuthorUserID:           &job.AuthorUserID,
-		UseVersions:            len(overrides) > 0,
 	}
 	aiPost.EnsureTitle()
-	_, _ = a.store.CreateScheduledPost(ctx, job.TeamID, principal, aiPost)
+	prepared, err := a.posts.Prepare(ctx, job.TeamID, aiPost, postservice.Options{RequireTeam: true, CheckLimits: true})
+	if err != nil {
+		return fmt.Errorf("validate auto-publish post: %w", err)
+	}
+	if err := postservice.ValidationError(prepared.Validation); err != nil {
+		return err
+	}
+	if _, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, prepared.Input); err != nil {
+		return fmt.Errorf("create auto-publish post: %w", err)
+	}
+	return nil
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {

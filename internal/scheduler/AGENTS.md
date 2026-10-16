@@ -23,6 +23,7 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 - Job types registered in scheduler initialization
 - Poll interval configurable via config
 - Worker pool size configurable
+- Before publishing, validate the full persisted target list through `postservice.ResolveTargets` against the post team, including already-posted targets on retries. Any invalid target fails the whole post with a log and stored error before publishing any account; never treat filtered targets as success
 - Job failures logged, not fatal
 - Template materialization uses domain template variables
 - Integration with store for job persistence
