@@ -87,7 +87,8 @@ func TestAPITokenManagementAuthority(t *testing.T) {
 		{name: "bound full access cannot change team", callerTeam: "a", targetTeam: "b"},
 		{name: "bound scoped cannot unbind", callerScopes: []string{"read"}, targetScopes: []string{"read"}, callerTeam: "a"},
 		{name: "bound scoped cannot change team", callerScopes: []string{"read"}, targetScopes: []string{"read"}, callerTeam: "a", targetTeam: "b"},
-		{name: "unbound cannot change binding", targetTeam: "a"},
+		{name: "unbound scoped cannot change binding", callerScopes: []string{"read"}, targetScopes: []string{"read"}, targetTeam: "a"},
+		{name: "unrestricted can choose binding", targetTeam: "a", allowed: true},
 	}
 	for _, tc := range cases {
 		for _, action := range []string{"create", "revoke"} {

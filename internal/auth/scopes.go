@@ -79,11 +79,11 @@ func PrincipalAllows(principal domain.AuthenticatedPrincipal, required string) b
 	return ScopeSatisfied(principal.Scopes, required)
 }
 
-// PrincipalCanManageAPIToken limits token creation and revocation to the API
-// caller's effective scopes and exact team binding. Browser sessions are exempt.
+// PrincipalCanManageAPIToken limits restricted callers to their effective scopes
+// and exact team binding. Callers without restrictions are exempt, regardless of Kind.
 // scopes and teamID must already be normalized, as for persisted tokens.
 func PrincipalCanManageAPIToken(principal domain.AuthenticatedPrincipal, scopes []string, teamID *string) bool {
-	if principal.Kind != "api_token" {
+	if len(principal.Scopes) == 0 && principal.TokenTeamID == nil {
 		return true
 	}
 	if (principal.TokenTeamID == nil) != (teamID == nil) {
@@ -96,7 +96,7 @@ func PrincipalCanManageAPIToken(principal domain.AuthenticatedPrincipal, scopes 
 		return false
 	}
 	for _, scope := range scopes {
-		if !PrincipalAllows(principal, scope) {
+		if len(principal.Scopes) > 0 && !ScopeSatisfied(principal.Scopes, scope) {
 			return false
 		}
 	}
