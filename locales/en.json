@@ -1191,6 +1191,8 @@
     "campaign_format_not_found": "campaign format not found",
     "style_example_limit_reached": "style example limit reached",
     "ai_service_not_configured": "AI service is not configured",
+    "invalid_ai_base_url": "AI base URL is invalid or points to a private network address (an admin can allow hosts via AI_ALLOWED_PRIVATE_HOSTS)",
+    "ai_api_key_required": "Changing the AI provider or base URL requires entering the API key again",
     "regenerate_blocked_posted": "Cannot regenerate: one or more posts in scope are already published or publishing",
     "skip_blocked_posted": "Cannot skip: one or more posts in this round or a later one are already published or publishing",
     "regenerate_no_posts": "No regenerable posts found in scope",

@@ -31,15 +31,24 @@ Single Go module (`go.mod` at root). Packages follow standard Go conventions.
 - Push (`internal/push`): subscription endpoints are HTTPS-only (rejected with
   `push_subscription_endpoint_https_required`); the default HTTP client is
   SSRF-guarded (dial + redirect resolution restricted to public addresses, own
-  `resolver` seam injectable for tests; `isPublicAddr` additionally denies the
-  special-use prefixes in `nonPublicPrefixes`: CGNAT, TEST-NET/IPv6
-  documentation, benchmarking, deprecated 6to4/site-local, reserved
-  future-use and discard-only ranges, with IPv4-mapped forms normalized via
-  `Unmap`); delivery of a batch is bounded by a single `DeliveryTimeout`
+  `resolver` seam injectable for tests; the public-address test is
+  `netguard.IsPublicAddr`); delivery of a batch is bounded by a single `DeliveryTimeout`
   (default 10s) spanning all targets; each target's notification payload
   embeds the user-wide open-review total from `CountUserOpenReviewItems`;
   logs show only the endpoint origin, never the full URL; notification `Topic`
   is `base64.RawURLEncoding(sha256(teamID)[:24])`
+- SSRF guard (`internal/netguard`): single source for "is this address
+  public" (`IsPublicAddr` denies loopback/private/link-local plus the
+  special-use prefixes in `nonPublicPrefixes`, IPv4-mapped forms normalized via
+  `Unmap`, NAT64/SIIT/IPv4-compatible IPv6 judged by the embedded IPv4).
+  `Policy` = public-only plus admin-allowlisted `host` or `host:port` entries;
+  `CheckURL` validates on save, `HTTPClient` guards dial + redirects (DNS
+  rebinding) and ignores env proxies. Any outbound call to a user-supplied URL
+  must use it
+- AI outbound (`internal/ai`): LLM HTTP clients come from
+  `ai.NewHTTPClient`/`ai.NewService(allowedPrivateHosts...)` (netguard policy
+  from `AI_ALLOWED_PRIVATE_HOSTS`, redirects never followed); never build a
+  plain `http.Client` for a team-configured base URL
 - Badge synchronization (frontend → sw.js): the app polls `/v1/me/review-counts`
   when authenticated (cookie session suffices, no stored bearer needed) and
   posts `review-badge` messages with `{total, teams}`; a `total <= 0` closes
