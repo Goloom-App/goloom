@@ -12,6 +12,12 @@ import (
 const (
 	chatMaxIterations = 8
 	chatMaxTokens     = 2000
+
+	// Limits for the client-held chat history (untrusted input).
+	chatHistoryMaxMessages   = 30
+	chatHistoryMaxChars      = 40000
+	chatToolResultsMaxPerMsg = 20
+	chatToolResultSummaryMax = 300
 )
 
 // ChatEvent is one server-sent event emitted while the chat loop runs.
@@ -47,7 +53,7 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string, 
 	sb.WriteString("Rules:\n")
 	sb.WriteString("- Stay on the platform and your work. Answer a brief factual aside if asked, but steer back to social media and this team; decline off-platform jobs with no social-media purpose (e.g. writing an essay or a manuscript).\n")
 	sb.WriteString("- When the user refers to what they see ('this post', 'here', 'the one I'm editing'), call get_current_view to ground yourself before acting.\n")
-	sb.WriteString("- Before you write post content, recall the team's voice with get_brand_profile and match its tone, wording and rules.\n")
+	sb.WriteString("- The team's brand voice is included below; match its tone, wording and rules. Call get_brand_profile only when you need details it does not show.\n")
 	sb.WriteString("- Use a tool when the user asks you to create or change something; otherwise just answer.\n")
 	sb.WriteString("- draft_post saves a draft and runs immediately. modify_post edits an existing draft or scheduled post — use it (with the post id) for any change to a post that already exists, never create a second draft. Content edits of a draft run immediately; modify_post on a scheduled post, or any change to scheduled_at or target_accounts, is proposed for the user to confirm.\n")
 	sb.WriteString("- When the current view is the composer (or a composer-context block is attached), the user is editing an UNSAVED post that has NO id. Revise it with revise_composer_post — never draft_post or modify_post, and never invent a post id. Read what is currently in the composer (its default text and per-account versions) and change only what was asked; account ids are NOT post ids.\n")
@@ -96,13 +102,22 @@ func BuildChatSystemPrompt(aiContext domain.AIContext, mentionContext []string, 
 }
 
 // ChatMessagesFromDomain converts API chat messages to LLM messages, folding
-// mention metadata into the user text so the model sees what was referenced.
+// mention metadata into the user text and tool outcomes into the assistant
+// text so the model sees what was referenced and what earlier tools did.
+// The history is client-supplied and therefore untrusted: only user/assistant
+// roles are accepted (system/tool are dropped), tool summaries are capped, and
+// the result is trimmed by TrimChatHistory.
 func ChatMessagesFromDomain(messages []domain.AIChatMessage) []Message {
 	out := make([]Message, 0, len(messages))
 	for _, msg := range messages {
-		role := RoleUser
-		if msg.Role == domain.AIChatMessageRoleAssistant {
+		var role string
+		switch msg.Role {
+		case domain.AIChatMessageRoleUser:
+			role = RoleUser
+		case domain.AIChatMessageRoleAssistant:
 			role = RoleAssistant
+		default:
+			continue
 		}
 		content := msg.Content
 		if len(msg.Mentions) > 0 && role == RoleUser {
@@ -112,9 +127,107 @@ func ChatMessagesFromDomain(messages []domain.AIChatMessage) []Message {
 			}
 			content += "\n\n[Referenced entities: " + strings.Join(refs, ", ") + "]"
 		}
-		out = append(out, Message{Role: role, Content: content})
+		if role == RoleAssistant {
+			if note := toolResultsNote(msg.ToolResults); note != "" {
+				if strings.TrimSpace(content) != "" {
+					content += "\n\n"
+				}
+				content += note
+			}
+		}
+		out = append(out, Message{Role: role, Content: capRunes(content, chatHistoryMaxChars)})
 	}
-	return out
+	return TrimChatHistory(out)
+}
+
+// chatToolResultAllowlist names the write/card tools whose summaries (ids,
+// status) may be echoed back. Read tools such as fetch_url carry untrusted text
+// and must never re-enter the history as assistant content. Keep in sync with
+// the frontend constant ECHOED_TOOL_RESULTS in AIChatWidget.tsx.
+var chatToolResultAllowlist = map[string]bool{
+	"draft_post":           true,
+	"modify_post":          true,
+	"revise_composer_post": true,
+	"create_campaign":      true,
+	"schedule_post":        true,
+	"delete_post":          true,
+	"create_recurring":     true,
+	"create_rss_feed":      true,
+}
+
+// toolResultsNote renders tool outcomes as one compact bracketed note.
+func toolResultsNote(results []domain.AIChatToolResult) string {
+	var parts []string
+	for _, res := range results {
+		if len(parts) >= chatToolResultsMaxPerMsg {
+			break
+		}
+		tool := strings.TrimSpace(res.Tool)
+		if !chatToolResultAllowlist[tool] {
+			continue
+		}
+		summary := truncateRunes(sanitizeUntrusted(strings.Join(strings.Fields(res.Summary), " ")), chatToolResultSummaryMax)
+		if summary == "" {
+			continue
+		}
+		parts = append(parts, tool+" → "+summary)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "[Tool results: " + strings.Join(parts, "; ") + "]"
+}
+
+// capRunes cuts s to at most max runes without an ellipsis.
+func capRunes(s string, max int) string {
+	if r := []rune(s); len(r) > max {
+		return string(r[:max])
+	}
+	return s
+}
+
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
+}
+
+// TrimChatHistory keeps the most recent messages within the count and
+// character budget. The latest user message (and everything after it) is
+// always kept, even if it alone exceeds the budget. Leading assistant
+// messages are dropped so the history starts with a user turn.
+func TrimChatHistory(messages []Message) []Message {
+	lastUser := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == RoleUser {
+			lastUser = i
+			break
+		}
+	}
+	if lastUser < 0 {
+		return messages
+	}
+	start := lastUser
+	count := len(messages) - lastUser
+	chars := 0
+	for _, m := range messages[lastUser:] {
+		chars += len([]rune(m.Content))
+	}
+	for start > 0 {
+		size := len([]rune(messages[start-1].Content))
+		if count+1 > chatHistoryMaxMessages || chars+size > chatHistoryMaxChars {
+			break
+		}
+		start--
+		count++
+		chars += size
+	}
+	for start < lastUser && messages[start].Role != RoleUser {
+		start++
+	}
+	return messages[start:]
 }
 
 // RunChat drives the tool-calling loop and emits events for each step.

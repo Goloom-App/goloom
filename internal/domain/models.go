@@ -514,10 +514,20 @@ type AIChatMention struct {
 	Name string            `json:"name"`
 }
 
+// AIChatToolResult is a compact record of one tool outcome of an earlier turn
+// (tool name plus a short summary such as "post_id=…"). The client keeps it on
+// the assistant message it belongs to and sends it back so the model still
+// knows what already exists; the server caps its size.
+type AIChatToolResult struct {
+	Tool    string `json:"tool"`
+	Summary string `json:"summary"`
+}
+
 type AIChatMessage struct {
-	Role     AIChatMessageRole `json:"role"`
-	Content  string            `json:"content"`
-	Mentions []AIChatMention   `json:"mentions,omitempty"`
+	Role        AIChatMessageRole  `json:"role"`
+	Content     string             `json:"content"`
+	Mentions    []AIChatMention    `json:"mentions,omitempty"`
+	ToolResults []AIChatToolResult `json:"tool_results,omitempty"`
 }
 
 type AIChatRequest struct {

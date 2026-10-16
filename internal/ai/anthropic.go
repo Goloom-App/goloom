@@ -79,7 +79,12 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 		"messages":   messages,
 	}
 	if strings.TrimSpace(req.System) != "" {
-		payload["system"] = req.System
+		// The system block carries a cache breakpoint so the tool loop reuses the prefix.
+		payload["system"] = []map[string]any{{
+			"type":          "text",
+			"text":          req.System,
+			"cache_control": map[string]string{"type": "ephemeral"},
+		}}
 	}
 	// Sampling parameters are not sent: recent Anthropic models reject them.
 	prefilledJSON := false
@@ -92,6 +97,7 @@ func (c *anthropicClient) Complete(ctx context.Context, req Request) (Response, 
 				"input_schema": tool.InputSchema,
 			})
 		}
+		tools[len(tools)-1]["cache_control"] = map[string]string{"type": "ephemeral"}
 		payload["tools"] = tools
 	} else if req.JSON {
 		// Anthropic has no JSON response mode, so we prefill the assistant turn

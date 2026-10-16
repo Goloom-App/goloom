@@ -94,8 +94,24 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  // History sent to the model: user/assistant turns only.
+  // History sent to the model: user/assistant turns only; tool outcomes ride
+  // along as tool_results on the assistant message they belong to.
   const history = useRef<BackendAIChatMessage[]>([])
+
+  // Attach a compact tool outcome to the current assistant turn so follow-up
+  // requests still know ids (e.g. post_id) without replaying full payloads.
+  const recordToolResult = useCallback((tool: string, summary: string) => {
+    const entry = { tool, summary }
+    const last = history.current[history.current.length - 1]
+    if (last && last.role === 'assistant') {
+      history.current = [
+        ...history.current.slice(0, -1),
+        { ...last, tool_results: [...(last.tool_results ?? []), entry] },
+      ]
+    } else {
+      history.current = [...history.current, { role: 'assistant', content: '', tool_results: [entry] }]
+    }
+  }, [])
 
   // Wipe the in-memory conversation and start a fresh agent session. Used by the
   // team switch and the /clear command; aborts any in-flight stream first.
@@ -307,24 +323,8 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
             event.payload && typeof event.payload === 'object'
               ? (event.payload as { confirmation?: { tool?: string; args?: Record<string, unknown>; summary?: string } }).confirmation
               : undefined
-          if (!isError && event.tool_name && event.tool_name !== 'fetch_url' && event.message) {
-            let note = `[${event.tool_name}] ${event.message}`
-            if (isDraftTool && event.payload && typeof event.payload === 'object') {
-              const post = event.payload as { content?: string }
-              if (post.content) {
-                note += `\nCurrent draft content:\n${post.content}`
-              }
-            }
-            if (isRevisionTool && event.payload && typeof event.payload === 'object') {
-              const revision = event.payload as { content?: string; account_content_override?: Record<string, string> }
-              if (revision.content) {
-                note += `\nProposed default text:\n${revision.content}`
-              }
-              for (const [accountId, body] of Object.entries(revision.account_content_override ?? {})) {
-                note += `\nProposed override for ${accountId}:\n${body}`
-              }
-            }
-            history.current = [...history.current, { role: 'assistant', content: note }]
+          if (!isError && event.tool_name && ECHOED_TOOL_RESULTS.has(event.tool_name) && event.message) {
+            recordToolResult(event.tool_name, summarizeToolResult(event.message, event.payload))
           }
           if (confirmation?.tool) {
             setEntries((current) => [
@@ -401,7 +401,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
           break
       }
     },
-    [t],
+    [t, recordToolResult],
   )
 
   // Run a proposed write after the user confirms it. Team access and scope are
@@ -413,10 +413,9 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
       setEntries((current) =>
         current.map((entry, i) => (i === index ? { ...entry, confirm: { ...data, resolved: 'confirmed' } } : entry)),
       )
-      history.current = [
-        ...history.current,
-        { role: 'assistant', content: `[${data.tool}] confirmed by the user. ${res.summary ?? ''}`.trim() },
-      ]
+      if (ECHOED_TOOL_RESULTS.has(data.tool)) {
+        recordToolResult(data.tool, summarizeToolResult(`confirmed by the user. ${res.summary ?? ''}`, res.payload))
+      }
       const post =
         res.payload && typeof res.payload === 'object'
           ? (res.payload as { post_id?: string; content?: string; title?: string; target_accounts?: string[]; scheduled_at?: string })
@@ -784,6 +783,36 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     </>,
     document.body,
   )
+}
+
+const TOOL_SUMMARY_MAX = 300
+
+// Only write/card tools echo their outcome (ids, status) back in the history.
+// Read tools such as fetch_url return untrusted text and must stay out. Keep in
+// sync with chatToolResultAllowlist in internal/ai/chat.go.
+const ECHOED_TOOL_RESULTS = new Set([
+  'draft_post',
+  'modify_post',
+  'revise_composer_post',
+  'create_campaign',
+  'schedule_post',
+  'delete_post',
+  'create_recurring',
+  'create_rss_feed',
+])
+
+// summarizeToolResult builds the short tool outcome sent back with the history:
+// the (capped) result text plus the post id when the payload carries one.
+function summarizeToolResult(message: string, payload: unknown): string {
+  let summary = message.replace(/\s+/g, ' ').trim()
+  if (summary.length > TOOL_SUMMARY_MAX) {
+    summary = `${summary.slice(0, TOOL_SUMMARY_MAX)}…`
+  }
+  const postId = payload && typeof payload === 'object' ? (payload as { post_id?: unknown }).post_id : undefined
+  if (typeof postId === 'string' && postId && !summary.includes(postId)) {
+    summary = `post_id=${postId} ${summary}`.trim()
+  }
+  return summary
 }
 
 function providerLabel(provider: string, t: (key: string) => string): string {
