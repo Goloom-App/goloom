@@ -1178,6 +1178,7 @@
     "expires_at_future": "expires_at must be in the future",
     "token_not_found": "token not found",
     "api_token_exceeds_authority": "API token scopes or team binding exceed the caller's authority",
+    "api_token_session_requires_full_access": "Sign-in requires an API token without scope or team restrictions. Use an unrestricted token or the recovery token.",
     "content_required": "content is required",
     "target_accounts_required": "target_accounts is required",
     "instance_url_required": "instance_url is required",

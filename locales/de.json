@@ -1178,6 +1178,7 @@
     "expires_at_future": "expires_at muss in der Zukunft liegen",
     "token_not_found": "Token nicht gefunden",
     "api_token_exceeds_authority": "API-Token-Berechtigungen oder Teambindung überschreiten die Berechtigungen des aufrufenden Tokens",
+    "api_token_session_requires_full_access": "Die Anmeldung erfordert ein API-Token ohne Berechtigungs- oder Teameinschränkungen. Verwende ein uneingeschränktes Token oder das Wiederherstellungs-Token.",
     "content_required": "Inhalt ist erforderlich",
     "target_accounts_required": "target_accounts ist erforderlich",
     "instance_url_required": "instance_url ist erforderlich",
