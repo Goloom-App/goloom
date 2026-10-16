@@ -4,7 +4,11 @@ import (
 	"net/http"
 
 	"git.f4mily.net/goloom/internal/auth"
+	"git.f4mily.net/goloom/internal/textcount"
 )
+
+// recentPostContextChars caps each recent post in GET /ai-context.
+const recentPostContextChars = 280
 
 func (a *API) handleGetAIContext(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
@@ -15,9 +19,7 @@ func (a *API) handleGetAIContext(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := range ctx.RecentPosts {
-		if len(ctx.RecentPosts[i].Content) > 280 {
-			ctx.RecentPosts[i].Content = ctx.RecentPosts[i].Content[len(ctx.RecentPosts[i].Content)-280:]
-		}
+		ctx.RecentPosts[i].Content = textcount.Truncate(ctx.RecentPosts[i].Content, recentPostContextChars)
 	}
 
 	auth.WriteJSON(w, http.StatusOK, ctx)

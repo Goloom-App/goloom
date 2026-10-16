@@ -7,21 +7,8 @@ import (
 	"strings"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/textcount"
 )
-
-// Platform constraints mirrored from the team validation rules.
-var platformLimits = map[string]int{
-	"mastodon":  500,
-	"bluesky":   300,
-	"friendica": 5000,
-}
-
-var platformHashtagRules = map[string]string{
-	"mastodon":  "Use readable hashtags sparingly, ideally 1-3 at the end.",
-	"bluesky":   "Use at most 2 concise hashtags only when they add discovery value.",
-	"friendica": "Hashtags are allowed, but keep them relevant and non-spammy.",
-	"default":   "Use hashtags sparingly and only when they are clearly relevant.",
-}
 
 var outputFormatHints = map[string]string{
 	"post":   "Single post — structure is up to you.",
@@ -42,6 +29,7 @@ const (
 	recurringRecentPostLimit = 6
 	formattingRuleLimit      = 4
 	recentPostExcerptChars   = 140
+	knowledgeSourceChars     = 4000
 )
 
 const recurringUserRequestBase = "Write a fresh social post from a recurring template.\n" +
@@ -124,28 +112,30 @@ func buildBrandVoicePrompt(context domain.AIContext) string {
 
 	preferredLanguage := strings.TrimSpace(style.PreferredLanguage)
 	if preferredLanguage == "" {
-		preferredLanguage = "unspecified"
+		preferredLanguage = defaultLanguageRule
 	}
 
 	voiceSummary := brandVoiceSummary(style)
-	if voiceSummary == "" {
-		voiceSummary = "Write clearly and authentically for this account."
-	}
+	defaultRules := brandDefaultRules(style, hasVoiceDescription(style))
 
-	sections := []string{
-		fmt.Sprintf("You write social media posts for %q.", teamName),
-		"",
-		"Brand voice:",
-		voiceSummary,
-		"",
-		"Quality bar:",
+	sections := []string{fmt.Sprintf("You write social media posts for %q.", teamName)}
+	if voiceSummary != "" {
+		sections = append(sections, "", "Brand voice:", voiceSummary)
 	}
+	sections = append(sections, "", "Quality bar:")
 	if antiAIOverride {
 		sections = append(sections, formatList(nil))
 	} else {
 		sections = append(sections, formatList(qualityVoicePrinciples))
 	}
 
+	if len(defaultRules) > 0 {
+		sections = append(sections,
+			"",
+			"Defaults (the brand profile says nothing here):",
+			formatList(defaultRules),
+		)
+	}
 	if len(formattingRules) > 0 {
 		sections = append(sections,
 			"",
@@ -187,8 +177,8 @@ func buildBrandVoicePrompt(context domain.AIContext) string {
 		"Posts that sound like us (match tone and attitude, not structure or layout):",
 		formatStyleExamples(styleExamples),
 		"",
-		fmt.Sprintf("Language: %s | Hashtag budget: up to %d", preferredLanguage, style.MaxHashtags),
-		"Facts about the specific item you are posting about always come from the source material in the task message.",
+		fmt.Sprintf("Language: %s | Hashtag budget: %s", preferredLanguage, hashtagBudgetLine(style.MaxHashtags)),
+		"Facts about the specific item you are posting about always come from the source material in the task message — never invent facts.",
 		untrustedSourceGuard,
 	)
 
@@ -219,6 +209,9 @@ func brandVoiceSummary(style domain.StyleMetadata) string {
 	}
 
 	var voiceBits []string
+	if t := strings.TrimSpace(style.Tonality); t != "" {
+		voiceBits = append(voiceBits, "Tone: "+t)
+	}
 	if style.LanguageDNA != nil {
 		if s := strings.TrimSpace(style.LanguageDNA.SentenceStyle); s != "" {
 			voiceBits = append(voiceBits, s)
@@ -248,9 +241,7 @@ func formatKnowledgeSource(item domain.KnowledgeSource) string {
 		name = "source"
 	}
 	content := strings.TrimSpace(item.Content)
-	if len(content) > 4000 {
-		content = content[:4000] + "…"
-	}
+	content = textcount.Truncate(content, knowledgeSourceChars)
 	prefix := "[" + name + "]"
 	if url := strings.TrimSpace(item.SourceURL); url != "" {
 		prefix += " (" + url + ")"
@@ -265,7 +256,7 @@ func formatKnowledgeSource(item domain.KnowledgeSource) string {
 // buildGenerationPrompt renders the per-request task prompt.
 func buildGenerationPrompt(context domain.AIContext, p params, platform string) string {
 	style := styleMetadata(context)
-	constraints := applyPlatformConstraints(platform, style.MaxHashtags)
+	constraints := applyPlatformConstraints(context, platform, style.MaxHashtags)
 	recentLimit := taskRecentPostLimit
 	if isRecurringKind(recurringPostKind(p)) {
 		recentLimit = recurringRecentPostLimit
@@ -363,35 +354,28 @@ func renderTaskPrompt(in taskPromptInput) string {
 	return strings.TrimSpace(strings.Join(sections, "\n"))
 }
 
-func applyPlatformConstraints(platform string, maxHashtags int) platformConstraints {
+func applyPlatformConstraints(context domain.AIContext, platform string, maxHashtags int) platformConstraints {
 	normalized := strings.ToLower(strings.TrimSpace(platform))
 	key := normalized
 	if key == "" {
 		key = "default"
 	}
-	charLimit, ok := platformLimits[normalized]
-	if !ok {
-		charLimit = 500
-	}
 	return platformConstraints{
 		platform:    key,
-		charLimit:   charLimit,
+		charLimit:   platformCharLimit(context, normalized),
 		hashtagRule: hashtagRule(normalized, maxHashtags),
 	}
 }
 
 func hashtagRule(platform string, maxHashtags int) string {
 	if maxHashtags > 0 {
-		minimum := maxHashtags
+		count := fmt.Sprintf("exactly %d", maxHashtags)
 		if maxHashtags >= 3 {
-			minimum = 3
+			count = fmt.Sprintf("3 to %d", maxHashtags)
 		}
-		return fmt.Sprintf("Include %d to %d relevant hashtags at the end of the post text (also mirror them in the hashtags JSON field).", minimum, maxHashtags)
+		return fmt.Sprintf("Include %s relevant hashtags at the end of the post text (also mirror them in the hashtags JSON field).", count)
 	}
-	if rule, ok := platformHashtagRules[platform]; ok {
-		return rule
-	}
-	return platformHashtagRules["default"]
+	return platformDefaultFor(platform).rule
 }
 
 func outputConstraints(context domain.AIContext, p params) []string {
