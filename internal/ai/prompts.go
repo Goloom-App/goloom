@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/textcount"
@@ -29,7 +30,9 @@ const (
 	recurringRecentPostLimit = 6
 	formattingRuleLimit      = 4
 	recentPostExcerptChars   = 140
-	knowledgeSourceChars     = 4000
+	knowledgeSourceChars     = 4000  // per-source cap
+	knowledgeTotalChars      = 12000 // total budget for the knowledge section
+	knowledgeMinSourceChars  = 200   // below this remaining budget, stop adding sources
 )
 
 const recurringUserRequestBase = "Write a fresh social post from a recurring template.\n" +
@@ -94,13 +97,10 @@ func buildBrandVoicePrompt(context domain.AIContext) string {
 		formattingRules = formattingRules[:formattingRuleLimit]
 	}
 
-	var knowledgeSources []string
-	for _, item := range context.KnowledgeSources {
-		knowledgeSources = append(knowledgeSources, formatKnowledgeSource(item))
-	}
+	knowledgeSources := budgetedKnowledgeSources(context.KnowledgeSources)
 
 	var styleExamples []string
-	for _, item := range context.StyleExamples {
+	for _, item := range newestStyleExamples(context.StyleExamples) {
 		content := strings.TrimSpace(item.Content)
 		if content != "" {
 			styleExamples = append(styleExamples, content)
@@ -235,13 +235,54 @@ func brandVoiceSummary(style domain.StyleMetadata) string {
 	return strings.Join(paragraphs, "\n\n")
 }
 
+// newestStyleExamples returns the examples newest first so the pick of the
+// first brandStyleExampleLimit is deterministic regardless of store ordering.
+func newestStyleExamples(in []domain.StyleExample) []domain.StyleExample {
+	out := append([]domain.StyleExample(nil), in...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out
+}
+
+// budgetedKnowledgeSources formats sources newest-updated first, each capped at
+// knowledgeSourceChars, until knowledgeTotalChars is spent. A trailing line
+// reports how many sources were left out.
+func budgetedKnowledgeSources(in []domain.KnowledgeSource) []string {
+	sorted := append([]domain.KnowledgeSource(nil), in...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		a, b := sorted[i].UpdatedAt, sorted[j].UpdatedAt
+		if a.IsZero() {
+			a = sorted[i].CreatedAt
+		}
+		if b.IsZero() {
+			b = sorted[j].CreatedAt
+		}
+		return a.After(b)
+	})
+	var out []string
+	remaining := knowledgeTotalChars
+	for i, item := range sorted {
+		if remaining < knowledgeMinSourceChars {
+			out = append(out, fmt.Sprintf("(%d more knowledge source(s) omitted to save space.)", len(sorted)-i))
+			break
+		}
+		limit := min(knowledgeSourceChars, remaining)
+		out = append(out, formatKnowledgeSourceLimit(item, limit))
+		remaining -= min(utf8.RuneCountInString(strings.TrimSpace(item.Content)), limit)
+	}
+	return out
+}
+
 func formatKnowledgeSource(item domain.KnowledgeSource) string {
+	return formatKnowledgeSourceLimit(item, knowledgeSourceChars)
+}
+
+func formatKnowledgeSourceLimit(item domain.KnowledgeSource, limit int) string {
 	name := strings.TrimSpace(item.Name)
 	if name == "" {
 		name = "source"
 	}
 	content := strings.TrimSpace(item.Content)
-	content = textcount.Truncate(content, knowledgeSourceChars)
+	content = textcount.Truncate(content, limit)
 	prefix := "[" + name + "]"
 	if url := strings.TrimSpace(item.SourceURL); url != "" {
 		prefix += " (" + url + ")"

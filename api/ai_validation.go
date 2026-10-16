@@ -12,26 +12,26 @@ import (
 // Limits for team AI settings input. They bound prompt size and storage per
 // team; handlers reject violations with a 400 and a translated error code.
 const (
-	maxProfileTonalityLen   = 200
-	maxProfileLanguageLen   = 35
-	maxProfileListItems     = 200 // banned words
-	maxProfileRuleItems     = 50  // formatting rules
-	maxProfileListItemLen   = 500
-	maxProfileHashtags      = 30
-	maxFormatNameLen        = 120
-	maxFormatStructureBytes = 16 * 1024
-	maxFormatHashtags       = 30
-	maxHashtagLen           = 100
-	maxStyleContentLen      = 5000
-	maxStylePlatformLen     = 50
-	maxStyleNotesLen        = 1000
-	maxKnowledgeNameLen     = 200
-	maxKnowledgeURLLen      = 2048
-	maxKnowledgeContentSize = 100_000 // bytes per source
-	maxKnowledgeSources     = 50      // per team
-	maxProactiveGapDays     = 365
-	maxProactiveTriggers    = 100
-	maxCronScheduleLen      = 100
+	maxProfileTonalityLen    = 200
+	maxProfileLanguageLen    = 35
+	maxProfileListItems      = 200 // banned words
+	maxProfileRuleItems      = 50  // formatting rules
+	maxProfileListItemLen    = 500
+	maxProfileHashtags       = 30
+	maxFormatNameLen         = 120
+	maxFormatStructureBytes  = 16 * 1024
+	maxFormatHashtags        = 30
+	maxHashtagLen            = 100
+	maxStyleContentLen       = 5000
+	maxStylePlatformLen      = 50
+	maxStyleNotesLen         = 1000
+	maxKnowledgeNameLen      = 200
+	maxKnowledgeURLLen       = 2048
+	maxKnowledgeContentChars = 20_000 // characters per source; matches the AI prompt budget
+	maxKnowledgeSources      = 50     // per team
+	maxProactiveGapDays      = 365
+	maxProactiveTriggers     = 100
+	maxCronScheduleLen       = 100
 )
 
 var errInvalidInput = errors.New("invalid input")

@@ -1206,7 +1206,7 @@
     "invalid_campaign_format": "invalid campaign format: name (max 120 characters) and structure are required, weekday 0-6, at most 30 hashtags",
     "invalid_style_example": "invalid style example: content is required (max 5000 characters), notes max 1000",
     "invalid_knowledge_source": "invalid knowledge source: type, name (max 200 characters) and content or source_url are required",
-    "knowledge_source_too_large": "knowledge source content is too large (max 100000 bytes)",
+    "knowledge_source_too_large": "knowledge source content is too long (max 20000 characters)",
     "knowledge_source_limit_reached": "knowledge source limit reached (max 50 per team)",
     "knowledge_source_not_found": "knowledge source not found",
     "knowledge_url_fetch_failed": "could not fetch the knowledge source URL",
