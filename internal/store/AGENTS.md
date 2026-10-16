@@ -10,6 +10,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Local Contracts
 
+- `LoadPostTargets` returns only unposted targets whose social account belongs to the scheduled post's team; persisted foreign-team target rows must never reach the publisher
 - Interface: `store.go` — all business logic depends on this contract
 - `LookupAPIToken` returns the authenticating token's persisted expiry in `AuthenticatedPrincipal.TokenExpiresAt`; non-expiring tokens return nil in both backends.
 - SQLite schema: `sqlite/schema.sql`
