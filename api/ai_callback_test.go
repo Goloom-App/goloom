@@ -321,12 +321,12 @@ type failOnceAIStatusStore struct {
 	failed bool
 }
 
-func (s *failOnceAIStatusStore) UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, message string) error {
+func (s *failOnceAIStatusStore) ClaimAIJobCompletion(ctx context.Context, id string, status domain.AIJobStatus, result []byte, message string) (bool, error) {
 	if !s.failed {
 		s.failed = true
-		return errors.New("injected status write failure")
+		return false, errors.New("injected status write failure")
 	}
-	return s.Store.UpdateAIJobStatus(ctx, id, status, result, message)
+	return s.Store.ClaimAIJobCompletion(ctx, id, status, result, message)
 }
 
 func TestCompleteAIJobStatusWriteFailureRetry(t *testing.T) {

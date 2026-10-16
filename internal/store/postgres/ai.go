@@ -901,3 +901,20 @@ func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
 	}
 	return teams, rows.Err()
 }
+
+// ClaimAIJobCompletion atomically assigns terminal completion to one caller.
+func (s *Store) ClaimAIJobCompletion(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) (bool, error) {
+	if status != domain.AIJobStatusCompleted && status != domain.AIJobStatusFailed {
+		return false, fmt.Errorf("claim AI job completion: invalid terminal status %q", status)
+	}
+
+	var resultVal any
+	if len(result) > 0 {
+		resultVal = json.RawMessage(result)
+	}
+	tag, err := s.pool.Exec(ctx, `update ai_jobs set status=$2, result=$3, error_message=NULLIF($4,''), updated_at=now(), completed_at=now() where id=$1 and status not in ('completed','failed','cancelled')`, id, string(status), resultVal, errorMsg)
+	if err != nil {
+		return false, fmt.Errorf("claim AI job completion: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}

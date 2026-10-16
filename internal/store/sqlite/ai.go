@@ -890,3 +890,22 @@ func intPtrToAny(v *int) any {
 	}
 	return *v
 }
+
+// ClaimAIJobCompletion atomically assigns terminal completion to one caller.
+func (s *Store) ClaimAIJobCompletion(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) (bool, error) {
+	if status != domain.AIJobStatusCompleted && status != domain.AIJobStatusFailed {
+		return false, fmt.Errorf("claim AI job completion: invalid terminal status %q", status)
+	}
+
+	var resultVal any
+	if len(result) > 0 {
+		resultVal = string(result)
+	}
+	now := nowString()
+	res, err := s.db.ExecContext(ctx, `update ai_jobs set status=?, result=?, error_message=?, updated_at=?, completed_at=? where id=? and status not in ('completed','failed','cancelled')`, string(status), resultVal, nullableString(errorMsg), now, now, id)
+	if err != nil {
+		return false, fmt.Errorf("claim AI job completion: %w", err)
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}

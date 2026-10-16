@@ -68,6 +68,8 @@ type Store interface {
 	GetAIJobByID(ctx context.Context, teamID string, id string) (domain.AIJob, error)
 	GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob, error)
 	ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error)
+	// ClaimAIJobCompletion persists terminal status only for the winning caller.
+	ClaimAIJobCompletion(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) (bool, error)
 	UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) error
 	ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error)
 	// ListUnfinishedAIJobs returns pending and processing jobs whose last

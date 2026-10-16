@@ -35,7 +35,7 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		a.log.ErrorContext(ctx, "ai job completion: job not found", "job_id", jobID, "error", err)
 		return
 	}
-	if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed {
+	if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed || job.Status == "cancelled" {
 		return
 	}
 
@@ -43,8 +43,13 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 	if len(result) > 0 {
 		resultBytes = []byte(result)
 	}
-	if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, resultBytes, errorMessage); err != nil {
+	claimed, err := a.store.ClaimAIJobCompletion(ctx, job.ID, status, resultBytes, errorMessage)
+	if err != nil {
 		a.log.ErrorContext(ctx, "ai job completion: update status failed", "job_id", jobID, "error", err)
+		return
+	}
+
+	if !claimed {
 		return
 	}
 
@@ -56,7 +61,7 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 	}
 	automation := job.Type == domain.AIJobTypeVoiceEngine && (rssMeta != nil || recurringMeta != nil)
 
-	// Persist terminal status before side effects so a retry cannot create another post.
+	// Only the atomic terminal-claim winner runs side effects, including across replicas.
 	// Automation callbacks own their separate post/fallback lifecycle below.
 	if status == domain.AIJobStatusCompleted && !automation {
 		profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
