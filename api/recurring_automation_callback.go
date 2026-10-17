@@ -120,6 +120,9 @@ func (a *API) createRecurringAutomationPost(
 	}
 	if len(fallbackReason) > 0 {
 		recPost.AIFallbackReason = fallbackReason[0]
+		if recPost.AIFallbackReason != nil {
+			recPost.AIJobID = &job.ID
+		}
 	}
 	recPost.EnsureTitle()
 	prepared, err := a.posts.Prepare(ctx, job.TeamID, recPost, postservice.Options{RequireTeam: true, CheckLimits: !draft})

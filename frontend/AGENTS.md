@@ -10,7 +10,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 
 ## Local Contracts
 
-- Automation template fallbacks carry optional API `ai_fallback_reason`, mapped to `PostRecord.aiFallbackReason`; PostCard and review queue share a warning badge with localized reason tooltip. Ordinary posts show no fallback badge. Mocked API coverage: `e2e/ai-fallback-badge.spec.ts`.
+- Automation template fallbacks carry optional API `ai_fallback_reason`, mapped to `PostRecord.aiFallbackReason`; PostCard and review queue share a warning badge with localized reason tooltip including optional `ai_job_id` (`PostRecord.aiJobId`) to identify the failed job. Ordinary posts show no fallback badge. Mocked API coverage: `e2e/ai-fallback-badge.spec.ts`.
 
 - Build output: `../internal/webui/dist` (critical cross-boundary contract)
 - API proxy: `vite.config.ts` proxies `/api` to `localhost:8080`

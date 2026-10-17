@@ -659,7 +659,8 @@
         "validation_failed": "AI content failed validation. Template content used.",
         "dispatch_failed": "AI generation could not start. Template content used.",
         "unknown": "AI generation failed. Template content used."
-      }
+      },
+      "aiFallbackJob": "AI job: {{id}}"
     },
     "automation": {
       "title": "Automation",

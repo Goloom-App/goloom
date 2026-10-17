@@ -162,6 +162,9 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 						var visible map[string]any
 						_ = json.Unmarshal(data, &visible)
 						reason, _ := visible["ai_fallback_reason"].(string)
+						if visible["ai_job_id"] != job.ID {
+							t.Errorf("fallback job reference=%v want %s", visible["ai_job_id"], job.ID)
+						}
 						wantReason := "validation_failed"
 						switch scenario {
 						case "fallback":

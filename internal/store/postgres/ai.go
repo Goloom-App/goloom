@@ -839,7 +839,7 @@ func (s *Store) ListRecentPostedPosts(ctx context.Context, teamID string, limit 
 		SELECT p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
-		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason,
+		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason, p.ai_job_id,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		FROM scheduled_posts p
 		LEFT JOIN scheduled_post_targets t ON t.post_id = p.id
@@ -862,7 +862,7 @@ func (s *Store) ListUpcomingPosts(ctx context.Context, teamID string, from time.
 		SELECT p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
-		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason,
+		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason, p.ai_job_id,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		FROM scheduled_posts p
 		LEFT JOIN scheduled_post_targets t ON t.post_id = p.id

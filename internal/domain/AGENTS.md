@@ -10,7 +10,7 @@ Models in `models.go`, patch utilities in `patch_field.go`, template vars in `te
 
 ## Local Contracts
 
-- `ScheduledPost.AIFallbackReason` is a nullable, persisted machine reason for automation template fallback. `CreatePostInput.AIFallbackReason` is server-only (`json:"-"`); user payloads cannot forge fallback provenance. Reasons are `provider_failure`, `empty_content`, `invalid_output`, `validation_failed`, and `dispatch_failed`.
+- `ScheduledPost.AIFallbackReason` is a nullable, persisted machine reason for automation template fallback. `ScheduledPost.AIJobID` identifies the failed automation job; `CreatePostInput.AIJobID` and `CreatePostInput.AIFallbackReason` are server-only (`json:"-"`); user payloads cannot forge fallback provenance. Reasons are `provider_failure`, `empty_content`, `invalid_output`, `validation_failed`, and `dispatch_failed`.
 
 - `CreatePostInput.RSSItemKey` is server-only and identifies an RSS item for atomic post/marker insertion; `MaxRSSItemAttempts` bounds automatic attempts at 3.
 - Domain types: `models.go` — User, Team, Post, Account, AIJob, etc.

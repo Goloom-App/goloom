@@ -927,10 +927,10 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	}
 
 	const insertPost = `
-		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, source, visibility, media_ids, media_exclude_by_account, post_template_id, template_counter, template_occurrence_at, template_post_role, rss_feed_id, ai_fallback_reason)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		insert into scheduled_posts (team_id, author_user_id, title, content, scheduled_at, status, source, visibility, media_ids, media_exclude_by_account, post_template_id, template_counter, template_occurrence_at, template_post_role, rss_feed_id, ai_fallback_reason, ai_job_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		returning id, team_id, author_user_id, title, content, scheduled_at, status,
-		          attempt_count, coalesce(last_error, ''), visibility, media_ids, media_exclude_by_account, created_at, updated_at, post_template_id, template_counter, ai_fallback_reason
+		          attempt_count, coalesce(last_error, ''), visibility, media_ids, media_exclude_by_account, created_at, updated_at, post_template_id, template_counter, ai_fallback_reason, ai_job_id
 	`
 
 	ins := domain.ResolvePostInsert(principal, input)
@@ -943,7 +943,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 	var mediaRaw, mediaExcludeRaw string
 	var postTemplateID sql.NullString
 	var templateCtr sql.NullInt64
-	err = tx.QueryRow(ctx, insertPost, teamID, ins.AuthorID, input.Title, input.Content, input.ScheduledAt, ins.Status, ins.Source, visibility, mediaJSON, excludeJSON, ins.TemplateID, ins.TemplateCounter, templateOccurrence, ins.TemplateRole, ins.RSSFeedID, input.AIFallbackReason).Scan(
+	err = tx.QueryRow(ctx, insertPost, teamID, ins.AuthorID, input.Title, input.Content, input.ScheduledAt, ins.Status, ins.Source, visibility, mediaJSON, excludeJSON, ins.TemplateID, ins.TemplateCounter, templateOccurrence, ins.TemplateRole, ins.RSSFeedID, input.AIFallbackReason, input.AIJobID).Scan(
 		&post.ID,
 		&post.TeamID,
 		&post.AuthorUserID,
@@ -961,6 +961,7 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		&postTemplateID,
 		&templateCtr,
 		&post.AIFallbackReason,
+		&post.AIJobID,
 	)
 	if err != nil {
 		return domain.ScheduledPost{}, err
@@ -1020,7 +1021,7 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
-		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason,
+		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason, p.ai_job_id,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -1045,7 +1046,7 @@ func (s *Store) ListTeamPostsPage(ctx context.Context, teamID string, limit, off
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
-		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason,
+		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason, p.ai_job_id,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -1066,7 +1067,7 @@ func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (do
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
-		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason,
+		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason, p.ai_job_id,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -1258,7 +1259,7 @@ func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.Scheduled
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
-		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason,
+		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason, p.ai_job_id,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}')
 		from scheduled_posts p
 		left join scheduled_post_targets t on t.post_id = p.id
@@ -1478,6 +1479,7 @@ func (s *Store) listPosts(ctx context.Context, query string, args ...any) ([]dom
 			&postTemplateID,
 			&templateCtr,
 			&post.AIFallbackReason,
+			&post.AIJobID,
 			&post.TargetAccounts,
 		); err != nil {
 			return nil, err

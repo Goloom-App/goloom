@@ -659,7 +659,8 @@
         "validation_failed": "KI-Inhalt ungültig. Inhalt aus Vorlage verwendet.",
         "dispatch_failed": "KI-Generierung konnte nicht starten. Inhalt aus Vorlage verwendet.",
         "unknown": "KI-Generierung fehlgeschlagen. Inhalt aus Vorlage verwendet."
-      }
+      },
+      "aiFallbackJob": "KI-Auftrag: {{id}}"
     },
     "automation": {
       "title": "Automation",

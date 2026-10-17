@@ -101,7 +101,7 @@ export function PostCard({
         <div className="post-card__title-block">
           {post.status === 'draft' || post.source === 'imported' || post.source === 'automation' || post.aiFallbackReason ? (
             <div className="post-card__badges">
-              <AIFallbackBadge reason={post.aiFallbackReason} />
+              <AIFallbackBadge reason={post.aiFallbackReason} jobId={post.aiJobId} />
               {post.status === 'draft' ? <span className="badge badge--default">{t('common.draft')}</span> : null}
               {post.source === 'imported' ? <span className="badge badge--info">{t('common.importedBadge')}</span> : null}
               {post.source === 'automation' ? <span className="badge badge--accent">{t('review.automationBadge')}</span> : null}

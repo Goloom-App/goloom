@@ -99,7 +99,7 @@ export function ReviewQueueView({
               <div className="review-card__header">
                 <div className="flex-row--center gap-2 flex-wrap">
                   <span className="badge">{t('review.automationBadge')}</span>
-                  <AIFallbackBadge reason={item.aiFallbackReason} />
+                  <AIFallbackBadge reason={item.aiFallbackReason} jobId={item.aiJobId} />
                   {item.isOverdue ? (
                     <span className="badge badge--warning" data-testid="review-overdue-badge">
                       {t('review.overdue')}

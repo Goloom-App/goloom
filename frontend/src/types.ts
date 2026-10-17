@@ -285,6 +285,7 @@ export interface PostRecord {
   status: PostStatus
   source?: PostSource
   aiFallbackReason?: string
+  aiJobId?: string
   publishedLinks?: Record<string, string>
   /** Platform media attachment IDs (Mastodon media IDs, Bluesky-encoded payloads, etc.) */
   mediaIds?: string[]

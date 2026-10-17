@@ -18,7 +18,7 @@ func (s *Store) ListAutomationReviewDrafts(ctx context.Context, teamID string, l
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, ai_fallback_reason, rss_feed_id, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, ai_job_id, rss_feed_id, created_at, updated_at
 		from scheduled_posts
 		where team_id = ?
 		  and status = ?
@@ -117,6 +117,7 @@ func scanReviewPostRow(rows *sql.Rows) (domain.ScheduledPost, sql.NullString, er
 		&postTemplateID,
 		&templateCtr,
 		&post.AIFallbackReason,
+		&post.AIJobID,
 		&rssFeedID,
 		&createdAt,
 		&updatedAt,
