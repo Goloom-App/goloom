@@ -14,7 +14,7 @@ func TestRSSCounterFailureRollsBackPostAndMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close(ctx)
+	t.Cleanup(func() { db.Close(ctx) })
 	user, team := newAITestTeam(t, s)
 	feed, err := s.CreateRSSFeedConfig(ctx, team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/counter", Name: "counter"})
 	if err != nil {
@@ -27,7 +27,9 @@ func TestRSSCounterFailureRollsBackPostAndMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		db.Exec(ctx, `drop trigger if exists fail_rss_counter on rss_feed_configs; drop function if exists fail_rss_counter()`)
+		if _, err := db.Exec(ctx, `drop trigger if exists fail_rss_counter on rss_feed_configs; drop function if exists fail_rss_counter()`); err != nil {
+			t.Errorf("cleanup counter trigger: %v", err)
+		}
 	})
 	input := domain.CreatePostInput{Title: "one", Content: "one", Draft: true, RSSFeedID: &feed.ID, RSSItemKey: "item"}
 	if _, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: user}, input); err == nil {
