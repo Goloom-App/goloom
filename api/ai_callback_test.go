@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -108,69 +109,72 @@ func TestCompleteAIJob_MissingScheduleAuthorityCreatesDraft(t *testing.T) {
 }
 
 func TestCompleteAIJobRefinePublishIntent(t *testing.T) {
-	for _, intent := range []string{"true", "false", "absent"} {
-		t.Run(intent, func(t *testing.T) {
-			ctx := context.Background()
-			f := newAICompletionFixture(t)
-			hub := sse.NewHub()
-			events, unsubscribe := hub.Subscribe(f.team.ID, "")
-			defer unsubscribe()
-			f.api = api.New(nil, f.store, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, hub)
-			if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
-				t.Fatal(err)
-			}
-			account := callbackAccount(t, f, f.team.ID)
-			params := map[string]any{
-				"refine_content":     true,
-				"source_content":     "Composer draft",
-				"target_account_ids": []string{account.ID},
-			}
-			if intent != "absent" {
-				params["no_publish"] = intent == "true"
-			}
-			// Caller had schedule authority, so only no_publish decides whether a post appears.
-			payload, _ := json.Marshal(map[string]any{"params": params, "_can_schedule": true})
-			job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
-			if err != nil {
-				t.Fatal(err)
-			}
-			result := json.RawMessage(`{"content":"Optimized draft"}`)
-			before := time.Now().UTC()
-			f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, result, "")
-			updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if updated.Status != domain.AIJobStatusCompleted || !bytes.Equal(updated.Result, result) || updated.ErrorMessage != "" {
-				t.Fatalf("completion must retain editor result: %+v", updated)
-			}
-			select {
-			case event := <-events:
-				var streamed domain.AIJob
-				if err := json.Unmarshal([]byte(event.Data), &streamed); err != nil {
+	for _, autoPublish := range []bool{true, false} {
+		for _, intent := range []string{"true", "false", "absent"} {
+			name := fmt.Sprintf("auto_publish_%t/no_publish_%s", autoPublish, intent)
+			t.Run(name, func(t *testing.T) {
+				ctx := context.Background()
+				f := newAICompletionFixture(t)
+				hub := sse.NewHub()
+				events, unsubscribe := hub.Subscribe(f.team.ID, "")
+				defer unsubscribe()
+				f.api = api.New(nil, f.store, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, hub)
+				if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: autoPublish}); err != nil {
 					t.Fatal(err)
 				}
-				if event.Type != "job:result" || streamed.ID != job.ID || streamed.Status != domain.AIJobStatusCompleted || !bytes.Equal(streamed.Result, result) {
-					t.Fatalf("completion SSE must retain editor result: %+v", event)
+				account := callbackAccount(t, f, f.team.ID)
+				params := map[string]any{
+					"refine_content":     true,
+					"source_content":     "Composer draft",
+					"target_account_ids": []string{account.ID},
 				}
-			case <-time.After(time.Second):
-				t.Fatal("missing completion SSE")
-			}
-			posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
-			if err != nil {
-				t.Fatal(err)
-			}
-			wantPosts := 1
-			if intent == "true" {
-				wantPosts = 0
-			}
-			if len(posts) != wantPosts {
-				t.Fatalf("no_publish=%s: got %d posts, want %d", intent, len(posts), wantPosts)
-			}
-			if wantPosts == 1 && (posts[0].Status != domain.PostStatusPending || posts[0].Content != "Optimized draft" || posts[0].ScheduledAt.Before(before) || posts[0].ScheduledAt.After(time.Now().UTC())) {
-				t.Fatalf("refine without opt-out must keep immediately due pending post: %+v", posts[0])
-			}
-		})
+				if intent != "absent" {
+					params["no_publish"] = intent == "true"
+				}
+				// Caller had schedule authority, so only no_publish decides whether a post appears.
+				payload, _ := json.Marshal(map[string]any{"params": params, "_can_schedule": true})
+				job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
+				if err != nil {
+					t.Fatal(err)
+				}
+				result := json.RawMessage(`{"content":"Optimized draft"}`)
+				before := time.Now().UTC()
+				f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, result, "")
+				updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if updated.Status != domain.AIJobStatusCompleted || !bytes.Equal(updated.Result, result) || updated.ErrorMessage != "" {
+					t.Fatalf("completion must retain editor result: %+v", updated)
+				}
+				select {
+				case event := <-events:
+					var streamed domain.AIJob
+					if err := json.Unmarshal([]byte(event.Data), &streamed); err != nil {
+						t.Fatal(err)
+					}
+					if event.Type != "job:result" || streamed.ID != job.ID || streamed.Status != domain.AIJobStatusCompleted || !bytes.Equal(streamed.Result, result) {
+						t.Fatalf("completion SSE must retain editor result: %+v", event)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("missing completion SSE")
+				}
+				posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantPosts := 0
+				if autoPublish && intent != "true" {
+					wantPosts = 1
+				}
+				if len(posts) != wantPosts {
+					t.Fatalf("no_publish=%s: got %d posts, want %d", intent, len(posts), wantPosts)
+				}
+				if wantPosts == 1 && (posts[0].Status != domain.PostStatusPending || posts[0].Content != "Optimized draft" || posts[0].ScheduledAt.Before(before) || posts[0].ScheduledAt.After(time.Now().UTC())) {
+					t.Fatalf("refine without opt-out must keep immediately due pending post: %+v", posts[0])
+				}
+			})
+		}
 	}
 }
 

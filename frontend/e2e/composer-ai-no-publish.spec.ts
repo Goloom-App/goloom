@@ -6,6 +6,18 @@ test('Composer optimization requests text without publishing', async ({ page, ba
   test.setTimeout(90_000)
   const teamId = await createAITeam(baseURL!, e2eBootstrapToken())
   const accountId = 'composer-ai-account'
+  await page.route(`**/v1/teams/${teamId}/profile`, (route) => route.fulfill({ json: {
+    id: 'composer-ai-profile', team_id: teamId, style_metadata: {}, auto_publish_enabled: true,
+    created_at: '2026-10-17T10:00:00Z', updated_at: '2026-10-17T10:00:00Z',
+  } }))
+  const postCreateRequests: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (request.method() === 'POST' && [
+      `/v1/teams/${teamId}/posts`,
+      `/v1/teams/${teamId}/posts/draft`,
+    ].includes(path)) postCreateRequests.push(path)
+  })
   await page.route(`**/v1/teams/${teamId}/accounts`, (route) => route.fulfill({ json: {
     items: [{ id: accountId, team_id: teamId, provider: 'mastodon', username: 'composer', instance_url: 'https://example.com' }],
   } }))
@@ -30,6 +42,7 @@ test('Composer optimization requests text without publishing', async ({ page, ba
   await page.getByTestId('composer-ai-optimize').click()
   await page.getByTestId('composer-ai-optimize').click()
   await expect(content).toHaveValue('Optimized editor text')
+  expect(postCreateRequests).toEqual([])
   expect(params).toMatchObject({
     refine_content: true,
     no_publish: true,
