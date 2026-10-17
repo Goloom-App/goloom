@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"testing"
+	"time"
 )
 
 func TestAuditOutboxSurvivesDeliveryFailure(t *testing.T) {
@@ -67,5 +68,51 @@ func TestAuditOutboxSurvivesDeliveryFailure(t *testing.T) {
 	}
 	if err := db.QueryRow(ctx, "select count(*) from audit_pending").Scan(&pending); err != nil || pending != 0 {
 		t.Fatalf("pending %d: %v", pending, err)
+	}
+}
+
+func TestRepairFuturePostedPostsRollsBackAuditFailure(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	db, err := pgx.Connect(ctx, postgresDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close(ctx)
+	u, err := s.UpsertOIDCUser(ctx, uuid.NewString(), "repair-failure@example.test", "Owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "Repair-failure-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{Content: "secret", ScheduledAt: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusCancelled, "", nil) })
+	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `create function fail_repair_insert() returns trigger language plpgsql as $$ begin raise exception 'audit unavailable'; end $$; create trigger fail_repair before insert on audit_events for each row execute function fail_repair_insert()`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		cleanup, err := pgx.Connect(context.Background(), postgresDSN(t))
+		if err == nil {
+			defer cleanup.Close(context.Background())
+			_, _ = cleanup.Exec(context.Background(), "drop trigger if exists fail_repair on audit_events; drop function if exists fail_repair_insert()")
+		}
+	})
+	if n, err := s.RepairFuturePostedPosts(ctx); err == nil || n != 0 {
+		t.Fatalf("untracked repair %d: %v", n, err)
+	}
+	got, err := s.GetScheduledPostByID(ctx, post.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.PostStatusPosted {
+		t.Fatalf("repair survived audit failure: %s", got.Status)
 	}
 }

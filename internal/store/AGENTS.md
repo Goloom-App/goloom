@@ -13,6 +13,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 - `WithAuditTransaction` routes callback-context store calls through one transaction, including decorated stores and nested backend savepoints; callback errors/cancellation roll back mutation and audit together. Keep provider/network calls outside transactions.
 - `AfterAuditCommit` defers background dispatch/notifications until successful outer commit, discards hooks on rollback, and supplies the pre-transaction context.
 - `EnqueueAuditEvent` atomically records observed external outcomes in `audit_pending`; `DrainAuditEvents` delivers bounded batches without repeating external work. Drain failures must be logged and retried by the caller.
+- `RepairFuturePostedPosts` writes one system-attributed `post.repair` event per affected post in the same transaction, retaining authenticated initiator IDs; no-op repairs emit nothing. `MarkPostProcessing` conditionally claims only pending/failed posts and errors when another worker already claimed them.
 - `ClaimPostTargetPublication` conditionally marks pending/failed targets processing with `publication_outcome_unknown`; processing targets require reconciliation instead of blind publication retries. `ClaimAIJobCompletion` permits one pending/processing → terminal transition before completion side effects.
 - Audit event IDs identify replayed evidence: duplicate IDs are ignored; pagination orders by `(created_at desc, id desc)`.
 - Interface: `store.go` — all business logic depends on this contract

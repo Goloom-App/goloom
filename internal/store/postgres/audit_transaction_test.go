@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store"
 	"github.com/google/uuid"
 	"testing"
@@ -266,5 +267,86 @@ func TestClaimAIJobCompletion(t *testing.T) {
 	}
 	if got.Status != domain.AIJobStatusCompleted {
 		t.Fatalf("replay overwrote completion: %s", got.Status)
+	}
+}
+func TestMarkPostProcessingClaimsOnce(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, err := s.UpsertOIDCUser(ctx, uuid.NewString(), "processing@example.test", "Owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "Processing-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{Content: "test", ScheduledAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkPostProcessing(ctx, post.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkPostProcessing(ctx, post.ID); err == nil {
+		t.Fatal("duplicate queue claim accepted")
+	}
+	for _, status := range []domain.PostStatus{domain.PostStatusDraft, domain.PostStatusPosted, domain.PostStatusCancelled} {
+		if err := s.MarkPostResult(ctx, post.ID, 0, status, "", nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.MarkPostProcessing(ctx, post.ID); err == nil {
+			t.Fatalf("claimed %s post", status)
+		}
+	}
+	if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusFailed, "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkPostProcessing(ctx, post.ID); err != nil {
+		t.Fatal("failed post must remain retryable", err)
+	}
+}
+func TestRepairFuturePostedPostsAuditsBothTeams(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, err := s.UpsertOIDCUser(ctx, uuid.NewString(), "repair@example.test", "Owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokenID := "initiating-token"
+	ctx = security.WithPrincipal(ctx, domain.AuthenticatedPrincipal{User: u, Kind: domain.AuditActorToken, TokenID: &tokenID})
+	for range 2 {
+		team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "Repair-" + uuid.NewString()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{Content: "secret post body", ScheduledAt: time.Now().Add(time.Hour)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.MarkPostResult(ctx, post.ID, 1, domain.PostStatusPosted, "", nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, err := s.RepairFuturePostedPosts(ctx)
+	if err != nil || n < 2 {
+		t.Fatalf("repair %d: %v", n, err)
+	}
+	teams, err := s.ListTeamsForUser(ctx, u.ID, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, team := range teams {
+		events, err := s.ListAuditEvents(ctx, domain.AuditFilter{TeamID: team.ID, Action: "post.repair"})
+		if err != nil || len(events) != 1 {
+			t.Fatalf("events %v: %v", events, err)
+		}
+		e := events[0]
+		if e.ActorKind != "system" || e.TargetType != "post" || e.TargetID == nil || e.Metadata["initiator_user_id"] != u.ID || e.Metadata["initiator_token_id"] != tokenID || e.Metadata["status_before"] != "posted" || e.Metadata["status_after"] != "pending" {
+			t.Fatalf("bad repair attribution: %+v", e)
+		}
+	}
+	n, err = s.RepairFuturePostedPosts(ctx)
+	if err != nil || n != 0 {
+		t.Fatalf("repair replay %d: %v", n, err)
 	}
 }

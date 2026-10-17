@@ -1079,8 +1079,18 @@ func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.Scheduled
 }
 
 func (s *Store) MarkPostProcessing(ctx context.Context, postID string) error {
-	_, err := s.db.ExecContext(ctx, `update scheduled_posts set status = ?, updated_at = ? where id = ?`, domain.PostStatusProcessing, nowString(), postID)
-	return err
+	result, err := s.db.ExecContext(ctx, `update scheduled_posts set status = 'processing', updated_at = ? where id = ? and status in ('pending','failed')`, nowString(), postID)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("post processing claim rejected")
+	}
+	return nil
 }
 
 func (s *Store) MarkPostResult(ctx context.Context, postID string, attemptCount int, status domain.PostStatus, lastError string, nextAttempt *time.Time) error {

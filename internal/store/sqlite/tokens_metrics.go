@@ -74,18 +74,48 @@ func (s *Store) AdminMetrics(ctx context.Context) (domain.AdminMetrics, error) {
 }
 
 func (s *Store) RepairFuturePostedPosts(ctx context.Context) (int64, error) {
-	now := nowString()
-	res, err := s.db.ExecContext(ctx, `
-		update scheduled_posts
-		set status = ?
-		where status = ?
-		  and scheduled_at > ?`,
-		domain.PostStatusPending, domain.PostStatusPosted, now,
-	)
+	var repaired int64
+	err := s.WithAuditTransaction(ctx, func(txctx context.Context) error {
+		rows, err := s.db.QueryContext(txctx, `update scheduled_posts set status = 'pending' where status = 'posted' and scheduled_at > ? returning id, team_id`, nowString())
+		if err != nil {
+			return err
+		}
+		type affected struct{ id, teamID string }
+		posts := make([]affected, 0)
+		for rows.Next() {
+			var p affected
+			if err := rows.Scan(&p.id, &p.teamID); err != nil {
+				rows.Close()
+				return err
+			}
+			posts = append(posts, p)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		for _, post := range posts {
+			metadata := map[string]string{"channel": "system", "outcome": "success", "status_before": "posted", "status_after": "pending", "post_id": post.id}
+			if principal, ok := security.PrincipalFromContext[domain.AuthenticatedPrincipal](txctx); ok {
+				metadata["channel"] = "rest"
+				metadata["initiator_user_id"] = principal.User.ID
+				if principal.Kind == domain.AuditActorToken && principal.TokenID != nil {
+					metadata["initiator_token_id"] = *principal.TokenID
+				}
+			}
+			event := domain.AuditEvent{ID: uuid.NewString(), TeamID: post.teamID, ActorKind: "system", ActorName: "Automation", Action: "post.repair", TargetType: "post", TargetID: &post.id, Summary: "Repaired future post status", Metadata: metadata}
+			if err := s.InsertAuditEvent(txctx, event); err != nil {
+				return err
+			}
+		}
+		repaired = int64(len(posts))
+		return nil
+	})
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	return repaired, nil
 }
 
 func (s *Store) CreateUserAPIToken(ctx context.Context, userID, name string, expiresAt *time.Time, scopes string, teamID *string, description string) (string, domain.APIToken, error) {
