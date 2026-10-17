@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/Goloom-App/goloom/compare/v0.3.0...v0.3.1) (2026-10-17)
+
+
+### Features
+
+* **chart:** disable service account token automount ([#183](https://github.com/Goloom-App/goloom/issues/183)) ([e0067d4](https://github.com/Goloom-App/goloom/commit/e0067d42fecb3c0389efbe845ca3fa925e9b6268))
+
 ## [0.3.0](https://github.com/Goloom-App/goloom/compare/v0.2.9...v0.3.0) (2026-10-17)
 
 
