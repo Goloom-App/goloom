@@ -85,7 +85,7 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 				effectErr = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
 			case automation:
 				effectErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta)
-			case status == domain.AIJobStatusCompleted:
+			case status == domain.AIJobStatusCompleted && !noPublishFromJobPayload(job.Payload):
 				profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 				if profErr == nil && profile.AutoPublishEnabled {
 					var draftResult json.RawMessage
@@ -257,6 +257,16 @@ func aiJobCanSchedule(payload json.RawMessage) bool {
 		CanSchedule bool `json:"_can_schedule"`
 	}
 	return json.Unmarshal(payload, &envelope) == nil && envelope.CanSchedule
+}
+
+// Editor-only jobs still complete normally, but must not create a publishable post.
+func noPublishFromJobPayload(payload json.RawMessage) bool {
+	var envelope struct {
+		Params struct {
+			NoPublish bool `json:"no_publish"`
+		} `json:"params"`
+	}
+	return json.Unmarshal(payload, &envelope) == nil && envelope.Params.NoPublish
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {

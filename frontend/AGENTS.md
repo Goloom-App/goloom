@@ -16,6 +16,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - Domain types: `src/types.ts` (single source of truth)
 - API client: `src/api.ts`
 - AI Generator prompt preview defaults to the plain “Generieren” action with current settings, even when an existing draft also offers “Neu generieren”; covered by `e2e/ai-prompt-preview.spec.ts`
+- Composer optimization sends `params.no_publish: true` because results only update the editor; AI Generator generation/refinement retains team auto-publish behavior. Composer intent covered by `e2e/composer-ai-no-publish.spec.ts`.
 - Team AI setup: saving provider config in `App.tsx` enables a newly toggled team only after the config save succeeds; keep this sequence covered by `e2e/team-ai-setup.spec.ts`
 - Team audit UI: keep audit results component-local (outside persisted query cache), bind responses to the current team/filter/page, reset controls on team switches, distinguish failed queries from empty results, and retain navigation on empty pages. Successful API team mutations dispatch `goloom:team-mutation`; audit also refreshes every 30 seconds while visible and on window focus. Render only allowlisted metadata; action filters accept historical/unknown names. Actor kinds `oidc` (and historical `user`), `api_token`, and `system` map to member, API-key, and automation badges.
 - Brand profile forms remount per team (`key={selectedTeam.id}`), clearing loaded profile and unsaved form state before editing another team.
