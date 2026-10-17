@@ -33,6 +33,7 @@ import { TeamSettingsView } from './views/teams/TeamSettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
 import { AIChatWidget } from './components/ai/AIChatWidget'
 import { getViewContext, setViewFocus, setViewSection } from './components/ai/viewContextBridge'
+import { clearComposerChatContext } from './components/ai/composerChatBridge'
 import { BrandProfileView } from './views/ai/BrandProfileView'
 import { AIGeneratorView } from './views/ai/AIGeneratorView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
@@ -958,6 +959,7 @@ function App() {
 
   const focusedPostId = section === 'composer'
     ? editTargetPost?.id
+    : isMobile ? teamPosts.find((post) => post.id === mobilePreviewPostId)?.id
     : showPreviewColumn ? selectedPost?.id : undefined
 
   // Navigation closes the previous selection; returning must not revive it.
@@ -972,6 +974,10 @@ function App() {
     setEditingPostId(null)
     setMobilePreviewPostId(null)
     setViewFocus(undefined)
+    setEditorDraft(defaultEditorDraft(new Date(), []))
+    setComposerMode('create')
+    setComposerScheduleError(false)
+    clearComposerChatContext()
   }, [effectiveSelectedTeamId])
 
   useEffect(() => {

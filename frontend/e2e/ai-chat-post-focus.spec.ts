@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { signIn, openContentCalendar } from './helpers'
 
-type ChatBody = { messages: { content: string }[]; view_context?: { section?: string; focus?: { type: string; id?: string } } }
+type ChatBody = { messages: { content: string }[]; view_context?: { section?: string; focus?: { type: string; id?: string }; visible?: { composer?: unknown } } }
 
 async function setup(page: Page) {
   const bodies: ChatBody[] = []
@@ -120,4 +120,52 @@ test('new composer does not inherit expanded post identity', async ({ page }) =>
   await expect(page.getByTestId('composer-view')).toBeVisible()
   await openChat()
   expect((await send()).view_context?.focus?.type).not.toBe('post')
+})
+
+test('team switch clears editor draft and chat context before selecting a new destination', async ({ page }) => {
+  const { send, closeChat, openChat } = await setup(page)
+  await closeChat()
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  const composer = page.getByTestId('composer-view')
+  const content = composer.getByLabel(/message.*all destinations/i)
+  await expect(content).toHaveValue('Persisted post content')
+  await content.fill('Alpha private unsaved draft')
+  await openChat()
+  expect(JSON.stringify(await send())).toContain('Alpha private unsaved draft')
+  await closeChat()
+
+  await page.locator('.sidebar-team-selector').click()
+  await page.getByRole('menuitem', { name: 'Focus Beta', exact: true }).click()
+  await expect(page.locator('.sidebar-team-selector')).toContainText('Focus Beta')
+  await expect(composer).toBeVisible()
+  const destination = composer.getByTestId('composer-destination-toggle')
+  await expect(destination).toHaveCount(1)
+  await expect(destination).toHaveAttribute('aria-pressed', 'false')
+  await destination.click()
+  await openChat()
+  const betaRequest = await send()
+  expect(JSON.stringify(betaRequest)).not.toContain('Alpha private unsaved draft')
+  expect(JSON.stringify(betaRequest)).not.toContain('Focus test post')
+  expect(JSON.stringify(betaRequest)).not.toContain('Persisted post content')
+  expect(betaRequest.view_context?.focus?.type).not.toBe('post')
+  expect(betaRequest.view_context?.visible?.composer).toBeUndefined()
+  await closeChat()
+  await expect(content).toHaveValue('')
+  await expect(page.getByTestId('composer-title')).toHaveText('Create post')
+})
+
+test('mobile post preview reports focus and clears it on dismissal', async ({ page }) => {
+  const { card, send, closeChat, openChat } = await setup(page)
+  await closeChat()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await card.click()
+  const preview = page.getByTestId('mobile-preview-overlay')
+  await expect(preview).toBeVisible()
+  await openChat()
+  expect((await send()).view_context?.focus).toEqual({ type: 'post', id: 'focused-post' })
+  await closeChat()
+  await preview.locator('.mobile-preview-header button').first().click()
+  await expect(preview).not.toBeVisible()
+  await openChat()
+  expect((await send()).view_context?.focus).toBeUndefined()
 })
