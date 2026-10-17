@@ -112,7 +112,7 @@ func TestRSSPollRetriesInsertFailureOnceAndBoundsPermanentFailure(t *testing.T) 
 	}
 }
 
-// A store can commit successfully then fail while rereading the post for its response.
+// A nested post insert can succeed then fail while rereading its response.
 type rssPostReadFailureStore struct{ store.Store }
 
 func (s rssPostReadFailureStore) CreateScheduledPost(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostInput) (domain.ScheduledPost, error) {
@@ -122,7 +122,7 @@ func (s rssPostReadFailureStore) CreateScheduledPost(ctx context.Context, teamID
 	return domain.ScheduledPost{}, fmt.Errorf("injected post-commit read failure")
 }
 
-func TestRSSPostCommitReadFailureKeepsItemReserved(t *testing.T) {
+func TestRSSResponseReadFailureRollsBackPostAndReleasesItem(t *testing.T) {
 	ctx := context.Background()
 	f, account, _ := newRecurringCallbackFixture(t)
 	feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{account.ID}})
@@ -138,27 +138,32 @@ func TestRSSPostCommitReadFailureKeepsItemReserved(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
 	instance := api.New(logger, rssPostReadFailureStore{f.store}, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
 	instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"generated"}`), "")
-	if !strings.Contains(logs.String(), `level=INFO msg="rss automation: item already linked or unavailable"`) {
-		t.Fatalf("benign release missing info log: %s", logs.String())
-	}
-	if strings.Contains(logs.String(), `level=ERROR msg="rss automation: release item failed"`) {
-		t.Fatalf("benign release logged ERROR: %s", logs.String())
+	if !strings.Contains(logs.String(), `msg="rss automation: item attempt failed"`) {
+		t.Fatalf("failed attempt missing log: %s", logs.String())
 	}
 	imported, err := f.store.RSSItemAlreadyImported(ctx, feed.ID, "item")
-	if err != nil || !imported {
-		t.Fatalf("committed post released item: imported=%v err=%v", imported, err)
+	if err != nil || imported {
+		t.Fatalf("rolled-back post kept item reserved: imported=%v err=%v", imported, err)
 	}
 	after, err := f.store.GetRSSFeedConfigByID(ctx, f.team.ID, feed.ID)
-	if err != nil || after.CounterNext != feed.CounterNext+1 {
-		t.Fatalf("post-commit error lost counter: got=%d want=%d err=%v", after.CounterNext, feed.CounterNext+1, err)
+	if err != nil || after.CounterNext != feed.CounterNext {
+		t.Fatalf("rolled-back post changed counter: got=%d want=%d err=%v", after.CounterNext, feed.CounterNext, err)
 	}
 	posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
-	if err != nil || len(posts) != 1 {
+	if err != nil || len(posts) != 0 {
 		t.Fatalf("posts=%d err=%v", len(posts), err)
 	}
+	events, err := f.store.ListAuditEvents(ctx, domain.AuditFilter{TeamID: f.team.ID, Action: "post.automation_create"})
+	if err != nil || len(events) != 0 {
+		t.Fatalf("rolled-back post has audit=%v err=%v", events, err)
+	}
+	if won, err := f.store.ClaimRSSItemAttempt(ctx, f.team.ID, feed.ID, "item"); err != nil || !won {
+		t.Fatalf("retry unavailable: %v %v", won, err)
+	}
+
 }
 
-func TestRSSValidationFallbackLinkFailureKeepsItemReserved(t *testing.T) {
+func TestRSSValidationFallbackUsesAtomicLinkAndCounter(t *testing.T) {
 	ctx := context.Background()
 	f, account, _ := newRecurringCallbackFixture(t)
 	feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{account.ID}})
@@ -181,6 +186,11 @@ func TestRSSValidationFallbackLinkFailureKeepsItemReserved(t *testing.T) {
 	if err != nil || len(posts) != 1 {
 		t.Fatalf("posts=%d err=%v", len(posts), err)
 	}
+	after, err := f.store.GetRSSFeedConfigByID(ctx, f.team.ID, feed.ID)
+	if err != nil || after.CounterNext != feed.CounterNext+1 {
+		t.Fatalf("fallback counter=%d err=%v", after.CounterNext, err)
+	}
+
 }
 
 // Scheduler dispatch and asynchronous completion may log concurrently.

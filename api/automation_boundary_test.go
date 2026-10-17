@@ -250,7 +250,11 @@ func (s *automationWriteFailureStore) CreateScheduledPost(ctx context.Context, t
 	if s.operation == "insert" {
 		return domain.ScheduledPost{}, fmt.Errorf("injected automation insert failure")
 	}
-	return s.Store.CreateScheduledPost(ctx, teamID, principal, input)
+	post, err := s.Store.CreateScheduledPost(ctx, teamID, principal, input)
+	if err == nil && s.operation == "read" {
+		return domain.ScheduledPost{}, fmt.Errorf("injected automation response read failure")
+	}
+	return post, err
 }
 
 func (s *automationWriteFailureStore) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
@@ -268,7 +272,7 @@ func (s *automationWriteFailureStore) IncrementRSSFeedCounter(ctx context.Contex
 }
 
 func TestAutomationCallbackDoesNotRetryStoreFailure(t *testing.T) {
-	for _, operation := range []string{"insert", "link", "counter"} {
+	for _, operation := range []string{"insert", "read"} {
 		t.Run(operation, func(t *testing.T) {
 			ctx := context.Background()
 			f, account, _ := newRecurringCallbackFixture(t)

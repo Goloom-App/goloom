@@ -139,7 +139,7 @@ func (s completionOnRecurringListStore) ListAIJobs(ctx context.Context, teamID s
 func TestCancelRecurringAIJobsPreservesConcurrentCompletion(t *testing.T) {
 	ctx := context.Background()
 	s, _, team, user := newRecurringAIFixture(t, true)
-	job, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusProcessing, Payload: []byte(`{"params":{"recurring_automation":{"template_id":"template"}}}`)})
+	job, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Origin: domain.AIJobOriginAutomation, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusProcessing, Payload: []byte(`{"params":{"recurring_automation":{"template_id":"template"}}}`)})
 	if err != nil {
 		t.Fatal(err)
 	}

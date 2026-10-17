@@ -17,6 +17,7 @@ import (
 var errRSSItemReserved = errors.New("RSS item already reserved or retries exhausted")
 var errRSSItemClaim = errors.New("RSS item reservation failed")
 var errRSSPostNotCreated = errors.New("RSS post not created")
+var errRSSAttemptReleased = errors.New("RSS attempt released")
 
 func (s *Service) shouldEnhanceRSSWithAI(ctx context.Context, feed domain.RSSFeedConfig) bool {
 	if !feed.AiEnhanceEnabled || s.jobManager == nil {
@@ -115,6 +116,12 @@ func (s *Service) createRSSPostDirect(
 		if err := s.store.LockAutomationSource(ctx, "rss_feed", feed.ID); err != nil {
 			return err
 		}
+		if !submissionFallback {
+			already, err := s.store.RSSItemAlreadyImported(ctx, feed.ID, itemKey)
+			if err != nil || already {
+				return err
+			}
+		}
 		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback, fallbackReason...)
 	})
 }
@@ -141,12 +148,7 @@ func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFe
 	if submissionFallback {
 		metadata["outcome"], metadata["error_code"] = "fallback", "ai_submission_failed"
 	}
-	post, err := s.createAutomationPost(ctx, feed.TeamID, principal, input, metadata, func(ctx context.Context, post domain.ScheduledPost) error {
-		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
-			return err
-		}
-		return s.store.IncrementRSSFeedCounter(ctx, feed.TeamID, feed.ID)
-	})
+	post, err := s.createAutomationPost(ctx, feed.TeamID, principal, input, metadata, nil)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errRSSPostNotCreated, err)
 	}

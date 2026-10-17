@@ -199,15 +199,24 @@ func filterRSSItemsSince(items []rss.Item, since time.Time) []rss.Item {
 // they do not count against the daily budget.
 func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) (bool, error) {
 	created := false
+	var importErr error
 	err := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
 		if err := s.store.LockAutomationSource(ctx, "rss_feed", feed.ID); err != nil {
 			return err
 		}
 		var err error
 		created, err = s.createPostFromRSSItemOnce(ctx, feed, item)
+		if errors.Is(err, errRSSAttemptReleased) {
+			// Preserve the failed attempt after the post savepoint rolled back.
+			importErr = err
+			return nil
+		}
 		return err
 	})
-	return created && err == nil, err
+	if err != nil {
+		return false, err
+	}
+	return created, importErr
 }
 
 func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) (bool, error) {
@@ -253,7 +262,7 @@ func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSS
 
 	var fallbackReason *string
 	if s.shouldEnhanceRSSWithAI(ctx, feed) {
-		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID, aiDispatchFailed); err != nil {
+		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
 			if errors.Is(err, errRSSItemReserved) {
 				return false, nil
 			}
@@ -277,6 +286,7 @@ func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSS
 				s.logger.ErrorContext(ctx, "rss import: release item failed", "feed_id", feed.ID, "item_key", itemKey, "error", releaseErr)
 			} else {
 				s.logger.WarnContext(ctx, "rss import: item attempt failed", "feed_id", feed.ID, "item_key", itemKey, "attempts", attempts, "exhausted", attempts >= domain.MaxRSSItemAttempts)
+				return false, fmt.Errorf("%w: %w", errRSSAttemptReleased, err)
 			}
 		}
 		return false, err

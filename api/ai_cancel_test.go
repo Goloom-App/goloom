@@ -180,22 +180,28 @@ func makeCancelJob(t *testing.T, f aiCancelFixture, status domain.AIJobStatus) d
 	return job
 }
 
-// completionOnCancelReadStore returns the processing snapshot after another
-// caller has won completion, reproducing the read/update cancellation race.
-type completionOnCancelReadStore struct{ store.Store }
+// Return a stale processing snapshot after completion committed independently.
+type completionOnCancelReadStore struct {
+	store.Store
+	stale domain.AIJob
+	read  bool
+}
 
-func (s completionOnCancelReadStore) GetAIJobByID(ctx context.Context, teamID, jobID string) (domain.AIJob, error) {
-	job, err := s.Store.GetAIJobByID(ctx, teamID, jobID)
-	if err == nil && job.Status == domain.AIJobStatusProcessing {
-		_, err = s.Store.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusCompleted, []byte(`{"content":"winner"}`), "")
+func (s *completionOnCancelReadStore) GetAIJobByID(ctx context.Context, teamID, jobID string) (domain.AIJob, error) {
+	if !s.read {
+		s.read = true
+		return s.stale, nil
 	}
-	return job, err
+	return s.Store.GetAIJobByID(ctx, teamID, jobID)
 }
 
 func TestCancelAIJobDoesNotOverwriteConcurrentCompletion(t *testing.T) {
 	f := newAICancelFixture(t)
 	job := makeCancelJob(t, f, domain.AIJobStatusProcessing)
-	wrapped := completionOnCancelReadStore{Store: f.store}
+	if won, err := f.store.ClaimAIJobCompletion(context.Background(), job.ID, domain.AIJobStatusCompleted, []byte(`{"content":"winner"}`), ""); err != nil || !won {
+		t.Fatalf("concurrent completion: won=%v err=%v", won, err)
+	}
+	wrapped := &completionOnCancelReadStore{Store: f.store, stale: job}
 	authSvc, err := auth.New(context.Background(), config.Config{}, wrapped)
 	if err != nil {
 		t.Fatal(err)

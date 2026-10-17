@@ -184,7 +184,7 @@ func (s *Store) ReleaseRSSItemAttempt(ctx context.Context, teamID, feedID, itemK
 
 // Link in the post transaction so a committed post can never be released for retry,
 // including when the post's response read fails after commit.
-func linkRSSItemForPost(ctx context.Context, tx *sql.Tx, teamID, feedID, itemKey, postID string) error {
+func linkRSSItemForPost(ctx context.Context, tx sqlExecutor, teamID, feedID, itemKey, postID string) error {
 	res, err := tx.ExecContext(ctx, `insert into rss_imported_items (id, feed_id, item_key, post_id, consumed_at, created_at)
  select ?, ?, ?, ?, ?, ? where exists (select 1 from rss_feed_configs where id = ? and team_id = ?)
  on conflict(feed_id, item_key) do update set post_id = excluded.post_id, consumed_at = excluded.consumed_at, retry_available = 0
