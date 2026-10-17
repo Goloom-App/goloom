@@ -672,7 +672,8 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 
 const rssFeedSelectQuery = `
 		select id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day, counter_next,
-		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
+		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at,
+ (select count(*) from rss_imported_items where feed_id = rss_feed_configs.id and post_id is null and attempts >= 3 and ` + rssItemRetryEligible + `) as exhausted_items_count
 		from rss_feed_configs
 `
 
@@ -694,7 +695,7 @@ func scanRSSFeedConfig(scanner rowScanner) (domain.RSSFeedConfig, error) {
 	var syncMode string
 	if err := scanner.Scan(
 		&cfg.ID, &cfg.TeamID, &cfg.FeedURL, &cfg.Name, &isActive, &aiEnhanceEnabled, &cfg.ContentTemplate, &cfg.TitleTemplate, &cfg.TitleHint, &outputMode, &cfg.MaxPostsPerDay, &cfg.CounterNext,
-		&cfg.PromptHint, &targetRaw, &cfg.Tonality, &syncMode, &lastFetchedAt, &createdAt,
+		&cfg.PromptHint, &targetRaw, &cfg.Tonality, &syncMode, &lastFetchedAt, &createdAt, &cfg.ExhaustedItemsCount,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.RSSFeedConfig{}, fmt.Errorf("rss feed config not found: %w", sql.ErrNoRows)
@@ -775,7 +776,7 @@ func (s *Store) ListRecentPostedPosts(ctx context.Context, teamID string, limit 
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, ai_job_id, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and status = 'posted' and trim(content) != ''
 		order by scheduled_at desc
@@ -800,7 +801,7 @@ func (s *Store) ListUpcomingPosts(ctx context.Context, teamID string, from time.
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, ai_job_id, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and status in ('pending', 'draft') and scheduled_at >= ?
 		order by scheduled_at asc
@@ -902,7 +903,7 @@ func (s *Store) ClaimAIJobCompletion(ctx context.Context, id string, status doma
 		resultVal = string(result)
 	}
 	now := nowString()
-	res, err := s.db.ExecContext(ctx, `update ai_jobs set status=?, result=?, error_message=?, updated_at=?, completed_at=? where id=? and status not in ('completed','failed')`, string(status), resultVal, nullableString(errorMsg), now, now, id)
+	res, err := s.db.ExecContext(ctx, `update ai_jobs set status=?, result=?, error_message=?, updated_at=?, completed_at=? where id=? and status in ('pending','processing')`, string(status), resultVal, nullableString(errorMsg), now, now, id)
 	if err != nil {
 		return false, fmt.Errorf("claim AI job completion: %w", err)
 	}

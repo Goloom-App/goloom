@@ -146,6 +146,8 @@ create table if not exists scheduled_posts (
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled')),
     attempt_count integer not null default 0,
     last_error text,
+    ai_fallback_reason text,
+    ai_job_id text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -411,3 +413,6 @@ create table if not exists audit_pending (
     team_id uuid not null references teams(id) on delete cascade,
     payload text not null
 );
+
+alter table scheduled_posts add column if not exists ai_fallback_reason text;
+alter table scheduled_posts add column if not exists ai_job_id text;

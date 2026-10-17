@@ -153,6 +153,9 @@ create table if not exists rss_imported_items (
     feed_id text not null references rss_feed_configs(id) on delete cascade,
     item_key text not null,
     post_id text references scheduled_posts(id) on delete set null,
+    attempts integer not null default 0,
+    retry_available integer not null default 0,
+    consumed_at text,
     created_at text not null default (datetime('now')),
     unique (feed_id, item_key)
 );
@@ -224,6 +227,8 @@ create table if not exists scheduled_posts (
     source text not null default 'scheduled' check (source in ('scheduled', 'imported', 'automation')),
     attempt_count integer not null default 0,
     last_error text,
+    ai_fallback_reason text,
+    ai_job_id text,
     acknowledged_at text,
     visibility text not null default 'public',
     media_ids text not null default '[]',

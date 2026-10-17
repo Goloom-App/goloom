@@ -161,6 +161,8 @@ export function toPostRecord(post: BackendPost): PostRecord {
     status: mapStatus(post.status),
     source:
       post.source === 'imported' ? 'imported' : post.source === 'automation' ? 'automation' : 'scheduled',
+    aiFallbackReason: post.ai_fallback_reason ?? undefined,
+    aiJobId: post.ai_job_id ?? undefined,
     publishedLinks: post.published_links,
     mediaIds: post.media_ids?.length ? post.media_ids : undefined,
     mediaExcludeByAccount: post.media_exclude_by_account && Object.keys(post.media_exclude_by_account).length > 0 ? post.media_exclude_by_account : undefined,
@@ -308,6 +310,7 @@ export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
     outputMode,
     maxPostsPerDay: raw.max_posts_per_day ?? 10,
     counterNext: raw.counter_next,
+    exhaustedItemsCount: raw.exhausted_items_count ?? 0,
     promptHint: raw.prompt_hint ?? '',
     targetAccountIds: raw.target_account_ids ?? [],
     tonality: raw.tonality ?? '',

@@ -650,7 +650,17 @@
       "discard": "Verwerfen",
       "discardConfirm": "Diesen Entwurf verwerfen?",
       "actionFailed": "Review-Aktion fehlgeschlagen.",
-      "pastTime": "Die gewählte Zeit liegt in der Vergangenheit. Korrigiere sie oder"
+      "pastTime": "Die gewählte Zeit liegt in der Vergangenheit. Korrigiere sie oder",
+      "aiFallbackBadge": "Vorlage statt KI",
+      "aiFallbackReasons": {
+        "provider_failure": "KI-Anbieter fehlgeschlagen. Inhalt aus Vorlage verwendet.",
+        "empty_content": "KI lieferte keinen Inhalt. Inhalt aus Vorlage verwendet.",
+        "invalid_output": "KI-Ausgabe unlesbar. Inhalt aus Vorlage verwendet.",
+        "validation_failed": "KI-Inhalt ungültig. Inhalt aus Vorlage verwendet.",
+        "dispatch_failed": "KI-Generierung konnte nicht starten. Inhalt aus Vorlage verwendet.",
+        "unknown": "KI-Generierung fehlgeschlagen. Inhalt aus Vorlage verwendet."
+      },
+      "aiFallbackJob": "KI-Auftrag: {{id}}"
     },
     "automation": {
       "title": "Automation",
@@ -697,7 +707,8 @@
       "feedUpdated": "RSS-Feed aktualisiert.",
       "feedDeleted": "RSS-Feed gelöscht.",
       "saveFailed": "RSS-Feed konnte nicht gespeichert werden.",
-      "deleteConfirm": "Diesen RSS-Feed löschen?"
+      "deleteConfirm": "Diesen RSS-Feed löschen?",
+      "exhaustedItems": "{{count}} Einträge haben automatische Wiederholungen ausgeschöpft"
     },
     "calendar": {
       "createPostHint": "Erstellen Sie einen Beitrag, um Ihre Veröffentlichungs-Timeline aufzubauen.",

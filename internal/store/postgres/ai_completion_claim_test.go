@@ -73,6 +73,7 @@ func TestClaimAIJobCompletion(t *testing.T) {
 		{domain.AIJobStatusCompleted, ""},
 		{domain.AIJobStatusFailed, "provider failed"},
 		{domain.AIJobStatusFailed, "cancelled"},
+		{domain.AIJobStatus("unknown"), "legacy unsupported state"},
 	} {
 		terminal := create()
 		if err := s.UpdateAIJobStatus(ctx, terminal.ID, outcome.status, nil, outcome.message); err != nil {

@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// scanRSSFeedConfig reads 18 columns from the database row.
-const rssFeedConfigScanFieldCount = 18
+// scanRSSFeedConfig reads 19 columns from the database row.
+const rssFeedConfigScanFieldCount = 19
 
 func TestRSSFeedConfigSelectListMatchesScannerArity(t *testing.T) {
 	t.Helper()
@@ -75,6 +75,7 @@ func assertRSSFeedSelectColumnsMatch(t *testing.T, label string, got, want []str
 }
 
 func parseRSSFeedSelectColumns(selectList string) []string {
+	selectList = regexp.MustCompile(`(?is)\(select count\(\*\).*?as exhausted_items_count`).ReplaceAllString(selectList, "exhausted_items_count")
 	parts := strings.Split(selectList, ",")
 	cols := make([]string, 0, len(parts))
 	for _, part := range parts {

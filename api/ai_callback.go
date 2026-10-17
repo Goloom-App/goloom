@@ -19,6 +19,9 @@ var errAutomationPostValidation = errors.New("invalid automation post")
 
 var errAutomationTemplateFallback = errors.New("used template fallback")
 
+// Only guaranteed pre-insertion failures may release an RSS reservation.
+var errAutomationPostNotCreated = errors.New("automation post not created")
+
 // aiCallbackResult is the shape of completed AI job results consumed by the
 // completion side effects below.
 type aiCallbackResult struct {
@@ -80,11 +83,11 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			case automation && rssMeta != nil && status == domain.AIJobStatusCompleted:
 				effectErr = a.finishRSSAutomationFromAI(ctx, job, result, rssMeta)
 			case automation && rssMeta != nil:
-				effectErr = a.finishRSSAutomationFallback(ctx, job, rssMeta)
+				effectErr = a.finishRSSAutomationFallback(ctx, job, rssMeta, "provider_failure")
 			case automation && status == domain.AIJobStatusCompleted:
 				effectErr = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
 			case automation:
-				effectErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta)
+				effectErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta, "provider_failure")
 			case status == domain.AIJobStatusCompleted && !noPublishFromJobPayload(job.Payload):
 				profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 				if profErr == nil && profile.AutoPublishEnabled {
@@ -112,6 +115,16 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			action, outcome = "ai_job.fail", "failure"
 		}
 		if effectErr != nil {
+			if rssMeta != nil && errors.Is(effectErr, errAutomationPostNotCreated) {
+				attempts, releaseErr := a.store.ReleaseRSSItemAttempt(ctx, job.TeamID, rssMeta.FeedID, rssMeta.ItemKey)
+				if errors.Is(releaseErr, domain.ErrNotFound) {
+					a.log.InfoContext(ctx, "rss automation: item already linked or unavailable", "job_id", job.ID, "feed_id", rssMeta.FeedID)
+				} else if releaseErr != nil {
+					a.log.ErrorContext(ctx, "rss automation: release item failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "error", releaseErr)
+				} else {
+					a.log.WarnContext(ctx, "rss automation: item attempt failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "attempts", attempts, "exhausted", attempts >= domain.MaxRSSItemAttempts)
+				}
+			}
 			logMessage := "ai job completion side effect failed"
 			if !automation {
 				logMessage = "ai job auto-publish failed"

@@ -69,15 +69,36 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column ai_enhance_enabled integer not null default 0`,
 		`alter table rss_feed_configs add column title_template text not null default '{title}'`,
 		`alter table rss_feed_configs add column title_hint text not null default ''`,
+		`alter table scheduled_posts add column ai_fallback_reason text`,
+		`alter table scheduled_posts add column ai_job_id text`,
 		`alter table scheduled_posts add column rss_feed_id text references rss_feed_configs(id) on delete set null`,
 		`create table if not exists rss_imported_items (
 			id text primary key,
 			feed_id text not null references rss_feed_configs(id) on delete cascade,
 			item_key text not null,
 			post_id text references scheduled_posts(id) on delete set null,
+			attempts integer not null default 0,
+			retry_available integer not null default 0,
+			consumed_at text,
 			created_at text not null default (datetime('now')),
 			unique (feed_id, item_key)
 		)`,
+		`alter table rss_imported_items add column attempts integer not null default 0`,
+		`alter table rss_imported_items add column retry_available integer not null default 0`,
+		`alter table rss_imported_items add column consumed_at text`,
+		// Legacy in-flight automation markers are reservations, not tombstones.
+		// Promote once so repeated startup never extends the lease.
+		`update rss_imported_items set attempts = 1, retry_available = 0, created_at = datetime('now')
+         where consumed_at is null and post_id is null and attempts = 0
+           and exists (
+             select 1 from ai_jobs j join rss_feed_configs f on f.id = rss_imported_items.feed_id
+             where j.team_id = f.team_id and j.origin = 'automation' and j.status in ('pending', 'processing')
+               and json_extract(j.payload, '$.params.rss_automation.feed_id') = rss_imported_items.feed_id
+               and json_extract(j.payload, '$.params.rss_automation.item_key') = rss_imported_items.item_key
+           )`,
+		// Remaining legacy baseline markers and linked imports are consumed.
+		`update rss_imported_items set consumed_at = created_at
+         where consumed_at is null and (post_id is not null or attempts = 0)`,
 		`create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id)`,
 		`alter table ai_service_configs add column provider text not null default 'openai'`,
 		`alter table ai_service_configs add column model text not null default ''`,
@@ -355,19 +376,21 @@ CREATE TABLE scheduled_posts_new (
     post_template_id text,
     template_counter integer,
     rss_feed_id text references rss_feed_configs(id) on delete set null,
+    ai_fallback_reason text,
+ ai_job_id text,
     created_at text not null,
     updated_at text not null
 );
 INSERT INTO scheduled_posts_new (
     id, team_id, author_user_id, title, content, scheduled_at, status, source,
     attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-    post_template_id, template_counter, rss_feed_id, created_at, updated_at
+    post_template_id, template_counter, rss_feed_id, ai_fallback_reason, ai_job_id, created_at, updated_at
 )
 SELECT id, team_id, author_user_id, title, content, scheduled_at, status,
     coalesce(nullif(trim(source), ''), 'scheduled'),
     attempt_count, last_error, visibility, media_ids,
     coalesce(nullif(trim(media_exclude_by_account), ''), '{}'),
-    post_template_id, template_counter, rss_feed_id, created_at, updated_at
+    post_template_id, template_counter, rss_feed_id, ai_fallback_reason, ai_job_id, created_at, updated_at
 FROM scheduled_posts;
 DROP TABLE scheduled_posts;
 ALTER TABLE scheduled_posts_new RENAME TO scheduled_posts;
@@ -568,7 +591,7 @@ func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, ai_job_id, created_at, updated_at
 		from scheduled_posts
 		where id = ?`, postID)
 	if err != nil {

@@ -106,6 +106,10 @@ type Store interface {
 	ListActiveRSSFeedConfigs(ctx context.Context, limit int) ([]domain.RSSFeedConfig, error)
 	CountRSSFeedPostsToday(ctx context.Context, feedID string) (int, error)
 	RSSItemAlreadyImported(ctx context.Context, feedID, itemKey string) (bool, error)
+	// ClaimRSSItemAttempt reserves a new/released item before dispatch, bounded by MaxRSSItemAttempts.
+	ClaimRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (bool, error)
+	// ReleaseRSSItemAttempt permits another poll only when no post was created; returns attempts used.
+	ReleaseRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (int, error)
 	RecordRSSImportedItem(ctx context.Context, feedID, itemKey, postID string) error
 	UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error
 	IncrementRSSFeedCounter(ctx context.Context, teamID, feedID string) error

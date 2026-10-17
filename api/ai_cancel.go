@@ -2,11 +2,11 @@ package api
 
 import (
 	"context"
-	"git.f4mily.net/goloom/internal/store"
 	"net/http"
 
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 const aiJobCancelledMessage = "cancelled"
@@ -21,41 +21,46 @@ func (a *API) handleCancelAIJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch job.Status {
-	case domain.AIJobStatusCompleted:
-		a.writeError(w, r, "ai_job_not_cancellable", http.StatusConflict)
-		return
-	case domain.AIJobStatusFailed:
-		auth.WriteJSON(w, http.StatusOK, job)
-		return
-	}
-
-	claimed, err := a.store.ClaimAIJobCompletion(r.Context(), job.ID, domain.AIJobStatusFailed, nil, aiJobCancelledMessage)
+	won, err := a.store.ClaimAIJobCompletion(r.Context(), job.ID, domain.AIJobStatusFailed, nil, aiJobCancelledMessage)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.log.ErrorContext(r.Context(), "cancel AI job failed", "job_id", job.ID, "error", err)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
-
-	if !claimed {
-		latest, err := a.store.GetAIJobByID(r.Context(), teamID, jobID)
-		if err != nil {
+	if !won {
+		current, loadErr := a.store.GetAIJobByID(r.Context(), teamID, jobID)
+		if loadErr != nil {
+			a.log.ErrorContext(r.Context(), "load AI job after cancellation conflict failed", "job_id", job.ID, "error", loadErr)
 			a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 			return
 		}
-		if latest.Status == domain.AIJobStatusCompleted {
-			a.writeError(w, r, "ai_job_not_cancellable", http.StatusConflict)
+		if current.Status == domain.AIJobStatusFailed && current.ErrorMessage == aiJobCancelledMessage {
+			auth.WriteJSON(w, http.StatusOK, current)
 			return
 		}
-		auth.WriteJSON(w, http.StatusOK, latest)
+		a.writeError(w, r, "ai_job_not_cancellable", http.StatusConflict)
 		return
 	}
+
+	if job.Origin == domain.AIJobOriginAutomation && job.Type == domain.AIJobTypeVoiceEngine {
+		if meta := parseRSSAutomationMeta(job.Payload); meta != nil {
+			attempts, releaseErr := a.store.ReleaseRSSItemAttempt(context.WithoutCancel(r.Context()), job.TeamID, meta.FeedID, meta.ItemKey)
+			if releaseErr != nil {
+				a.log.WarnContext(r.Context(), "cancelled RSS AI job item release failed", "job_id", job.ID, "feed_id", meta.FeedID, "attempts", attempts, "error", releaseErr)
+			} else if attempts >= domain.MaxRSSItemAttempts {
+				a.log.WarnContext(r.Context(), "cancelled RSS AI job exhausted item attempts", "job_id", job.ID, "feed_id", meta.FeedID, "attempts", attempts)
+			}
+		}
+	}
+
 	a.recordAudit(r, teamID, "ai_job.cancel", "ai_job", &jobID, "Cancelled AI job", map[string]string{"job_id": jobID})
 	// Abort the in-process LLM call (no-op if the job is not running here).
 	store.AfterAuditCommit(r.Context(), func(context.Context) { a.jobManager.Cancel(job.ID) })
 
 	updatedJob, err := a.store.GetAIJobByID(r.Context(), teamID, jobID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.log.ErrorContext(r.Context(), "load cancelled AI job failed", "job_id", job.ID, "error", err)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
 

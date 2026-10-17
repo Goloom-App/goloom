@@ -144,6 +144,8 @@ export interface BackendPost {
   source?: 'scheduled' | 'imported' | 'automation'
   attempt_count: number
   last_error?: string
+  ai_fallback_reason?: string | null
+  ai_job_id?: string | null
   created_at: string
   updated_at: string
   target_accounts: string[]
@@ -542,6 +544,7 @@ export interface BackendReviewCounts {
 }
 
 export interface BackendRSSFeedConfig {
+  exhausted_items_count?: number
   id: string
   team_id: string
   feed_url: string

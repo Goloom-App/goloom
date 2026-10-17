@@ -157,6 +157,39 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 					if (scenario == "fallback" || usedFallback) && posts[0].Content != fallback {
 						t.Errorf("fallback content=%q", posts[0].Content)
 					}
+					if scenario == "fallback" || usedFallback {
+						data, _ := json.Marshal(posts[0])
+						var visible map[string]any
+						_ = json.Unmarshal(data, &visible)
+						reason, _ := visible["ai_fallback_reason"].(string)
+						if visible["ai_job_id"] != job.ID {
+							t.Errorf("fallback job reference=%v want %s", visible["ai_job_id"], job.ID)
+						}
+						wantReason := "validation_failed"
+						switch scenario {
+						case "fallback":
+							wantReason = "provider_failure"
+						case "empty-result":
+							wantReason = "empty_content"
+						case "invalid-result":
+							wantReason = "invalid_output"
+						}
+						if reason != wantReason {
+							t.Errorf("fallback reason=%q want %q", reason, wantReason)
+						}
+						fields := []string{"WARN", "job_id=" + job.ID, "post_id=" + posts[0].ID, "reason=" + wantReason}
+						if kind == "rss" {
+							if strings.Contains(logs.String(), "item_key=") {
+								t.Error("fallback warning exposes raw RSS item key")
+							}
+							fields = append(fields, "feed_id="+feed.ID)
+						}
+						for _, field := range fields {
+							if !strings.Contains(logs.String(), field) {
+								t.Errorf("fallback log lacks %s: %s", field, logs.String())
+							}
+						}
+					}
 					if scenario == "fallback" && (updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage != message) {
 						t.Errorf("fallback lost provider failure: %+v", updated)
 					}
@@ -220,7 +253,11 @@ func (s *automationWriteFailureStore) CreateScheduledPost(ctx context.Context, t
 	if s.operation == "insert" {
 		return domain.ScheduledPost{}, fmt.Errorf("injected automation insert failure")
 	}
-	return s.Store.CreateScheduledPost(ctx, teamID, principal, input)
+	post, err := s.Store.CreateScheduledPost(ctx, teamID, principal, input)
+	if err == nil && s.operation == "read" {
+		return domain.ScheduledPost{}, fmt.Errorf("injected automation response read failure")
+	}
+	return post, err
 }
 
 func (s *automationWriteFailureStore) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
@@ -238,7 +275,7 @@ func (s *automationWriteFailureStore) IncrementRSSFeedCounter(ctx context.Contex
 }
 
 func TestAutomationCallbackDoesNotRetryStoreFailure(t *testing.T) {
-	for _, operation := range []string{"insert", "link", "counter"} {
+	for _, operation := range []string{"insert", "read"} {
 		t.Run(operation, func(t *testing.T) {
 			ctx := context.Background()
 			f, account, _ := newRecurringCallbackFixture(t)

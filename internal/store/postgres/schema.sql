@@ -165,6 +165,8 @@ create table if not exists scheduled_posts (
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft')),
     attempt_count integer not null default 0,
     last_error text,
+    ai_fallback_reason text,
+    ai_job_id text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -592,6 +594,9 @@ create table if not exists rss_imported_items (
     feed_id uuid not null references rss_feed_configs(id) on delete cascade,
     item_key text not null,
     post_id uuid references scheduled_posts(id) on delete set null,
+    attempts integer not null default 0,
+    retry_available boolean not null default false,
+    consumed_at timestamptz,
     created_at timestamptz not null default now(),
     unique (feed_id, item_key)
 );
@@ -635,3 +640,25 @@ create table if not exists audit_pending (
 );
 
 alter table ai_jobs add column if not exists origin text not null default 'user';
+
+alter table scheduled_posts add column if not exists ai_fallback_reason text;
+
+alter table rss_imported_items add column if not exists attempts integer not null default 0;
+alter table rss_imported_items add column if not exists retry_available boolean not null default false;
+
+alter table scheduled_posts add column if not exists ai_job_id text;
+
+alter table rss_imported_items add column if not exists consumed_at timestamptz;
+-- Legacy in-flight automation markers are reservations, not tombstones.
+-- Promote once so repeated startup never extends the lease.
+update rss_imported_items set attempts = 1, retry_available = false, created_at = now()
+where consumed_at is null and post_id is null and attempts = 0
+  and exists (
+    select 1 from ai_jobs j join rss_feed_configs f on f.id = rss_imported_items.feed_id
+    where j.team_id = f.team_id and j.origin = 'automation' and j.status in ('pending', 'processing')
+      and j.payload #>> '{params,rss_automation,feed_id}' = rss_imported_items.feed_id::text
+      and j.payload #>> '{params,rss_automation,item_key}' = rss_imported_items.item_key
+  );
+-- Remaining legacy baseline markers and linked imports are consumed.
+update rss_imported_items set consumed_at = created_at
+where consumed_at is null and (post_id is not null or attempts = 0);

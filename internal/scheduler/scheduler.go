@@ -699,10 +699,13 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 	}
 
 	metadata := map[string]string{"template_id": tmpl.ID, "occurrence_at": mainEventAt.UTC().Format(time.RFC3339Nano), "post_kind": domain.TemplatePostRoleAnnouncement}
+	var fallbackReason *string
 	if s.shouldEnhanceRecurringAnnouncementWithAI(ctx, *tmpl) {
 		if err := s.submitRecurringAnnouncementAIEnhancement(ctx, *tmpl, content, expandedTitle, announceAt, mainEventAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: announcement ai unavailable, using template", "template_id", tmpl.ID, "error", err)
 			metadata["outcome"], metadata["error_code"] = "fallback", "ai_submission_failed"
+			reason := "dispatch_failed"
+			fallbackReason = &reason
 		} else {
 			if advanceCounter {
 				return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
@@ -728,11 +731,16 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 		TemplateOccurrenceAt:  &mainEventAt,
 		TemplatePostRole:      domain.TemplatePostRoleAnnouncement,
 		Source:                domain.PostSourceAutomation,
+		AIFallbackReason:      fallbackReason,
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}, Kind: "system"}
-	if _, err := s.createAutomationPost(ctx, tmpl.TeamID, principal, input, metadata, nil); err != nil {
+	post, err := s.createAutomationPost(ctx, tmpl.TeamID, principal, input, metadata, nil)
+	if err != nil {
 		return err
+	}
+	if fallbackReason != nil {
+		s.logger.WarnContext(ctx, "recurring automation: used template fallback", "job_id", "", "template_id", tmpl.ID, "post_id", post.ID, "reason", *fallbackReason)
 	}
 	if advanceCounter {
 		return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
@@ -788,10 +796,13 @@ func (s *Service) createScheduledPostFromTemplateOnce(ctx context.Context, tmpl 
 	}
 
 	metadata := map[string]string{"template_id": tmpl.ID, "occurrence_at": occurrenceAt.UTC().Format(time.RFC3339Nano), "post_kind": role}
+	var fallbackReason *string
 	if s.shouldEnhanceRecurringWithAI(ctx, *tmpl) {
 		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, content, expandedTitle, at, draft, occurrenceAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: ai unavailable, using template", "template_id", tmpl.ID, "error", err)
 			metadata["outcome"], metadata["error_code"] = "fallback", "ai_submission_failed"
+			reason := "dispatch_failed"
+			fallbackReason = &reason
 		} else {
 			return nil
 		}
@@ -815,6 +826,7 @@ func (s *Service) createScheduledPostFromTemplateOnce(ctx context.Context, tmpl 
 		TemplateOccurrenceAt:  &occAt,
 		TemplatePostRole:      role,
 		Source:                domain.PostSourceAutomation,
+		AIFallbackReason:      fallbackReason,
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}, Kind: "system"}
@@ -822,6 +834,9 @@ func (s *Service) createScheduledPostFromTemplateOnce(ctx context.Context, tmpl 
 	if err != nil {
 		s.logger.Error("materialize scheduled post from template failed", "template_id", tmpl.ID, "error", err)
 		return err
+	}
+	if fallbackReason != nil {
+		s.logger.WarnContext(ctx, "recurring automation: used template fallback", "job_id", "", "template_id", tmpl.ID, "post_id", post.ID, "reason", *fallbackReason)
 	}
 	s.notifyReviewCreated(ctx, tmpl.TeamID, post)
 	return nil

@@ -395,24 +395,25 @@ func NormalizeAutomationOutputMode(raw string) AutomationOutputMode {
 }
 
 type RSSFeedConfig struct {
-	ID               string               `json:"id"`
-	TeamID           string               `json:"team_id"`
-	FeedURL          string               `json:"feed_url"`
-	Name             string               `json:"name"`
-	IsActive         bool                 `json:"is_active"`
-	AiEnhanceEnabled bool                 `json:"ai_enhance_enabled"`
-	ContentTemplate  string               `json:"content_template"`
-	TitleTemplate    string               `json:"title_template"`
-	TitleHint        string               `json:"title_hint"`
-	OutputMode       AutomationOutputMode `json:"output_mode"`
-	MaxPostsPerDay   int                  `json:"max_posts_per_day"`
-	CounterNext      int                  `json:"counter_next"`
-	PromptHint       string               `json:"prompt_hint"`
-	TargetAccountIDs []string             `json:"target_account_ids"`
-	Tonality         string               `json:"tonality"`
-	InitialSyncMode  RSSInitialSyncMode   `json:"initial_sync_mode"`
-	LastFetchedAt    *time.Time           `json:"last_fetched_at,omitempty"`
-	CreatedAt        time.Time            `json:"created_at"`
+	ExhaustedItemsCount int                  `json:"exhausted_items_count"`
+	ID                  string               `json:"id"`
+	TeamID              string               `json:"team_id"`
+	FeedURL             string               `json:"feed_url"`
+	Name                string               `json:"name"`
+	IsActive            bool                 `json:"is_active"`
+	AiEnhanceEnabled    bool                 `json:"ai_enhance_enabled"`
+	ContentTemplate     string               `json:"content_template"`
+	TitleTemplate       string               `json:"title_template"`
+	TitleHint           string               `json:"title_hint"`
+	OutputMode          AutomationOutputMode `json:"output_mode"`
+	MaxPostsPerDay      int                  `json:"max_posts_per_day"`
+	CounterNext         int                  `json:"counter_next"`
+	PromptHint          string               `json:"prompt_hint"`
+	TargetAccountIDs    []string             `json:"target_account_ids"`
+	Tonality            string               `json:"tonality"`
+	InitialSyncMode     RSSInitialSyncMode   `json:"initial_sync_mode"`
+	LastFetchedAt       *time.Time           `json:"last_fetched_at,omitempty"`
+	CreatedAt           time.Time            `json:"created_at"`
 }
 
 func (f RSSFeedConfig) NormalizedContentTemplate() string {
@@ -670,6 +671,8 @@ type ScheduledPost struct {
 	TemplateOccurrenceAt  *time.Time          `json:"template_occurrence_at,omitempty"`
 	TemplatePostRole      string              `json:"template_post_role,omitempty"`
 	RSSFeedID             *string             `json:"rss_feed_id,omitempty"`
+	AIJobID               *string             `json:"ai_job_id,omitempty"`
+	AIFallbackReason      *string             `json:"ai_fallback_reason,omitempty"`
 }
 
 // PostTemplate drives recurring scheduled posts (stored in post_templates).
@@ -1252,6 +1255,9 @@ type CreatePostInput struct {
 	TemplatePostRole     string     `json:"-"`
 	Source               PostSource `json:"-"`
 	RSSFeedID            *string    `json:"-"`
+	RSSItemKey           string     `json:"-"`
+	AIJobID              *string    `json:"-"`
+	AIFallbackReason     *string    `json:"-"`
 }
 
 func (in CreatePostInput) EffectiveContent(accountID string) string {

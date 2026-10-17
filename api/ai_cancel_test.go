@@ -6,6 +6,13 @@ import (
 	"net/http"
 	"testing"
 
+	"git.f4mily.net/goloom/api"
+	"git.f4mily.net/goloom/internal/config"
+	"git.f4mily.net/goloom/internal/i18n"
+	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/security"
+	"git.f4mily.net/goloom/internal/store"
+
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 	sqlitestore "git.f4mily.net/goloom/internal/store/sqlite"
@@ -55,7 +62,7 @@ func TestCancelAIJob(t *testing.T) {
 		}
 	})
 
-	t.Run("IdempotentForFailedJob", func(t *testing.T) {
+	t.Run("Returns409ForFailedJob", func(t *testing.T) {
 		f := newAICancelFixture(t)
 		job, err := f.store.CreateAIJob(context.Background(), domain.AIJob{
 			TeamID:       f.team.ID,
@@ -67,12 +74,12 @@ func TestCancelAIJob(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := f.store.UpdateAIJobStatus(context.Background(), job.ID, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
+		if err := f.store.UpdateAIJobStatus(context.Background(), job.ID, domain.AIJobStatusFailed, nil, "provider failed"); err != nil {
 			t.Fatal(err)
 		}
 
 		rec := doRequest(t, f.h, http.MethodPost, "/v1/teams/"+f.team.ID+"/ai-jobs/"+job.ID+"/cancel", f.bearer, nil)
-		if rec.Code != http.StatusOK {
+		if rec.Code != http.StatusConflict {
 			t.Fatalf("POST cancel failed job: got %d; body: %s", rec.Code, rec.Body.String())
 		}
 	})
@@ -171,4 +178,79 @@ func makeCancelJob(t *testing.T, f aiCancelFixture, status domain.AIJobStatus) d
 		}
 	}
 	return job
+}
+
+// Return a stale processing snapshot after completion committed independently.
+type completionOnCancelReadStore struct {
+	store.Store
+	stale domain.AIJob
+	read  bool
+}
+
+func (s *completionOnCancelReadStore) GetAIJobByID(ctx context.Context, teamID, jobID string) (domain.AIJob, error) {
+	if !s.read {
+		s.read = true
+		return s.stale, nil
+	}
+	return s.Store.GetAIJobByID(ctx, teamID, jobID)
+}
+
+func TestCancelAIJobDoesNotOverwriteConcurrentCompletion(t *testing.T) {
+	f := newAICancelFixture(t)
+	job := makeCancelJob(t, f, domain.AIJobStatusProcessing)
+	if won, err := f.store.ClaimAIJobCompletion(context.Background(), job.ID, domain.AIJobStatusCompleted, []byte(`{"content":"winner"}`), ""); err != nil || !won {
+		t.Fatalf("concurrent completion: won=%v err=%v", won, err)
+	}
+	wrapped := &completionOnCancelReadStore{Store: f.store, stale: job}
+	authSvc, err := auth.New(context.Background(), config.Config{}, wrapped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := i18n.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := api.New(nil, wrapped, authSvc, provider.NewRegistry(), config.Config{}, nil, catalog, nil, nil).Handler(security.NewLimiter(10000, 10000), nil)
+	rec := doRequest(t, h, http.MethodPost, "/v1/teams/"+f.team.ID+"/ai-jobs/"+job.ID+"/cancel", f.bearer, nil)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("cancel lost race: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	got, err := f.store.GetAIJobByID(context.Background(), f.team.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.AIJobStatusCompleted || string(got.Result) != `{"content":"winner"}` || got.ErrorMessage != "" {
+		t.Fatalf("completion overwritten: %+v", got)
+	}
+}
+
+func TestCancelRSSAIJobReleasesItem(t *testing.T) {
+	ctx := context.Background()
+	f := newAICancelFixture(t)
+	feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "cancel-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.RecordRSSImportedItem(ctx, feed.ID, "cancel-item", ""); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{"params": map[string]any{"rss_automation": map[string]string{"feed_id": feed.ID, "item_key": "cancel-item"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Origin: domain.AIJobOriginAutomation, Payload: payload})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := doRequest(t, f.h, http.MethodPost, "/v1/teams/"+f.team.ID+"/ai-jobs/"+job.ID+"/cancel", f.bearer, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cancel: %d %s", rec.Code, rec.Body.String())
+	}
+	imported, err := f.store.RSSItemAlreadyImported(ctx, feed.ID, "cancel-item")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported {
+		t.Fatal("cancelled RSS item remains imported")
+	}
 }

@@ -3,6 +3,7 @@ import { format, parseISO } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 import { Clock, Eye, Inbox, Pencil, Send, Trash2 } from 'lucide-react'
 
+import { AIFallbackBadge } from '../../components/post/AIFallbackBadge'
 import { DestinationStack } from '../../components/post/DestinationAvatar'
 import { SectionCard } from '../../components/ui'
 import { sharedAccountLabels } from '../../schedule'
@@ -98,6 +99,7 @@ export function ReviewQueueView({
               <div className="review-card__header">
                 <div className="flex-row--center gap-2 flex-wrap">
                   <span className="badge">{t('review.automationBadge')}</span>
+                  <AIFallbackBadge reason={item.aiFallbackReason} jobId={item.aiJobId} />
                   {item.isOverdue ? (
                     <span className="badge badge--warning" data-testid="review-overdue-badge">
                       {t('review.overdue')}

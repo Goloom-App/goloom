@@ -227,6 +227,7 @@ export interface RSSFeedConfig {
   outputMode: AutomationOutputMode
   maxPostsPerDay: number
   counterNext?: number
+  exhaustedItemsCount?: number
   promptHint: string
   targetAccountIds: string[]
   tonality: string
@@ -284,6 +285,8 @@ export interface PostRecord {
   targetAccountIds: string[]
   status: PostStatus
   source?: PostSource
+  aiFallbackReason?: string
+  aiJobId?: string
   publishedLinks?: Record<string, string>
   /** Platform media attachment IDs (Mastodon media IDs, Bluesky-encoded payloads, etc.) */
   mediaIds?: string[]

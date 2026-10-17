@@ -650,7 +650,17 @@
       "discard": "Discard",
       "discardConfirm": "Discard this draft?",
       "actionFailed": "Review action failed.",
-      "pastTime": "The chosen time is in the past. Adjust it or"
+      "pastTime": "The chosen time is in the past. Adjust it or",
+      "aiFallbackBadge": "Template fallback",
+      "aiFallbackReasons": {
+        "provider_failure": "AI provider failed. Template content used.",
+        "empty_content": "AI returned empty content. Template content used.",
+        "invalid_output": "AI returned unreadable output. Template content used.",
+        "validation_failed": "AI content failed validation. Template content used.",
+        "dispatch_failed": "AI generation could not start. Template content used.",
+        "unknown": "AI generation failed. Template content used."
+      },
+      "aiFallbackJob": "AI job: {{id}}"
     },
     "automation": {
       "title": "Automation",
@@ -697,7 +707,8 @@
       "feedUpdated": "RSS feed updated.",
       "feedDeleted": "RSS feed deleted.",
       "saveFailed": "Failed to save RSS feed.",
-      "deleteConfirm": "Delete this RSS feed?"
+      "deleteConfirm": "Delete this RSS feed?",
+      "exhaustedItems": "{{count}} items exhausted automatic retries"
     },
     "calendar": {
       "createPostHint": "Create a post to start building your publishing timeline.",
