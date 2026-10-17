@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
@@ -55,6 +55,8 @@ export function PostComposer({
   scheduleError = false,
   onPublishNow,
   onScheduleDraftTime,
+  draftGenerationRef,
+  onDiscardedResult,
 }: {
   open: boolean
   mode: 'create' | 'edit'
@@ -82,6 +84,10 @@ export function PostComposer({
   onPublishNow?: () => void | Promise<void>
   /** Called when the user picks a new schedule time (clears the past-time error). */
   onScheduleDraftTime?: (time: string) => void
+  /** Bumped by App whenever a different draft or team is loaded into the composer. */
+  draftGenerationRef: RefObject<number>
+  /** Forwarded to the AI assist: a finished job was dropped because the draft moved on. */
+  onDiscardedResult?: () => void
 }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'default' | string>('default')
@@ -486,6 +492,8 @@ export function PostComposer({
               setDraft={setDraft}
               activeTab={activeTab}
               teamAccounts={teamAccounts}
+              draftGenerationRef={draftGenerationRef}
+              onDiscardedResult={onDiscardedResult}
             />
           ) : null}
 

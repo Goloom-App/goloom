@@ -1035,6 +1035,7 @@
       "aiOptimize": "Optimize with AI",
       "aiOptimizing": "Optimizing…",
       "aiOptimizeDescription": "Let AI polish your draft while keeping your message and team voice.",
+      "aiOptimizeDiscarded": "AI result discarded because the draft changed.",
       "aiOptimizeHint": "Optimization instructions (optional)",
       "aiOptimizePlaceholder": "e.g. Make it shorter and more engaging",
       "aiOptimizeApplied": "Draft updated with AI suggestions.",

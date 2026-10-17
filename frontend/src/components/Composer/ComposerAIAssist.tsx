@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Loader2, MessageSquareText, Sparkles } from 'lucide-react'
 
@@ -36,6 +36,8 @@ export function ComposerAIAssist({
   setDraft,
   activeTab,
   teamAccounts,
+  draftGenerationRef,
+  onDiscardedResult,
 }: {
   teamId: string
   isAiEnabled: boolean
@@ -43,6 +45,10 @@ export function ComposerAIAssist({
   setDraft: Dispatch<SetStateAction<EditorDraftState>>
   activeTab: string
   teamAccounts: AccountRecord[]
+  /** Bumped by App whenever a different draft or team is loaded into the composer. */
+  draftGenerationRef: RefObject<number>
+  /** Called when a finished AI job is dropped because the draft moved on. */
+  onDiscardedResult?: () => void
 }) {
   const { t } = useTranslation()
   const triggerJob = useTriggerAIJob()
@@ -53,6 +59,22 @@ export function ComposerAIAssist({
   const [optimizing, setOptimizing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+
+  // Async job results must be compared against the draft as it is now, not the
+  // render that started the request.
+  const latestDraftRef = useRef(draft)
+  useEffect(() => {
+    latestDraftRef.current = draft
+  }, [draft])
+
+  // Results arriving after the composer closed have nowhere to land.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   if (!isAiEnabled || activeTab !== 'default') {
     return null
@@ -70,6 +92,8 @@ export function ComposerAIAssist({
     setError(null)
     setStatusMessage(null)
     setOptimizing(true)
+    const startGeneration = draftGenerationRef.current
+    const startContent = draft.content.trim()
     try {
       const response = await triggerJob.mutateAsync({
         teamId,
@@ -88,6 +112,18 @@ export function ComposerAIAssist({
         throw new Error('AI job id missing from trigger response')
       }
       const job = await waitForAIJob(teamId, response.jobId)
+      if (!mountedRef.current) {
+        return
+      }
+      // The user may have opened another draft, switched teams or edited the
+      // text while the job ran — a result for the old draft must not land.
+      if (
+        draftGenerationRef.current !== startGeneration ||
+        latestDraftRef.current.content.trim() !== startContent
+      ) {
+        onDiscardedResult?.()
+        return
+      }
       const content = typeof job.result?.content === 'string' ? job.result.content : ''
       if (!content.trim()) {
         throw new Error('AI returned empty content')
@@ -104,9 +140,14 @@ export function ComposerAIAssist({
       setStatusMessage(t('composer.aiOptimizeApplied'))
       setShowInstruction(false)
     } catch (err) {
+      if (!mountedRef.current) {
+        return
+      }
       setError(err instanceof Error ? err.message : t('composer.aiOptimizeFailed'))
     } finally {
-      setOptimizing(false)
+      if (mountedRef.current) {
+        setOptimizing(false)
+      }
     }
   }
 

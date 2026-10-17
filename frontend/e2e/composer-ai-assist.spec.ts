@@ -105,6 +105,66 @@ async function startOptimize(page: Page) {
 }
 
 test.describe('composer AI assist', () => {
+  test('discards a stale AI result when the composer draft changes', async ({ page, baseURL }) => {
+    test.setTimeout(120_000)
+    const teamId = await createAITeam(baseURL!, e2eBootstrapToken())
+    await mockTeamAccounts(page, teamId)
+    const job = await mockComposerAI(page, teamId, {
+      content: 'AI refined draft body.',
+      accountContentOverride: {},
+    })
+
+    await signIn(page)
+    await page.goto(`/?team=${teamId}`)
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    await page.getByRole('button', { name: 'New Post' }).click()
+
+    const defaultBody = page.getByPlaceholder(DEFAULT_PLACEHOLDER)
+    await defaultBody.fill('Original draft while the job runs.')
+    await startOptimize(page)
+    await expect.poll(job.triggerCount).toBe(1)
+
+    // Start a different draft while the first optimize job is still running.
+    await page.locator('.sidebar-composer-cta').click()
+    await expect(defaultBody).toHaveValue('')
+    await defaultBody.fill('Second draft that must survive.')
+
+    job.complete()
+
+    // The optimize button re-enables once the (stale) job has been processed.
+    await expect(page.getByTestId('composer-ai-optimize')).toBeEnabled({ timeout: 20_000 })
+    await expect(defaultBody).toHaveValue('Second draft that must survive.')
+    await expect(page.getByTestId('composer-ai-notice')).toBeVisible()
+  })
+
+  test('discards the AI result when the draft is edited while the job runs', async ({ page, baseURL }) => {
+    test.setTimeout(120_000)
+    const teamId = await createAITeam(baseURL!, e2eBootstrapToken())
+    await mockTeamAccounts(page, teamId)
+    const job = await mockComposerAI(page, teamId, {
+      content: 'AI refined draft body.',
+      accountContentOverride: {},
+    })
+
+    await signIn(page)
+    await page.goto(`/?team=${teamId}`)
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    await page.getByRole('button', { name: 'New Post' }).click()
+
+    const defaultBody = page.getByPlaceholder(DEFAULT_PLACEHOLDER)
+    await defaultBody.fill('Original draft while the job runs.')
+    await startOptimize(page)
+    await expect.poll(job.triggerCount).toBe(1)
+
+    await defaultBody.fill('Edited while the job runs.')
+
+    job.complete()
+
+    await expect(page.getByTestId('composer-ai-optimize')).toBeEnabled({ timeout: 20_000 })
+    await expect(defaultBody).toHaveValue('Edited while the job runs.')
+    await expect(page.getByTestId('composer-ai-notice')).toBeVisible()
+  })
+
   test('keeps user-written per-account overrides and fills the remaining accounts', async ({ page, baseURL }) => {
     test.setTimeout(120_000)
     const teamId = await createAITeam(baseURL!, e2eBootstrapToken())
