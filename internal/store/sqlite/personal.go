@@ -86,7 +86,17 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_imported_items add column attempts integer not null default 0`,
 		`alter table rss_imported_items add column retry_available integer not null default 0`,
 		`alter table rss_imported_items add column consumed_at text`,
-		// Legacy baseline markers and linked imports have already been consumed.
+		// Legacy in-flight automation markers are reservations, not tombstones.
+		// Promote once so repeated startup never extends the lease.
+		`update rss_imported_items set attempts = 1, retry_available = 0, created_at = datetime('now')
+         where consumed_at is null and post_id is null and attempts = 0
+           and exists (
+             select 1 from ai_jobs j join rss_feed_configs f on f.id = rss_imported_items.feed_id
+             where j.team_id = f.team_id and j.origin = 'automation' and j.status in ('pending', 'processing')
+               and json_extract(j.payload, '$.params.rss_automation.feed_id') = rss_imported_items.feed_id
+               and json_extract(j.payload, '$.params.rss_automation.item_key') = rss_imported_items.item_key
+           )`,
+		// Remaining legacy baseline markers and linked imports are consumed.
 		`update rss_imported_items set consumed_at = created_at
          where consumed_at is null and (post_id is not null or attempts = 0)`,
 		`create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id)`,

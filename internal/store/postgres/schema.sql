@@ -648,7 +648,17 @@ alter table rss_imported_items add column if not exists retry_available boolean 
 
 alter table scheduled_posts add column if not exists ai_job_id text;
 
--- Legacy baseline markers and linked imports have already been consumed.
 alter table rss_imported_items add column if not exists consumed_at timestamptz;
+-- Legacy in-flight automation markers are reservations, not tombstones.
+-- Promote once so repeated startup never extends the lease.
+update rss_imported_items set attempts = 1, retry_available = false, created_at = now()
+where consumed_at is null and post_id is null and attempts = 0
+  and exists (
+    select 1 from ai_jobs j join rss_feed_configs f on f.id = rss_imported_items.feed_id
+    where j.team_id = f.team_id and j.origin = 'automation' and j.status in ('pending', 'processing')
+      and j.payload #>> '{params,rss_automation,feed_id}' = rss_imported_items.feed_id::text
+      and j.payload #>> '{params,rss_automation,item_key}' = rss_imported_items.item_key
+  );
+-- Remaining legacy baseline markers and linked imports are consumed.
 update rss_imported_items set consumed_at = created_at
 where consumed_at is null and (post_id is not null or attempts = 0);
