@@ -1173,6 +1173,7 @@
     "unauthorized": "nicht autorisiert",
     "missing_principal": "Principal fehlt",
     "frontend_bundle_unavailable": "Frontend-Bundle nicht verfügbar",
+    "scope_required": "Dem API-Token fehlt der erforderliche Berechtigungsbereich",
     "token_name_reserved": "Token-Name ist reserviert",
     "expires_at_rfc3339": "expires_at muss RFC3339-Zeitstempel sein",
     "expires_at_future": "expires_at muss in der Zukunft liegen",
