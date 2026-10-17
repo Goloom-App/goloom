@@ -117,8 +117,8 @@ func (s *Service) createRSSPostDirect(
 			return err
 		}
 		if !submissionFallback {
-			already, err := s.store.RSSItemAlreadyImported(ctx, feed.ID, itemKey)
-			if err != nil || already {
+			claimed, err := s.store.ClaimRSSItemAttempt(ctx, feed.TeamID, feed.ID, itemKey)
+			if err != nil || !claimed {
 				return err
 			}
 		}

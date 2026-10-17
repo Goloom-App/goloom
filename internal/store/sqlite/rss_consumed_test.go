@@ -61,6 +61,9 @@ func TestRSSConsumedItemSurvivesPostDeletion(t *testing.T) {
 				if err := s.DeleteScheduledPost(ctx, team.ID, post.ID); err != nil {
 					t.Fatal(err)
 				}
+				if count, err := s.CountRSSFeedPostsToday(ctx, feed.ID); err != nil || count != 1 {
+					t.Fatalf("deleted consumed item budget=%d want=1 err=%v", count, err)
+				}
 				var linkedPost *string
 				if err := db.QueryRowContext(ctx, "select post_id from rss_imported_items where feed_id = ? and item_key = 'item'", feed.ID).Scan(&linkedPost); err != nil || linkedPost != nil {
 					t.Fatalf("deleted post link=%v err=%v", linkedPost, err)

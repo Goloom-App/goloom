@@ -48,14 +48,17 @@ func (s *Store) ListActiveRSSFeedConfigs(ctx context.Context, limit int) ([]doma
 }
 
 func (s *Store) CountRSSFeedPostsToday(ctx context.Context, feedID string) (int, error) {
-	const query = `
-		SELECT count(*)
-		FROM scheduled_posts
-		WHERE rss_feed_id = $1
-		  AND created_at >= date_trunc('day', now() at time zone 'utc')
-	`
+	return s.countRSSFeedBudget(ctx, feedID, time.Now().UTC().Format("2006-01-02"))
+}
+
+func (s *Store) countRSSFeedBudget(ctx context.Context, feedID, day string) (int, error) {
 	var count int
-	if err := s.pool.QueryRow(ctx, query, feedID).Scan(&count); err != nil {
+	err := s.pool.QueryRow(ctx, `
+ select (select count(*) from rss_imported_items where feed_id = $1 and budget_date = $2::date and not `+rssItemRetryEligible+`)
+ + (select count(*) from scheduled_posts p where p.rss_feed_id = $1 and (p.created_at at time zone 'UTC')::date = $2::date
+    and not exists (select 1 from rss_imported_items i where i.feed_id = p.rss_feed_id and i.post_id = p.id))`,
+		feedID, day).Scan(&count)
+	if err != nil {
 		return 0, fmt.Errorf("CountRSSFeedPostsToday: %w", err)
 	}
 	return count, nil
@@ -76,9 +79,9 @@ func (s *Store) RSSItemAlreadyImported(ctx context.Context, feedID, itemKey stri
 
 func (s *Store) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, postID string) error {
 	const query = `
-		INSERT INTO rss_imported_items (feed_id, item_key, post_id, consumed_at)
-		VALUES ($1, $2, $3, CASE WHEN $3::uuid IS NOT NULL THEN now() END)
-		ON CONFLICT (feed_id, item_key) DO UPDATE SET post_id = excluded.post_id, consumed_at = excluded.consumed_at, retry_available = false
+		INSERT INTO rss_imported_items (feed_id, item_key, post_id, consumed_at, budget_date)
+		VALUES ($1, $2, $3, CASE WHEN $3::uuid IS NOT NULL THEN now() END, CASE WHEN $3::uuid IS NOT NULL THEN (clock_timestamp() at time zone 'UTC')::date END)
+		ON CONFLICT (feed_id, item_key) DO UPDATE SET post_id = excluded.post_id, consumed_at = excluded.consumed_at, retry_available = false, budget_date = coalesce(rss_imported_items.budget_date, excluded.budget_date)
         WHERE rss_imported_items.post_id IS NULL AND rss_imported_items.consumed_at IS NULL AND excluded.post_id IS NOT NULL
 	`
 	var postArg any
@@ -94,7 +97,7 @@ func (s *Store) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, post
 func (s *Store) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE rss_imported_items
-		SET post_id = $3, consumed_at = coalesce(consumed_at, now()), retry_available = false
+		SET post_id = $3, consumed_at = coalesce(consumed_at, now()), retry_available = false, budget_date = coalesce(budget_date, (clock_timestamp() at time zone 'UTC')::date)
 		WHERE feed_id = $1 AND item_key = $2
 		  AND (consumed_at IS NULL OR post_id = $3)
 		  AND EXISTS (SELECT 1 FROM rss_feed_configs WHERE id = rss_imported_items.feed_id AND team_id = $4)
@@ -136,17 +139,50 @@ func (s *Store) UpdateRSSFeedLastFetched(ctx context.Context, feedID string, las
 	return nil
 }
 
+// The source lock covers the capacity read and conditional claim across replicas.
 func (s *Store) ClaimRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (bool, error) {
-	tag, err := s.pool.Exec(ctx, `
- INSERT INTO rss_imported_items (feed_id, item_key, attempts, retry_available)
- SELECT $1, $2, 1, false WHERE EXISTS (SELECT 1 FROM rss_feed_configs WHERE id = $1 AND team_id = $3)
- ON CONFLICT(feed_id, item_key) DO UPDATE SET attempts = rss_imported_items.attempts + 1, retry_available = false, created_at = now()
- WHERE rss_imported_items.post_id IS NULL AND `+rssItemRetryEligible+` AND rss_imported_items.attempts < $4`,
-		feedID, itemKey, teamID, domain.MaxRSSItemAttempts)
-	if err != nil {
-		return false, fmt.Errorf("ClaimRSSItemAttempt: %w", err)
-	}
-	return tag.RowsAffected() > 0, nil
+	claimed := false
+	err := s.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		if err := s.LockAutomationSource(ctx, "rss_feed", feedID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				return nil
+			}
+			return err
+		}
+		var limit int
+		var day string
+		err := s.pool.QueryRow(ctx, "select max_posts_per_day, (clock_timestamp() at time zone 'UTC')::date::text from rss_feed_configs where id = $1 and team_id = $2", feedID, teamID).Scan(&limit, &day)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		imported, err := s.RSSItemAlreadyImported(ctx, feedID, itemKey)
+		if err != nil || imported {
+			return err
+		}
+		// Use the database UTC day captured after the lock for both statements.
+		used, err := s.countRSSFeedBudget(ctx, feedID, day)
+		if err != nil {
+			return err
+		}
+		if used >= limit {
+			return domain.ErrRSSDailyLimit
+		}
+		tag, err := s.pool.Exec(ctx, `
+ insert into rss_imported_items (feed_id, item_key, attempts, retry_available, budget_date)
+ values ($1, $2, 1, false, $3::date)
+ on conflict(feed_id, item_key) do update set attempts = rss_imported_items.attempts + 1, retry_available = false, created_at = now(), budget_date = excluded.budget_date
+ where rss_imported_items.post_id is null and `+rssItemRetryEligible+` and rss_imported_items.attempts < $4`,
+			feedID, itemKey, day, domain.MaxRSSItemAttempts)
+		if err != nil {
+			return fmt.Errorf("ClaimRSSItemAttempt: %w", err)
+		}
+		claimed = tag.RowsAffected() > 0
+		return nil
+	})
+	return claimed && err == nil, err
 }
 
 func (s *Store) ReleaseRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (int, error) {
@@ -167,9 +203,9 @@ func (s *Store) ReleaseRSSItemAttempt(ctx context.Context, teamID, feedID, itemK
 
 // Link in the post transaction; concurrent attempts cannot commit a second post.
 func linkRSSItemForPost(ctx context.Context, tx pgx.Tx, teamID, feedID, itemKey, postID string) error {
-	tag, err := tx.Exec(ctx, `INSERT INTO rss_imported_items (feed_id,item_key,post_id,consumed_at)
- SELECT $1,$2,$3,now() WHERE EXISTS (SELECT 1 FROM rss_feed_configs WHERE id=$1 AND team_id=$4)
- ON CONFLICT(feed_id,item_key) DO UPDATE SET post_id=excluded.post_id,consumed_at=excluded.consumed_at,retry_available=false
+	tag, err := tx.Exec(ctx, `INSERT INTO rss_imported_items (feed_id,item_key,post_id,consumed_at,budget_date)
+ SELECT $1,$2,$3,now(),(clock_timestamp() at time zone 'UTC')::date WHERE EXISTS (SELECT 1 FROM rss_feed_configs WHERE id=$1 AND team_id=$4)
+ ON CONFLICT(feed_id,item_key) DO UPDATE SET post_id=excluded.post_id,consumed_at=excluded.consumed_at,retry_available=false,budget_date=coalesce(rss_imported_items.budget_date,excluded.budget_date)
  WHERE rss_imported_items.post_id IS NULL AND rss_imported_items.consumed_at IS NULL`, feedID, itemKey, postID, teamID)
 	if err != nil {
 		return fmt.Errorf("link RSS item in post transaction: %w", err)

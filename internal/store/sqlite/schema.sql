@@ -156,6 +156,7 @@ create table if not exists rss_imported_items (
     attempts integer not null default 0,
     retry_available integer not null default 0,
     consumed_at text,
+    budget_date text,
     created_at text not null default (datetime('now')),
     unique (feed_id, item_key)
 );

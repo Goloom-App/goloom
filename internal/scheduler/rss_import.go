@@ -71,20 +71,6 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 	}
 
 	now := time.Now().UTC()
-	createdToday, err := s.store.CountRSSFeedPostsToday(ctx, feed.ID)
-	if err != nil {
-		s.logger.WarnContext(ctx, "rss import: count posts failed", "feed_id", feed.ID, "error", err)
-		return
-	}
-	remaining := feed.NormalizedMaxPostsPerDay() - createdToday
-	if remaining <= 0 {
-		s.logger.InfoContext(ctx, "rss import: daily limit reached",
-			"feed_id", feed.ID,
-			"feed_name", feed.Name,
-			"created_today", createdToday,
-			"max_posts_per_day", feed.NormalizedMaxPostsPerDay())
-		return
-	}
 
 	items, err := parser.Fetch(ctx, feed.FeedURL)
 	if err != nil {
@@ -93,7 +79,7 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 	}
 
 	if feed.LastFetchedAt == nil {
-		s.handleRSSFirstFetch(ctx, feed, items, now, remaining)
+		s.handleRSSFirstFetch(ctx, feed, items, now)
 		return
 	}
 
@@ -103,12 +89,14 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 		return candidates[i].PublishedAt.Before(candidates[j].PublishedAt)
 	})
 
-	processed, alreadyImported, failed := 0, 0, 0
+	processed, alreadyImported, limited, failed := 0, 0, 0, 0
 	for _, item := range candidates {
-		if processed >= remaining {
-			break
-		}
 		created, err := s.createPostFromRSSItem(ctx, feed, item)
+		if errors.Is(err, domain.ErrRSSDailyLimit) {
+			limited++
+			s.logRSSDailyLimit(ctx, feed, rss.ItemKey(item))
+			continue
+		}
 		if err != nil {
 			failed++
 			s.logger.WarnContext(ctx, "rss import: create post failed", "feed_id", feed.ID, "item_link", item.Link, "error", err)
@@ -135,16 +123,16 @@ func (s *Service) importRSSFeed(ctx context.Context, parser rssFeedFetcher, feed
 		"created", processed,
 		"already_imported", alreadyImported,
 		"failed", failed,
-		"remaining_daily_budget", remaining-processed)
+		"daily_limit_skipped", limited)
 
 	if err := s.store.UpdateRSSFeedLastFetched(ctx, feed.ID, now); err != nil {
 		s.logger.WarnContext(ctx, "rss import: update last fetched failed", "feed_id", feed.ID, "error", err)
 	}
 }
 
-func (s *Service) handleRSSFirstFetch(ctx context.Context, feed domain.RSSFeedConfig, items []rss.Item, now time.Time, remaining int) {
+func (s *Service) handleRSSFirstFetch(ctx context.Context, feed domain.RSSFeedConfig, items []rss.Item, now time.Time) {
 	publishedKey := ""
-	if feed.InitialSyncMode == domain.RSSInitialSyncPublishLatest && len(items) > 0 && remaining > 0 {
+	if feed.InitialSyncMode == domain.RSSInitialSyncPublishLatest && len(items) > 0 {
 		latest := items[0]
 		for _, item := range items[1:] {
 			if item.PublishedAt.After(latest.PublishedAt) {
@@ -154,7 +142,9 @@ func (s *Service) handleRSSFirstFetch(ctx context.Context, feed domain.RSSFeedCo
 		// The published item records itself via createPostFromRSSItem; on
 		// failure it stays unrecorded so the next poll can retry it.
 		publishedKey = rss.ItemKey(latest)
-		if _, err := s.createPostFromRSSItem(ctx, feed, latest); err != nil {
+		if _, err := s.createPostFromRSSItem(ctx, feed, latest); errors.Is(err, domain.ErrRSSDailyLimit) {
+			s.logRSSDailyLimit(ctx, feed, publishedKey)
+		} else if err != nil {
 			s.logger.WarnContext(ctx, "rss import: publish latest failed", "feed_id", feed.ID, "error", err)
 		}
 	}
@@ -312,4 +302,8 @@ func rssOutputSchedule(mode domain.AutomationOutputMode, publishedAt time.Time) 
 	default:
 		return now, false
 	}
+}
+
+func (s *Service) logRSSDailyLimit(ctx context.Context, feed domain.RSSFeedConfig, itemKey string) {
+	s.logger.InfoContext(ctx, "rss import: daily limit reached", "feed_id", feed.ID, "item_key_hash", sourceKey(itemKey), "max_posts_per_day", feed.NormalizedMaxPostsPerDay())
 }
