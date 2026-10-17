@@ -13,6 +13,7 @@ import (
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/hashtag"
+	"git.f4mily.net/goloom/internal/postservice"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/push"
 	"git.f4mily.net/goloom/internal/socialtokens"
@@ -196,6 +197,14 @@ func (s *Service) enqueueDuePosts(ctx context.Context, queue chan<- domain.Sched
 }
 
 func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
+	// Validate all persisted targets, including targets filtered by LoadPostTargets
+	// and already-posted targets on a retry. Reject the entire inconsistent post
+	// before publishing to any remaining account.
+	if _, _, err := postservice.New(s.store, s.providers).ResolveTargets(ctx, post.TeamID, post.TargetAccounts, nil); err != nil {
+		s.logger.ErrorContext(ctx, "post target validation failed", "post_id", post.ID, "team_id", post.TeamID, "error", err)
+		s.failPost(ctx, post, fmt.Errorf("validate targets: %w", err))
+		return
+	}
 	accounts, err := s.store.LoadPostTargets(ctx, post.ID)
 	if err != nil {
 		s.failPost(ctx, post, fmt.Errorf("load targets: %w", err))

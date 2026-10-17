@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/auth"
@@ -32,6 +33,17 @@ func (a *API) handleAITrigger(w http.ResponseWriter, r *http.Request) {
 	if !isValidAIJobType(input.Type) {
 		a.writeError(w, r, "invalid_ai_job_type", http.StatusBadRequest)
 		return
+	}
+	// Automation context is server-owned; scheduler jobs bypass this handler.
+	var params map[string]json.RawMessage
+	if err := json.Unmarshal(input.Params, &params); err == nil {
+		for key := range params {
+			if strings.EqualFold(key, "rss_automation") || strings.EqualFold(key, "recurring_automation") {
+				a.log.WarnContext(r.Context(), "ai trigger: reserved automation param rejected", "team_id", r.PathValue("teamID"), "param", key)
+				a.writeError(w, r, "reserved_ai_job_param", http.StatusBadRequest)
+				return
+			}
+		}
 	}
 
 	principal, err := a.auth.CurrentPrincipal(r)

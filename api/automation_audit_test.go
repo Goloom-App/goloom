@@ -13,6 +13,7 @@ import (
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/store"
+	"git.f4mily.net/goloom/internal/provider"
 )
 
 type callbackAuditFailure struct{ store.Store }
@@ -55,7 +56,7 @@ func TestAutomationCallbackAuditFailureRollsBack(t *testing.T) {
 	ctx := context.Background()
 	f, acc, tmpl := newRecurringCallbackFixture(t)
 	job := makeRecurringJob(t, f, recurringJobPayload(tmpl.ID, acc.ID, "fallback", time.Now().Add(time.Hour)))
-	a := api.New(nil, callbackAuditFailure{f.store}, nil, nil, config.Config{}, nil, nil, nil, nil)
+	a := api.New(nil, callbackAuditFailure{f.store}, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
 	a.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"hello"}`), "")
 	posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
 	if err != nil {

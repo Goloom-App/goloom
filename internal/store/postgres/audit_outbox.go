@@ -71,20 +71,3 @@ func (s *Store) ClaimPostTargetPublication(ctx context.Context, postID, accountI
 	}
 	return result.RowsAffected() == 1, nil
 }
-
-// ClaimAIJobCompletion permits one terminal transition; retries cannot repeat side effects.
-func (s *Store) ClaimAIJobCompletion(ctx context.Context, jobID string, status domain.AIJobStatus, result []byte, errorMessage string) (bool, error) {
-	if status != domain.AIJobStatusCompleted && status != domain.AIJobStatusFailed {
-		return false, fmt.Errorf("AI completion requires terminal status")
-	}
-
-	var resultValue any
-	if len(result) > 0 {
-		resultValue = json.RawMessage(result)
-	}
-	r, err := s.pool.Exec(ctx, `update ai_jobs set status=$2,result=$3,error_message=nullif($4,''),updated_at=now(),completed_at=now() where id=$1 and status in ('pending','processing')`, jobID, status, resultValue, errorMessage)
-	if err != nil {
-		return false, err
-	}
-	return r.RowsAffected() == 1, nil
-}

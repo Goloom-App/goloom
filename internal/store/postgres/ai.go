@@ -376,21 +376,25 @@ func scanStyleExample(row interface{ Scan(dest ...any) error }) (domain.StyleExa
 }
 
 func (s *Store) CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJob, error) {
+	origin := input.Origin
+	if origin == "" {
+		origin = domain.AIJobOriginUser
+	}
 	status := input.Status
 	if status == "" {
 		status = domain.AIJobStatusPending
 	}
 	const query = `
-		INSERT INTO ai_jobs (team_id, author_user_id, job_type, status, payload)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
+		INSERT INTO ai_jobs (team_id, author_user_id, job_type, status, origin, payload)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, team_id, author_user_id, job_type, status, origin, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
 	`
 	payload := input.Payload
 	if len(payload) == 0 {
 		payload = json.RawMessage(`{}`)
 	}
 	job, err := scanAIJob(s.pool.QueryRow(ctx, query,
-		input.TeamID, input.AuthorUserID, string(input.Type), string(status), payload,
+		input.TeamID, input.AuthorUserID, string(input.Type), string(status), origin, payload,
 	))
 	if err != nil {
 		return domain.AIJob{}, fmt.Errorf("CreateAIJob: %w", err)
@@ -400,7 +404,7 @@ func (s *Store) CreateAIJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 
 func (s *Store) GetAIJobByID(ctx context.Context, teamID string, id string) (domain.AIJob, error) {
 	const query = `
-		SELECT id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
+		SELECT id, team_id, author_user_id, job_type, status, origin, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
 		FROM ai_jobs
 		WHERE team_id = $1 AND id = $2
 	`
@@ -416,7 +420,7 @@ func (s *Store) GetAIJobByID(ctx context.Context, teamID string, id string) (dom
 
 func (s *Store) GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob, error) {
 	const query = `
-		SELECT id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
+		SELECT id, team_id, author_user_id, job_type, status, origin, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
 		FROM ai_jobs
 		WHERE id = $1
 	`
@@ -432,7 +436,7 @@ func (s *Store) GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob
 
 func (s *Store) ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error) {
 	const query = `
-		SELECT id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
+		SELECT id, team_id, author_user_id, job_type, status, origin, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
 		FROM ai_jobs
 		WHERE team_id = $1
 		ORDER BY created_at DESC
@@ -471,7 +475,7 @@ func (s *Store) UpdateAIJobStatus(ctx context.Context, id string, status domain.
 
 func (s *Store) ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error) {
 	const query = `
-		SELECT id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
+		SELECT id, team_id, author_user_id, job_type, status, origin, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
 		FROM ai_jobs
 		WHERE status = 'pending'
 		ORDER BY created_at ASC
@@ -492,7 +496,7 @@ func (s *Store) MarkAIJobProcessing(ctx context.Context, id string) (bool, error
 
 func (s *Store) ListUnfinishedAIJobs(ctx context.Context, olderThan time.Time, limit int) ([]domain.AIJob, error) {
 	const query = `
-		SELECT id, team_id, author_user_id, job_type, status, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
+		SELECT id, team_id, author_user_id, job_type, status, origin, payload, result, coalesce(error_message, ''), created_at, updated_at, completed_at
 		FROM ai_jobs
 		WHERE status IN ('pending', 'processing') AND updated_at < $1
 		ORDER BY created_at ASC
@@ -530,6 +534,7 @@ func scanAIJob(row interface{ Scan(dest ...any) error }) (domain.AIJob, error) {
 		&job.AuthorUserID,
 		&job.Type,
 		&job.Status,
+		&job.Origin,
 		&payloadRaw,
 		&resultRaw,
 		&job.ErrorMessage,
@@ -895,4 +900,21 @@ func (s *Store) ListAIEnabledTeams(ctx context.Context) ([]domain.Team, error) {
 		teams = append(teams, team)
 	}
 	return teams, rows.Err()
+}
+
+// ClaimAIJobCompletion atomically assigns terminal completion to one caller.
+func (s *Store) ClaimAIJobCompletion(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) (bool, error) {
+	if status != domain.AIJobStatusCompleted && status != domain.AIJobStatusFailed {
+		return false, fmt.Errorf("claim AI job completion: invalid terminal status %q", status)
+	}
+
+	var resultVal any
+	if len(result) > 0 {
+		resultVal = json.RawMessage(result)
+	}
+	tag, err := s.pool.Exec(ctx, `update ai_jobs set status=$2, result=$3, error_message=NULLIF($4,''), updated_at=now(), completed_at=now() where id=$1 and status not in ('completed','failed')`, id, string(status), resultVal, errorMsg)
+	if err != nil {
+		return false, fmt.Errorf("claim AI job completion: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
 }

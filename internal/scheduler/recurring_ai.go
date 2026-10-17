@@ -181,6 +181,7 @@ func (s *Service) submitRecurringAIJob(ctx context.Context, in recurringAIJobInp
 	}
 
 	job, err := s.jobManager.SubmitJob(ctx, domain.AIJob{
+		Origin:       domain.AIJobOriginAutomation,
 		TeamID:       in.tmpl.TeamID,
 		AuthorUserID: in.tmpl.AuthorUserID,
 		Type:         domain.AIJobTypeVoiceEngine,

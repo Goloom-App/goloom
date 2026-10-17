@@ -309,6 +309,7 @@ create table if not exists ai_jobs (
     author_user_id uuid not null references users(id),
     job_type text not null,
     status text not null default 'pending',
+    origin text not null default 'user',
     payload jsonb not null default '{}',
     result jsonb,
     error_message text,
@@ -632,3 +633,5 @@ create table if not exists audit_pending (
     team_id uuid not null references teams(id) on delete cascade,
     payload text not null
 );
+
+alter table ai_jobs add column if not exists origin text not null default 'user';

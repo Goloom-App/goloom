@@ -2,10 +2,14 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"github.com/google/uuid"
 )
+
+var errAutomationAudit = errors.New("automation audit insert failed")
 
 func jobAuditEvent(job domain.AIJob, action, targetType, targetID string, metadata map[string]string) domain.AuditEvent {
 	if metadata == nil {
@@ -25,7 +29,7 @@ func (a *API) createJobAutomationPost(ctx context.Context, job domain.AIJob, inp
 	}
 	metadata["post_id"] = post.ID
 	if err := a.store.InsertAuditEvent(ctx, jobAuditEvent(job, "post.automation_create", "post", post.ID, metadata)); err != nil {
-		return domain.ScheduledPost{}, err
+		return domain.ScheduledPost{}, fmt.Errorf("%w: %w", errAutomationAudit, err)
 	}
 	return post, nil
 }

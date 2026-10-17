@@ -62,6 +62,7 @@ func makeRecurringJob(t *testing.T, f aiCompletionFixture, payload json.RawMessa
 		AuthorUserID: f.user.ID,
 		Type:         domain.AIJobTypeVoiceEngine,
 		Status:       domain.AIJobStatusPending,
+		Origin:       domain.AIJobOriginAutomation,
 		Payload:      payload,
 	})
 	if err != nil {

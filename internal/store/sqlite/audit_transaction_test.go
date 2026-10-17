@@ -237,7 +237,7 @@ func TestAuditAfterCommitHooks(t *testing.T) {
 		t.Fatal("outside hook not immediate")
 	}
 }
-func TestClaimAIJobCompletion(t *testing.T) {
+func TestAuditTransactionClaimAIJobCompletion(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 	u, err := s.UpsertOIDCUser(ctx, uuid.NewString(), "job@example.test", "Job")

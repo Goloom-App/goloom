@@ -105,6 +105,7 @@ create table if not exists ai_jobs (
     author_user_id text not null references users(id),
     job_type text not null,
     status text not null default 'pending',
+    origin text not null default 'user',
     payload text not null default '{}',
     result text,
     error_message text,
