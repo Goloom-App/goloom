@@ -18,25 +18,30 @@ import (
 // Scope fallback must retain #169's target validation and atomic completion claim.
 func TestCompleteAIJob_ScheduleAuthority(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		authority any
-		foreign   bool
-		overLimit bool
-		wantPost  domain.PostStatus
+		name          string
+		authority     any
+		foreign       bool
+		overLimit     bool
+		wantPost      domain.PostStatus
+		wantFailure   bool
+		noAutoPublish bool
+		emptyContent  bool
 	}{
 		{name: "allowed", authority: true, wantPost: domain.PostStatusPending},
 		{name: "draft only", authority: false, wantPost: domain.PostStatusDraft},
 		{name: "legacy", wantPost: domain.PostStatusDraft},
 		{name: "invalid authority", authority: "true", wantPost: domain.PostStatusDraft},
 		{name: "draft retains long content", authority: false, overLimit: true, wantPost: domain.PostStatusDraft},
-		{name: "scheduled rejects long content", authority: true, overLimit: true},
-		{name: "draft rejects foreign target", authority: false, foreign: true},
-		{name: "scheduled rejects foreign target", authority: true, foreign: true},
+		{name: "scheduled rejects long content", authority: true, overLimit: true, wantFailure: true},
+		{name: "draft rejects foreign target", authority: false, foreign: true, wantFailure: true},
+		{name: "scheduled rejects foreign target", authority: true, foreign: true, wantFailure: true},
+		{name: "no auto publish", authority: false, noAutoPublish: true},
+		{name: "empty content", authority: false, emptyContent: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			f := newAICompletionFixture(t)
-			if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
+			if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: !tc.noAutoPublish}); err != nil {
 				t.Fatal(err)
 			}
 			targetTeam := f.team.ID
@@ -69,6 +74,9 @@ func TestCompleteAIJob_ScheduleAuthority(t *testing.T) {
 			if tc.overLimit {
 				content = strings.Repeat("x", 501)
 			}
+			if tc.emptyContent {
+				content = ""
+			}
 			result, _ := json.Marshal(map[string]any{"content": content})
 			for range 2 {
 				instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, result, "")
@@ -81,12 +89,16 @@ func TestCompleteAIJob_ScheduleAuthority(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if tc.wantPost == "" {
+			if tc.wantFailure {
 				if len(posts) != 0 || updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage != "Auto-publish failed: post could not be created" {
 					t.Fatalf("invalid output: posts=%d job=%+v", len(posts), updated)
 				}
 				if !strings.Contains(logs.String(), "ai job auto-publish failed") {
 					t.Errorf("missing validation failure log: %s", logs.String())
+				}
+			} else if tc.wantPost == "" {
+				if len(posts) != 0 || updated.Status != domain.AIJobStatusCompleted {
+					t.Fatalf("unexpected post or failed completion: posts=%+v job=%+v", posts, updated)
 				}
 			} else {
 				if len(posts) != 1 || posts[0].Status != tc.wantPost || posts[0].Content != content || updated.Status != domain.AIJobStatusCompleted {
@@ -96,8 +108,34 @@ func TestCompleteAIJob_ScheduleAuthority(t *testing.T) {
 					t.Errorf("missing draft fallback log: %s", logs.String())
 				}
 			}
+
+			var output struct {
+				Content string `json:"content"`
+				Notice  string `json:"notice"`
+			}
+			if err := json.Unmarshal(updated.Result, &output); err != nil {
+				t.Fatal(err)
+			}
+			wantNotice := ""
+			if tc.wantPost == domain.PostStatusDraft {
+				wantNotice = "saved_as_draft_without_schedule_authority"
+			}
+			if output.Notice != wantNotice || output.Content != content {
+				t.Errorf("result=%s want notice=%q and original content", updated.Result, wantNotice)
+			}
+			if updated.Status == domain.AIJobStatusCompleted && updated.ErrorMessage != "" {
+				t.Errorf("notice must not be an error: %+v", updated)
+			}
 			select {
 			case event := <-events:
+				var streamed domain.AIJob
+				if err := json.Unmarshal([]byte(event.Data), &streamed); err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(streamed.Result, updated.Result) {
+					t.Errorf("SSE result=%s persisted=%s", streamed.Result, updated.Result)
+				}
+
 				data, _ := json.Marshal(event)
 				if !bytes.Contains(data, []byte(updated.Status)) {
 					t.Errorf("SSE missing final status: %s", data)
