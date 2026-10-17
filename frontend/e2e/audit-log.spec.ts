@@ -16,7 +16,7 @@ test.afterEach(({ page }) => {
 const event = (team: string, summary = 'Activity one', action = 'team.update') => ({
   id: `${team}-${summary}`, team_id: team, actor_user_id: 'system', actor_name: '', actor_email: '',
   actor_kind: 'system', action, target_type: 'post', target_id: 'post-123', summary,
-  metadata: { channel: 'scheduler', job_id: 'job-123', outcome: 'success', api_key: 'never-show-secret' },
+  metadata: { channel: 'scheduler', job_id: 'job-123', outcome: 'success', removed_count: '2', status_before: 'failed', status_after: 'scheduled', api_key: 'never-show-secret' },
   created_at: '2026-06-01T12:00:00Z',
 })
 const reply = (route: Route, entries: ReturnType<typeof event>[], total = entries.length) =>
@@ -123,6 +123,9 @@ test('polls new activity, shows safe automation details and filters historical a
   await expect(card.getByText('Automation', { exact: true }).first()).toBeVisible()
   await expect(card.getByText('post: post-123')).toBeVisible()
   await expect(card.getByText('job_id: job-123')).toBeVisible()
+  await expect(card.getByText('removed_count: 2')).toBeVisible()
+  await expect(card.getByText('status_before: failed')).toBeVisible()
+  await expect(card.getByText('status_after: scheduled')).toBeVisible()
   await expect(card.getByText('never-show-secret')).toHaveCount(0)
   await expect(card.getByText('historical.custom_action', { exact: true })).toBeVisible()
   await card.getByLabel('Filter by action').fill('historical.custom_action')
