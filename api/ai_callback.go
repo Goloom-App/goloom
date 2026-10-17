@@ -112,7 +112,11 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			action, outcome = "ai_job.fail", "failure"
 		}
 		if effectErr != nil {
-			a.log.ErrorContext(ctx, "ai job completion side effect failed", "job_id", job.ID, "team_id", job.TeamID, "error", effectErr)
+			logMessage := "ai job completion side effect failed"
+			if !automation {
+				logMessage = "ai job auto-publish failed"
+			}
+			a.log.ErrorContext(ctx, logMessage, "job_id", job.ID, "team_id", job.TeamID, "error", effectErr)
 			status = domain.AIJobStatusFailed
 			errorMessage = "Auto-publish failed: post could not be created"
 			if automation {
