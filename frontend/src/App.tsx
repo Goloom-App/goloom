@@ -87,6 +87,9 @@ function App() {
   const [calendarDragOverKey, setCalendarDragOverKey] = useState<string | null>(null)
   const prevSectionRef = useRef<AppSection | null>(null)
   const prevSectionBeforeComposerRef = useRef<AppSection | null>(null)
+  // Incremented whenever a different draft or team is loaded into the composer;
+  // the AI assist uses it to drop results that belong to an abandoned draft.
+  const composerDraftGenerationRef = useRef(0)
   const [settings, setSettings] = useState<SettingsState>(() => loadStoredSettings())
 
   // Tell the AI chat assistant which view the user is on, so it can ground its
@@ -158,6 +161,7 @@ function App() {
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [composerAiNotice, setComposerAiNotice] = useState<string | null>(null)
   const [createTeamOpen, setCreateTeamOpen] = useState(false)
   const [dismissedNoticeKey, setDismissedNoticeKey] = useState<string | null>(null)
   const [directoryUsers, setDirectoryUsers] = useState<UserRecord[]>([])
@@ -1017,7 +1021,21 @@ function App() {
     }
   }
 
+  // A new draft/team invalidates any AI job still running for the previous one.
+  function beginComposerDraft(): number {
+    composerDraftGenerationRef.current += 1
+    setComposerAiNotice(null)
+    return composerDraftGenerationRef.current
+  }
+
+  // Every way the active team can change (menu, create team, delete/leave,
+  // reload) lands here, so none of them needs to remember to bump the counter.
+  useEffect(() => {
+    composerDraftGenerationRef.current += 1
+  }, [effectiveSelectedTeamId])
+
   function openCreateComposer() {
+    beginComposerDraft()
     prevSectionBeforeComposerRef.current = section === 'composer' ? prevSectionBeforeComposerRef.current : section
     setComposerMode('create')
     setEditingPostId(null)
@@ -1034,6 +1052,7 @@ function App() {
     accountContentOverride?: Record<string, string>
     scheduledAt?: string
   }) {
+    beginComposerDraft()
     const baseDraft = defaultEditorDraft(currentDate, teamAccounts)
     setComposerScheduleError(false)
     setEditorDraft({
@@ -1074,6 +1093,9 @@ function App() {
   }
 
   async function openEditor(postId: string) {
+    // The generation taken here identifies this load: a newer draft or a team
+    // switch bumps it, and a stale load must not install its draft afterwards.
+    const loadGeneration = beginComposerDraft()
     const targetPost = await ensurePostLoaded(postId)
     if (!targetPost || targetPost.source === 'imported') {
       return
@@ -1092,6 +1114,11 @@ function App() {
         accountContentOverride = {}
       }
     }
+    if (composerDraftGenerationRef.current !== loadGeneration) {
+      return
+    }
+    // Invalidate AI jobs still running for the draft that is being replaced.
+    beginComposerDraft()
     setEditorDraft({
       title: targetPost.title,
       content: targetPost.content,
@@ -1122,6 +1149,7 @@ function App() {
   async function duplicatePost(postId: string) {
     const targetPost = posts.find((post) => post.id === postId)
     if (!targetPost) return
+    const loadGeneration = beginComposerDraft()
 
     let accountContentOverride: Record<string, string> = {}
     if (api) {
@@ -1137,6 +1165,10 @@ function App() {
       }
     }
 
+    if (composerDraftGenerationRef.current !== loadGeneration) {
+      return
+    }
+    beginComposerDraft()
     setEditorDraft({
       title: `${targetPost.title} (Copy)`,
       content: targetPost.content,
@@ -1946,6 +1978,17 @@ function App() {
         </section>
       ) : null}
 
+      {composerAiNotice ? (
+        <section className="glass-panel status-banner-panel" data-testid="composer-ai-notice">
+          <div>
+            <span className="hint">{composerAiNotice}</span>
+          </div>
+          <button className="btn btn--ghost btn--xs" onClick={() => setComposerAiNotice(null)}>
+            <X size={16} />
+          </button>
+        </section>
+      ) : null}
+
       <div className="pb-section">
         {section === 'composer' ? (
           <PostComposer
@@ -1979,6 +2022,8 @@ function App() {
             }
             schedulingPreferences={selectedTeam?.schedulingPreferences}
             isAiEnabled={selectedTeam?.isAiEnabled ?? false}
+            draftGenerationRef={composerDraftGenerationRef}
+            onDiscardedResult={() => setComposerAiNotice(t('composer.aiOptimizeDiscarded'))}
             standalone
             previewColumnExternal={!isMobile}
           />
@@ -2277,6 +2322,7 @@ function App() {
           teamAccounts={teamAccounts}
           onOpenInComposer={openComposerFromGeneratedContent}
           onApplyToComposer={({ content, accountContentOverride }) => {
+            beginComposerDraft()
             setEditorDraft((current) => ({
               ...current,
               ...(content !== undefined ? { content } : {}),
