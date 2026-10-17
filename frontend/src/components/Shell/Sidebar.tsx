@@ -111,20 +111,18 @@ export function Sidebar({
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className="radix-dropdown-content"
-              align="start"
-              style={{ maxHeight: 'var(--radix-dropdown-menu-content-available-height)', overflowY: 'auto' }}
-            >
-              {teams.map((team) => (
-                <DropdownMenu.Item
-                  key={team.id}
-                  className="radix-dropdown-item"
-                  onSelect={() => onSelectTeam(team.id)}
-                >
-                  {team.name}
-                </DropdownMenu.Item>
-              ))}
+            <DropdownMenu.Content className="radix-dropdown-content sidebar-team-menu" align="start">
+              <DropdownMenu.Group className="sidebar-team-menu__list">
+                {teams.map((team) => (
+                  <DropdownMenu.Item
+                    key={team.id}
+                    className="radix-dropdown-item"
+                    onSelect={() => onSelectTeam(team.id)}
+                  >
+                    {team.name}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Group>
               <DropdownMenu.Separator className="divider" />
               <DropdownMenu.Item
                 className="radix-dropdown-item"

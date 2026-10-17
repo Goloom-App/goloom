@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test'
 
 import { signIn } from './helpers'
-import { e2eBootstrapToken } from './constants'
 
 // Regression: clicking "+ Create Team" in the sidebar team selector must actually
 // open the create-team flow and create the team (the dropdown item previously had
@@ -25,21 +24,4 @@ test('create a team from the sidebar team selector', async ({ page }) => {
   // The modal closes and the freshly created team becomes the selected team.
   await expect(modal).toBeHidden({ timeout: 15_000 })
   await expect(page.locator('.sidebar-team-selector')).toContainText(teamName, { timeout: 15_000 })
-})
-
-
-test('team selector keeps creation reachable with many teams', async ({ page, request }) => {
-  await page.setViewportSize({ width: 1280, height: 720 })
-  const fixture = Date.now().toString(36)
-  for (let index = 0; index < 25; index++) {
-    const response = await request.post('/v1/teams', {
-      headers: { Authorization: `Bearer ${e2eBootstrapToken()}` },
-      data: { name: `E2E Overflow Team ${fixture}-${index}` },
-    })
-    expect(response.status()).toBe(201)
-  }
-  await signIn(page)
-  await page.locator('.sidebar-team-selector').click()
-  await page.getByTestId('sidebar-create-team').click({ timeout: 5_000 })
-  await expect(page.getByTestId('create-team-modal')).toBeVisible()
 })

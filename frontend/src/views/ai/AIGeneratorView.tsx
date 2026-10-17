@@ -52,6 +52,14 @@ const OCCASION_TYPES: { id: 'text' | 'url' | 'rss'; label: string }[] = [
   { id: 'rss', label: 'RSS-Feed' },
 ]
 
+function jobTargetAccountIds(job: AIJob): string[] | null {
+  const params = job.payload?.params
+  if (!params || typeof params !== 'object' || !('target_account_ids' in params)) return null
+  const ids = params.target_account_ids
+  if (!Array.isArray(ids) || ids.length === 0) return null
+  return ids.every((id): id is string => typeof id === 'string' && id.trim().length > 0) ? ids : null
+}
+
 export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGeneratorViewProps) {
   const { data: profile } = useTeamProfile(team.id)
   const { data: formats } = useCampaignFormats(team.id)
@@ -237,16 +245,19 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
 
   const saveGeneratedPost = async (job: AIJob) => {
     if (!job.result?.content) return
-    setSavingDraftId(job.id)
     setError(null)
+    const targetAccountIds = jobTargetAccountIds(job)
+    if (!targetAccountIds) {
+      setError('Zielkonten für den Job nicht gefunden')
+      return
+    }
+    setSavingDraftId(job.id)
     try {
       const api = getApi()
       await api.createAIDraft(team.id, {
         title: typeof job.result.title === 'string' ? job.result.title : '',
         content: String(job.result.content),
-        account_ids: Array.isArray(job.payload?.target_account_ids)
-          ? (job.payload.target_account_ids as string[])
-          : selectedAccounts,
+        account_ids: targetAccountIds,
         account_content_override:
           job.result.account_content_override && typeof job.result.account_content_override === 'object'
             ? (job.result.account_content_override as Record<string, string>)
@@ -261,6 +272,25 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
     } finally {
       setSavingDraftId(null)
     }
+  }
+
+  const openGeneratedPostInComposer = (job: AIJob) => {
+    setError(null)
+    const targetAccountIds = jobTargetAccountIds(job)
+    if (!targetAccountIds) {
+      setError('Zielkonten für den Job nicht gefunden')
+      return
+    }
+    onEditInComposer?.({
+      title: typeof job.result?.title === 'string' ? job.result.title : undefined,
+      content: String(job.result?.content ?? ''),
+      targetAccountIds,
+      accountContentOverride:
+        job.result?.account_content_override && typeof job.result.account_content_override === 'object'
+          ? (job.result.account_content_override as Record<string, string>)
+          : undefined,
+      scheduledAt: typeof job.result?.scheduled_at === 'string' ? job.result.scheduled_at : undefined,
+    })
   }
 
   const displayJob = voiceJob?.status === 'completed' ? voiceJob : latestVoiceResult
@@ -516,13 +546,7 @@ export function AIGeneratorView({ team, accounts, onEditInComposer }: AIGenerato
               <button
                 type="button"
                 className="btn btn--secondary"
-                onClick={() =>
-                  onEditInComposer({
-                    title: typeof displayJob.result?.title === 'string' ? displayJob.result.title : undefined,
-                    content: String(displayJob.result?.content ?? ''),
-                    targetAccountIds: selectedAccounts,
-                  })
-                }
+                onClick={() => openGeneratedPostInComposer(displayJob)}
               >
                 <Edit size={14} /> Im Composer öffnen
               </button>
