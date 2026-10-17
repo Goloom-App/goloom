@@ -23,6 +23,7 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
 - Team AI provider config (`/v1/teams/{teamID}/ai-service-config`) works before AI is enabled: `GET` for all team members, `PUT` owner-only; changing `provider`/`base_url` while a key is stored requires the key again (`ai_api_key_required`); `base_url` must be public unless allowlisted via `AI_ALLOWED_PRIVATE_HOSTS` (`invalid_ai_base_url`). AI execution endpoints still require `is_ai_enabled=true`
 - AI post callbacks discard and log every generated override key outside the payload targets before `Prepare`; targets remain subject to team validation. RSS/recurring AI validation failures before insertion retry with template content through the same pipeline, with logs and a failed-job error even when fallback succeeds. Insert/link/counter failures never retry post creation. Automation callback errors expose only fixed category messages in jobs/SSE; account/team IDs and store error details remain in logs.
 - AI jobs with client-supplied `params.no_publish: true` skip ordinary auto-publish post creation while retaining terminal completion, results and SSE. Server-origin automation callbacks retain their separate lifecycle. `refine_content` alone does not disable auto-publish.
+- AI cancellation returns 200 for already failed/`cancelled` jobs, including concurrent cancellations, without repeating completion side effects; other terminal jobs return 409 and foreign jobs remain 404.
 
 ## Work Guidance
 
