@@ -205,3 +205,56 @@ func (b *rssRetryLog) Write(p []byte) (int, error) {
 	return b.buffer.Write(p)
 }
 func (b *rssRetryLog) String() string { b.Lock(); defer b.Unlock(); return b.buffer.String() }
+
+func TestRSSCallbackFallbackLogsOmitCredentialItemKeys(t *testing.T) {
+	for _, scenario := range []string{"provider_failure", "empty_content", "validation_failure", "insert_failure"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx := context.Background()
+			f, account, _ := newRecurringCallbackFixture(t)
+			feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "redaction", TargetAccountIDs: []string{account.ID}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			itemKey := "https://rss-user:rss-password@example.test/item?token=rss-secret"
+			if err := f.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, ""); err != nil {
+				t.Fatal(err)
+			}
+			payload, err := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}, "rss_automation": map[string]any{"feed_id": feed.ID, "item_key": itemKey, "output_mode": "scheduled", "fallback_content": "fallback"}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			job := makeRecurringJob(t, f, payload)
+			var logs bytes.Buffer
+			var st store.Store = f.store
+			if scenario == "insert_failure" {
+				st = &automationWriteFailureStore{Store: f.store, operation: "insert"}
+			}
+			instance := api.New(slog.New(slog.NewTextHandler(&logs, nil)), st, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
+			status, result, message := domain.AIJobStatusCompleted, json.RawMessage(`{"content":" "}`), ""
+			if scenario == "provider_failure" {
+				status, result, message = domain.AIJobStatusFailed, nil, "provider failed"
+			}
+			if scenario == "validation_failure" {
+				result, _ = json.Marshal(map[string]string{"content": strings.Repeat("x", 501)})
+			}
+			if scenario == "insert_failure" {
+				result = json.RawMessage(`{"content":"generated"}`)
+			}
+			instance.CompleteAIJob(ctx, job.ID, status, result, message)
+			for _, secret := range []string{itemKey, "rss-user", "rss-password", "rss-secret"} {
+				if strings.Contains(logs.String(), secret) {
+					t.Errorf("RSS logs expose credential-bearing item key: %q", secret)
+				}
+			}
+			warning := "automation: used template fallback"
+			if scenario == "insert_failure" {
+				warning = "rss automation: item attempt failed"
+			}
+			for _, field := range []string{warning, "job_id=" + job.ID, "feed_id=" + feed.ID} {
+				if !strings.Contains(logs.String(), field) {
+					t.Errorf("RSS warning lacks %q: %s", field, logs.String())
+				}
+			}
+		})
+	}
+}

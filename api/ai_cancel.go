@@ -46,9 +46,9 @@ func (a *API) handleCancelAIJob(w http.ResponseWriter, r *http.Request) {
 		if meta := parseRSSAutomationMeta(job.Payload); meta != nil {
 			attempts, releaseErr := a.store.ReleaseRSSItemAttempt(context.WithoutCancel(r.Context()), job.TeamID, meta.FeedID, meta.ItemKey)
 			if releaseErr != nil {
-				a.log.WarnContext(r.Context(), "cancelled RSS AI job item release failed", "job_id", job.ID, "feed_id", meta.FeedID, "item_key", meta.ItemKey, "attempts", attempts, "error", releaseErr)
+				a.log.WarnContext(r.Context(), "cancelled RSS AI job item release failed", "job_id", job.ID, "feed_id", meta.FeedID, "attempts", attempts, "error", releaseErr)
 			} else if attempts >= domain.MaxRSSItemAttempts {
-				a.log.WarnContext(r.Context(), "cancelled RSS AI job exhausted item attempts", "job_id", job.ID, "feed_id", meta.FeedID, "item_key", meta.ItemKey, "attempts", attempts)
+				a.log.WarnContext(r.Context(), "cancelled RSS AI job exhausted item attempts", "job_id", job.ID, "feed_id", meta.FeedID, "attempts", attempts)
 			}
 		}
 	}

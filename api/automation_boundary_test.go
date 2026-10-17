@@ -179,7 +179,10 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 						}
 						fields := []string{"WARN", "job_id=" + job.ID, "post_id=" + posts[0].ID, "reason=" + wantReason}
 						if kind == "rss" {
-							fields = append(fields, "feed_id="+feed.ID, "item_key=item")
+							if strings.Contains(logs.String(), "item_key=") {
+								t.Error("fallback warning exposes raw RSS item key")
+							}
+							fields = append(fields, "feed_id="+feed.ID)
 						}
 						for _, field := range fields {
 							if !strings.Contains(logs.String(), field) {

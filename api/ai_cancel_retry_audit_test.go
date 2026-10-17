@@ -226,7 +226,10 @@ func TestCancelRSSRetryReleaseWarnings(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("cancel: %d %s", rec.Code, rec.Body.String())
 			}
-			for _, field := range []string{"level=WARN", warning, "job_id=" + job.ID, "feed_id=" + feed.ID, "item_key=item"} {
+			if strings.Contains(logs.String(), "item_key=") {
+				t.Fatal("cancel warning exposes raw RSS item key")
+			}
+			for _, field := range []string{"level=WARN", warning, "job_id=" + job.ID, "feed_id=" + feed.ID} {
 				if !strings.Contains(logs.String(), field) {
 					t.Fatalf("release warning lacks %q: %s", field, logs.String())
 				}

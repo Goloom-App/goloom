@@ -103,7 +103,7 @@ func (a *API) createRSSAutomationPost(
 		return fmt.Errorf("%w: create automation post: %w", errAutomationPostNotCreated, err)
 	}
 	if post.AIFallbackReason != nil {
-		a.log.WarnContext(ctx, "automation: used template fallback", "job_id", job.ID, "feed_id", meta.FeedID, "item_key", meta.ItemKey, "post_id", post.ID, "reason", *post.AIFallbackReason)
+		a.log.WarnContext(ctx, "automation: used template fallback", "job_id", job.ID, "feed_id", meta.FeedID, "post_id", post.ID, "reason", *post.AIFallbackReason)
 	}
 	a.notifyReviewCreated(ctx, job.TeamID, post)
 	return nil

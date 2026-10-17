@@ -118,11 +118,11 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			if rssMeta != nil && errors.Is(effectErr, errAutomationPostNotCreated) {
 				attempts, releaseErr := a.store.ReleaseRSSItemAttempt(ctx, job.TeamID, rssMeta.FeedID, rssMeta.ItemKey)
 				if errors.Is(releaseErr, domain.ErrNotFound) {
-					a.log.InfoContext(ctx, "rss automation: item already linked or unavailable", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey)
+					a.log.InfoContext(ctx, "rss automation: item already linked or unavailable", "job_id", job.ID, "feed_id", rssMeta.FeedID)
 				} else if releaseErr != nil {
-					a.log.ErrorContext(ctx, "rss automation: release item failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey, "error", releaseErr)
+					a.log.ErrorContext(ctx, "rss automation: release item failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "error", releaseErr)
 				} else {
-					a.log.WarnContext(ctx, "rss automation: item attempt failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey, "attempts", attempts, "exhausted", attempts >= domain.MaxRSSItemAttempts)
+					a.log.WarnContext(ctx, "rss automation: item attempt failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "attempts", attempts, "exhausted", attempts >= domain.MaxRSSItemAttempts)
 				}
 			}
 			logMessage := "ai job completion side effect failed"

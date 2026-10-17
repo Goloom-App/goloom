@@ -153,7 +153,7 @@ func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFe
 		return fmt.Errorf("%w: %w", errRSSPostNotCreated, err)
 	}
 	if input.AIFallbackReason != nil {
-		s.logger.WarnContext(ctx, "rss automation: used template fallback", "job_id", "", "feed_id", feed.ID, "item_key", itemKey, "post_id", post.ID, "reason", *input.AIFallbackReason)
+		s.logger.WarnContext(ctx, "rss automation: used template fallback", "job_id", "", "feed_id", feed.ID, "item_key_hash", sourceKey(itemKey), "post_id", post.ID, "reason", *input.AIFallbackReason)
 	}
 	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)
 	s.notifyReviewCreated(ctx, feed.TeamID, post)
