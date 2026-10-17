@@ -271,7 +271,9 @@ func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSS
 	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, fallbackReason != nil, fallbackReason); err != nil {
 		if fallbackReason != nil && errors.Is(err, errRSSPostNotCreated) {
 			attempts, releaseErr := s.store.ReleaseRSSItemAttempt(context.WithoutCancel(ctx), feed.TeamID, feed.ID, itemKey)
-			if releaseErr != nil {
+			if errors.Is(releaseErr, domain.ErrNotFound) {
+				s.logger.InfoContext(ctx, "rss import: item already linked or unavailable", "feed_id", feed.ID, "item_key", itemKey)
+			} else if releaseErr != nil {
 				s.logger.ErrorContext(ctx, "rss import: release item failed", "feed_id", feed.ID, "item_key", itemKey, "error", releaseErr)
 			} else {
 				s.logger.WarnContext(ctx, "rss import: item attempt failed", "feed_id", feed.ID, "item_key", itemKey, "attempts", attempts, "exhausted", attempts >= domain.MaxRSSItemAttempts)

@@ -117,7 +117,9 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		if effectErr != nil {
 			if rssMeta != nil && errors.Is(effectErr, errAutomationPostNotCreated) {
 				attempts, releaseErr := a.store.ReleaseRSSItemAttempt(ctx, job.TeamID, rssMeta.FeedID, rssMeta.ItemKey)
-				if releaseErr != nil {
+				if errors.Is(releaseErr, domain.ErrNotFound) {
+					a.log.InfoContext(ctx, "rss automation: item already linked or unavailable", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey)
+				} else if releaseErr != nil {
 					a.log.ErrorContext(ctx, "rss automation: release item failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey, "error", releaseErr)
 				} else {
 					a.log.WarnContext(ctx, "rss automation: item attempt failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey, "attempts", attempts, "exhausted", attempts >= domain.MaxRSSItemAttempts)

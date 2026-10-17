@@ -134,8 +134,16 @@ func TestRSSPostCommitReadFailureKeepsItemReserved(t *testing.T) {
 	}
 	payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}, "rss_automation": map[string]any{"feed_id": feed.ID, "item_key": "item", "output_mode": "draft", "fallback_content": "fallback"}}})
 	job := makeRecurringJob(t, f, payload)
-	instance := api.New(nil, rssPostReadFailureStore{f.store}, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	instance := api.New(logger, rssPostReadFailureStore{f.store}, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
 	instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"generated"}`), "")
+	if !strings.Contains(logs.String(), `level=INFO msg="rss automation: item already linked or unavailable"`) {
+		t.Fatalf("benign release missing info log: %s", logs.String())
+	}
+	if strings.Contains(logs.String(), `level=ERROR msg="rss automation: release item failed"`) {
+		t.Fatalf("benign release logged ERROR: %s", logs.String())
+	}
 	imported, err := f.store.RSSItemAlreadyImported(ctx, feed.ID, "item")
 	if err != nil || !imported {
 		t.Fatalf("committed post released item: imported=%v err=%v", imported, err)
