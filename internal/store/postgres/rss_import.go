@@ -11,6 +11,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// Only attempted reservations expire; baseline markers remain permanent. Active jobs
+// protect their markers even when generation outlives the fifteen-minute lease.
+const rssItemRetryEligible = `(retry_available or (attempts > 0 and created_at <= now() - interval '15 minutes'
+ and not exists (select 1 from ai_jobs j join rss_feed_configs f on f.id = rss_imported_items.feed_id
+ where j.team_id = f.team_id and j.origin = 'automation' and j.status in ('pending', 'processing')
+ and j.payload #>> '{params,rss_automation,feed_id}' = rss_imported_items.feed_id::text
+ and j.payload #>> '{params,rss_automation,item_key}' = rss_imported_items.item_key)))`
+
 func (s *Store) ListActiveRSSFeedConfigs(ctx context.Context, limit int) ([]domain.RSSFeedConfig, error) {
 	if limit <= 0 {
 		limit = 200
@@ -54,7 +62,7 @@ func (s *Store) CountRSSFeedPostsToday(ctx context.Context, feedID string) (int,
 }
 
 func (s *Store) RSSItemAlreadyImported(ctx context.Context, feedID, itemKey string) (bool, error) {
-	const query = `SELECT 1 FROM rss_imported_items WHERE feed_id = $1 AND item_key = $2 AND (post_id IS NOT NULL OR NOT retry_available OR attempts >= $3) LIMIT 1`
+	const query = `SELECT 1 FROM rss_imported_items WHERE feed_id = $1 AND item_key = $2 AND (post_id IS NOT NULL OR NOT ` + rssItemRetryEligible + ` OR attempts >= $3) LIMIT 1`
 	var one int
 	err := s.pool.QueryRow(ctx, query, feedID, itemKey, domain.MaxRSSItemAttempts).Scan(&one)
 	if err != nil {
@@ -131,8 +139,8 @@ func (s *Store) ClaimRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey
 	tag, err := s.pool.Exec(ctx, `
  INSERT INTO rss_imported_items (feed_id, item_key, attempts, retry_available)
  SELECT $1, $2, 1, false WHERE EXISTS (SELECT 1 FROM rss_feed_configs WHERE id = $1 AND team_id = $3)
- ON CONFLICT(feed_id, item_key) DO UPDATE SET attempts = rss_imported_items.attempts + 1, retry_available = false
- WHERE rss_imported_items.post_id IS NULL AND rss_imported_items.retry_available AND rss_imported_items.attempts < $4`,
+ ON CONFLICT(feed_id, item_key) DO UPDATE SET attempts = rss_imported_items.attempts + 1, retry_available = false, created_at = now()
+ WHERE rss_imported_items.post_id IS NULL AND `+rssItemRetryEligible+` AND rss_imported_items.attempts < $4`,
 		feedID, itemKey, teamID, domain.MaxRSSItemAttempts)
 	if err != nil {
 		return false, fmt.Errorf("ClaimRSSItemAttempt: %w", err)
