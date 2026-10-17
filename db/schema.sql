@@ -147,6 +147,7 @@ create table if not exists scheduled_posts (
     attempt_count integer not null default 0,
     last_error text,
     ai_fallback_reason text,
+    ai_job_id text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -414,3 +415,4 @@ create table if not exists audit_pending (
 );
 
 alter table scheduled_posts add column if not exists ai_fallback_reason text;
+alter table scheduled_posts add column if not exists ai_job_id text;
