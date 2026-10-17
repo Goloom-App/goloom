@@ -65,3 +65,23 @@ func TestChatAdapterPassesViewContext(t *testing.T) {
 	}
 	t.Fatal("get_current_view not exposed to chat")
 }
+
+func TestFocusedPostViewIdentifiesPostWithoutLoadingContent(t *testing.T) {
+	view := json.RawMessage(`{"section":"contentCalendar","focus":{"type":"post","id":"p1"}}`)
+	summary := ViewSummary(view)
+	for _, want := range []string{"post p1", "get_posts", "search_posts", "current team"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary missing %q: %s", want, summary)
+		}
+	}
+	out, err := coreGetCurrentView(context.Background(), Deps{}, Invocation{ViewContext: view}, GetCurrentViewInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out.View) != string(view) {
+		t.Fatalf("view = %s, want identity-only focus %s", out.View, view)
+	}
+	if !strings.Contains(out.Note, "get_posts") || !strings.Contains(out.Note, "current team") {
+		t.Fatalf("focused view must explain team-scoped content lookup: %+v", out)
+	}
+}
