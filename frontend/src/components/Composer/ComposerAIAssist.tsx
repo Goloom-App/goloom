@@ -6,7 +6,7 @@ import { Loader2, MessageSquareText, Sparkles } from 'lucide-react'
 import { getApiClient, useTriggerAIJob } from '../../hooks/useAI'
 import { useAIJobStream } from '../../hooks/useSSE'
 import { openAIChatWithComposerContext } from '../ai/composerChatBridge'
-import { effectiveBody } from './composerUtils'
+import { effectiveBody, mergeAccountContentOverride } from './composerUtils'
 import type { AccountRecord } from '../../types'
 import type { EditorDraftState } from './types'
 
@@ -99,7 +99,7 @@ export function ComposerAIAssist({
       setDraft((current) => ({
         ...current,
         content,
-        accountContentOverride: overrides,
+        accountContentOverride: mergeAccountContentOverride(current.accountContentOverride, overrides),
       }))
       setStatusMessage(t('composer.aiOptimizeApplied'))
       setShowInstruction(false)
