@@ -672,7 +672,8 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 
 const rssFeedSelectQuery = `
 		select id, team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day, counter_next,
-		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at
+		       prompt_hint, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at,
+ (select count(*) from rss_imported_items where feed_id = rss_feed_configs.id and post_id is null and attempts >= 3 and ` + rssItemRetryEligible + `) as exhausted_items_count
 		from rss_feed_configs
 `
 
@@ -694,7 +695,7 @@ func scanRSSFeedConfig(scanner rowScanner) (domain.RSSFeedConfig, error) {
 	var syncMode string
 	if err := scanner.Scan(
 		&cfg.ID, &cfg.TeamID, &cfg.FeedURL, &cfg.Name, &isActive, &aiEnhanceEnabled, &cfg.ContentTemplate, &cfg.TitleTemplate, &cfg.TitleHint, &outputMode, &cfg.MaxPostsPerDay, &cfg.CounterNext,
-		&cfg.PromptHint, &targetRaw, &cfg.Tonality, &syncMode, &lastFetchedAt, &createdAt,
+		&cfg.PromptHint, &targetRaw, &cfg.Tonality, &syncMode, &lastFetchedAt, &createdAt, &cfg.ExhaustedItemsCount,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.RSSFeedConfig{}, fmt.Errorf("rss feed config not found: %w", sql.ErrNoRows)

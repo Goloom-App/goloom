@@ -759,6 +759,7 @@ func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeed
 		&syncMode,
 		&lastFetched,
 		&feed.CreatedAt,
+		&feed.ExhaustedItemsCount,
 	); err != nil {
 		return domain.RSSFeedConfig{}, err
 	}

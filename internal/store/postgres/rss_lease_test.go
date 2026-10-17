@@ -69,6 +69,45 @@ func TestRSSReservationLease(t *testing.T) {
 	if won, err := s.ClaimRSSItemAttempt(ctx, team.ID, feed.ID, "orphan"); err != nil || won {
 		t.Fatalf("exhausted orphan claimed=%v err=%v", won, err)
 	}
+	// Only stale/released exhausted markers count; active third attempts do not.
+	checkCount := func(feed domain.RSSFeedConfig, want float64) {
+		t.Helper()
+		raw, _ := json.Marshal(feed)
+		var data map[string]any
+		_ = json.Unmarshal(raw, &data)
+		if data["exhausted_items_count"] != want {
+			t.Fatalf("exhausted_items_count=%v want=%v", data["exhausted_items_count"], want)
+		}
+	}
+	current, err := s.GetRSSFeedConfigByID(ctx, team.ID, feed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCount(current, 1)
+	feeds, err := s.ListRSSFeedConfigs(ctx, team.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCount(feeds[0], 1)
+	for attempt := 2; attempt <= 3; attempt++ {
+		if _, err := s.ReleaseRSSItemAttempt(ctx, team.ID, feed.ID, "active"); err != nil {
+			t.Fatal(err)
+		}
+		if won, err := s.ClaimRSSItemAttempt(ctx, team.ID, feed.ID, "active"); err != nil || !won {
+			t.Fatal(won, err)
+		}
+	}
+	age("active")
+	current, err = s.GetRSSFeedConfigByID(ctx, team.ID, feed.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCount(current, 1)
+	// Rewind active marker to second attempt for the terminal-claim recovery assertion.
+	if _, err := db.Exec(ctx, "update rss_imported_items set attempts = 2 where feed_id = $1 and item_key = 'active'", feed.ID); err != nil {
+		t.Fatal(err)
+	}
+	age("active")
 	// Simulates crash after cancel/completion claims terminal state, before marker release.
 	if _, err := s.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
 		t.Fatal(err)
