@@ -1022,9 +1022,10 @@ function App() {
   }
 
   // A new draft/team invalidates any AI job still running for the previous one.
-  function beginComposerDraft() {
+  function beginComposerDraft(): number {
     composerDraftGenerationRef.current += 1
     setComposerAiNotice(null)
+    return composerDraftGenerationRef.current
   }
 
   // Every way the active team can change (menu, create team, delete/leave,
@@ -1092,11 +1093,13 @@ function App() {
   }
 
   async function openEditor(postId: string) {
+    // The generation taken here identifies this load: a newer draft or a team
+    // switch bumps it, and a stale load must not install its draft afterwards.
+    const loadGeneration = beginComposerDraft()
     const targetPost = await ensurePostLoaded(postId)
     if (!targetPost || targetPost.source === 'imported') {
       return
     }
-    beginComposerDraft()
     setComposerScheduleError(false)
     let accountContentOverride: Record<string, string> = {}
     if (api) {
@@ -1111,6 +1114,11 @@ function App() {
         accountContentOverride = {}
       }
     }
+    if (composerDraftGenerationRef.current !== loadGeneration) {
+      return
+    }
+    // Invalidate AI jobs still running for the draft that is being replaced.
+    beginComposerDraft()
     setEditorDraft({
       title: targetPost.title,
       content: targetPost.content,
@@ -1141,7 +1149,7 @@ function App() {
   async function duplicatePost(postId: string) {
     const targetPost = posts.find((post) => post.id === postId)
     if (!targetPost) return
-    beginComposerDraft()
+    const loadGeneration = beginComposerDraft()
 
     let accountContentOverride: Record<string, string> = {}
     if (api) {
@@ -1157,6 +1165,10 @@ function App() {
       }
     }
 
+    if (composerDraftGenerationRef.current !== loadGeneration) {
+      return
+    }
+    beginComposerDraft()
     setEditorDraft({
       title: `${targetPost.title} (Copy)`,
       content: targetPost.content,

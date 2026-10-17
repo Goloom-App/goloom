@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
-import { signIn } from './helpers'
+import { e2eBootstrapToken } from './constants'
+import { getFirstTeamId, openContentCalendar, openSeededPostPreview, signIn } from './helpers'
 
 const DEFAULT_PLACEHOLDER = "What's on your mind?"
 const OVERRIDE_PLACEHOLDER = 'Leave aligned with default, or type a custom version for this account.'
@@ -49,7 +50,7 @@ async function mockTeams(page: Page) {
       json: {
         ...data,
         items: [
-          ...data.items,
+          ...data.items.map((item) => ({ ...item, is_ai_enabled: true })),
           mockTeam(TEAM_ID, 'Mock AI team', template),
           mockTeam(OTHER_TEAM_ID, 'Mock other team', template),
           ...extra,
@@ -313,5 +314,89 @@ test.describe('composer AI assist', () => {
     // … while the account without a user override receives the AI variant.
     await page.getByRole('tab', { name: new RegExp(BLUESKY_USERNAME) }).click()
     await expect(overrideBody).toHaveValue('AI bluesky variant')
+  })
+
+  test.describe('async editor loads', () => {
+    const VERSIONS = '**/v1/teams/*/posts/*/versions'
+
+    /** Holds the next post-versions response until release() is called. */
+    async function holdNextVersionsRequest(page: Page) {
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let held = false
+      await page.route(VERSIONS, async (route) => {
+        if (held || route.request().method() !== 'GET') {
+          await route.fallback()
+          return
+        }
+        held = true
+        await gate
+        await route.fallback()
+      })
+      return { release: () => release(), isHeld: () => held }
+    }
+
+    test('an editor load finishing after another draft was opened is discarded', async ({ page, baseURL }) => {
+      test.setTimeout(120_000)
+      const teamId = await getFirstTeamId(baseURL!, e2eBootstrapToken())
+      await mockTeams(page)
+      await mockTeamAccounts(page, teamId)
+      const job = await mockComposerAI(page, teamId, {
+        content: 'AI refined draft body.',
+        accountContentOverride: {},
+      })
+      await signIn(page)
+      await openContentCalendar(page)
+
+      // Learn the seeded post's text so draft B can share it exactly.
+      await openSeededPostPreview(page)
+      await page.getByTestId('preview-edit-button').click()
+      const defaultBody = page.getByPlaceholder(DEFAULT_PLACEHOLDER)
+      await expect(page.getByTestId('composer-title')).toHaveText('Edit post', { timeout: 15_000 })
+      const seededText = await defaultBody.inputValue()
+      await page.getByRole('button', { name: 'Cancel' }).click()
+
+      // Draft A: the post editor whose versions request is held back.
+      const hold = await holdNextVersionsRequest(page)
+      // Cancel restores the calendar with the preview still open.
+      await page.getByTestId('preview-edit-button').click()
+      await expect.poll(hold.isHeld).toBe(true)
+
+      // Draft B: a new post with identical shared text, optimization running.
+      await page.getByRole('button', { name: 'New Post' }).click()
+      await expect(page.getByTestId('composer-title')).toHaveText('Create post')
+      await defaultBody.fill(seededText)
+      await startOptimize(page)
+      await expect.poll(job.triggerCount).toBe(1)
+
+      hold.release()
+      await page.waitForTimeout(500)
+      job.complete()
+
+      await expect(page.getByTestId('composer-ai-optimize')).toBeEnabled({ timeout: 20_000 })
+      await expect(page.getByTestId('composer-title')).toHaveText('Create post')
+      await expect(defaultBody).toHaveValue('AI refined draft body.')
+    })
+
+    test('an editor load finishing after a team switch does not restore the old draft', async ({ page }) => {
+      test.setTimeout(120_000)
+      await mockTeams(page)
+      await signIn(page)
+      await openContentCalendar(page)
+      await openSeededPostPreview(page)
+
+      const hold = await holdNextVersionsRequest(page)
+      await page.getByTestId('preview-edit-button').click()
+      await expect.poll(hold.isHeld).toBe(true)
+
+      await page.locator('.sidebar-team-selector').click()
+      await page.getByRole('menuitem', { name: 'Mock other team', exact: true }).click()
+
+      hold.release()
+      await page.waitForTimeout(1000)
+      await expect(page.getByTestId('composer-view')).toHaveCount(0)
+    })
   })
 })
