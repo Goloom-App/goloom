@@ -66,6 +66,7 @@ const slashCommands: SlashCommand[] = [
 interface AIChatWidgetProps {
   api: ApiClient
   teamId: string
+  focusedPostId?: string
   teamAccounts: AccountRecord[]
   onOpenInComposer: (payload: {
     title?: string
@@ -77,7 +78,7 @@ interface AIChatWidgetProps {
   onApplyToComposer?: (payload: { content?: string; accountContentOverride?: Record<string, string> }) => void
 }
 
-export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onApplyToComposer }: AIChatWidgetProps) {
+export function AIChatWidget({ api, teamId, focusedPostId, teamAccounts, onOpenInComposer, onApplyToComposer }: AIChatWidgetProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<ChatEntry[]>([])
@@ -170,7 +171,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
       setComposerContext({ content: detail.content, title: detail.title, targets: detail.targets ?? [] })
       // Mirror the open composer draft into the view context so the agent can see,
       // via get_current_view, which post is open and what it currently says.
-      setViewFocus({ type: 'composerDraft', label: detail.title })
+      setViewFocus(focusedPostId ? { type: 'post', id: focusedPostId } : { type: 'composerDraft', label: detail.title })
       setViewVisible({
         composer: {
           content: detail.content,
@@ -193,7 +194,7 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     }
     window.addEventListener(composerContextEvent, onComposerContext)
     return () => window.removeEventListener(composerContextEvent, onComposerContext)
-  }, [composerDetached])
+  }, [composerDetached, focusedPostId])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -476,8 +477,11 @@ export function AIChatWidget({ api, teamId, teamAccounts, onOpenInComposer, onAp
     }
     const mentions = pendingMentions.filter((mention) => text.includes(`@${mention.name}`))
     const viewContext = outgoingViewContext(getViewContext(), composerContext, deselectedAccountIds)
+    // Persisted identity comes from the current selection, never a stale composer event.
+    if (focusedPostId) viewContext.focus = { type: 'post', id: focusedPostId }
+    else if (viewContext.focus?.type === 'post') delete viewContext.focus
     const scopedComposer = viewContext.visible?.composer
-    const modelText = scopedComposer ? text + buildComposerNote(scopedComposer) : text
+    const modelText = scopedComposer ? text + buildComposerNote(scopedComposer, focusedPostId) : text
     const userMessage: BackendAIChatMessage = {
       role: 'user',
       content: modelText,
@@ -857,13 +861,15 @@ function outgoingViewContext(
 
 // Scope was already filtered with the outgoing view context; never restore
 // excluded accounts when no targets remain.
-function buildComposerNote(composerContext: ComposerChatContext): string {
+function buildComposerNote(composerContext: ComposerChatContext, focusedPostId?: string): string {
   const lines = composerContext.targets.map((target) => {
     const version = target.hasOverride ? `own version: ${target.text}` : 'uses the default text'
     return `- ${target.name} (id=${target.accountId}, ${target.provider}, max ${target.maxChars}): ${version}`
   })
   return (
-    '\n\n[Composer context — the user is editing an UNSAVED post (it has NO id; use revise_composer_post, never create_draft or update_draft). ' +
+    '\n\n[Composer context — the user is editing ' +
+    (focusedPostId ? 'UNSAVED changes to the focused saved post' : 'an UNSAVED post (it has NO id)') +
+    '; use revise_composer_post for these unsaved edits, never create_draft or update_draft. ' +
     'The default text is the long version used by accounts without an override.]\n' +
     `Default text:\n${composerContext.content || '(empty)'}\n` +
     `Accounts in scope:\n${lines.join('\n')}` +

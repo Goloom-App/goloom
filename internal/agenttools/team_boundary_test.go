@@ -92,3 +92,54 @@ func TestChatConfirmedPostMutationsWithinActiveTeam(t *testing.T) {
 		t.Fatalf("same-team delete failed: posts=%v, err=%v", posts, err)
 	}
 }
+
+func TestFocusedForeignPostDoesNotGrantTeamAccess(t *testing.T) {
+	f := newFixture(t)
+	foreign := f.foreignAccount(t) // User owns both teams; active chat team still bounds access.
+	inv := f.inv(t, `["read","write","delete"]`)
+	post, err := coreDraftPost(bg(), f.deps, inv, DraftPostInput{
+		TeamID: foreign.TeamID, Title: "private title", Content: "private body", TargetAccounts: []string{foreign.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, _ := json.Marshal(map[string]any{"section": "contentCalendar", "focus": map[string]string{"type": "post", "id": post.PostID}})
+	bind := ChatBinding{TeamID: f.team.ID, Principal: inv.Principal, ViewContext: view}
+	args, _ := json.Marshal(map[string]string{"post_id": post.PostID, "team_id": foreign.TeamID, "query": post.PostID, "content": "changed"})
+	seen := map[string]bool{}
+	for _, tool := range ChatTools(f.deps, bind) {
+		if tool.Name != "get_current_view" && tool.Name != "get_posts" && tool.Name != "search_posts" {
+			continue
+		}
+		seen[tool.Name] = true
+		summary, payload, err := tool.Execute(bg(), args)
+		if err != nil {
+			t.Fatalf("%s: %v", tool.Name, err)
+		}
+		if strings.Contains(summary+string(payload), "private") {
+			t.Fatalf("%s leaked foreign content: %s %s", tool.Name, summary, payload)
+		}
+		if tool.Name == "get_current_view" && !strings.Contains(summary+string(payload), post.PostID) {
+			t.Fatal("focused identity missing from view")
+		}
+		if tool.Name != "get_current_view" && strings.Contains(summary+string(payload), post.PostID) {
+			t.Fatalf("%s read foreign focused post", tool.Name)
+		}
+	}
+	for _, name := range []string{"get_current_view", "get_posts", "search_posts"} {
+		if !seen[name] {
+			t.Fatalf("missing tool %s", name)
+		}
+	}
+	for _, name := range []string{"modify_post", "delete_post"} {
+		_, missingErr := RunConfirmed(bg(), f.deps, bind, name, json.RawMessage(`{"post_id":"missing","content":"changed"}`))
+		_, err := RunConfirmed(bg(), f.deps, bind, name, args)
+		if missingErr == nil || !errors.Is(err, missingErr) {
+			t.Fatalf("%s focused foreign post must match missing post: %v != %v", name, err, missingErr)
+		}
+	}
+	unchanged, err := f.store.GetScheduledPost(bg(), foreign.TeamID, post.PostID)
+	if err != nil || unchanged.Content != "private body" {
+		t.Fatalf("foreign post changed: %+v, %v", unchanged, err)
+	}
+}

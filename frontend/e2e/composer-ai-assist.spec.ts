@@ -235,6 +235,10 @@ test.describe('composer AI assist', () => {
     await page.locator('.sidebar-team-selector').click()
     await page.getByRole('menuitem', { name: 'Mock other team', exact: true }).click()
 
+    await expect(defaultBody).toHaveValue('')
+    // Retype identical text so the content-change guard cannot mask a broken team guard.
+    await defaultBody.fill('Draft of the first team.')
+
     job.complete()
 
     await expect(page.getByTestId('composer-ai-notice')).toBeVisible({ timeout: 20_000 })
@@ -267,6 +271,10 @@ test.describe('composer AI assist', () => {
     await page.getByTestId('create-team-name').fill('Brand new team')
     await page.getByTestId('create-team-submit').click()
     await expect(page.getByTestId('create-team-modal')).toBeHidden()
+
+    await expect(defaultBody).toHaveValue('')
+    // Retype identical text so the content-change guard cannot mask a broken team guard.
+    await defaultBody.fill('Draft of the first team.')
 
     job.complete()
 

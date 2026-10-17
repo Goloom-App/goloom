@@ -32,7 +32,8 @@ import { SettingsView } from './views/settings/SettingsView'
 import { TeamSettingsView } from './views/teams/TeamSettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
 import { AIChatWidget } from './components/ai/AIChatWidget'
-import { setViewSection } from './components/ai/viewContextBridge'
+import { getViewContext, setViewFocus, setViewSection } from './components/ai/viewContextBridge'
+import { clearComposerChatContext } from './components/ai/composerChatBridge'
 import { BrandProfileView } from './views/ai/BrandProfileView'
 import { AIGeneratorView } from './views/ai/AIGeneratorView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
@@ -87,6 +88,7 @@ function App() {
   const [calendarDragOverKey, setCalendarDragOverKey] = useState<string | null>(null)
   const prevSectionRef = useRef<AppSection | null>(null)
   const prevSectionBeforeComposerRef = useRef<AppSection | null>(null)
+  const returningFromComposerRef = useRef(false)
   // Incremented whenever a different draft or team is loaded into the composer;
   // the AI assist uses it to drop results that belong to an abandoned draft.
   const composerDraftGenerationRef = useRef(0)
@@ -960,12 +962,43 @@ function App() {
   }, [expandedPostId, mobilePreviewPostId, posts])
   const editTargetPost = useMemo(() => teamPosts.find((post) => post.id === editingPostId) ?? null, [editingPostId, teamPosts])
 
+  const focusedPostId = section === 'composer'
+    ? editTargetPost?.id
+    : isMobile ? teamPosts.find((post) => post.id === mobilePreviewPostId)?.id
+    : showPreviewColumn ? selectedPost?.id : undefined
+
+  // Preserve desktop preview across composer entry and explicit return only.
+  useEffect(() => {
+    if (section !== 'composer' && !returningFromComposerRef.current) setExpandedPostId(null)
+    returningFromComposerRef.current = false
+    setMobilePreviewPostId(null)
+    if (section !== 'composer') setEditingPostId(null)
+  }, [section])
+
+  useEffect(() => {
+    returningFromComposerRef.current = false
+    setExpandedPostId(null)
+    setEditingPostId(null)
+    setMobilePreviewPostId(null)
+    setViewFocus(undefined)
+    setEditorDraft(defaultEditorDraft(new Date(), []))
+    setComposerMode('create')
+    setComposerScheduleError(false)
+    clearComposerChatContext()
+  }, [effectiveSelectedTeamId])
+
+  useEffect(() => {
+    if (section !== 'composer' || focusedPostId || getViewContext()?.focus?.type === 'post') {
+      setViewFocus(focusedPostId ? { type: 'post', id: focusedPostId } : undefined)
+    }
+  }, [section, focusedPostId, effectiveSelectedTeamId])
+
   const openPostPreview = useCallback(
     (postId: string) => {
       if (isMobile) {
         setMobilePreviewPostId(postId)
       } else {
-        setExpandedPostId(postId)
+        setExpandedPostId(current => current === postId ? null : postId)
         setMobilePreviewPostId(null)
       }
     },
@@ -1138,6 +1171,7 @@ function App() {
   }
 
   function closeComposer() {
+    returningFromComposerRef.current = section === 'composer'
     if (prevSectionBeforeComposerRef.current) {
       setSection(prevSectionBeforeComposerRef.current)
       prevSectionBeforeComposerRef.current = null
@@ -2319,6 +2353,7 @@ function App() {
           key={selectedTeam.id}
           api={api}
           teamId={selectedTeam.id}
+          focusedPostId={focusedPostId}
           teamAccounts={teamAccounts}
           onOpenInComposer={openComposerFromGeneratedContent}
           onApplyToComposer={({ content, accountContentOverride }) => {
