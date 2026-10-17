@@ -110,6 +110,9 @@ resources: {}
   #   memory: 128Mi
 
 serviceAccount:
+  # The chart-managed ServiceAccount carries no RBAC bindings — it exists only
+  # so the pod runs under a dedicated identity with automountServiceAccountToken
+  # disabled (Goloom needs no Kubernetes API access).
   create: true
   name: ""
   annotations: {}

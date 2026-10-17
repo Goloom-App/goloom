@@ -38,6 +38,8 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "goloom.serviceAccountName" . }}
+      # Goloom never talks to the Kubernetes API. Never mount a token.
+      automountServiceAccountToken: false
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
