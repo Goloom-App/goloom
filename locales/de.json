@@ -1027,6 +1027,7 @@
       "aiOptimize": "Mit KI optimieren",
       "aiOptimizing": "Optimiere…",
       "aiOptimizeDescription": "Die KI verbessert Ihren Entwurf und behält Botschaft sowie Team-Stimme bei.",
+      "aiOptimizeDiscarded": "KI-Ergebnis verworfen, da sich der Entwurf geändert hat.",
       "aiOptimizeHint": "Optimierungsanweisungen (optional)",
       "aiOptimizePlaceholder": "z. B. Kürzer und ansprechender formulieren",
       "aiOptimizeApplied": "Entwurf mit KI-Vorschlägen aktualisiert.",

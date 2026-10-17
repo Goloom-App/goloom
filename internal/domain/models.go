@@ -11,6 +11,9 @@ import (
 // no-rows error) so callers can detect not-found independent of the backend.
 var ErrNotFound = errors.New("record not found")
 
+// ErrRSSDailyLimit means no daily capacity remains for a new RSS reservation.
+var ErrRSSDailyLimit = errors.New("RSS daily limit reached")
+
 // ErrProviderInstanceInUse is returned when deleting a provider instance that still has social accounts linked.
 var ErrProviderInstanceInUse = errors.New("provider instance still has connected social accounts")
 
