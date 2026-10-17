@@ -133,6 +133,9 @@ func runVoiceEngine(ctx context.Context, client Client, job domain.AIJob, aiCont
 	if len(prepared.injectionHits) > 0 {
 		slog.Warn("ai source material contains possible prompt injection", "team", aiContext.Team.ID, "job_type", job.Type, "markers", prepared.injectionHits)
 	}
+	if prepared.rssGeneration && p.str("rss_article_content", "rss_article_summary") == "" {
+		slog.InfoContext(ctx, "ai rss item has no body; generating a short teaser from title and link", "team", aiContext.Team.ID, "job_id", job.ID)
+	}
 	parsed, err := generateWithRetries(ctx, client, prepared.generateAttempt)
 	if err != nil {
 		return nil, err
@@ -288,7 +291,7 @@ func rssGenerationRules(p params) string {
 		"- This is a NEW post written from the feed item body, not a polish of a previous draft.\n" +
 		"- Keep the title and any numbers/identifiers exactly as in the source.\n" +
 		"- Use the item link from the source — never substitute the RSS feed subscription URL.\n" +
-		"- Include at least two concrete details from the body; skip generic filler not supported by the source.\n\n"
+		"- " + rssDetailGuidance(p) + "\n\n"
 }
 
 func accountLines(selected []domain.AIAccountSummary) string {

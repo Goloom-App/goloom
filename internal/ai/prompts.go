@@ -634,6 +634,13 @@ func webPageSourceSection(p params) string {
 	return strings.Join(lines, "\n")
 }
 
+func rssDetailGuidance(p params) string {
+	if p.str("rss_article_content", "rss_article_summary") == "" {
+		return "Write a short teaser from the title and link. Do not invent facts or add filler."
+	}
+	return "Include 2-4 concrete details from the body only when supported; if the body is thin, write a short teaser from the title and link. Do not invent facts or add filler."
+}
+
 func sourceMaterial(p params, context domain.AIContext) []string {
 	var sections []string
 
@@ -657,7 +664,7 @@ func sourceMaterial(p params, context domain.AIContext) []string {
 		}
 		lines = append(lines,
 			"The title and link above are authoritative. "+
-				"Pick 2-4 concrete points from the body text and work them in naturally. "+
+				rssDetailGuidance(p)+" "+
 				"Do not invent facts, change numbers/identifiers, or swap the item link for a feed URL.")
 		sections = append(sections, strings.Join(lines, "\n"))
 	}
@@ -776,7 +783,7 @@ func resolveUserRequest(p params) string {
 		base := "Write a new social post based on the RSS feed item below.\n" +
 			"- Use the exact title from the source (keep any numbers or identifiers).\n" +
 			"- Use the item link from the source — never the RSS subscription/feed URL.\n" +
-			"- Mention 2-3 concrete details from the body text; do not invent themes or change identifiers.\n" +
+			"- " + rssDetailGuidance(p) + "\n" +
 			"- Do not force brand buzzwords unless they appear in the source."
 		if editorial != "" {
 			return base + "\n\nEditorial direction: " + editorial

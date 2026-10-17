@@ -1,9 +1,11 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -184,6 +186,96 @@ func TestVoiceEngineRSSMetadataStaysOutOfPrompt(t *testing.T) {
 			callbackMeta := callbackParams.nested("rss_automation")
 			if callbackMeta.str("feed_id") != "private-feed-id" || callbackMeta.str("fallback_content") != skeleton {
 				t.Fatal("callback metadata lost")
+			}
+		})
+	}
+}
+
+func TestVoiceEngineRSSDetailDemandsMatchBody(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		body    any
+		summary string
+		hasBody bool
+	}{
+		{name: "full", body: "Release 2 ships Friday. Offline mode and CSV export are included.", hasBody: true},
+		{name: "description_only", body: "Release 2 ships Friday with offline mode.", hasBody: true},
+		{name: "thin", body: "Release 2", hasBody: true},
+		{name: "legacy_summary", summary: "Release 2 ships Friday with offline mode.", hasBody: true},
+		{name: "title_link_only"},
+		{name: "empty", body: ""},
+		{name: "whitespace", body: " \n\t "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := params{
+				"rss_article_title": "Release 2", "rss_article_link": "https://example.org/release",
+				"target_account_ids": []string{"acc-1"}, "schedule": false,
+			}
+			if tc.body != nil {
+				p["rss_article_content"] = tc.body
+			}
+			if tc.summary != "" {
+				p["rss_article_summary"] = tc.summary
+			}
+			client := &scriptedClient{responses: []Response{rssVoiceResponse(t, strings.Repeat("Release 2 ships Friday with offline mode. ", 11), nil)}}
+			if _, err := runVoiceEngine(context.Background(), client, domain.AIJob{Type: domain.AIJobTypeVoiceEngine}, testContext(), p); err != nil {
+				t.Fatal(err)
+			}
+			prompt := client.requests[0].Messages[len(client.requests[0].Messages)-1].Content
+			for _, want := range []string{"Title: Release 2", "Link: https://example.org/release", "Do not invent facts"} {
+				if !strings.Contains(prompt, want) {
+					t.Errorf("prompt missing %q", want)
+				}
+			}
+			if tc.hasBody {
+				if strings.Count(prompt, "concrete") != 3 {
+					t.Error("body guidance missing from one of three RSS prompt sections")
+				}
+				if !strings.Contains(prompt, "only when supported") || !strings.Contains(prompt, "if the body is thin") {
+					t.Error("thin bodies must not require unsupported details")
+				}
+			} else {
+				for _, demand := range []string{"concrete", "at least two", "2-3", "2-4"} {
+					if strings.Contains(prompt, demand) {
+						t.Errorf("empty-body prompt demands details: %q", demand)
+					}
+				}
+				if strings.Count(prompt, "short teaser from the title and link") != 3 {
+					t.Error("all three RSS sections must request a title/link teaser")
+				}
+			}
+		})
+	}
+}
+
+func TestVoiceEngineRSSEmptyBodyLogsOnceAcrossRetries(t *testing.T) {
+	for _, body := range []string{"", " \n\t ", "Release 2 ships Friday."} {
+		t.Run(fmt.Sprintf("body_%d_chars", len(body)), func(t *testing.T) {
+			var logs bytes.Buffer
+			original := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+			defer slog.SetDefault(original)
+			client := &scriptedClient{responses: []Response{
+				rssVoiceResponse(t, "", nil),
+				rssVoiceResponse(t, strings.Repeat("Release 2 ships Friday with offline mode. ", 11), nil),
+			}}
+			_, err := runVoiceEngine(context.Background(), client, domain.AIJob{ID: "rss-job", Type: domain.AIJobTypeVoiceEngine}, testContext(), params{
+				"rss_article_title": "Release 2", "rss_article_content": body,
+				"rss_article_link": "https://example.org/release", "schedule": false,
+				"target_account_ids": []string{"acc-1"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(client.requests) != 2 {
+				t.Fatalf("calls = %d, want 2", len(client.requests))
+			}
+			wantLogs := 0
+			if strings.TrimSpace(body) == "" {
+				wantLogs = 1
+			}
+			if got := strings.Count(logs.String(), "ai rss item has no body"); got != wantLogs {
+				t.Fatalf("empty-body log count = %d, want %d: %s", got, wantLogs, logs.String())
 			}
 		})
 	}
