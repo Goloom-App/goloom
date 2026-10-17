@@ -107,6 +107,7 @@ func (s *Service) createRSSPostDirect(
 	scheduledAt time.Time,
 	draft bool,
 	ownerID string,
+	submissionFallback bool,
 ) error {
 	return s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
 		if err := s.store.LockAutomationSource(ctx, "rss_feed", feed.ID); err != nil {
@@ -116,11 +117,11 @@ func (s *Service) createRSSPostDirect(
 		if err != nil || already {
 			return err
 		}
-		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID)
+		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback)
 	})
 }
 
-func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFeedConfig, itemKey, content, title string, scheduledAt time.Time, draft bool, ownerID string) error {
+func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFeedConfig, itemKey, content, title string, scheduledAt time.Time, draft bool, ownerID string, submissionFallback bool) error {
 	feedID := feed.ID
 	input := domain.CreatePostInput{
 		Title:          title,
@@ -134,7 +135,11 @@ func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFe
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: ownerID}, Kind: "system"}
-	post, err := s.createAutomationPost(ctx, feed.TeamID, principal, input, map[string]string{"feed_id": feed.ID, "item_key_hash": sourceKey(itemKey)}, func(ctx context.Context, post domain.ScheduledPost) error {
+	metadata := map[string]string{"feed_id": feed.ID, "item_key_hash": sourceKey(itemKey)}
+	if submissionFallback {
+		metadata["outcome"], metadata["error_code"] = "fallback", "ai_submission_failed"
+	}
+	post, err := s.createAutomationPost(ctx, feed.TeamID, principal, input, metadata, func(ctx context.Context, post domain.ScheduledPost) error {
 		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
 			return err
 		}

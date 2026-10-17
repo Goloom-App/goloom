@@ -21,7 +21,7 @@ func TestRSSDirectCreationAudit(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := New(testLogger(), s, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, nil)
-	if err := svc.createRSSPostDirect(ctx, feed, "https://secret:credential@example.test/item?token=secret", "private source body", "private title", time.Now(), true, user.ID); err != nil {
+	if err := svc.createRSSPostDirect(ctx, feed, "https://secret:credential@example.test/item?token=secret", "private source body", "private title", time.Now(), true, user.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	events, err := s.ListAuditEvents(ctx, domain.AuditFilter{TeamID: team.ID})
@@ -63,7 +63,7 @@ func TestAutomationCreationRollsBackWhenAuditFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := New(testLogger(), failingAuditStore{s}, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, nil)
-	if err := svc.createRSSPostDirect(ctx, feed, "item", "content", "title", time.Now(), true, user.ID); err == nil {
+	if err := svc.createRSSPostDirect(ctx, feed, "item", "content", "title", time.Now(), true, user.ID, false); err == nil {
 		t.Fatal("expected audit failure")
 	}
 	posts, err := s.ListTeamPosts(ctx, team.ID)

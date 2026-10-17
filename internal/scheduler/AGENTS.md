@@ -29,6 +29,7 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 - Template materialization uses domain template variables
 - Integration with store for job persistence
 - Automated post creation and `post.automation_create` audit commit together. RSS dedupe/counters share that transaction; recurring events correlate occurrence and role. System actors retain initiators separately.
+- Direct template fallback after failed AI submission (RSS, recurring main, announcement) records `post.automation_create` with `outcome=fallback` and `error_code=ai_submission_failed`; retain source/author correlation and exclude raw errors. Normal AI-disabled creation stays `outcome=success`. RSS job creation and item reservation share a savepoint so failed reservation cannot dispatch an orphan job before fallback.
 - Claim publication targets before fallible preparation. Persist provider outcomes with `EnqueueAuditEvent` in one transaction; drain at startup/poll and after outcomes. Delivery retries never invoke providers. Unknown processing targets require reconciliation; explicit rejections and preparation failures remain retryable.
 - External calls and review push stay outside database transactions; defer side effects with `store.AfterAuditCommit` when callers can supply a transaction.
 - Source locks serialize RSS imports and recurring generation with callback/skip/regeneration. Pending dedupe accepts only same-team jobs with server-owned automation provenance; authorship never substitutes for an authenticated initiator.

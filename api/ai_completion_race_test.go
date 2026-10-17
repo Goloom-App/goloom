@@ -15,19 +15,17 @@ import (
 	"git.f4mily.net/goloom/internal/store"
 )
 
-// Force both callers to read the unfinished job before either can claim it.
+// Start both independent callers before either can enter the database transaction.
+// SQLite's IMMEDIATE write transactions serialize reads as well as completion;
+// a barrier inside a transaction would prevent the second caller from entering.
 type concurrentCompletionStore struct {
 	store.Store
-	reads atomic.Int32
-	ready chan struct{}
+	entries atomic.Int32
+	ready   chan struct{}
 }
 
-func (s *concurrentCompletionStore) GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob, error) {
-	job, err := s.Store.GetAIJobByIDGlobal(ctx, id)
-	if err != nil {
-		return job, err
-	}
-	n := s.reads.Add(1)
+func (s *concurrentCompletionStore) WithAuditTransaction(ctx context.Context, fn func(context.Context) error) error {
+	n := s.entries.Add(1)
 	if n == 2 {
 		close(s.ready)
 	}
@@ -35,10 +33,10 @@ func (s *concurrentCompletionStore) GetAIJobByIDGlobal(ctx context.Context, id s
 		select {
 		case <-s.ready:
 		case <-ctx.Done():
-			return domain.AIJob{}, ctx.Err()
+			return ctx.Err()
 		}
 	}
-	return job, nil
+	return s.Store.WithAuditTransaction(ctx, fn)
 }
 
 func TestConcurrentAICompletionCreatesOnePost(t *testing.T) {

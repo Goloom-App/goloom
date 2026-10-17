@@ -250,15 +250,17 @@ func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSS
 		title = feed.Name
 	}
 
+	submissionFallback := false
 	if s.shouldEnhanceRSSWithAI(ctx, feed) {
 		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
 			s.logger.WarnContext(ctx, "rss import: ai enhancement unavailable, using template", "feed_id", feed.ID, "error", err)
+			submissionFallback = true
 		} else {
 			return true, nil
 		}
 	}
 
-	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
+	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback); err != nil {
 		return false, err
 	}
 	return true, nil
