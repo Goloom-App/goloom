@@ -15,13 +15,17 @@ func TestPostFallbackReasonRoundTrip(t *testing.T) {
 	reason := "provider_failure"
 	jobID := "01234567-89ab-cdef-0123-456789abcdef"
 	for _, marker := range []*string{nil, &reason} {
-		post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{Content: "Template fallback", ScheduledAt: time.Now().UTC().Add(time.Hour), Draft: true, Source: domain.PostSourceAutomation, AIFallbackReason: marker, AIJobID: &jobID})
+		var jobRef *string
+		if marker != nil {
+			jobRef = &jobID
+		}
+		post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{Content: "Template fallback", ScheduledAt: time.Now().UTC().Add(time.Hour), Draft: true, Source: domain.PostSourceAutomation, AIFallbackReason: marker, AIJobID: jobRef})
 		if err != nil {
 			t.Fatal(err)
 		}
 		check := func(p domain.ScheduledPost) {
 			t.Helper()
-			if p.AIJobID == nil || *p.AIJobID != jobID {
+			if (p.AIJobID == nil) != (jobRef == nil) || jobRef != nil && *p.AIJobID != *jobRef {
 				t.Fatalf("job ID=%v want %s", p.AIJobID, jobID)
 			}
 			if (p.AIFallbackReason == nil) != (marker == nil) || marker != nil && *p.AIFallbackReason != *marker {
