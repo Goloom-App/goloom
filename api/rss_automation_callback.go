@@ -86,6 +86,9 @@ func (a *API) createRSSAutomationPost(
 	}
 	if len(fallbackReason) > 0 {
 		rssPost.AIFallbackReason = fallbackReason[0]
+		if fallbackReason[0] != nil {
+			rssPost.AIJobID = &job.ID
+		}
 	}
 	rssPost.EnsureTitle()
 	prepared, err := a.posts.Prepare(ctx, job.TeamID, rssPost, postservice.Options{RequireTeam: true, CheckLimits: !draft})
