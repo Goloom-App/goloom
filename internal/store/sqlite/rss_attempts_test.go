@@ -100,6 +100,10 @@ func TestRSSPostInsertLinksItemAtomically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	after, err := s.GetRSSFeedConfigByID(ctx, team.ID, feed.ID)
+	if err != nil || after.CounterNext != feed.CounterNext+1 {
+		t.Fatalf("atomic counter=%d want=%d err=%v", after.CounterNext, feed.CounterNext+1, err)
+	}
 	if _, err := s.ReleaseRSSItemAttempt(ctx, team.ID, feed.ID, "item"); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("committed post released: %v", err)
 	}

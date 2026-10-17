@@ -14,7 +14,7 @@ import (
 
 // Only attempted reservations expire; baseline markers remain permanent. Active jobs
 // protect their markers even when generation outlives the fifteen-minute lease.
-const rssItemRetryEligible = `(retry_available = 1 or (attempts > 0 and datetime(created_at) <= datetime('now', '-15 minutes')
+const rssItemRetryEligible = `(rss_imported_items.retry_available = 1 or (rss_imported_items.attempts > 0 and datetime(rss_imported_items.created_at) <= datetime('now', '-15 minutes')
  and not exists (select 1 from ai_jobs j join rss_feed_configs f on f.id = rss_imported_items.feed_id
  where j.team_id = f.team_id and j.origin = 'automation' and j.status in ('pending', 'processing')
  and json_extract(j.payload, '$.params.rss_automation.feed_id') = rss_imported_items.feed_id
@@ -196,6 +196,9 @@ func linkRSSItemForPost(ctx context.Context, tx *sql.Tx, teamID, feedID, itemKey
 	}
 	if n == 0 {
 		return fmt.Errorf("RSS item already linked or feed not owned: %w", domain.ErrNotFound)
+	}
+	if _, err := tx.ExecContext(ctx, `update rss_feed_configs set counter_next = counter_next + 1 where id = ? and team_id = ?`, feedID, teamID); err != nil {
+		return fmt.Errorf("increment RSS counter in post transaction: %w", err)
 	}
 	return nil
 }

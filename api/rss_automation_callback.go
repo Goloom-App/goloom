@@ -106,11 +106,5 @@ func (a *API) createRSSAutomationPost(
 		a.log.WarnContext(ctx, "automation: used template fallback", "job_id", job.ID, "feed_id", meta.FeedID, "item_key", meta.ItemKey, "post_id", post.ID, "reason", *post.AIFallbackReason)
 	}
 	a.notifyReviewCreated(ctx, job.TeamID, post)
-	if err := a.store.UpdateRSSImportedItemPostID(ctx, job.TeamID, meta.FeedID, meta.ItemKey, post.ID); err != nil {
-		return fmt.Errorf("link automation RSS item: %w", err)
-	}
-	if err := a.store.IncrementRSSFeedCounter(ctx, job.TeamID, meta.FeedID); err != nil {
-		return fmt.Errorf("increment automation RSS counter: %w", err)
-	}
 	return nil
 }

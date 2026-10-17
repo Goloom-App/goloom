@@ -140,6 +140,10 @@ func TestRSSPostCommitReadFailureKeepsItemReserved(t *testing.T) {
 	if err != nil || !imported {
 		t.Fatalf("committed post released item: imported=%v err=%v", imported, err)
 	}
+	after, err := f.store.GetRSSFeedConfigByID(ctx, f.team.ID, feed.ID)
+	if err != nil || after.CounterNext != feed.CounterNext+1 {
+		t.Fatalf("post-commit error lost counter: got=%d want=%d err=%v", after.CounterNext, feed.CounterNext+1, err)
+	}
 	posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
 	if err != nil || len(posts) != 1 {
 		t.Fatalf("posts=%d err=%v", len(posts), err)
