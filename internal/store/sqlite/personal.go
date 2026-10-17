@@ -70,18 +70,25 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column title_template text not null default '{title}'`,
 		`alter table rss_feed_configs add column title_hint text not null default ''`,
 		`alter table scheduled_posts add column ai_fallback_reason text`,
- `alter table scheduled_posts add column ai_job_id text`,
+		`alter table scheduled_posts add column ai_job_id text`,
 		`alter table scheduled_posts add column rss_feed_id text references rss_feed_configs(id) on delete set null`,
 		`create table if not exists rss_imported_items (
 			id text primary key,
 			feed_id text not null references rss_feed_configs(id) on delete cascade,
 			item_key text not null,
 			post_id text references scheduled_posts(id) on delete set null,
+			attempts integer not null default 0,
+			retry_available integer not null default 0,
+			consumed_at text,
 			created_at text not null default (datetime('now')),
 			unique (feed_id, item_key)
 		)`,
 		`alter table rss_imported_items add column attempts integer not null default 0`,
 		`alter table rss_imported_items add column retry_available integer not null default 0`,
+		`alter table rss_imported_items add column consumed_at text`,
+		// Legacy baseline markers and linked imports have already been consumed.
+		`update rss_imported_items set consumed_at = created_at
+         where consumed_at is null and (post_id is not null or attempts = 0)`,
 		`create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id)`,
 		`alter table ai_service_configs add column provider text not null default 'openai'`,
 		`alter table ai_service_configs add column model text not null default ''`,

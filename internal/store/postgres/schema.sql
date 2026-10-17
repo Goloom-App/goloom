@@ -596,6 +596,7 @@ create table if not exists rss_imported_items (
     post_id uuid references scheduled_posts(id) on delete set null,
     attempts integer not null default 0,
     retry_available boolean not null default false,
+    consumed_at timestamptz,
     created_at timestamptz not null default now(),
     unique (feed_id, item_key)
 );
@@ -646,3 +647,8 @@ alter table rss_imported_items add column if not exists attempts integer not nul
 alter table rss_imported_items add column if not exists retry_available boolean not null default false;
 
 alter table scheduled_posts add column if not exists ai_job_id text;
+
+-- Legacy baseline markers and linked imports have already been consumed.
+alter table rss_imported_items add column if not exists consumed_at timestamptz;
+update rss_imported_items set consumed_at = created_at
+where consumed_at is null and (post_id is not null or attempts = 0);
