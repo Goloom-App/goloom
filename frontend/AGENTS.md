@@ -16,6 +16,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - Domain types: `src/types.ts` (single source of truth)
 - API client: `src/api.ts`
 - AI Generator prompt preview defaults to the plain “Generieren” action with current settings, even when an existing draft also offers “Neu generieren”; covered by `e2e/ai-prompt-preview.spec.ts`
+- Composer optimization sends `params.no_publish: true` because results only update the editor; AI Generator generation/refinement retains team auto-publish behavior. Composer intent covered by `e2e/composer-ai-no-publish.spec.ts`.
 - Team AI setup: saving provider config in `App.tsx` enables a newly toggled team only after the config save succeeds; keep this sequence covered by `e2e/team-ai-setup.spec.ts`
 - Brand profile forms remount per team (`key={selectedTeam.id}`), clearing loaded profile and unsaved form state before editing another team.
 - Generator draft/composer actions use the completed job's `payload.params.target_account_ids`; missing or empty targets show an error. Preserve account overrides and schedule during handoff.

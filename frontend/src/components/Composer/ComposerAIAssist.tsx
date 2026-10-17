@@ -76,6 +76,7 @@ export function ComposerAIAssist({
         type: 'voice_engine',
         params: {
           refine_content: true,
+          no_publish: true,
           source_content: draft.content.trim(),
           prompt_hint:
             instruction.trim() ||
