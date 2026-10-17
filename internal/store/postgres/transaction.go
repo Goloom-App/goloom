@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"git.f4mily.net/goloom/internal/store/txcontext"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,6 +41,11 @@ func (p *contextPool) Begin(ctx context.Context) (pgx.Tx, error) {
 	return p.Pool.Begin(ctx)
 }
 func (s *Store) WithAuditTransaction(ctx context.Context, fn func(context.Context) error) error {
+	hookctx, finish := txcontext.Begin(ctx)
+	committed := false
+	defer func() { finish(committed) }()
+	ctx = hookctx
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -52,5 +58,7 @@ func (s *Store) WithAuditTransaction(ctx context.Context, fn func(context.Contex
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	committed = err == nil
+	return err
 }

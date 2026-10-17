@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"git.f4mily.net/goloom/internal/store/txcontext"
 	"strings"
 
 	"github.com/google/uuid"
@@ -89,6 +90,11 @@ func (s *sqliteSavepoint) Rollback() error {
 	return err
 }
 func (s *Store) WithAuditTransaction(ctx context.Context, fn func(context.Context) error) error {
+	hookctx, finish := txcontext.Begin(ctx)
+	committed := false
+	defer func() { finish(committed) }()
+	ctx = hookctx
+
 	if _, ok := ctx.Value(sqliteTxKey{s.db}).(*sql.Tx); ok {
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
@@ -98,7 +104,9 @@ func (s *Store) WithAuditTransaction(ctx context.Context, fn func(context.Contex
 		if err := fn(ctx); err != nil {
 			return err
 		}
-		return tx.Commit()
+		err = tx.Commit()
+		committed = err == nil
+		return err
 	}
 	tx, err := s.db.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -113,6 +121,7 @@ func (s *Store) WithAuditTransaction(ctx context.Context, fn func(context.Contex
 		return err
 	}
 	err = tx.Commit()
+	committed = err == nil
 	if errors.Is(err, sql.ErrTxDone) && ctx.Err() != nil {
 		return ctx.Err()
 	}

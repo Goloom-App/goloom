@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/store"
 	"github.com/google/uuid"
 	"testing"
 	"time"
@@ -152,5 +153,118 @@ func TestAuditOrderingIdempotencyAndFilters(t *testing.T) {
 		if err != nil || n != 0 {
 			t.Fatalf("filter: %d %v", n, err)
 		}
+	}
+}
+
+func TestClaimPostTargetPublication(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, err := s.UpsertOIDCUser(ctx, uuid.NewString(), "claim@example.test", "Claim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "Claim"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc, err := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{Provider: "bluesky", AuthType: domain.AccountAuthTypeAppPassword, InstanceURL: "https://b.social", Username: "b", AccessToken: "token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{Content: "test", ScheduledAt: time.Now(), TargetAccounts: []string{acc.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []bool{true, false} {
+		got, err := s.ClaimPostTargetPublication(ctx, post.ID, acc.ID)
+		if err != nil || got != want {
+			t.Fatalf("claim %v: %v, want %v", got, err, want)
+		}
+	}
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusFailed, "", "confirmed_failure", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.ClaimPostTargetPublication(ctx, post.ID, acc.ID); err != nil || !got {
+		t.Fatalf("retry claim %v: %v", got, err)
+	}
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://b.social/post", "", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.ClaimPostTargetPublication(ctx, post.ID, acc.ID); err != nil || got {
+		t.Fatalf("posted replay %v: %v", got, err)
+	}
+}
+
+func TestAuditAfterCommitHooks(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	calls := 0
+	if err := s.WithAuditTransaction(ctx, func(txctx context.Context) error {
+		store.AfterAuditCommit(txctx, func(cleanctx context.Context) {
+			calls++
+			// This starts a new transaction: a stale committed tx would fail.
+			if err := s.WithAuditTransaction(cleanctx, func(context.Context) error { return nil }); err != nil {
+				t.Errorf("stale hook context: %v", err)
+			}
+		})
+		if calls != 0 {
+			t.Fatal("hook before commit")
+		}
+		abort := errors.New("nested abort")
+		if err := s.WithAuditTransaction(txctx, func(nested context.Context) error {
+			store.AfterAuditCommit(nested, func(context.Context) { t.Error("rolled back nested hook ran") })
+			return abort
+		}); !errors.Is(err, abort) {
+			t.Fatal(err)
+		}
+		return s.WithAuditTransaction(txctx, func(nested context.Context) error {
+			store.AfterAuditCommit(nested, func(context.Context) { calls++ })
+			return nil
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Fatalf("hooks %d", calls)
+	}
+	_ = s.WithAuditTransaction(ctx, func(txctx context.Context) error {
+		store.AfterAuditCommit(txctx, func(context.Context) { t.Error("rolled back outer hook ran") })
+		return errors.New("abort")
+	})
+	store.AfterAuditCommit(ctx, func(context.Context) { calls++ })
+	if calls != 3 {
+		t.Fatal("outside hook not immediate")
+	}
+}
+func TestClaimAIJobCompletion(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, err := s.UpsertOIDCUser(ctx, uuid.NewString(), "job@example.test", "Job")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "Job-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Payload: []byte(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusProcessing, nil, ""); err == nil || got {
+		t.Fatalf("nonterminal claim %v: %v", got, err)
+	}
+	if got, err := s.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusCompleted, []byte(`{"count":1}`), ""); err != nil || !got {
+		t.Fatalf("first claim %v: %v", got, err)
+	}
+	if got, err := s.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusFailed, nil, "replay"); err != nil || got {
+		t.Fatalf("replayed claim %v: %v", got, err)
+	}
+	got, err := s.GetAIJobByID(ctx, team.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.AIJobStatusCompleted {
+		t.Fatalf("replay overwrote completion: %s", got.Status)
 	}
 }
