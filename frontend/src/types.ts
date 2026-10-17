@@ -227,6 +227,7 @@ export interface RSSFeedConfig {
   outputMode: AutomationOutputMode
   maxPostsPerDay: number
   counterNext?: number
+  exhaustedItemsCount?: number
   promptHint: string
   targetAccountIds: string[]
   tonality: string

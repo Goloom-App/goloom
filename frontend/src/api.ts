@@ -544,6 +544,7 @@ export interface BackendReviewCounts {
 }
 
 export interface BackendRSSFeedConfig {
+  exhausted_items_count?: number
   id: string
   team_id: string
   feed_url: string

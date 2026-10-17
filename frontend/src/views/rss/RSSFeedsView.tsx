@@ -399,6 +399,11 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
               <div className="recurring-template-card__header">
                 <div className="flex-row--center gap-2">
                   <span className="badge">{feed.name}</span>
+                  {(feed.exhaustedItemsCount ?? 0) > 0 && (
+                    <span className="badge badge--warning" data-testid="rss-exhausted-items">
+                      {t('rss.exhaustedItems', { count: feed.exhaustedItemsCount })}
+                    </span>
+                  )}
                 </div>
                 {canEdit ? (
                   <div className="flex-row--center gap-1">

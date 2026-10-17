@@ -707,7 +707,8 @@
       "feedUpdated": "RSS feed updated.",
       "feedDeleted": "RSS feed deleted.",
       "saveFailed": "Failed to save RSS feed.",
-      "deleteConfirm": "Delete this RSS feed?"
+      "deleteConfirm": "Delete this RSS feed?",
+      "exhaustedItems": "{{count}} items exhausted automatic retries"
     },
     "calendar": {
       "createPostHint": "Create a post to start building your publishing timeline.",

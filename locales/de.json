@@ -707,7 +707,8 @@
       "feedUpdated": "RSS-Feed aktualisiert.",
       "feedDeleted": "RSS-Feed gelöscht.",
       "saveFailed": "RSS-Feed konnte nicht gespeichert werden.",
-      "deleteConfirm": "Diesen RSS-Feed löschen?"
+      "deleteConfirm": "Diesen RSS-Feed löschen?",
+      "exhaustedItems": "{{count}} Einträge haben automatische Wiederholungen ausgeschöpft"
     },
     "calendar": {
       "createPostHint": "Erstellen Sie einen Beitrag, um Ihre Veröffentlichungs-Timeline aufzubauen.",

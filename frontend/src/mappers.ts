@@ -310,6 +310,7 @@ export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
     outputMode,
     maxPostsPerDay: raw.max_posts_per_day ?? 10,
     counterNext: raw.counter_next,
+    exhaustedItemsCount: raw.exhausted_items_count ?? 0,
     promptHint: raw.prompt_hint ?? '',
     targetAccountIds: raw.target_account_ids ?? [],
     tonality: raw.tonality ?? '',
