@@ -363,10 +363,12 @@ func TestAPITokenListOnlyManageableTokens(t *testing.T) {
 		name           string
 		scopes         []string
 		bound, browser bool
+		withoutRead    bool
 		want           []string
 	}{
 		{name: "read", scopes: []string{"read"}, want: []string{"caller", "reader"}},
-		{name: "write hierarchy", scopes: []string{"write"}, want: []string{"caller", "writer", "draft"}},
+		{name: "write only cannot list", scopes: []string{"write"}, withoutRead: true},
+		{name: "write hierarchy", scopes: []string{"read", "write"}, want: []string{"caller", "reader", "writer", "draft"}},
 		{name: "bound read", scopes: []string{"read"}, bound: true, want: []string{"caller", "team-reader"}},
 		{name: "team only", bound: true, want: []string{"caller", "team-reader", "team-writer", "team-full"}},
 		{name: "unrestricted"},
@@ -413,6 +415,13 @@ func TestAPITokenListOnlyManageableTokens(t *testing.T) {
 				rec = doBrowserTokenRequest(f.handler, session, http.MethodGet, "/v1/me/api-tokens", nil)
 			} else {
 				rec = f.do(t, http.MethodGet, "/v1/me/api-tokens", nil)
+			}
+			if tc.withoutRead {
+				requireStatus(t, rec, http.StatusForbidden)
+				if rec.Header().Get("X-Error-Code") != "scope_required" {
+					t.Fatalf("wrong denial: %s", rec.Body.String())
+				}
+				return
 			}
 			requireStatus(t, rec, http.StatusOK)
 			listed := decodeJSON[struct {

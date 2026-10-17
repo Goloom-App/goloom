@@ -66,13 +66,10 @@ func ScopeSatisfied(tokenScopes []string, required string) bool {
 }
 
 // PrincipalAllows reports whether the principal may perform an action requiring
-// the given scope. Browser/OIDC principals and unscoped tokens (empty scope
-// list, the backward-compatible default) are always allowed; only tokens with an
-// explicit scope list are restricted.
+// the given scope. Callers without scopes (including browser/OIDC sessions)
+// retain full authority. Explicit token scopes apply regardless of Kind, since
+// legacy API tokens named like browser sessions are classified as OIDC.
 func PrincipalAllows(principal domain.AuthenticatedPrincipal, required string) bool {
-	if principal.Kind != "api_token" {
-		return true
-	}
 	if len(principal.Scopes) == 0 {
 		return true
 	}

@@ -75,12 +75,36 @@ func makeCallbackJob(t *testing.T, f aiCompletionFixture, status domain.AIJobSta
 		AuthorUserID: f.user.ID,
 		Type:         domain.AIJobTypeVoiceEngine,
 		Status:       status,
-		Payload:      json.RawMessage(`{"params":{}}`),
+		Payload:      json.RawMessage(`{"params":{},"_can_schedule":true}`),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return job
+}
+
+func TestCompleteAIJob_MissingScheduleAuthorityCreatesDraft(t *testing.T) {
+	ctx := context.Background()
+	f := newAICompletionFixture(t)
+	if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Jobs queued before schedule authority was recorded must fail closed.
+	job, err := f.store.CreateAIJob(ctx, domain.AIJob{
+		TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine,
+		Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{"params":{}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"legacy job content"}`), "")
+	posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 1 || posts[0].Status != domain.PostStatusDraft {
+		t.Fatalf("legacy job must create one draft, got %#v", posts)
+	}
 }
 
 func TestCompleteAIJob(t *testing.T) {
@@ -121,7 +145,7 @@ func TestCompleteAIJob(t *testing.T) {
 		}
 
 		account := callbackAccount(t, f, f.team.ID)
-		payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}}})
+		payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": []string{account.ID}}})
 		job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
 		if err != nil {
 			t.Fatal(err)
@@ -313,7 +337,7 @@ func TestCompleteAIJobAutoPublishTargets(t *testing.T) {
 			case "same-team-versions", "hallucinated-overrides":
 				targets = []string{own.ID}
 			}
-			payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": targets}})
+			payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": targets}})
 			job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeCampaignAutopilot, Payload: payload})
 			if err != nil {
 				t.Fatal(err)
@@ -401,7 +425,7 @@ func TestCompleteAIJobStatusWriteFailureRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := callbackAccount(t, f, f.team.ID)
-	payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}}})
+	payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": []string{account.ID}}})
 	job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
 	if err != nil {
 		t.Fatal(err)
@@ -436,7 +460,7 @@ func TestCompleteAIJobAutoPublishInsertFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := callbackAccount(t, f, f.team.ID)
-	payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}}})
+	payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": []string{account.ID}}})
 	job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeCampaignAutopilot, Payload: payload})
 	if err != nil {
 		t.Fatal(err)

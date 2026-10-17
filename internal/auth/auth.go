@@ -237,7 +237,7 @@ func (s *Service) RequireAdmin(next http.Handler) http.Handler {
 			http.Error(w, "missing principal", http.StatusUnauthorized)
 			return
 		}
-		if !principal.User.IsAdmin {
+		if !principal.User.IsAdmin || !PrincipalCanManageAPIToken(*principal, nil, nil) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
