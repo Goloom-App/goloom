@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"git.f4mily.net/goloom/internal/push"
 	"git.f4mily.net/goloom/internal/socialtokens"
 	"git.f4mily.net/goloom/internal/store"
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -75,7 +77,7 @@ func (s *Service) notifyReviewCreated(ctx context.Context, teamID string, post d
 		s.logger.Warn("push: team lookup for review notification", "team_id", teamID, "error", err)
 		return
 	}
-	s.push.SendNewReview(ctx, team, post)
+	store.AfterAuditCommit(ctx, func(cleanctx context.Context) { s.push.SendNewReview(cleanctx, team, post) })
 }
 
 func (s *Service) Start(ctx context.Context) {
@@ -144,6 +146,9 @@ func (s *Service) Start(ctx context.Context) {
 	defer wg.Wait()
 
 	for {
+		if err := s.store.DrainAuditEvents(ctx); err != nil {
+			s.logger.Error("audit delivery pending", "error", err)
+		}
 		if err := s.materializePostTemplates(ctx); err != nil {
 			s.logger.Error("post template materialize failed", "error", err)
 		}
@@ -226,10 +231,32 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 	var firstErr error
 	for _, account := range accounts {
+		attemptID := uuid.NewString()
+		claimed := false
+		err := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+			var err error
+			claimed, err = s.store.ClaimPostTargetPublication(ctx, post.ID, account.ID)
+			if err != nil || !claimed {
+				return err
+			}
+			return s.store.EnqueueAuditEvent(ctx, publicationEvent(post, account.ID, attemptID, "post.publish_started", "pending", ""))
+		})
+		if err != nil {
+			s.logger.Error("publication claim failed", "post_id", post.ID, "account_id", account.ID, "error", err)
+			s.failPost(ctx, post, fmt.Errorf("publication claim unavailable"))
+			return
+		}
+		if !claimed {
+			s.logger.Warn("publication outcome unresolved; reconciliation required", "post_id", post.ID, "account_id", account.ID)
+			return
+		}
+
 		providerImpl, ok := s.providers.Get(account.Provider)
 		if !ok {
 			err := fmt.Errorf("unsupported provider %q", account.Provider)
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+				return
+			}
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -238,7 +265,9 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		acc, err := socialtokens.EnsureMastodonFresh(ctx, s.store, s.providers, account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+				return
+			}
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -248,7 +277,9 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		token, err := s.store.DecryptAccessToken(account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+				return
+			}
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -257,7 +288,9 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		refreshToken, err := s.store.DecryptRefreshToken(account)
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+				return
+			}
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -279,7 +312,9 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			RefreshToken: refreshToken,
 		})
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+				return
+			}
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -296,16 +331,23 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			ScheduledAt: nil,
 		})
 		if err != nil {
-			_ = s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "")
-			if firstErr == nil {
-				firstErr = err
+			var rejected *provider.PublicationRejectedError
+			if errors.As(err, &rejected) || provider.IsRateLimitError(err) {
+				if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "provider_rejected"); persistErr != nil {
+					return
+				}
+				if firstErr == nil {
+					firstErr = err
+				}
+				continue
 			}
-			continue
+			_ = s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusProcessing, "", "publication_outcome_unknown", nil, "", "post.publish_uncertain", "uncertain", "provider_outcome_unknown")
+			s.logger.Warn("provider publication outcome unknown; reconciliation required", "post_id", post.ID, "account_id", account.ID)
+			return
 		}
 
-		if err := s.store.MarkPostTargetResult(ctx, post.ID, account.ID, domain.PostStatusPosted, result.URL, "", result.Metadata, provider.ResolveRemotePostID(account.Provider, result)); err != nil {
-			s.logger.Warn("failed to mark post target result", "post_id", post.ID, "account_id", account.ID, "error", err)
-			continue
+		if err := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusPosted, result.URL, "", result.Metadata, provider.ResolveRemotePostID(account.Provider, result), "post.publish_success", "success", ""); err != nil {
+			return
 		}
 		if err := s.store.ReplacePostHashtags(ctx, post.ID, account.ID, hashtag.Extract(content)); err != nil {
 			s.logger.Warn("failed to store post hashtags", "post_id", post.ID, "account_id", account.ID, "error", err)
@@ -326,7 +368,9 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		return
 	}
 
-	if err := s.store.MarkPostResult(ctx, post.ID, post.AttemptCount+1, domain.PostStatusPosted, "", nil); err != nil {
+	resultCtx, cancelResult := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancelResult()
+	if err := s.store.MarkPostResult(resultCtx, post.ID, post.AttemptCount+1, domain.PostStatusPosted, "", nil); err != nil {
 		s.logger.Error("failed to mark post as posted", "post_id", post.ID, "error", err)
 	}
 }
@@ -539,6 +583,8 @@ func (s *Service) syncOnePostTargetMetrics(ctx context.Context, row domain.Poste
 }
 
 func (s *Service) failPost(ctx context.Context, post domain.ScheduledPost, err error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
 	attemptCount := post.AttemptCount + 1
 	if attemptCount >= 5 {
 		if markErr := s.store.MarkPostResult(ctx, post.ID, attemptCount, domain.PostStatusFailed, err.Error(), nil); markErr != nil {
@@ -652,13 +698,17 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 		targets = tmpl.TargetAccountIDs
 	}
 
+	metadata := map[string]string{"template_id": tmpl.ID, "occurrence_at": mainEventAt.UTC().Format(time.RFC3339Nano), "post_kind": domain.TemplatePostRoleAnnouncement}
 	if s.shouldEnhanceRecurringAnnouncementWithAI(ctx, *tmpl) {
 		if err := s.submitRecurringAnnouncementAIEnhancement(ctx, *tmpl, content, expandedTitle, announceAt, mainEventAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: announcement ai unavailable, using template", "template_id", tmpl.ID, "error", err)
-		} else if advanceCounter {
-			return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
+			metadata["outcome"], metadata["error_code"] = "fallback", "ai_submission_failed"
+		} else {
+			if advanceCounter {
+				return s.store.AdvancePostTemplateAnnouncementCounter(ctx, tmpl.ID, tmpl.AnnouncementCounterNext+1)
+			}
+			return nil
 		}
-		return nil
 	}
 
 	authorID := tmpl.AuthorUserID
@@ -680,8 +730,8 @@ func (s *Service) materializeAnnouncement(ctx context.Context, tmpl *domain.Post
 		Source:                domain.PostSourceAutomation,
 	}
 	input.EnsureTitle()
-	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
-	if _, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input); err != nil {
+	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}, Kind: "system"}
+	if _, err := s.createAutomationPost(ctx, tmpl.TeamID, principal, input, metadata, nil); err != nil {
 		return err
 	}
 	if advanceCounter {
@@ -700,6 +750,19 @@ func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTem
 }
 
 func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time, occurrenceAt time.Time, role string) error {
+	return s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		if err := s.store.LockAutomationSource(ctx, "post_template", tmpl.ID); err != nil {
+			return err
+		}
+		exists, err := s.store.HasPostTemplateRoleMaterialized(ctx, tmpl.ID, occurrenceAt, role)
+		if err != nil || exists {
+			return err
+		}
+		return s.createScheduledPostFromTemplateOnce(ctx, tmpl, scheduledAt, occurrenceAt, role)
+	})
+}
+
+func (s *Service) createScheduledPostFromTemplateOnce(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time, occurrenceAt time.Time, role string) error {
 	counterVal := tmpl.CounterNext
 	// Content is NOT expanded here - it stays with {counter} placeholders
 	// and is expanded at publish time in processPost using TemplateCounter
@@ -724,9 +787,11 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 		draft = false
 	}
 
+	metadata := map[string]string{"template_id": tmpl.ID, "occurrence_at": occurrenceAt.UTC().Format(time.RFC3339Nano), "post_kind": role}
 	if s.shouldEnhanceRecurringWithAI(ctx, *tmpl) {
 		if err := s.submitRecurringAIEnhancement(ctx, *tmpl, content, expandedTitle, at, draft, occurrenceAt); err != nil {
 			s.logger.WarnContext(ctx, "recurring materialize: ai unavailable, using template", "template_id", tmpl.ID, "error", err)
+			metadata["outcome"], metadata["error_code"] = "fallback", "ai_submission_failed"
 		} else {
 			return nil
 		}
@@ -752,8 +817,8 @@ func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *dom
 		Source:                domain.PostSourceAutomation,
 	}
 	input.EnsureTitle()
-	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}}
-	post, err := s.store.CreateScheduledPost(ctx, tmpl.TeamID, principal, input)
+	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: tmpl.AuthorUserID}, Kind: "system"}
+	post, err := s.createAutomationPost(ctx, tmpl.TeamID, principal, input, metadata, nil)
 	if err != nil {
 		s.logger.Error("materialize scheduled post from template failed", "template_id", tmpl.ID, "error", err)
 		return err

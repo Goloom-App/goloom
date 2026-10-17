@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -134,8 +135,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/me", a.requireAuth(http.HandlerFunc(a.handleMe)))
 	mux.Handle("PUT /v1/me/tour", a.requireAuth(http.HandlerFunc(a.handleSetTourDone)))
 	mux.Handle("GET /v1/me/api-tokens", a.requireAuth(http.HandlerFunc(a.handleListMyAPITokens)))
-	mux.Handle("POST /v1/me/api-tokens", a.requireAuth(http.HandlerFunc(a.handleCreateMyAPIToken)))
-	mux.Handle("DELETE /v1/me/api-tokens/{tokenID}", a.requireAuth(http.HandlerFunc(a.handleRevokeMyAPIToken)))
+	mux.Handle("POST /v1/me/api-tokens", a.requireAuth(a.auditedHandler(a.handleCreateMyAPIToken)))
+	mux.Handle("DELETE /v1/me/api-tokens/{tokenID}", a.requireAuth(a.auditedHandler(a.handleRevokeMyAPIToken)))
 	mux.Handle("GET /v1/me/push/vapid-key", a.requireAuth(http.HandlerFunc(a.handleGetMyVAPIDPublicKey)))
 	mux.Handle("GET /v1/me/push-subscriptions", a.requireAuth(http.HandlerFunc(a.handleListMyPushSubscriptions)))
 	mux.Handle("POST /v1/me/push-subscriptions", a.requireAuth(http.HandlerFunc(a.handleCreateMyPushSubscription)))
@@ -147,15 +148,15 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/me/review-counts", a.requireAuth(http.HandlerFunc(a.handleMyReviewCounts)))
 	mux.Handle("GET /v1/users", a.requireAuth(http.HandlerFunc(a.handleListUsers)))
 	mux.Handle("GET /v1/teams", a.requireAuth(http.HandlerFunc(a.handleListTeams)))
-	mux.Handle("POST /v1/teams", a.requireAuth(http.HandlerFunc(a.handleCreateTeam)))
-	mux.Handle("PATCH /v1/teams/{teamID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpdateTeam))))
+	mux.Handle("POST /v1/teams", a.requireAuth(a.auditedHandler(a.handleCreateTeam)))
+	mux.Handle("PATCH /v1/teams/{teamID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(a.auditedHandler(a.handleUpdateTeam))))
 	mux.Handle("GET /v1/admin/users", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleListUsers))))
 	mux.Handle("PATCH /v1/admin/users/{userID}", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleUpdateUser))))
 	mux.Handle("GET /v1/admin/runtime-config", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleRuntimeConfig))))
 	mux.Handle("GET /v1/admin/metrics", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminMetrics))))
 	mux.Handle("GET /v1/admin/publish-failures", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminListPublishFailures))))
-	mux.Handle("POST /v1/admin/publish-failures/{postID}/acknowledge", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminAcknowledgePublishFailure))))
-	mux.Handle("POST /v1/admin/publish-failures/{postID}/retry", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminRetryPublishFailure))))
+	mux.Handle("POST /v1/admin/publish-failures/{postID}/acknowledge", a.requireAuth(a.auth.RequireAdmin(a.auditedHandler(a.handleAdminAcknowledgePublishFailure))))
+	mux.Handle("POST /v1/admin/publish-failures/{postID}/retry", a.requireAuth(a.auth.RequireAdmin(a.auditedHandler(a.handleAdminRetryPublishFailure))))
 	mux.Handle("GET /v1/admin/sync-status", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncStatus))))
 	mux.Handle("POST /v1/admin/sync-metrics", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncMetrics))))
 	mux.Handle("POST /v1/admin/sync-external-posts", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminSyncExternalPosts))))
@@ -177,32 +178,32 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("DELETE /v1/admin/provider-instances/{instanceID}", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleDeleteProviderInstance))))
 	mux.Handle("GET /v1/admin/provider-instances/{instanceID}/health", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleProviderInstanceHealth))))
 	mux.Handle("GET /v1/teams/{teamID}/members", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListTeamMembers))))
-	mux.Handle("POST /v1/teams/{teamID}/members", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleAddTeamMember))))
-	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleRemoveTeamMember))))
-	mux.Handle("GET /v1/teams/{teamID}/audit-log", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamAuditLog))))
-	mux.Handle("POST /v1/teams/{teamID}/invitations", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleCreateTeamInvitation))))
+	mux.Handle("POST /v1/teams/{teamID}/members", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(a.auditedHandler(a.handleAddTeamMember))))
+	mux.Handle("DELETE /v1/teams/{teamID}/members/{userID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(a.auditedHandler(a.handleRemoveTeamMember))))
+	mux.Handle("GET /v1/teams/{teamID}/audit-log", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListTeamAuditLog)))))
+	mux.Handle("POST /v1/teams/{teamID}/invitations", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(a.auditedHandler(a.handleCreateTeamInvitation))))
 	mux.Handle("GET /v1/teams/{teamID}/invitations", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleListTeamInvitations))))
-	mux.Handle("DELETE /v1/teams/{teamID}/invitations/{invitationID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleDeleteTeamInvitation))))
-	mux.Handle("POST /v1/invitations/accept", a.requireAuth(http.HandlerFunc(a.handleAcceptTeamInvitation)))
+	mux.Handle("DELETE /v1/teams/{teamID}/invitations/{invitationID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(a.auditedHandler(a.handleDeleteTeamInvitation))))
+	mux.Handle("POST /v1/invitations/accept", a.requireAuth(a.auditedHandler(a.handleAcceptTeamInvitation)))
 	mux.Handle("GET /v1/teams/{teamID}/accounts", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListAccounts)))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts/oauth/mastodon/start", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleStartMastodonOAuth))))
 	mux.Handle("POST /v1/teams/{teamID}/accounts", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAccount))))
 	mux.Handle("GET /v1/teams/{teamID}/media", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamMediaList)))))
 	mux.Handle("POST /v1/teams/{teamID}/media", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaUploadToLibrary))))
-	mux.Handle("PATCH /v1/teams/{teamID}/media/{mediaID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaRename))))
+	mux.Handle("PATCH /v1/teams/{teamID}/media/{mediaID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleTeamMediaRename))))
 	mux.Handle("DELETE /v1/teams/{teamID}/media/{mediaID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaDelete))))
 	mux.Handle("GET /v1/teams/{teamID}/media/{mediaID}/preview", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleTeamMediaPreview))))
-	mux.Handle("POST /v1/teams/{teamID}/accounts/{accountID}/migrate", a.requireAuth(http.HandlerFunc(a.handleMigrateAccount)))
-	mux.Handle("PATCH /v1/teams/{teamID}/accounts/{accountID}", a.requireAuth(http.HandlerFunc(a.handleUpdateAccount)))
+	mux.Handle("POST /v1/teams/{teamID}/accounts/{accountID}/migrate", a.requireAuth(a.auditedHandler(a.handleMigrateAccount)))
+	mux.Handle("PATCH /v1/teams/{teamID}/accounts/{accountID}", a.requireAuth(a.auditedHandler(a.handleUpdateAccount)))
 	mux.Handle("DELETE /v1/teams/{teamID}/accounts/{accountID}", a.requireAuth(http.HandlerFunc(a.handleDeleteAccount)))
 	mux.Handle("GET /v1/teams/{teamID}/posts", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListPosts)))))
 	mux.Handle("GET /v1/teams/{teamID}/review-queue", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleListReviewQueue)))))
-	mux.Handle("POST /v1/teams/{teamID}/posts", a.requireAuth(http.HandlerFunc(a.handleCreatePost)))
+	mux.Handle("POST /v1/teams/{teamID}/posts", a.requireAuth(a.auditedHandler(a.handleCreatePost)))
 	mux.Handle("POST /v1/teams/{teamID}/posts/validate", a.requireAuth(http.HandlerFunc(a.handleValidatePost)))
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}", a.requireAuth(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleGetPost))))
-	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}", a.requireAuth(http.HandlerFunc(a.handleUpdatePost)))
-	mux.Handle("DELETE /v1/teams/{teamID}/posts/{postID}", a.requireAuth(http.HandlerFunc(a.handleDeletePost)))
-	mux.Handle("POST /v1/teams/{teamID}/posts/{postID}/cancel", a.requireAuth(http.HandlerFunc(a.handleCancelPost)))
+	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}", a.requireAuth(a.auditedHandler(a.handleUpdatePost)))
+	mux.Handle("DELETE /v1/teams/{teamID}/posts/{postID}", a.requireAuth(a.auditedHandler(a.handleDeletePost)))
+	mux.Handle("POST /v1/teams/{teamID}/posts/{postID}/cancel", a.requireAuth(a.auditedHandler(a.handleCancelPost)))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/summary", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAnalyticsSummary)))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/posts", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAnalyticsPosts)))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/chart", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamAnalyticsChart)))))
@@ -211,52 +212,52 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/analytics", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handlePostAnalytics)))))
 	mux.Handle("GET /v1/teams/{teamID}/posts/{postID}/versions", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostVersions))))
 	mux.Handle("GET /v1/teams/{teamID}/versions", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAllTeamPostVersions))))
-	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}/versions", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handlePatchPostVersions))))
+	mux.Handle("PATCH /v1/teams/{teamID}/posts/{postID}/versions", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handlePatchPostVersions))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-hours", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamEngagementHourHistogram)))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/engagement-heatmap", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamEngagementHeatmap)))))
 	mux.Handle("GET /v1/teams/{teamID}/analytics/hashtags", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(auth.RequireTokenScope(auth.ScopeRead)(http.HandlerFunc(a.handleTeamHashtagAnalytics)))))
 	mux.Handle("GET /v1/teams/{teamID}/external-post-monitor", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetExternalPostMonitor))))
-	mux.Handle("PUT /v1/teams/{teamID}/external-post-monitor", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpsertExternalPostMonitor))))
+	mux.Handle("PUT /v1/teams/{teamID}/external-post-monitor", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(a.auditedHandler(a.handleUpsertExternalPostMonitor))))
 	mux.Handle("POST /v1/teams/{teamID}/import-old-posts", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleImportOldPosts))))
 	mux.Handle("GET /v1/teams/{teamID}/post-templates", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostTemplates))))
 	mux.Handle("GET /v1/teams/{teamID}/post-templates/{templateID}/linked-posts", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListPostTemplateLinkedPosts))))
-	mux.Handle("POST /v1/teams/{teamID}/post-templates", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreatePostTemplate))))
-	mux.Handle("PATCH /v1/teams/{teamID}/post-templates/{templateID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdatePostTemplate))))
-	mux.Handle("DELETE /v1/teams/{teamID}/post-templates/{templateID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeletePostTemplate))))
-	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/skip", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleSkipPostTemplateOccurrence))))
-	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/regenerate", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleRegeneratePostTemplate))))
-	mux.Handle("PUT /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpsertTeamProfile)))))
+	mux.Handle("POST /v1/teams/{teamID}/post-templates", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleCreatePostTemplate))))
+	mux.Handle("PATCH /v1/teams/{teamID}/post-templates/{templateID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpdatePostTemplate))))
+	mux.Handle("DELETE /v1/teams/{teamID}/post-templates/{templateID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeletePostTemplate))))
+	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/skip", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleSkipPostTemplateOccurrence))))
+	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/regenerate", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleRegeneratePostTemplate))))
+	mux.Handle("PUT /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpsertTeamProfile)))))
 	mux.Handle("GET /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetTeamProfile)))))
-	mux.Handle("DELETE /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteTeamProfile)))))
-	mux.Handle("POST /v1/teams/{teamID}/campaign-formats", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateCampaignFormat)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeleteTeamProfile)))))
+	mux.Handle("POST /v1/teams/{teamID}/campaign-formats", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleCreateCampaignFormat)))))
 	mux.Handle("GET /v1/teams/{teamID}/campaign-formats", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListCampaignFormats)))))
 	mux.Handle("GET /v1/teams/{teamID}/campaign-formats/{formatID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetCampaignFormat)))))
-	mux.Handle("PATCH /v1/teams/{teamID}/campaign-formats/{formatID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdateCampaignFormat)))))
-	mux.Handle("DELETE /v1/teams/{teamID}/campaign-formats/{formatID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteCampaignFormat)))))
-	mux.Handle("POST /v1/teams/{teamID}/style-examples", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateStyleExample)))))
+	mux.Handle("PATCH /v1/teams/{teamID}/campaign-formats/{formatID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpdateCampaignFormat)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/campaign-formats/{formatID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeleteCampaignFormat)))))
+	mux.Handle("POST /v1/teams/{teamID}/style-examples", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleCreateStyleExample)))))
 	mux.Handle("GET /v1/teams/{teamID}/style-examples", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListStyleExamples)))))
-	mux.Handle("DELETE /v1/teams/{teamID}/style-examples/{exampleID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteStyleExample)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/style-examples/{exampleID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeleteStyleExample)))))
 	mux.Handle("POST /v1/teams/{teamID}/knowledge-sources", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateKnowledgeSource)))))
 	mux.Handle("GET /v1/teams/{teamID}/knowledge-sources", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListKnowledgeSources)))))
 	mux.Handle("PATCH /v1/teams/{teamID}/knowledge-sources/{sourceID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdateKnowledgeSource)))))
-	mux.Handle("DELETE /v1/teams/{teamID}/knowledge-sources/{sourceID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteKnowledgeSource)))))
+	mux.Handle("DELETE /v1/teams/{teamID}/knowledge-sources/{sourceID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeleteKnowledgeSource)))))
 	mux.Handle("POST /v1/teams/{teamID}/ai/prompt-preview", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIPromptPreview)))))
 	mux.Handle("GET /v1/teams/{teamID}/proactive-settings", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetProactiveSettings)))))
-	mux.Handle("PUT /v1/teams/{teamID}/proactive-settings", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpsertProactiveSettings)))))
-	mux.Handle("POST /v1/teams/{teamID}/rss-feeds", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateRSSFeed))))
+	mux.Handle("PUT /v1/teams/{teamID}/proactive-settings", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpsertProactiveSettings)))))
+	mux.Handle("POST /v1/teams/{teamID}/rss-feeds", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleCreateRSSFeed))))
 	mux.Handle("GET /v1/teams/{teamID}/rss-feeds", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListRSSFeeds))))
-	mux.Handle("PATCH /v1/teams/{teamID}/rss-feeds/{feedID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleUpdateRSSFeed))))
-	mux.Handle("DELETE /v1/teams/{teamID}/rss-feeds/{feedID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleDeleteRSSFeed))))
+	mux.Handle("PATCH /v1/teams/{teamID}/rss-feeds/{feedID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpdateRSSFeed))))
+	mux.Handle("DELETE /v1/teams/{teamID}/rss-feeds/{feedID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeleteRSSFeed))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-service-config", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIServiceConfig))))
 	mux.Handle("PUT /v1/teams/{teamID}/ai-service-config", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleOwner)(http.HandlerFunc(a.handleUpsertAIServiceConfig))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-context", a.requireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeRead)(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIContext))))))
-	mux.Handle("POST /v1/teams/{teamID}/posts/draft", a.requireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCreateAIDraft))))))
+	mux.Handle("POST /v1/teams/{teamID}/posts/draft", a.requireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleCreateAIDraft))))))
 	mux.Handle("POST /v1/teams/{teamID}/ai-trigger", a.requireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAITrigger))))))
 	mux.Handle("POST /v1/teams/{teamID}/ai/chat", a.requireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeRead)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIChat))))))
 	mux.Handle("POST /v1/teams/{teamID}/ai/confirm-action", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIConfirmAction)))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListAIJobs)))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/{jobID}", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIJob)))))
-	mux.Handle("POST /v1/teams/{teamID}/ai-jobs/{jobID}/cancel", a.requireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleCancelAIJob))))))
+	mux.Handle("POST /v1/teams/{teamID}/ai-jobs/{jobID}/cancel", a.requireAuth(a.auth.RequireAIEnabled("teamID")(auth.RequireTokenScope(auth.ScopeWriteDraft)(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleCancelAIJob))))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-jobs/stream", a.auth.AcceptQueryToken("token")(a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleAIJobStream))))))
 	mux.Handle("GET /v1/admin/ai-enabled-teams", a.requireAuth(a.auth.RequireAdmin(http.HandlerFunc(a.handleAdminListAIEnabledTeams))))
 
@@ -423,6 +424,7 @@ func (a *API) handleCreateTeam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, team.ID, "team.create", "team", &team.ID, "Created team")
 	auth.WriteJSON(w, http.StatusCreated, team)
 }
 
@@ -460,7 +462,9 @@ func (a *API) handleUpdateTeam(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.recordAudit(r, team.ID, "team.update", "team", &team.ID, "Updated team settings")
+	if auditChanged(team, updated) {
+		a.recordAudit(r, team.ID, "team.update", "team", &team.ID, "Updated team settings")
+	}
 	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -712,19 +716,53 @@ func (a *API) handleAddTeamMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	members, err := a.store.ListTeamMembers(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		a.writeStoreError(w, r, err, "audit mutation")
+		return
+	}
+	var previousRole domain.TeamRole
+	for _, member := range members {
+		if member.UserID == input.UserID {
+			previousRole = member.Role
+			break
+		}
+	}
 	membership, err := a.store.AddTeamMember(r.Context(), r.PathValue("teamID"), input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	memberID := input.UserID
-	a.recordAudit(r, r.PathValue("teamID"), "member.add", "member", &memberID, "Added member with role "+string(input.Role))
+	if previousRole != input.Role {
+		action := "member.add"
+		if previousRole != "" {
+			action = "member.role_change"
+		}
+		a.recordAudit(r, r.PathValue("teamID"), action, "member", &memberID, "Changed team membership", map[string]string{"role_before": string(previousRole), "role_after": string(input.Role)})
+	}
 	auth.WriteJSON(w, http.StatusCreated, membership)
 }
 
 func (a *API) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 	if _, err := a.store.GetTeamByID(r.Context(), r.PathValue("teamID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	members, err := a.store.ListTeamMembers(r.Context(), r.PathValue("teamID"))
+	if err != nil {
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+		return
+	}
+	found := false
+	for _, member := range members {
+		if member.UserID == r.PathValue("userID") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if err := a.store.RemoveTeamMember(r.Context(), r.PathValue("teamID"), r.PathValue("userID")); err != nil {
@@ -773,13 +811,21 @@ func (a *API) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := a.store.CreateAccount(r.Context(), r.PathValue("teamID"), connectedAccount)
+	var account domain.SocialAccount
+	err = a.auditMutation(r, func(r *http.Request) error {
+		var err error
+		account, err = a.store.CreateAccount(r.Context(), r.PathValue("teamID"), connectedAccount)
+		if err != nil {
+			return err
+		}
+		a.recordAudit(r, r.PathValue("teamID"), "account.connect", "account", &account.ID, "Connected account")
+		return nil
+	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
 	a.syncAccountMetricsNow(r.Context(), account, connectedAccount)
-	a.recordAudit(r, r.PathValue("teamID"), "account.connect", "account", &account.ID, "Connected "+account.Provider+" account "+account.Username)
 	auth.WriteJSON(w, http.StatusCreated, account)
 }
 
@@ -818,7 +864,9 @@ func (a *API) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.recordAudit(r, teamID, "account.update", "account", &accountID, "Updated account "+updated.Username)
+	if auditChanged(acc, updated) {
+		a.recordAudit(r, teamID, "account.update", "account", &accountID, "Updated account")
+	}
 	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -841,12 +889,17 @@ func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	// Best-effort: revoke the OAuth authorization on the remote instance before we
 	// forget the token locally. Never blocks disconnecting the account.
 	a.revokeProviderToken(r.Context(), acc)
-	if err := a.store.DeleteSocialAccount(r.Context(), acc.ID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	err = a.auditMutation(r, func(r *http.Request) error {
+		if err := a.store.DeleteSocialAccount(r.Context(), acc.ID); err != nil {
+			return err
+		}
+		a.recordAudit(r, acc.TeamID, "account.disconnect", "account", &acc.ID, "Disconnected account")
+		return nil
+	})
+	if err != nil {
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
-	accountID := acc.ID
-	a.recordAudit(r, acc.TeamID, "account.disconnect", "account", &accountID, "Disconnected "+acc.Provider+" account "+acc.Username)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1012,7 +1065,7 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.recordAudit(r, effectiveTeam, "post.create", "post", &post.ID, "Created post: "+auditTitle(post.Title))
+	a.recordAudit(r, effectiveTeam, "post.create", "post", &post.ID, "Created post")
 	auth.WriteJSON(w, http.StatusCreated, post)
 }
 
@@ -1147,7 +1200,18 @@ func (a *API) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.recordAudit(r, existing.TeamID, "post.update", "post", &post.ID, "Updated post: "+auditTitle(post.Title))
+	versionsChanged := false
+	if patch.AccountContentOverride.Set {
+		after, err := a.store.ListPostVersionsForTeamPost(r.Context(), existing.TeamID, existing.ID)
+		if err != nil {
+			a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+			return
+		}
+		versionsChanged = auditVersionsChanged(versions, after)
+	}
+	if auditChanged(existing, post) || versionsChanged {
+		a.recordAudit(r, existing.TeamID, "post.update", "post", &post.ID, "Updated post")
+	}
 	auth.WriteJSON(w, http.StatusOK, post)
 }
 
@@ -1177,7 +1241,7 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	postID := r.PathValue("postID")
-	a.recordAudit(r, post.TeamID, "post.delete", "post", &postID, "Deleted post: "+auditTitle(post.Title))
+	a.recordAudit(r, post.TeamID, "post.delete", "post", &postID, "Deleted post")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1214,12 +1278,16 @@ func (a *API) handleCancelPost(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "forbidden", http.StatusForbidden)
 		return
 	}
+	if post.Status == domain.PostStatusCancelled {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if err := a.store.CancelScheduledPost(r.Context(), post.TeamID, r.PathValue("postID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	postID := r.PathValue("postID")
-	a.recordAudit(r, post.TeamID, "post.cancel", "post", &postID, "Cancelled post: "+auditTitle(post.Title))
+	a.recordAudit(r, post.TeamID, "post.cancel", "post", &postID, "Cancelled post")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1287,6 +1355,22 @@ func (a *API) handleMigrateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accountID := r.PathValue("accountID")
+	source, err := a.store.GetAccountByID(r.Context(), accountID)
+	if err != nil {
+		a.writeError(w, r, "not_found", http.StatusNotFound)
+		return
+	}
+	if source.TeamID != r.PathValue("teamID") {
+		a.writeError(w, r, "not_found", http.StatusNotFound)
+		return
+	}
+	for _, teamID := range []string{source.TeamID, input.TargetTeamID} {
+		allowed, err := a.auth.PrincipalHasTeamAccess(r.Context(), principal, teamID, domain.RoleOwner)
+		if err != nil || !allowed {
+			a.writeError(w, r, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
 	if err := a.store.MigrateAccountToTeam(r.Context(), principal.User.ID, accountID, input.TargetTeamID, principal.User.IsAdmin); err != nil {
 		msg := err.Error()
 		if strings.Contains(msg, "forbidden") {
@@ -1300,6 +1384,12 @@ func (a *API) handleMigrateAccount(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if source.TeamID != acc.TeamID {
+		correlation := uuid.NewString()
+		metadata := map[string]string{"correlation_id": correlation, "source_team_id": source.TeamID, "destination_team_id": acc.TeamID}
+		a.recordAudit(r, source.TeamID, "account.migrate_out", "account", &accountID, "Moved account to another team", metadata)
+		a.recordAudit(r, acc.TeamID, "account.migrate_in", "account", &accountID, "Moved account from another team", metadata)
 	}
 	auth.WriteJSON(w, http.StatusOK, acc)
 }
@@ -1320,7 +1410,7 @@ func (a *API) handleCreateTeamInvitation(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	a.recordAudit(r, inv.TeamID, "invitation.create", "invitation", &inv.ID, "Invited "+inv.Email+" as "+string(inv.Role))
+	a.recordAudit(r, inv.TeamID, "invitation.create", "invitation", &inv.ID, "Created team invitation")
 	auth.WriteJSON(w, http.StatusCreated, map[string]any{
 		"invitation": inv,
 		"token":      token,
@@ -1371,6 +1461,7 @@ func (a *API) handleAcceptTeamInvitation(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.recordAudit(r, membership.TeamID, "invitation.accept", "member", &membership.UserID, "Accepted team invitation", map[string]string{"role_after": string(membership.Role)})
 	auth.WriteJSON(w, http.StatusOK, membership)
 }
 

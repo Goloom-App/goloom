@@ -37,103 +37,131 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		return
 	}
 
-	job, err := a.store.GetAIJobByIDGlobal(ctx, jobID)
-	if err != nil {
-		a.log.ErrorContext(ctx, "ai job completion: job not found", "job_id", jobID, "error", err)
-		return
-	}
-	if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed {
-		return
-	}
-
-	rssMeta := parseRSSAutomationMeta(job.Payload)
-	recurringMeta := parseRecurringAutomationMeta(job.Payload)
-	legacyAutomation := job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil)
-	if legacyAutomation {
-		status = domain.AIJobStatusFailed
-		errorMessage = "Automation job from before upgrade; please re-run"
-		rssMeta, recurringMeta = nil, nil
-	}
-
-	var resultBytes []byte
-	if len(result) > 0 {
-		resultBytes = []byte(result)
-	}
-	claimed, err := a.store.ClaimAIJobCompletion(ctx, job.ID, status, resultBytes, errorMessage)
-	if err != nil {
-		a.log.ErrorContext(ctx, "ai job completion: update status failed", "job_id", jobID, "error", err)
-		return
-	}
-
-	if !claimed {
-		return
-	}
-
-	if legacyAutomation {
-		a.log.WarnContext(ctx, "ai job completion: rejecting automation metadata without server provenance", "job_id", job.ID, "team_id", job.TeamID, "origin", job.Origin)
-	}
-	automation := job.Type == domain.AIJobTypeVoiceEngine && (rssMeta != nil || recurringMeta != nil)
-
-	// Only the atomic terminal-claim winner runs side effects, including across replicas.
-	// Automation callbacks own their separate post/fallback lifecycle below.
-	if status == domain.AIJobStatusCompleted && !automation && !noPublishFromJobPayload(job.Payload) {
-		profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
-		if profErr == nil && profile.AutoPublishEnabled {
-			if draftResult, err := a.autoCreatePostFromCallbackResult(ctx, job, result); err != nil {
-				a.log.ErrorContext(ctx, "ai job auto-publish failed", "job_id", job.ID, "team_id", job.TeamID, "error", err)
-				status = domain.AIJobStatusFailed
-				errorMessage = "Auto-publish failed: post could not be created"
-				if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, resultBytes, errorMessage); err != nil {
-					a.log.ErrorContext(ctx, "ai job auto-publish: update failure status failed", "job_id", job.ID, "error", err)
-					return
-				}
-			} else if draftResult != nil {
-				// Keep completion successful; expose the downgrade in the existing result JSON.
-				if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, draftResult, errorMessage); err != nil {
-					a.log.ErrorContext(ctx, "ai job completion: persist draft notice failed", "job_id", job.ID, "error", err)
-					return
-				}
-			}
+	var completed *domain.AIJob
+	err := a.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		job, err := a.store.GetAIJobByIDGlobal(ctx, jobID)
+		if err != nil {
+			return err
 		}
-	}
 
-	var automationErr error
-	if automation {
-		if status == domain.AIJobStatusCompleted {
+		rssMeta, recurringMeta := parseRSSAutomationMeta(job.Payload), parseRecurringAutomationMeta(job.Payload)
+		legacyAutomation := job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil)
+		if legacyAutomation {
+			status = domain.AIJobStatusFailed
+			errorMessage = "Automation job from before upgrade; please re-run"
+			rssMeta, recurringMeta = nil, nil
+		}
+		automation := job.Type == domain.AIJobTypeVoiceEngine && (rssMeta != nil || recurringMeta != nil)
+		var sourceErr error
+		if automation {
 			if rssMeta != nil {
-				automationErr = a.finishRSSAutomationFromAI(ctx, job, result, rssMeta)
+				sourceErr = a.store.LockAutomationSource(ctx, "rss_feed", rssMeta.FeedID)
 			} else {
-				automationErr = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
+				sourceErr = a.store.LockAutomationSource(ctx, "post_template", recurringMeta.TemplateID)
 			}
-		} else {
-			if rssMeta != nil {
-				automationErr = a.finishRSSAutomationFallback(ctx, job, rssMeta)
-			} else {
-				automationErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta)
+			if sourceErr != nil && !errors.Is(sourceErr, domain.ErrNotFound) {
+				return sourceErr
 			}
 		}
-	}
-
-	if automationErr != nil {
-		a.log.ErrorContext(ctx, "ai job automation failed", "job_id", job.ID, "team_id", job.TeamID, "error", automationErr, "job_error", errorMessage)
-		errorMessage = "Automation failed: post could not be created"
-		if errors.Is(automationErr, errAutomationTemplateFallback) {
-			errorMessage = "Automation failed: used template fallback"
+		claimed, err := a.store.ClaimAIJobCompletion(ctx, job.ID, status, result, errorMessage)
+		if err != nil || !claimed {
+			return err
 		}
-		if err := a.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusFailed, resultBytes, errorMessage); err != nil {
-			a.log.ErrorContext(ctx, "ai job automation: update failure status failed", "job_id", job.ID, "error", err)
-			return
+		if legacyAutomation {
+			a.log.WarnContext(ctx, "ai job completion: rejecting automation metadata without server provenance", "job_id", job.ID, "team_id", job.TeamID, "origin", job.Origin)
 		}
-	}
-	updatedJob, err := a.store.GetAIJobByIDGlobal(ctx, job.ID)
+		var effectErr error
+		// Failed side effects roll back independently. A successful template fallback
+		// retains its post and records the user-visible failed AI outcome.
+		err = a.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+			switch {
+			case sourceErr != nil:
+				effectErr = sourceErr
+			case automation && rssMeta != nil && status == domain.AIJobStatusCompleted:
+				effectErr = a.finishRSSAutomationFromAI(ctx, job, result, rssMeta)
+			case automation && rssMeta != nil:
+				effectErr = a.finishRSSAutomationFallback(ctx, job, rssMeta)
+			case automation && status == domain.AIJobStatusCompleted:
+				effectErr = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
+			case automation:
+				effectErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta)
+			case status == domain.AIJobStatusCompleted && !noPublishFromJobPayload(job.Payload):
+				profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
+				if profErr == nil && profile.AutoPublishEnabled {
+					var draftResult json.RawMessage
+					draftResult, effectErr = a.autoCreatePostFromCallbackResult(ctx, job, result)
+					if effectErr == nil && draftResult != nil {
+						// Notice, draft and audit share the completion transaction.
+						effectErr = a.store.UpdateAIJobStatus(ctx, job.ID, status, draftResult, errorMessage)
+						if effectErr == nil {
+							result = draftResult
+						}
+					}
+				}
+			}
+			if errors.Is(effectErr, errAutomationTemplateFallback) {
+				return nil
+			}
+			return effectErr
+		})
+		if (err != nil && !errors.Is(err, effectErr)) || errors.Is(err, errAutomationAudit) || ctx.Err() != nil {
+			return err
+		}
+		action, outcome := "ai_job.complete", "success"
+		if status == domain.AIJobStatusFailed {
+			action, outcome = "ai_job.fail", "failure"
+		}
+		if effectErr != nil {
+			logMessage := "ai job completion side effect failed"
+			if !automation {
+				logMessage = "ai job auto-publish failed"
+			}
+			a.log.ErrorContext(ctx, logMessage, "job_id", job.ID, "team_id", job.TeamID, "error", effectErr)
+			status = domain.AIJobStatusFailed
+			errorMessage = "Auto-publish failed: post could not be created"
+			if automation {
+				errorMessage = "Automation failed: post could not be created"
+			}
+			if errors.Is(effectErr, errAutomationTemplateFallback) {
+				errorMessage = "Automation failed: used template fallback"
+			}
+			if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, result, errorMessage); err != nil {
+				return err
+			}
+			action, outcome = "ai_job.fail", "failure"
+		}
+		if automation && (errors.Is(effectErr, errAutomationTemplateFallback) || (effectErr == nil && status == domain.AIJobStatusFailed)) {
+			action, outcome = "ai_job.fallback", "fallback"
+		}
+		metadata := map[string]string{"outcome": outcome}
+		if rssMeta != nil {
+			metadata["feed_id"] = rssMeta.FeedID
+		}
+		if recurringMeta != nil {
+			metadata["template_id"], metadata["post_kind"] = recurringMeta.TemplateID, recurringMeta.PostKind
+			if recurringMeta.TemplateOccurrenceAt != nil {
+				metadata["occurrence_at"] = recurringMeta.TemplateOccurrenceAt.UTC().Format(time.RFC3339Nano)
+			}
+		}
+		if err := a.store.InsertAuditEvent(ctx, jobAuditEvent(ctx, job, action, "ai_job", job.ID, metadata)); err != nil {
+			return err
+		}
+		updated, err := a.store.GetAIJobByIDGlobal(ctx, job.ID)
+		if err == nil {
+			completed = &updated
+		}
+		return err
+	})
 	if err != nil {
-		a.log.ErrorContext(ctx, "ai job completion: reload job failed", "job_id", jobID, "error", err)
+		a.log.ErrorContext(ctx, "ai job completion transaction failed", "job_id", jobID, "error", err)
 		return
 	}
-
-	if event, evErr := aiJobStreamEvent(updatedJob); evErr == nil {
-		a.hub.Publish(job.TeamID, event)
+	if completed != nil {
+		if event, err := aiJobStreamEvent(*completed); err == nil {
+			a.hub.Publish(completed.TeamID, event)
+		}
 	}
+
 }
 
 // NotifyAIJobStatus implements aijobs.StatusNotifier: publishes the current
@@ -174,11 +202,6 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 
 	targetAccounts := targetAccountIDsFromJobPayload(job.Payload)
 
-	principal := domain.AuthenticatedPrincipal{
-		User: domain.User{ID: job.AuthorUserID},
-		Kind: "api_token",
-	}
-
 	aiPost := domain.CreatePostInput{
 		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
@@ -208,7 +231,7 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 			return nil, err
 		}
 	}
-	if _, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, prepared.Input); err != nil {
+	if _, err := a.createJobAutomationPost(ctx, job, prepared.Input, map[string]string{}); err != nil {
 		return nil, fmt.Errorf("create auto-publish post: %w", err)
 	}
 	if aiPost.Draft {

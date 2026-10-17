@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -40,7 +41,9 @@ func coreCreateCampaign(ctx context.Context, d Deps, inv Invocation, in CreateCa
 	if err != nil {
 		return CreateCampaignOutput{}, err
 	}
-	d.recordAudit(ctx, inv, in.TeamID, "campaign.create", "campaign", created.ID, "Created campaign: "+created.Name)
+	if err := d.recordAudit(ctx, inv, in.TeamID, "campaign_format.create", "campaign_format", created.ID, "Created campaign format"); err != nil {
+		return CreateCampaignOutput{}, err
+	}
 	return CreateCampaignOutput{CampaignID: created.ID, Name: created.Name}, nil
 }
 
@@ -79,7 +82,9 @@ func coreCreateRecurring(ctx context.Context, d Deps, inv Invocation, in CreateR
 	if err != nil {
 		return CreateRecurringOutput{}, err
 	}
-	d.recordAudit(ctx, inv, in.TeamID, "recurring.create", "recurring", template.ID, "Created recurring template: "+strings.TrimSpace(in.Title))
+	if err := d.recordAudit(ctx, inv, in.TeamID, "recurring.create", "recurring", template.ID, "Created recurring template"); err != nil {
+		return CreateRecurringOutput{}, err
+	}
 	return CreateRecurringOutput{TemplateID: template.ID}, nil
 }
 
@@ -118,7 +123,9 @@ func coreCreateRSSFeed(ctx context.Context, d Deps, inv Invocation, in CreateRSS
 	if err != nil {
 		return CreateRSSFeedOutput{}, err
 	}
-	d.recordAudit(ctx, inv, in.TeamID, "rss_feed.create", "rss_feed", created.ID, "Created RSS feed: "+strings.TrimSpace(in.Name))
+	if err := d.recordAudit(ctx, inv, in.TeamID, "rss_feed.create", "rss_feed", created.ID, "Created RSS feed"); err != nil {
+		return CreateRSSFeedOutput{}, err
+	}
 	return CreateRSSFeedOutput{FeedID: created.ID}, nil
 }
 
@@ -153,7 +160,9 @@ func coreSchedulePost(ctx context.Context, d Deps, inv Invocation, in SchedulePo
 	if err != nil {
 		return SchedulePostOutput{}, err
 	}
-	d.recordAudit(ctx, inv, prepared.EffectiveTeam, "post.create", "post", post.ID, "Scheduled post: "+post.Title)
+	if err := d.recordAudit(ctx, inv, prepared.EffectiveTeam, "post.create", "post", post.ID, "Scheduled post"); err != nil {
+		return SchedulePostOutput{}, err
+	}
 	return SchedulePostOutput{
 		PostID:      post.ID,
 		ScheduledAt: post.ScheduledAt.Format(time.RFC3339),
@@ -187,7 +196,9 @@ func coreDraftPost(ctx context.Context, d Deps, inv Invocation, in DraftPostInpu
 	if err != nil {
 		return DraftPostOutput{}, err
 	}
-	d.recordAudit(ctx, inv, prepared.EffectiveTeam, "post.create", "post", post.ID, "Drafted post: "+post.Title)
+	if err := d.recordAudit(ctx, inv, prepared.EffectiveTeam, "post.create", "post", post.ID, "Drafted post"); err != nil {
+		return DraftPostOutput{}, err
+	}
 	return DraftPostOutput{
 		PostID:         post.ID,
 		Status:         string(post.Status),
@@ -259,7 +270,21 @@ func coreModifyPost(ctx context.Context, d Deps, inv Invocation, in ModifyPostIn
 	if err != nil {
 		return ModifyPostOutput{}, err
 	}
-	d.recordAudit(ctx, inv, existing.TeamID, "post.update", "post", in.PostID, "Updated post: "+prepared.Input.Title)
+	beforeCompare, afterCompare := existing, updated
+	afterCompare.UpdatedAt = beforeCompare.UpdatedAt
+	versionsChanged := false
+	if in.AccountContentOverride != nil {
+		after, err := d.Store.ListPostVersionsForTeamPost(ctx, existing.TeamID, in.PostID)
+		if err != nil {
+			return ModifyPostOutput{}, err
+		}
+		versionsChanged = agentAuditVersionsChanged(versions, after)
+	}
+	if !reflect.DeepEqual(beforeCompare, afterCompare) || versionsChanged {
+		if err := d.recordAudit(ctx, inv, existing.TeamID, "post.update", "post", in.PostID, "Updated post"); err != nil {
+			return ModifyPostOutput{}, err
+		}
+	}
 	return ModifyPostOutput{
 		PostID:         in.PostID,
 		Status:         string(updated.Status),
@@ -284,7 +309,9 @@ func coreDeletePost(ctx context.Context, d Deps, inv Invocation, in DeletePostIn
 	if err := d.Store.DeleteScheduledPost(ctx, existing.TeamID, in.PostID); err != nil {
 		return DeletePostOutput{}, err
 	}
-	d.recordAudit(ctx, inv, existing.TeamID, "post.delete", "post", in.PostID, "Deleted post: "+existing.Title)
+	if err := d.recordAudit(ctx, inv, existing.TeamID, "post.delete", "post", in.PostID, "Deleted post"); err != nil {
+		return DeletePostOutput{}, err
+	}
 	return DeletePostOutput{Success: true}, nil
 }
 
@@ -308,4 +335,17 @@ func confirmModifyPost(ctx context.Context, d Deps, args json.RawMessage) (bool,
 		return true, "the post is already scheduled."
 	}
 	return false, ""
+}
+
+func agentAuditVersionsChanged(before, after []domain.PostVersion) bool {
+	content := func(versions []domain.PostVersion) map[string]string {
+		out := map[string]string{}
+		for _, version := range versions {
+			if version.Content != "" {
+				out[version.AccountID] = version.Content
+			}
+		}
+		return out
+	}
+	return !reflect.DeepEqual(content(before), content(after))
 }

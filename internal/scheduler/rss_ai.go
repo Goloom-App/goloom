@@ -67,25 +67,33 @@ func (s *Service) submitRSSAIEnhancement(
 		return err
 	}
 
-	job, err := s.jobManager.SubmitJob(ctx, domain.AIJob{
-		Origin:       domain.AIJobOriginAutomation,
-		TeamID:       feed.TeamID,
-		AuthorUserID: ownerID,
-		Type:         domain.AIJobTypeVoiceEngine,
-		Payload:      payload,
-	})
-	if err != nil {
-		if errors.Is(err, aijobs.ErrAIServiceNotConfigured) {
+	var job domain.AIJob
+	err = s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		job, err = s.jobManager.SubmitJob(ctx, domain.AIJob{
+			Origin:       domain.AIJobOriginAutomation,
+			TeamID:       feed.TeamID,
+			AuthorUserID: ownerID,
+			Type:         domain.AIJobTypeVoiceEngine,
+			Payload:      payload,
+		})
+		if err != nil {
+			if errors.Is(err, aijobs.ErrAIServiceNotConfigured) {
+				return err
+			}
+			return fmt.Errorf("submit rss ai job: %w", err)
+		}
+		if job.Status == domain.AIJobStatusFailed {
+			return fmt.Errorf("rss ai job dispatch failed")
+		}
+		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, ""); err != nil {
 			return err
 		}
-		return fmt.Errorf("submit rss ai job: %w", err)
-	}
-	if job.Status == domain.AIJobStatusFailed {
-		return fmt.Errorf("rss ai job dispatch failed")
-	}
-	if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, ""); err != nil {
+		return nil
+	})
+	if err != nil {
 		return err
 	}
+
 	s.logger.InfoContext(ctx, "rss import: ai enhancement queued", "feed_id", feed.ID, "job_id", job.ID, "item_key", itemKey)
 	return nil
 }
@@ -99,7 +107,21 @@ func (s *Service) createRSSPostDirect(
 	scheduledAt time.Time,
 	draft bool,
 	ownerID string,
+	submissionFallback bool,
 ) error {
+	return s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		if err := s.store.LockAutomationSource(ctx, "rss_feed", feed.ID); err != nil {
+			return err
+		}
+		already, err := s.store.RSSItemAlreadyImported(ctx, feed.ID, itemKey)
+		if err != nil || already {
+			return err
+		}
+		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback)
+	})
+}
+
+func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFeedConfig, itemKey, content, title string, scheduledAt time.Time, draft bool, ownerID string, submissionFallback bool) error {
 	feedID := feed.ID
 	input := domain.CreatePostInput{
 		Title:          title,
@@ -113,14 +135,17 @@ func (s *Service) createRSSPostDirect(
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: ownerID}, Kind: "system"}
-	post, err := s.store.CreateScheduledPost(ctx, feed.TeamID, principal, input)
+	metadata := map[string]string{"feed_id": feed.ID, "item_key_hash": sourceKey(itemKey)}
+	if submissionFallback {
+		metadata["outcome"], metadata["error_code"] = "fallback", "ai_submission_failed"
+	}
+	post, err := s.createAutomationPost(ctx, feed.TeamID, principal, input, metadata, func(ctx context.Context, post domain.ScheduledPost) error {
+		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
+			return err
+		}
+		return s.store.IncrementRSSFeedCounter(ctx, feed.TeamID, feed.ID)
+	})
 	if err != nil {
-		return err
-	}
-	if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
-		return err
-	}
-	if err := s.store.IncrementRSSFeedCounter(ctx, feed.TeamID, feed.ID); err != nil {
 		return err
 	}
 	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)

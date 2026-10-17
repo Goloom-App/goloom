@@ -292,7 +292,7 @@ func (p *BlueskyProvider) Publish(ctx context.Context, account domain.SocialAcco
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return PublishResult{}, fmt.Errorf("bluesky publish failed with status %d", resp.StatusCode)
+		return PublishResult{}, publicationHTTPError(resp.StatusCode, fmt.Errorf("bluesky publish failed with status %d", resp.StatusCode))
 	}
 
 	var payload blueskyCreateRecordResponse

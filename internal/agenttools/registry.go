@@ -34,9 +34,8 @@ type Deps struct {
 	Posts     *postservice.Service
 	Providers *provider.Registry
 	Logger    *slog.Logger
-	// Audit records a team audit event for a write action. Best-effort: a nil
-	// sink (or one that fails) must never fail the tool call.
-	Audit func(ctx context.Context, event domain.AuditEvent)
+	// Audit persists evidence in the invocation transaction. Nil uses Store.
+	Audit func(ctx context.Context, event domain.AuditEvent) error
 }
 
 // Transport identifies which surface a tool is exposed on.
@@ -143,6 +142,16 @@ func define[In, Out any](s spec, core coreFn[In, Out]) *Tool {
 		Transports:  s.transports,
 		inputSchema: mustSchema[In](s.name),
 	}
+	invoke := func(ctx context.Context, d Deps, inv Invocation, in In) (out Out, err error) {
+		if s.scope == "" {
+			return core(ctx, d, inv, in)
+		}
+		err = d.Store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+			out, err = core(ctx, d, inv, in)
+			return err
+		})
+		return out, err
+	}
 	t.exec = func(ctx context.Context, d Deps, inv Invocation, raw json.RawMessage) (Result, error) {
 		var in In
 		if len(strings.TrimSpace(string(raw))) > 0 {
@@ -150,7 +159,7 @@ func define[In, Out any](s spec, core coreFn[In, Out]) *Tool {
 				return Result{}, fmt.Errorf("invalid arguments: %w", err)
 			}
 		}
-		out, err := core(ctx, d, inv, in)
+		out, err := invoke(ctx, d, inv, in)
 		if err != nil {
 			return Result{}, err
 		}
@@ -175,7 +184,7 @@ func define[In, Out any](s spec, core coreFn[In, Out]) *Tool {
 				if p := PrincipalFromContext(ctx); p != nil {
 					inv.Principal = *p
 				}
-				out, err := core(ctx, d, inv, in)
+				out, err := invoke(ctx, d, inv, in)
 				if err != nil {
 					var zero Out
 					return nil, zero, err
@@ -220,10 +229,10 @@ func requireTeam(ctx context.Context, d Deps, inv Invocation, teamID string, rol
 }
 
 // recordAudit mirrors the REST API's audit so agent write actions show up in the
-// team audit log regardless of transport. Best-effort.
-func (d Deps) recordAudit(ctx context.Context, inv Invocation, teamID, action, targetType, targetID, summary string) {
-	if d.Audit == nil || strings.TrimSpace(teamID) == "" {
-		return
+// team audit log regardless of transport; failures roll back the invocation.
+func (d Deps) recordAudit(ctx context.Context, inv Invocation, teamID, action, targetType, targetID, summary string) error {
+	if strings.TrimSpace(teamID) == "" {
+		return nil
 	}
 	p := inv.Principal
 	event := domain.AuditEvent{
@@ -235,6 +244,7 @@ func (d Deps) recordAudit(ctx context.Context, inv Invocation, teamID, action, t
 		Action:      action,
 		TargetType:  targetType,
 		Summary:     summary,
+		Metadata:    map[string]string{"channel": string(inv.Transport), "outcome": "success"},
 	}
 	if strings.TrimSpace(targetID) != "" {
 		event.TargetID = &targetID
@@ -243,7 +253,10 @@ func (d Deps) recordAudit(ctx context.Context, inv Invocation, teamID, action, t
 		event.TokenID = p.TokenID
 		event.TokenName = p.TokenName
 	}
-	d.Audit(ctx, event)
+	if d.Audit != nil {
+		return d.Audit(ctx, event)
+	}
+	return d.Store.InsertAuditEvent(ctx, event)
 }
 
 // ===== Principal context (shared between adapters) =====

@@ -109,7 +109,7 @@ func (a *API) handleCreateMyAPIToken(w http.ResponseWriter, r *http.Request) {
 	// tool/automation key was minted for the team.
 	if tokenTeamID != nil {
 		tokenID := meta.ID
-		a.recordAudit(r, *tokenTeamID, "api_token.create", "api_token", &tokenID, "Created API key: "+input.Name)
+		a.recordAudit(r, *tokenTeamID, "api_token.create", "api_token", &tokenID, "Created API key")
 	}
 	auth.WriteJSON(w, http.StatusCreated, map[string]any{
 		"token":     plaintext,
@@ -194,7 +194,7 @@ func (a *API) handleRevokeMyAPIToken(w http.ResponseWriter, r *http.Request) {
 	}
 	if revoked.TeamID != nil {
 		id := revoked.ID
-		a.recordAudit(r, *revoked.TeamID, "api_token.revoke", "api_token", &id, "Revoked API key: "+revoked.Name)
+		a.recordAudit(r, *revoked.TeamID, "api_token.revoke", "api_token", &id, "Revoked API key")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

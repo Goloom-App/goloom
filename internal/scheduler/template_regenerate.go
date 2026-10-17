@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
 
+	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 var (
@@ -18,6 +21,12 @@ var (
 )
 
 func (s *Service) RegeneratePostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) (domain.PostTemplateRegenerateResult, error) {
+	return s.mutatePostTemplate(ctx, templateID, func(ctx context.Context) (domain.PostTemplateRegenerateResult, error) {
+		return s.regeneratePostTemplateOccurrence(ctx, teamID, templateID, occurrenceAt)
+	})
+}
+
+func (s *Service) regeneratePostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time) (domain.PostTemplateRegenerateResult, error) {
 	tmpl, err := s.store.GetPostTemplate(ctx, teamID, templateID)
 	if err != nil {
 		return domain.PostTemplateRegenerateResult{}, err
@@ -67,6 +76,12 @@ func (s *Service) RegeneratePostTemplateOccurrence(ctx context.Context, teamID, 
 }
 
 func (s *Service) RegeneratePostTemplateHorizon(ctx context.Context, teamID, templateID string) (domain.PostTemplateRegenerateResult, error) {
+	return s.mutatePostTemplate(ctx, templateID, func(ctx context.Context) (domain.PostTemplateRegenerateResult, error) {
+		return s.regeneratePostTemplateHorizon(ctx, teamID, templateID)
+	})
+}
+
+func (s *Service) regeneratePostTemplateHorizon(ctx context.Context, teamID, templateID string) (domain.PostTemplateRegenerateResult, error) {
 	tmpl, err := s.store.GetPostTemplate(ctx, teamID, templateID)
 	if err != nil {
 		return domain.PostTemplateRegenerateResult{}, err
@@ -264,30 +279,81 @@ func (s *Service) cancelPendingRecurringAIJobsFrom(ctx context.Context, teamID, 
 	})
 }
 
+// Lock the source before snapshots so cancellation and callback completion use
+// the same source -> job lock order in both backends.
+func (s *Service) mutatePostTemplate(ctx context.Context, templateID string, mutate func(context.Context) (domain.PostTemplateRegenerateResult, error)) (domain.PostTemplateRegenerateResult, error) {
+	var result domain.PostTemplateRegenerateResult
+	err := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		if err := s.store.LockAutomationSource(ctx, "post_template", templateID); err != nil {
+			return err
+		}
+		var err error
+		result, err = mutate(ctx)
+		return err
+	})
+	if err != nil {
+		return domain.PostTemplateRegenerateResult{}, err
+	}
+	return result, nil
+}
+
+func (s *Service) pendingRecurringAIJobs(ctx context.Context, teamID, templateID string, match func(*time.Time) bool) ([]domain.AIJob, error) {
+	// Team history may exceed the UI's 200-row window; cancellation must inspect
+	// every potentially active source job rather than silently skipping old jobs.
+	jobs, err := s.store.ListAIJobs(ctx, teamID, math.MaxInt32)
+	if err != nil {
+		return nil, err
+	}
+	selected := make([]domain.AIJob, 0)
+	for _, job := range jobs {
+		if job.TeamID != teamID || job.Origin != domain.AIJobOriginAutomation || job.Type != domain.AIJobTypeVoiceEngine || (job.Status != domain.AIJobStatusPending && job.Status != domain.AIJobStatusProcessing) {
+			continue
+		}
+		meta := parseRecurringAutomationMetaFromPayload(job.Payload)
+		if meta != nil && meta.TemplateID == templateID && match(meta.TemplateOccurrenceAt) {
+			selected = append(selected, job)
+		}
+	}
+	return selected, nil
+}
+
 func (s *Service) cancelPendingRecurringAIJobsMatching(ctx context.Context, teamID, templateID string, match func(occurrenceAt *time.Time) bool) error {
-	jobs, err := s.store.ListAIJobs(ctx, teamID, 200)
+	jobs, err := s.pendingRecurringAIJobs(ctx, teamID, templateID, match)
 	if err != nil {
 		return err
 	}
 	for _, job := range jobs {
-		if job.Status != domain.AIJobStatusPending && job.Status != domain.AIJobStatusProcessing {
+		claimed, err := s.store.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusFailed, nil, "cancelled")
+		if err != nil {
+			return err
+		}
+		if !claimed {
 			continue
 		}
 		meta := parseRecurringAutomationMetaFromPayload(job.Payload)
-		if meta == nil || meta.TemplateID != templateID {
-			continue
+		metadata := map[string]string{"job_id": job.ID, "template_id": templateID, "post_kind": meta.PostKind, "author_user_id": job.AuthorUserID, "reason": "recurring_change"}
+		if meta.TemplateOccurrenceAt != nil {
+			metadata["occurrence_at"] = meta.TemplateOccurrenceAt.UTC().Format(time.RFC3339Nano)
 		}
-		if !match(meta.TemplateOccurrenceAt) {
-			continue
+		if p := auth.PrincipalFromContext(ctx); p != nil {
+			metadata["initiator_user_id"] = p.User.ID
+			if p.Kind == domain.AuditActorToken && p.TokenID != nil {
+				metadata["initiator_token_id"] = *p.TokenID
+			}
 		}
-		if err := s.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
+		if err := s.store.InsertAuditEvent(ctx, automationEvent(teamID, "ai_job.cancel", "ai_job", job.ID, metadata)); err != nil {
 			return err
+		}
+		if s.jobManager != nil {
+			store.AfterAuditCommit(ctx, func(context.Context) { s.jobManager.Cancel(job.ID) })
 		}
 	}
 	return nil
 }
 
 type recurringAutomationMetaLite struct {
+	PostKind             string
+	TemplateCounter      int
 	TemplateID           string
 	TemplateOccurrenceAt *time.Time
 }
@@ -302,6 +368,8 @@ func parseRecurringAutomationMetaFromPayload(payload []byte) *recurringAutomatio
 	var params struct {
 		RecurringAutomation struct {
 			TemplateID           string `json:"template_id"`
+			PostKind             string `json:"post_kind"`
+			TemplateCounter      int    `json:"template_counter"`
 			TemplateOccurrenceAt string `json:"template_occurrence_at"`
 		} `json:"recurring_automation"`
 	}
@@ -316,7 +384,12 @@ func parseRecurringAutomationMetaFromPayload(payload []byte) *recurringAutomatio
 		return nil
 	}
 	meta := &recurringAutomationMetaLite{
-		TemplateID: params.RecurringAutomation.TemplateID,
+		TemplateID:      params.RecurringAutomation.TemplateID,
+		PostKind:        strings.TrimSpace(params.RecurringAutomation.PostKind),
+		TemplateCounter: params.RecurringAutomation.TemplateCounter,
+	}
+	if meta.PostKind == "" {
+		meta.PostKind = domain.TemplatePostRoleMain
 	}
 	if ts := strings.TrimSpace(params.RecurringAutomation.TemplateOccurrenceAt); ts != "" {
 		if parsed, err := time.Parse(time.RFC3339, ts); err == nil {

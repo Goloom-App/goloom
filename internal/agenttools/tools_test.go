@@ -2,7 +2,9 @@ package agenttools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -706,5 +708,43 @@ func TestWriteToolsRequireScopes(t *testing.T) {
 	}
 	if _, err := coreCreateCampaign(bg(), f.deps, readOnly, CreateCampaignInput{TeamID: f.team.ID, Name: "c"}); err == nil {
 		t.Fatal("create_campaign must require a write scope")
+	}
+}
+
+func TestWriteInvocationAuditFailureRollsBack(t *testing.T) {
+	for _, tr := range []Transport{TransportMCP, TransportChat} {
+		t.Run(string(tr), func(t *testing.T) {
+			f := newFixture(t)
+			inv := f.inv(t, `["write"]`)
+			inv.Transport = tr
+			f.deps.Audit = func(context.Context, domain.AuditEvent) error { return fmt.Errorf("injected audit failure") }
+			raw, _ := json.Marshal(CreateCampaignInput{TeamID: f.team.ID, Name: "No untracked campaign"})
+			_, err := FindTool("create_campaign").exec(bg(), f.deps, inv, raw)
+			if err == nil {
+				t.Fatal("audit failure accepted")
+			}
+			rows, err := f.store.ListCampaignFormats(bg(), f.team.ID)
+			if err != nil || len(rows) != 0 {
+				t.Fatalf("mutation escaped rollback: %+v %v", rows, err)
+			}
+		})
+	}
+}
+
+func TestCampaignAuditCanonicalAction(t *testing.T) {
+	f := newFixture(t)
+	inv := f.inv(t, `["write"]`)
+	inv.Transport = TransportChat
+	raw, _ := json.Marshal(CreateCampaignInput{TeamID: f.team.ID, Name: "Campaign"})
+	if _, err := FindTool("create_campaign").exec(bg(), f.deps, inv, raw); err != nil {
+		t.Fatal(err)
+	}
+	events, err := f.store.ListAuditEvents(bg(), domain.AuditFilter{TeamID: f.team.ID})
+	if err != nil || len(events) != 1 {
+		t.Fatalf("events: %+v %v", events, err)
+	}
+	e := events[0]
+	if e.Action != "campaign_format.create" || e.TargetType != "campaign_format" || e.Metadata["channel"] != "chat" || e.Metadata["outcome"] != "success" {
+		t.Fatalf("canonical event: %+v", e)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	_ "image/png"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"git.f4mily.net/goloom/internal/auth"
@@ -82,12 +83,20 @@ func (a *API) handleTeamMediaUploadToLibrary(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	created, err := a.store.CreateMediaItem(r.Context(), item)
+	var created domain.MediaItem
+	err = a.auditMutation(r, func(r *http.Request) error {
+		var err error
+		created, err = a.store.CreateMediaItem(r.Context(), item)
+		if err != nil {
+			return err
+		}
+		a.recordAudit(r, teamID, "media.upload", "media", &created.ID, "Uploaded media", map[string]string{"size_bytes": strconv.FormatInt(size, 10)})
+		return nil
+	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
-
 	auth.WriteJSON(w, http.StatusCreated, created)
 }
 
@@ -112,7 +121,8 @@ func (a *API) handleTeamMediaRename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := a.store.GetMediaItemByID(r.Context(), teamID, mediaID); err != nil {
+	before, err := a.store.GetMediaItemByID(r.Context(), teamID, mediaID)
+	if err != nil {
 		a.writeError(w, r, "not_found", http.StatusNotFound)
 		return
 	}
@@ -122,7 +132,9 @@ func (a *API) handleTeamMediaRename(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.recordAudit(r, teamID, "media.rename", "media", &mediaID, "Renamed media to "+filename)
+	if before.Filename != updated.Filename {
+		a.recordAudit(r, teamID, "media.rename", "media", &mediaID, "Renamed media", map[string]string{"changed_fields": "filename"})
+	}
 	auth.WriteJSON(w, http.StatusOK, updated)
 }
 
@@ -136,11 +148,17 @@ func (a *API) handleTeamMediaDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.store.DeleteMediaItem(r.Context(), teamID, mediaID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	err = a.auditMutation(r, func(r *http.Request) error {
+		if err := a.store.DeleteMediaItem(r.Context(), teamID, mediaID); err != nil {
+			return err
+		}
+		a.recordAudit(r, teamID, "media.delete", "media", &mediaID, "Deleted media")
+		return nil
+	})
+	if err != nil {
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
 		return
 	}
-
 	// Best effort cleanup of file
 	_ = store.DeleteMediaFile(teamID, item.Sha256)
 

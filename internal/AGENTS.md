@@ -13,6 +13,7 @@ Single Go module (`go.mod` at root). Packages follow standard Go conventions.
 - App bootstrap: `app/app.go` → `Run(ctx)` function
 - Domain models: `domain/models.go` (shared across all packages)
 - Store interface: `store/store.go` (80+ methods, the persistence contract)
+- Audit persistence: local mutations and events share `WithAuditTransaction`; publication outcomes use a durable audit outbox. Deferred jobs/push use `store.AfterAuditCommit` with its transaction-free context. AI completion claims its terminal transition and commits status, generated posts and audit atomically.
 - Auth middleware: `auth/auth.go`
 - Config: `config/config.go`
 - AI context: `aicontext.Build(ctx, store, teamID, opts)` is the only place that composes `domain.AIContext` from store primitives (never in a store backend); callers pick parts via `aicontext.Full()` / `aicontext.Chat()` / `Options{}`. Output is always well-formed: slices non-nil, `Profile` nil (no error) when the team has no brand profile — prompt code must fall back to defaults. Posts carry `TargetAccounts` in both backends

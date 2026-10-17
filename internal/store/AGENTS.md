@@ -10,12 +10,20 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Local Contracts
 
+- `WithAuditTransaction` routes callback-context store calls through one transaction, including decorated stores and nested backend savepoints; callback errors/cancellation roll back mutation and audit together. Keep provider/network calls outside transactions.
+- `AfterAuditCommit` defers background dispatch/notifications until successful outer commit, discards hooks on rollback, and supplies the pre-transaction context.
+- `EnqueueAuditEvent` atomically records observed external outcomes in `audit_pending`; `DrainAuditEvents` delivers bounded batches without repeating external work. Drain failures must be logged and retried by the caller.
+- `LockAutomationSource` accepts only `rss_feed`/`post_template` and requires an active audit transaction; lock source before checking dedupe and submitting/materializing. `HasPostTemplateRoleMaterialized` includes pending/processing AI jobs for the same template, occurrence and role; terminal jobs permit genuine regeneration.
+- `RepairFuturePostedPosts` writes one system-attributed `post.repair` event per affected post in the same transaction, retaining authenticated initiator IDs; no-op repairs emit nothing. `MarkPostProcessing` conditionally claims only pending/failed posts and errors when another worker already claimed them.
+- `ClaimPostTargetPublication` conditionally marks pending/failed targets processing with `publication_outcome_unknown`; processing targets require reconciliation instead of blind publication retries. `ClaimAIJobCompletion` permits one pending/processing → terminal transition before completion side effects.
+- Audit event IDs identify replayed evidence: duplicate IDs are ignored; pagination orders by `(created_at desc, id desc)`.
 - `ClaimAIJobCompletion` atomically persists `completed`/`failed` only while status is not `completed` or `failed`; cancellation is `failed` with error message `cancelled`. Only the claim winner may run completion side effects. Missing/terminal jobs return false; nonterminal requested statuses return an error. `UpdateAIJobStatus` remains unconditional so the winner can persist later publication/automation failures
 - AI job `origin` is server-owned and immutable through status updates: omitted origin and legacy rows default to `user`; scheduler-created jobs explicitly persist `automation`. All job reads (including global, pending, unfinished) preserve provenance; `AIJob.Origin` is excluded from JSON
 - `LoadPostTargets` returns only unposted targets whose social account belongs to the scheduled post's team; persisted foreign-team target rows must never reach the publisher
 - RSS completion writes (`IncrementRSSFeedCounter`, `UpdateRSSImportedItemPostID`) require `teamID`; foreign/missing feeds or items return `domain.ErrNotFound`. Item links also require the scheduled post to belong to that team
 - Interface: `store.go` — all business logic depends on this contract
 - `LookupAPIToken` returns the authenticating token's persisted expiry in `AuthenticatedPrincipal.TokenExpiresAt`; non-expiring tokens return nil in both backends.
+- SQLite pooled connections enforce foreign keys and `busy_timeout=5000` through driver DSN settings; writer transactions use `BEGIN IMMEDIATE` so concurrent read→write audit transactions serialize before taking snapshots. Existing unrelated DSN options remain intact.
 - SQLite schema: `sqlite/schema.sql`
 - PostgreSQL schema: `postgres/schema.sql`
 - Top-level schema reference: `../../db/schema.sql`
@@ -46,6 +54,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Child DOX Index
 
-- `sqlite/` — SQLite implementation (43 files)
-- `postgres/` — PostgreSQL implementation (34 files)
+- `sqlite/` — SQLite implementation
+- `postgres/` — PostgreSQL implementation
 - `seriesfill/` — Time series gap filling utility
+- `txcontext/` — Nested transaction commit hooks and clean side-effect contexts

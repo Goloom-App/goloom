@@ -627,4 +627,11 @@ create table if not exists vapid_keys (
     updated_at timestamptz not null default now()
 );
 
+-- Durable observed-outcome queue: delivery retries never repeat external work.
+create table if not exists audit_pending (
+    id uuid primary key,
+    team_id uuid not null references teams(id) on delete cascade,
+    payload text not null
+);
+
 alter table ai_jobs add column if not exists origin text not null default 'user';

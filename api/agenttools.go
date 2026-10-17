@@ -16,10 +16,12 @@ func (a *API) agentDeps() agenttools.Deps {
 		Posts:     a.posts,
 		Providers: a.providers,
 		Logger:    a.log,
-		Audit: func(ctx context.Context, event domain.AuditEvent) {
+		Audit: func(ctx context.Context, event domain.AuditEvent) error {
 			if err := a.store.InsertAuditEvent(ctx, event); err != nil {
 				a.log.Error("agent audit insert failed", "team_id", event.TeamID, "action", event.Action, "error", err)
+				return err
 			}
+			return nil
 		},
 	}
 }

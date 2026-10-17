@@ -76,10 +76,12 @@ func newFixture(t *testing.T) fixture {
 		Posts:     postservice.New(s, registry),
 		Providers: registry,
 		Logger:    logger,
-		Audit: func(ctx context.Context, event domain.AuditEvent) {
+		Audit: func(ctx context.Context, event domain.AuditEvent) error {
 			if err := s.InsertAuditEvent(ctx, event); err != nil {
 				t.Errorf("audit insert: %v", err)
+				return err
 			}
+			return nil
 		},
 	}
 	return fixture{store: s, deps: deps, user: u, team: team, account: acc}

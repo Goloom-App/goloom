@@ -15,6 +15,7 @@ import (
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/security"
 )
 
 const mastodonOAuthStateTTL = 10 * time.Minute
@@ -191,7 +192,35 @@ func (a *API) handleMastodonOAuthCallback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	account, err := a.store.CreateAccount(r.Context(), state.TeamID, accountInput)
+	// Signed state plus current membership identify the initiating human. The
+	// callback itself has no bearer token and must never invent one.
+	users, err := a.store.ListUsers(r.Context())
+	if err != nil {
+		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, "failed to load actor")
+		return
+	}
+	var actor *domain.User
+	for i := range users {
+		if users[i].ID == state.UserID {
+			actor = &users[i]
+			break
+		}
+	}
+	if actor == nil {
+		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, "failed to load actor")
+		return
+	}
+	r = r.WithContext(security.WithPrincipal(r.Context(), domain.AuthenticatedPrincipal{User: *actor, Kind: domain.AuditActorHuman}))
+	var account domain.SocialAccount
+	err = a.auditMutation(r, func(r *http.Request) error {
+		var err error
+		account, err = a.store.CreateAccount(r.Context(), state.TeamID, accountInput)
+		if err != nil {
+			return err
+		}
+		a.recordAudit(r, state.TeamID, "account.connect", "account", &account.ID, "Connected OAuth account", map[string]string{"channel": "oauth", "provider": state.Provider})
+		return nil
+	})
 	if err != nil {
 		a.redirectOAuthResult(w, r, state.ReturnTo, "error", state.Provider, "failed to save account")
 		return

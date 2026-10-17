@@ -46,10 +46,12 @@ func NewHandler(
 			Logger:    logger,
 			// Mirror the REST API's audit so agent actions show up in the team
 			// audit log. Best-effort: a failure is logged, never fatal.
-			Audit: func(ctx context.Context, event domain.AuditEvent) {
+			Audit: func(ctx context.Context, event domain.AuditEvent) error {
 				if err := dataStore.InsertAuditEvent(ctx, event); err != nil {
 					logger.Error("mcp audit insert failed", "team_id", event.TeamID, "action", event.Action, "error", err)
+					return err
 				}
+				return nil
 			},
 		},
 	}

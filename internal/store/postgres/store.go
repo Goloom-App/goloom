@@ -59,7 +59,7 @@ func decodePostMediaIDs(raw string, dest *[]string) error {
 }
 
 type Store struct {
-	pool       *pgxpool.Pool
+	pool       *contextPool
 	encrypter  *security.Encrypter
 	sessionTTL time.Duration
 }
@@ -88,7 +88,7 @@ func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter)
 		pool.Close()
 		return nil, fmt.Errorf("apply postgres schema: %w", err)
 	}
-	return &Store{pool: pool, encrypter: encrypter}, nil
+	return &Store{pool: &contextPool{Pool: pool}, encrypter: encrypter}, nil
 }
 
 func (s *Store) Close() {
@@ -1267,13 +1267,15 @@ func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.Scheduled
 }
 
 func (s *Store) MarkPostProcessing(ctx context.Context, postID string) error {
-	_, err := s.pool.Exec(
-		ctx,
-		`update scheduled_posts set status = $1, updated_at = now() where id = $2`,
-		domain.PostStatusProcessing,
-		postID,
-	)
-	return err
+	result, err := s.pool.Exec(ctx, `update scheduled_posts set status = 'processing', updated_at = now() where id = $1 and status in ('pending','failed')`, postID)
+	if err != nil {
+		return err
+	}
+	n := result.RowsAffected()
+	if n != 1 {
+		return fmt.Errorf("post processing claim rejected")
+	}
+	return nil
 }
 
 func (s *Store) MarkPostResult(ctx context.Context, postID string, attemptCount int, status domain.PostStatus, lastError string, nextAttempt *time.Time) error {

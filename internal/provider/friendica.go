@@ -141,7 +141,7 @@ func (p *GenericStatusProvider) Publish(ctx context.Context, account domain.Soci
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return PublishResult{}, fmt.Errorf("%s publish failed with status %d", p.name, resp.StatusCode)
+		return PublishResult{}, publicationHTTPError(resp.StatusCode, fmt.Errorf("%s publish failed with status %d", p.name, resp.StatusCode))
 	}
 
 	var statusPayload mastodonStatusResponse

@@ -647,10 +647,14 @@ async function request<T>(options: ApiClientOptions, path: string, init?: Reques
       errorCode,
     )
   }
-  if (response.status === 204) {
-    return undefined as T
+  const result = response.status === 204 ? undefined : await response.json()
+  if (method !== 'GET' && method !== 'HEAD') {
+    const team = path.match(/^\/v1\/teams\/([^/?]+)/)?.[1]
+    if (team && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('goloom:team-mutation', { detail: team }))
+    }
   }
-  return (await response.json()) as T
+  return result as T
 }
 
 export function requestAuthStatus(baseUrl: string) {

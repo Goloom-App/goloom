@@ -70,10 +70,6 @@ func (a *API) createRSSAutomationPost(
 	}
 
 	feedID := meta.FeedID
-	principal := domain.AuthenticatedPrincipal{
-		User: domain.User{ID: job.AuthorUserID},
-		Kind: "api_token",
-	}
 	rssPost := domain.CreatePostInput{
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
@@ -94,7 +90,7 @@ func (a *API) createRSSAutomationPost(
 	if err := postservice.ValidationError(prepared.Validation); err != nil {
 		return fmt.Errorf("%w: %w", errAutomationPostValidation, err)
 	}
-	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, prepared.Input)
+	post, err := a.createJobAutomationPost(ctx, job, prepared.Input, map[string]string{"feed_id": meta.FeedID})
 	if err != nil {
 		return fmt.Errorf("create automation post: %w", err)
 	}

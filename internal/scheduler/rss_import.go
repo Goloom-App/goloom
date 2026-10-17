@@ -197,6 +197,19 @@ func filterRSSItemsSince(items []rss.Item, since time.Time) []rss.Item {
 // AI job) was actually created: already-imported items return (false, nil) so
 // they do not count against the daily budget.
 func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) (bool, error) {
+	created := false
+	err := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		if err := s.store.LockAutomationSource(ctx, "rss_feed", feed.ID); err != nil {
+			return err
+		}
+		var err error
+		created, err = s.createPostFromRSSItemOnce(ctx, feed, item)
+		return err
+	})
+	return created && err == nil, err
+}
+
+func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) (bool, error) {
 	itemKey := rss.ItemKey(item)
 	if itemKey == "" {
 		return false, fmt.Errorf("rss item has no guid or link")
@@ -237,15 +250,17 @@ func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeed
 		title = feed.Name
 	}
 
+	submissionFallback := false
 	if s.shouldEnhanceRSSWithAI(ctx, feed) {
 		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
 			s.logger.WarnContext(ctx, "rss import: ai enhancement unavailable, using template", "feed_id", feed.ID, "error", err)
+			submissionFallback = true
 		} else {
 			return true, nil
 		}
 	}
 
-	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
+	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -10,6 +10,7 @@ import (
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/push"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 // PushSender exposes the notifier so internal/app can wire it into the
@@ -47,7 +48,7 @@ func (a *API) notifyReviewCreated(ctx context.Context, teamID string, post domai
 		a.log.Warn("push: team lookup for review notification", "team_id", teamID, "error", err)
 		return
 	}
-	a.push.SendNewReview(ctx, team, post)
+	store.AfterAuditCommit(ctx, func(cleanctx context.Context) { a.push.SendNewReview(cleanctx, team, post) })
 }
 
 func (a *API) handleGetMyVAPIDPublicKey(w http.ResponseWriter, r *http.Request) {

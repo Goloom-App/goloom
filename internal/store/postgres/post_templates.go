@@ -408,13 +408,12 @@ func (s *Store) HasPostTemplateRoleMaterialized(ctx context.Context, templateID 
 	}
 	var n int
 	err := s.pool.QueryRow(ctx, `
-		select count(*) from scheduled_posts
-		where post_template_id = $1
-		  and template_occurrence_at = $2
-		  and template_post_role = $3
-		  and status != $4`,
-		templateID, occurrenceAt, role, domain.PostStatusCancelled,
-	).Scan(&n)
+ select (select count(*) from scheduled_posts where post_template_id=$1 and template_occurrence_at=$2 and template_post_role=$3 and status!=$4)
+ + (select count(*) from ai_jobs where origin='automation' and status in ('pending','processing') and team_id=(select team_id from post_templates where id=$1)
+ and payload #>> '{params,recurring_automation,template_id}'=$1::text
+ and payload #>> '{params,recurring_automation,template_occurrence_at}'=$5
+ and coalesce(nullif(payload #>> '{params,recurring_automation,post_kind}',''),'main')=$3)`,
+		templateID, occurrenceAt, role, domain.PostStatusCancelled, occurrenceAt.UTC().Format(time.RFC3339)).Scan(&n)
 	return n > 0, err
 }
 

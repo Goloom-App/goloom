@@ -16,6 +16,19 @@ import (
 )
 
 type Store interface {
+	// WithAuditTransaction atomically commits all store calls made with callback's context.
+	// Keep external I/O outside the callback. Cancellation or any error rolls back everything.
+	WithAuditTransaction(ctx context.Context, fn func(context.Context) error) error
+	// LockAutomationSource serializes source work inside an active audit transaction.
+	// kind is rss_feed or post_template. Recheck source dedupe after obtaining the lock.
+	LockAutomationSource(ctx context.Context, kind, id string) error
+	// EnqueueAuditEvent persists observed external outcomes without delivering them.
+	EnqueueAuditEvent(ctx context.Context, e domain.AuditEvent) error
+	// DrainAuditEvents delivers up to 100 pending events; callers retry on error.
+	DrainAuditEvents(ctx context.Context) error
+	// ClaimPostTargetPublication refuses processing/posted targets to prevent uncertain replay.
+	ClaimPostTargetPublication(ctx context.Context, postID, accountID string) (bool, error)
+
 	Close()
 
 	UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error)

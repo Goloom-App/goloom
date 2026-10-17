@@ -452,3 +452,10 @@ create table if not exists vapid_keys (
     private_key text not null,
     updated_at text not null
 );
+
+-- Durable observed-outcome queue: delivery retries never repeat external work.
+create table if not exists audit_pending (
+    id text primary key,
+    team_id text not null references teams(id) on delete cascade,
+    payload text not null
+);

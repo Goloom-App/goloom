@@ -293,7 +293,7 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
 
           <TeamInvitationsSection api={props.api} teamId={selectedTeam.id} />
 
-          <TeamAuditLogSection api={props.api} teamId={selectedTeam.id} />
+          <TeamAuditLogSection key={selectedTeam.id} api={props.api} teamId={selectedTeam.id} />
         </>
       ) : (
         <SectionCard icon={<Users size={18} />} title={t('common.members')}>

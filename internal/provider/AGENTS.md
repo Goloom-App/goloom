@@ -29,6 +29,7 @@ Provider interface in `provider.go`, registry pattern. Individual implementation
 - Metrics fetching is async and provider-specific
 - Test with provider mocks where possible
 - Instance URL resolution in `instance_host.go`
+- Publish HTTP 4xx rejections (except 408) use `PublicationRejectedError`. Transport errors, 408, 5xx and malformed success responses retain uncertain outcomes; callers must not automatically republish them.
 
 ## Verification
 
