@@ -23,6 +23,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 - RSS completion writes (`IncrementRSSFeedCounter`, `UpdateRSSImportedItemPostID`) require `teamID`; foreign/missing feeds or items return `domain.ErrNotFound`. Item links also require the scheduled post to belong to that team
 - Interface: `store.go` — all business logic depends on this contract
 - `LookupAPIToken` returns the authenticating token's persisted expiry in `AuthenticatedPrincipal.TokenExpiresAt`; non-expiring tokens return nil in both backends.
+- SQLite pooled connections enforce foreign keys and `busy_timeout=5000` through driver DSN settings; writer transactions use `BEGIN IMMEDIATE` so concurrent read→write audit transactions serialize before taking snapshots. Existing unrelated DSN options remain intact.
 - SQLite schema: `sqlite/schema.sql`
 - PostgreSQL schema: `postgres/schema.sql`
 - Top-level schema reference: `../../db/schema.sql`

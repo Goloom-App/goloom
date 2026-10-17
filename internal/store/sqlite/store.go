@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -39,15 +40,17 @@ func (s *Store) webSessionTTL() time.Duration {
 }
 
 func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter) (*Store, error) {
+	databaseURL, err := sqliteConnectionURL(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("configure sqlite URL: %w", err)
+	}
 	db, err := sql.Open("sqlite", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
 	pragmas := []string{
-		"pragma foreign_keys = on",
 		"pragma journal_mode = wal",
-		"pragma busy_timeout = 5000",
 	}
 	for _, pragma := range pragmas {
 		if _, err := db.ExecContext(ctx, pragma); err != nil {
@@ -1713,4 +1716,35 @@ func marshalScopes(scopes []string) (string, error) {
 		return "", fmt.Errorf("encode provider scopes: %w", err)
 	}
 	return string(payload), nil
+}
+
+// SQLite's foreign-key and busy settings belong to connections, not databases.
+// Configure the driver DSN so newly opened pool connections retain the contract.
+func sqliteConnectionURL(databaseURL string) (string, error) {
+	base, raw, _ := strings.Cut(databaseURL, "?")
+	options, err := url.ParseQuery(raw)
+	if err != nil {
+		return "", err
+	}
+	options.Set("_txlock", "immediate")
+	options.Set("_foreign_keys", "on")
+	options.Del("_fk")
+	options.Del("_busy_timeout")
+	options.Del("_timeout")
+	pragmas := make([]string, 0, len(options["_pragma"])+1)
+	for _, pragma := range options["_pragma"] {
+		name := strings.ToLower(strings.TrimSpace(pragma))
+		parts := strings.FieldsFunc(name, func(r rune) bool { return r == '(' || r == '=' || r == ' ' })
+		if len(parts) > 0 {
+			name = parts[0]
+		}
+		if dot := strings.LastIndex(name, "."); dot >= 0 {
+			name = name[dot+1:]
+		}
+		if name != "busy_timeout" {
+			pragmas = append(pragmas, pragma)
+		}
+	}
+	options["_pragma"] = append(pragmas, "busy_timeout(5000)")
+	return base + "?" + options.Encode(), nil
 }
