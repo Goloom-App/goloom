@@ -165,6 +165,7 @@ create table if not exists scheduled_posts (
     status text not null check (status in ('pending', 'processing', 'posted', 'failed', 'cancelled', 'draft')),
     attempt_count integer not null default 0,
     last_error text,
+    ai_fallback_reason text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -638,6 +639,7 @@ create table if not exists audit_pending (
 
 alter table ai_jobs add column if not exists origin text not null default 'user';
 
+alter table scheduled_posts add column if not exists ai_fallback_reason text;
 
 alter table rss_imported_items add column if not exists attempts integer not null default 0;
 alter table rss_imported_items add column if not exists retry_available boolean not null default false;

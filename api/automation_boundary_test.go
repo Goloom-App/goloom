@@ -157,6 +157,33 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 					if (scenario == "fallback" || usedFallback) && posts[0].Content != fallback {
 						t.Errorf("fallback content=%q", posts[0].Content)
 					}
+					if scenario == "fallback" || usedFallback {
+						data, _ := json.Marshal(posts[0])
+						var visible map[string]any
+						_ = json.Unmarshal(data, &visible)
+						reason, _ := visible["ai_fallback_reason"].(string)
+						wantReason := "validation_failed"
+						switch scenario {
+						case "fallback":
+							wantReason = "provider_failure"
+						case "empty-result":
+							wantReason = "empty_content"
+						case "invalid-result":
+							wantReason = "invalid_output"
+						}
+						if reason != wantReason {
+							t.Errorf("fallback reason=%q want %q", reason, wantReason)
+						}
+						fields := []string{"WARN", "job_id=" + job.ID, "post_id=" + posts[0].ID, "reason=" + wantReason}
+						if kind == "rss" {
+							fields = append(fields, "feed_id="+feed.ID, "item_key=item")
+						}
+						for _, field := range fields {
+							if !strings.Contains(logs.String(), field) {
+								t.Errorf("fallback log lacks %s: %s", field, logs.String())
+							}
+						}
+					}
 					if scenario == "fallback" && (updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage != message) {
 						t.Errorf("fallback lost provider failure: %+v", updated)
 					}

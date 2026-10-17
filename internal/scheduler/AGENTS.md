@@ -10,6 +10,8 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 
 ## Local Contracts
 
+- AI dispatch failures that use RSS/recurring template content persist `AIFallbackReason=dispatch_failed` and log WARN with source IDs, post ID, and reason. Recurring announcement dispatch failures create the template fallback before advancing their counter. Completion fallbacks persist fixed reasons and log WARN after insertion with job/source/post IDs.
+
 - Scheduler core: `scheduler.go` — poll loop, worker pool, job dispatch
 - AI job submissions: RSS, recurring main posts, and recurring announcements set server-only `domain.AIJob.Origin=AIJobOriginAutomation` through `aijobs`; payload metadata alone never authorizes automation completion
 - Recurring teardown cancels jobs through `ClaimAIJobCompletion`; concurrent completion winners keep their terminal result.

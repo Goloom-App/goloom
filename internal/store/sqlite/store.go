@@ -763,11 +763,11 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 		insert into scheduled_posts (
 			id, team_id, author_user_id, title, content, scheduled_at, status, source,
 			attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-			post_template_id, template_counter, template_occurrence_at, template_post_role, rss_feed_id, created_at, updated_at
+			post_template_id, template_counter, template_occurrence_at, template_post_role, rss_feed_id, ai_fallback_reason, created_at, updated_at
 		)
-		values (?, ?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, 0, null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		postID, teamID, ins.AuthorID, input.Title, input.Content, formatTime(input.ScheduledAt), ins.Status, ins.Source,
-		visibility, mediaJSON, excludeJSON, ins.TemplateID, ins.TemplateCounter, templateOccurrence, ins.TemplateRole, ins.RSSFeedID, now, now,
+		visibility, mediaJSON, excludeJSON, ins.TemplateID, ins.TemplateCounter, templateOccurrence, ins.TemplateRole, ins.RSSFeedID, input.AIFallbackReason, now, now,
 	); err != nil {
 		return domain.ScheduledPost{}, err
 	}
@@ -806,7 +806,7 @@ func (s *Store) ListTeamPosts(ctx context.Context, teamID string) ([]domain.Sche
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, created_at, updated_at
 		from scheduled_posts
 		where team_id = ?
 		order by scheduled_at asc`,
@@ -839,7 +839,7 @@ func (s *Store) ListTeamPostsPage(ctx context.Context, teamID string, limit, off
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, created_at, updated_at
 		from scheduled_posts
 		where team_id = ?
 		order by scheduled_at asc
@@ -864,7 +864,7 @@ func (s *Store) GetScheduledPost(ctx context.Context, teamID, postID string) (do
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and id = ?`,
 		teamID, postID,
@@ -1063,7 +1063,7 @@ func (s *Store) ListDuePosts(ctx context.Context, limit int) ([]domain.Scheduled
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, created_at, updated_at
 		from scheduled_posts
 		where scheduled_at <= ?
 		  and status in (?, ?)
@@ -1493,6 +1493,7 @@ func scanPost(scanner postScanner) (domain.ScheduledPost, error) {
 		&mediaExcludeJSON,
 		&postTemplateID,
 		&templateCtr,
+		&post.AIFallbackReason,
 		&createdAt,
 		&updatedAt,
 	); err != nil {

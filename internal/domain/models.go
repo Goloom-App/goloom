@@ -670,6 +670,7 @@ type ScheduledPost struct {
 	TemplateOccurrenceAt  *time.Time          `json:"template_occurrence_at,omitempty"`
 	TemplatePostRole      string              `json:"template_post_role,omitempty"`
 	RSSFeedID             *string             `json:"rss_feed_id,omitempty"`
+	AIFallbackReason      *string             `json:"ai_fallback_reason,omitempty"`
 }
 
 // PostTemplate drives recurring scheduled posts (stored in post_templates).
@@ -1253,6 +1254,7 @@ type CreatePostInput struct {
 	Source               PostSource `json:"-"`
 	RSSFeedID            *string    `json:"-"`
 	RSSItemKey           string     `json:"-"`
+	AIFallbackReason     *string    `json:"-"`
 }
 
 func (in CreatePostInput) EffectiveContent(accountID string) string {

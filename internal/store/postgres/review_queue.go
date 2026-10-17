@@ -18,7 +18,7 @@ func (s *Store) ListAutomationReviewDrafts(ctx context.Context, teamID string, l
 		select p.id, p.team_id, p.author_user_id, p.title, p.content, p.scheduled_at, p.status, p.source,
 		       p.attempt_count, coalesce(p.last_error, ''), p.created_at, p.updated_at,
 		       p.visibility, p.media_ids, coalesce(p.media_exclude_by_account::text, '{}'),
-		       p.post_template_id::text, p.template_counter,
+		       p.post_template_id::text, p.template_counter, p.ai_fallback_reason,
 		       coalesce(array_agg(t.account_id::text) filter (where t.account_id is not null), '{}'),
 		       coalesce(max(f.name), '')
 		from scheduled_posts p
@@ -75,6 +75,7 @@ func scanReviewQueueRow(rows interface {
 		&mediaExcludeRaw,
 		&postTemplateID,
 		&templateCtr,
+		&post.AIFallbackReason,
 		&post.TargetAccounts,
 		&feedName,
 	); err != nil {

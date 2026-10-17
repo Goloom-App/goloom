@@ -161,6 +161,7 @@ export function toPostRecord(post: BackendPost): PostRecord {
     status: mapStatus(post.status),
     source:
       post.source === 'imported' ? 'imported' : post.source === 'automation' ? 'automation' : 'scheduled',
+    aiFallbackReason: post.ai_fallback_reason ?? undefined,
     publishedLinks: post.published_links,
     mediaIds: post.media_ids?.length ? post.media_ids : undefined,
     mediaExcludeByAccount: post.media_exclude_by_account && Object.keys(post.media_exclude_by_account).length > 0 ? post.media_exclude_by_account : undefined,

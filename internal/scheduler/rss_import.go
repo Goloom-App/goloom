@@ -251,7 +251,7 @@ func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSS
 		title = feed.Name
 	}
 
-	var aiDispatchFailed bool
+	var fallbackReason *string
 	if s.shouldEnhanceRSSWithAI(ctx, feed) {
 		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID, aiDispatchFailed); err != nil {
 			if errors.Is(err, errRSSItemReserved) {
@@ -261,14 +261,15 @@ func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSS
 				return false, err
 			}
 			s.logger.WarnContext(ctx, "rss import: ai enhancement unavailable, using template", "feed_id", feed.ID, "error", err)
-			aiDispatchFailed = true
+			reason := "dispatch_failed"
+			fallbackReason = &reason
 		} else {
 			return true, nil
 		}
 	}
 
-	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, aiDispatchFailed); err != nil {
-		if aiDispatchFailed && errors.Is(err, errRSSPostNotCreated) {
+	if err := s.createRSSPostDirect(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, fallbackReason != nil, fallbackReason); err != nil {
+		if fallbackReason != nil && errors.Is(err, errRSSPostNotCreated) {
 			attempts, releaseErr := s.store.ReleaseRSSItemAttempt(context.WithoutCancel(ctx), feed.TeamID, feed.ID, itemKey)
 			if releaseErr != nil {
 				s.logger.ErrorContext(ctx, "rss import: release item failed", "feed_id", feed.ID, "item_key", itemKey, "error", releaseErr)

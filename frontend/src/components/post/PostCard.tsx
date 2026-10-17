@@ -6,6 +6,7 @@ import { Icon } from '../../icons'
 import type { AccountRecord, PostRecord } from '../../types'
 import { sharedAccountLabels } from '../../schedule'
 import { DestinationStack } from './DestinationAvatar'
+import { AIFallbackBadge } from './AIFallbackBadge'
 
 export function PostCard({
   post,
@@ -98,8 +99,9 @@ export function PostCard({
           </div>
         </div>
         <div className="post-card__title-block">
-          {post.status === 'draft' || post.source === 'imported' || post.source === 'automation' ? (
+          {post.status === 'draft' || post.source === 'imported' || post.source === 'automation' || post.aiFallbackReason ? (
             <div className="post-card__badges">
+              <AIFallbackBadge reason={post.aiFallbackReason} />
               {post.status === 'draft' ? <span className="badge badge--default">{t('common.draft')}</span> : null}
               {post.source === 'imported' ? <span className="badge badge--info">{t('common.importedBadge')}</span> : null}
               {post.source === 'automation' ? <span className="badge badge--accent">{t('review.automationBadge')}</span> : null}

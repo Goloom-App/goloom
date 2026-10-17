@@ -69,6 +69,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column ai_enhance_enabled integer not null default 0`,
 		`alter table rss_feed_configs add column title_template text not null default '{title}'`,
 		`alter table rss_feed_configs add column title_hint text not null default ''`,
+		`alter table scheduled_posts add column ai_fallback_reason text`,
 		`alter table scheduled_posts add column rss_feed_id text references rss_feed_configs(id) on delete set null`,
 		`create table if not exists rss_imported_items (
 			id text primary key,
@@ -357,19 +358,20 @@ CREATE TABLE scheduled_posts_new (
     post_template_id text,
     template_counter integer,
     rss_feed_id text references rss_feed_configs(id) on delete set null,
+    ai_fallback_reason text,
     created_at text not null,
     updated_at text not null
 );
 INSERT INTO scheduled_posts_new (
     id, team_id, author_user_id, title, content, scheduled_at, status, source,
     attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-    post_template_id, template_counter, rss_feed_id, created_at, updated_at
+    post_template_id, template_counter, rss_feed_id, ai_fallback_reason, created_at, updated_at
 )
 SELECT id, team_id, author_user_id, title, content, scheduled_at, status,
     coalesce(nullif(trim(source), ''), 'scheduled'),
     attempt_count, last_error, visibility, media_ids,
     coalesce(nullif(trim(media_exclude_by_account), ''), '{}'),
-    post_template_id, template_counter, rss_feed_id, created_at, updated_at
+    post_template_id, template_counter, rss_feed_id, ai_fallback_reason, created_at, updated_at
 FROM scheduled_posts;
 DROP TABLE scheduled_posts;
 ALTER TABLE scheduled_posts_new RENAME TO scheduled_posts;
@@ -570,7 +572,7 @@ func (s *Store) GetScheduledPostByID(ctx context.Context, postID string) (domain
 	post, err := queryPost(ctx, s.db, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, created_at, updated_at
 		from scheduled_posts
 		where id = ?`, postID)
 	if err != nil {

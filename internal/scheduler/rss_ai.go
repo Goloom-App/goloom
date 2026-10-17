@@ -109,16 +109,17 @@ func (s *Service) createRSSPostDirect(
 	draft bool,
 	ownerID string,
 	submissionFallback bool,
+	fallbackReason ...*string,
 ) error {
 	return s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
 		if err := s.store.LockAutomationSource(ctx, "rss_feed", feed.ID); err != nil {
 			return err
 		}
-		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback)
+		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback, fallbackReason...)
 	})
 }
 
-func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFeedConfig, itemKey, content, title string, scheduledAt time.Time, draft bool, ownerID string, submissionFallback bool) error {
+func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFeedConfig, itemKey, content, title string, scheduledAt time.Time, draft bool, ownerID string, submissionFallback bool, fallbackReason ...*string) error {
 	feedID := feed.ID
 	input := domain.CreatePostInput{
 		Title:          title,
@@ -130,6 +131,9 @@ func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFe
 		Source:         domain.PostSourceAutomation,
 		RSSFeedID:      &feedID,
 		RSSItemKey:     itemKey,
+	}
+	if len(fallbackReason) > 0 {
+		input.AIFallbackReason = fallbackReason[0]
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: ownerID}, Kind: "system"}
@@ -145,6 +149,9 @@ func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFe
 	})
 	if err != nil {
 		return fmt.Errorf("%w: %w", errRSSPostNotCreated, err)
+	}
+	if input.AIFallbackReason != nil {
+		s.logger.WarnContext(ctx, "rss automation: used template fallback", "job_id", "", "feed_id", feed.ID, "item_key", itemKey, "post_id", post.ID, "reason", *input.AIFallbackReason)
 	}
 	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)
 	s.notifyReviewCreated(ctx, feed.TeamID, post)

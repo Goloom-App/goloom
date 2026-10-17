@@ -775,7 +775,7 @@ func (s *Store) ListRecentPostedPosts(ctx context.Context, teamID string, limit 
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and status = 'posted' and trim(content) != ''
 		order by scheduled_at desc
@@ -800,7 +800,7 @@ func (s *Store) ListUpcomingPosts(ctx context.Context, teamID string, from time.
 	rows, err := s.db.QueryContext(ctx, `
 		select id, team_id, author_user_id, title, content, scheduled_at, status, source,
 		       attempt_count, last_error, visibility, media_ids, media_exclude_by_account,
-		       post_template_id, template_counter, created_at, updated_at
+		       post_template_id, template_counter, ai_fallback_reason, created_at, updated_at
 		from scheduled_posts
 		where team_id = ? and status in ('pending', 'draft') and scheduled_at >= ?
 		order by scheduled_at asc

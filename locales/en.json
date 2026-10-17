@@ -650,7 +650,16 @@
       "discard": "Discard",
       "discardConfirm": "Discard this draft?",
       "actionFailed": "Review action failed.",
-      "pastTime": "The chosen time is in the past. Adjust it or"
+      "pastTime": "The chosen time is in the past. Adjust it or",
+      "aiFallbackBadge": "Template fallback",
+      "aiFallbackReasons": {
+        "provider_failure": "AI provider failed. Template content used.",
+        "empty_content": "AI returned empty content. Template content used.",
+        "invalid_output": "AI returned unreadable output. Template content used.",
+        "validation_failed": "AI content failed validation. Template content used.",
+        "dispatch_failed": "AI generation could not start. Template content used.",
+        "unknown": "AI generation failed. Template content used."
+      }
     },
     "automation": {
       "title": "Automation",

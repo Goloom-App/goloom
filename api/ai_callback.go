@@ -83,11 +83,11 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			case automation && rssMeta != nil && status == domain.AIJobStatusCompleted:
 				effectErr = a.finishRSSAutomationFromAI(ctx, job, result, rssMeta)
 			case automation && rssMeta != nil:
-				effectErr = a.finishRSSAutomationFallback(ctx, job, rssMeta)
+				effectErr = a.finishRSSAutomationFallback(ctx, job, rssMeta, "provider_failure")
 			case automation && status == domain.AIJobStatusCompleted:
 				effectErr = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
 			case automation:
-				effectErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta)
+				effectErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta, "provider_failure")
 			case status == domain.AIJobStatusCompleted && !noPublishFromJobPayload(job.Payload):
 				profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 				if profErr == nil && profile.AutoPublishEnabled {

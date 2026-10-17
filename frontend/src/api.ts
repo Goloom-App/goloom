@@ -144,6 +144,7 @@ export interface BackendPost {
   source?: 'scheduled' | 'imported' | 'automation'
   attempt_count: number
   last_error?: string
+  ai_fallback_reason?: string | null
   created_at: string
   updated_at: string
   target_accounts: string[]
