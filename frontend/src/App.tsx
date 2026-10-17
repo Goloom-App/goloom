@@ -32,7 +32,7 @@ import { SettingsView } from './views/settings/SettingsView'
 import { TeamSettingsView } from './views/teams/TeamSettingsView'
 import { ImportOldPostsDialog } from './components/settings/ImportOldPostsDialog'
 import { AIChatWidget } from './components/ai/AIChatWidget'
-import { setViewSection } from './components/ai/viewContextBridge'
+import { getViewContext, setViewFocus, setViewSection } from './components/ai/viewContextBridge'
 import { BrandProfileView } from './views/ai/BrandProfileView'
 import { AIGeneratorView } from './views/ai/AIGeneratorView'
 import { CampaignFormatView } from './views/ai/CampaignFormatView'
@@ -956,12 +956,36 @@ function App() {
   }, [expandedPostId, mobilePreviewPostId, posts])
   const editTargetPost = useMemo(() => teamPosts.find((post) => post.id === editingPostId) ?? null, [editingPostId, teamPosts])
 
+  const focusedPostId = section === 'composer'
+    ? editTargetPost?.id
+    : showPreviewColumn ? selectedPost?.id : undefined
+
+  // Navigation closes the previous selection; returning must not revive it.
+  useEffect(() => {
+    setExpandedPostId(null)
+    setMobilePreviewPostId(null)
+    if (section !== 'composer') setEditingPostId(null)
+  }, [section])
+
+  useEffect(() => {
+    setExpandedPostId(null)
+    setEditingPostId(null)
+    setMobilePreviewPostId(null)
+    setViewFocus(undefined)
+  }, [effectiveSelectedTeamId])
+
+  useEffect(() => {
+    if (section !== 'composer' || focusedPostId || getViewContext()?.focus?.type === 'post') {
+      setViewFocus(focusedPostId ? { type: 'post', id: focusedPostId } : undefined)
+    }
+  }, [section, focusedPostId, effectiveSelectedTeamId])
+
   const openPostPreview = useCallback(
     (postId: string) => {
       if (isMobile) {
         setMobilePreviewPostId(postId)
       } else {
-        setExpandedPostId(postId)
+        setExpandedPostId(current => current === postId ? null : postId)
         setMobilePreviewPostId(null)
       }
     },
@@ -2274,6 +2298,7 @@ function App() {
           key={selectedTeam.id}
           api={api}
           teamId={selectedTeam.id}
+          focusedPostId={focusedPostId}
           teamAccounts={teamAccounts}
           onOpenInComposer={openComposerFromGeneratedContent}
           onApplyToComposer={({ content, accountContentOverride }) => {
