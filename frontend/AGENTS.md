@@ -17,6 +17,10 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - API client: `src/api.ts`
 - AI Generator prompt preview defaults to the plain “Generieren” action with current settings, even when an existing draft also offers “Neu generieren”; covered by `e2e/ai-prompt-preview.spec.ts`
 - Team AI setup: saving provider config in `App.tsx` enables a newly toggled team only after the config save succeeds; keep this sequence covered by `e2e/team-ai-setup.spec.ts`
+- Brand profile forms remount per team (`key={selectedTeam.id}`), clearing loaded profile and unsaved form state before editing another team.
+- Generator draft/composer actions use the completed job's `payload.params.target_account_ids`; missing or empty targets show an error. Preserve account overrides and schedule during handoff.
+- Chat composer scope filters both `view_context.visible.composer.targets` and the model note. Detach and `/clear` survive automatic edits until the composer closes or its explicit AI-chat action re-attaches.
+- Sidebar team menu stays within Radix available height/width; only team list scrolls, with Create team fixed below it. Preserve keyboard navigation and theme tokens; regression: `e2e/sidebar-team-menu.spec.ts`.
 - Local-storage helpers: `src/appStorage.ts` (settings, last section/team keys)
 - Theming: CSS variables in `src/index.css`; the accent family derives from `--brand-primary` (team brand color, set inline on `<html>` by `App.tsx`; default purple fallback). Theme/breakpoint hooks in `src/hooks/useTheme.ts`
 - i18n: `src/i18n/` (i18next)
@@ -56,4 +60,4 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 
 - `src/views/` — Route-level view components (13 views)
 - `src/components/` — Reusable component library (10 subdirectories)
-- `e2e/` — Playwright E2E tests (13 spec files)
+- `e2e/` — Playwright E2E tests

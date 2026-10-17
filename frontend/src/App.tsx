@@ -2214,7 +2214,7 @@ function App() {
         )}
 
         {section === 'aiProfile' && selectedTeam && (
-          <BrandProfileView team={selectedTeam} />
+          <BrandProfileView key={selectedTeam.id} team={selectedTeam} />
         )}
 
         {section === 'aiGenerator' && selectedTeam && (
