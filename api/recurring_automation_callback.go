@@ -68,6 +68,12 @@ func (a *API) createRecurringAutomationPost(
 	if _, err := a.store.GetPostTemplate(ctx, job.TeamID, meta.TemplateID); err != nil {
 		return fmt.Errorf("load automation template: %w", err)
 	}
+	// Attachment failures are terminal: fallback would reuse the same unsafe media.
+	for _, id := range domain.NormalizeMediaIDs(meta.MediaIDs) {
+		if _, err := a.store.GetMediaItemByID(ctx, job.TeamID, id); err != nil {
+			return fmt.Errorf("load automation media %s: %w", id, err)
+		}
+	}
 	scheduledAt := meta.ScheduledAt
 	if res.ScheduledAt != nil && !res.ScheduledAt.IsZero() {
 		scheduledAt = res.ScheduledAt.UTC()

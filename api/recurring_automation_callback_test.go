@@ -1,14 +1,21 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
+	"git.f4mily.net/goloom/api"
+	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 // recurringJobPayload mirrors the payload the scheduler submits for recurring
@@ -28,6 +35,96 @@ func recurringJobPayload(templateID, accountID, fallbackContent string, schedule
 			"template_counter":3
 		}
 	}}`, accountID, templateID, scheduledAt.Format(time.RFC3339), scheduledAt.Format(time.RFC3339), fallbackContent))
+}
+
+func recurringMedia(t *testing.T, f aiCompletionFixture, teamID, name string) string {
+	t.Helper()
+	item, err := f.store.CreateMediaItem(context.Background(), domain.MediaItem{
+		TeamID: teamID, Sha256: name, Filename: name + ".png", MimeType: "image/png", SizeBytes: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return item.ID
+}
+
+type recurringMediaFailureStore struct{ store.Store }
+
+func (s recurringMediaFailureStore) GetMediaItemByID(context.Context, string, string) (domain.MediaItem, error) {
+	return domain.MediaItem{}, fmt.Errorf("injected media lookup failure")
+}
+
+func TestRecurringAutomationRejectsUnsafeMedia(t *testing.T) {
+	for _, scenario := range []string{"foreign-media", "unknown-media", "foreign-target", "media-lookup-failure"} {
+		for _, kind := range []string{domain.TemplatePostRoleMain, domain.TemplatePostRoleAnnouncement} {
+			for _, outcome := range []string{"completed", "failed", "empty", "draft"} {
+				t.Run(scenario+"/"+kind+"/"+outcome, func(t *testing.T) {
+					ctx := context.Background()
+					f, account, template := newRecurringCallbackFixture(t)
+					other, err := f.store.CreateTeam(ctx, f.user.ID, domain.CreateTeamInput{Name: "other"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					owned := recurringMedia(t, f, f.team.ID, "owned")
+					media := []string{owned}
+					switch scenario {
+					case "foreign-media":
+						media = append(media, recurringMedia(t, f, other.ID, "foreign"))
+					case "unknown-media":
+						media = append(media, "missing-media")
+					case "foreign-target":
+						account = callbackAccount(t, f, other.ID)
+					}
+					payload, err := json.Marshal(map[string]any{"params": map[string]any{
+						"target_account_ids": []string{account.ID},
+						"recurring_automation": map[string]any{
+							"template_id": template.ID, "post_kind": kind, "draft": outcome == "draft",
+							"scheduled_at": "2027-02-01T09:00:00Z", "fallback_content": "fallback",
+							"visibility": domain.PostVisibilityPrivate, "media_ids": media,
+						},
+					}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					job := makeRecurringJob(t, f, payload)
+					var logs bytes.Buffer
+					var callbackStore store.Store = f.store
+					if scenario == "media-lookup-failure" {
+						callbackStore = recurringMediaFailureStore{f.store}
+					}
+					instance := api.New(slog.New(slog.NewTextHandler(&logs, nil)), callbackStore, nil,
+						provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})),
+						config.Config{}, nil, nil, nil, nil)
+					status, result := domain.AIJobStatusCompleted, json.RawMessage(`{"content":"generated"}`)
+					if outcome == "failed" {
+						status, result = domain.AIJobStatusFailed, nil
+					} else if outcome == "empty" {
+						result = json.RawMessage(`{"content":" "}`)
+					}
+					instance.CompleteAIJob(ctx, job.ID, status, result, "provider failed")
+					for _, teamID := range []string{f.team.ID, other.ID} {
+						posts, err := f.store.ListTeamPosts(ctx, teamID)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if len(posts) != 0 {
+							t.Errorf("unsafe automation created %d posts", len(posts))
+						}
+					}
+					updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage != "Automation failed: post could not be created" {
+						t.Errorf("failure not visible to user: %s %q", updated.Status, updated.ErrorMessage)
+					}
+					if !strings.Contains(logs.String(), "ERROR") {
+						t.Errorf("missing failure log: %s", logs.String())
+					}
+				})
+			}
+		}
+	}
 }
 
 func newRecurringCallbackFixture(t *testing.T) (aiCompletionFixture, domain.SocialAccount, domain.PostTemplate) {
@@ -213,8 +310,8 @@ func TestRecurringAutomationPreservesPublicationSnapshot(t *testing.T) {
 					ctx := context.Background()
 					f, acc, tmpl := newRecurringCallbackFixture(t)
 					at := time.Date(2027, 2, 1, 9, 0, 0, 0, time.UTC)
-					media := []string{"media-1", "media-2"}
-					exclusions := map[string][]string{acc.ID: {"media-2"}}
+					media := []string{recurringMedia(t, f, f.team.ID, "media-1"), recurringMedia(t, f, f.team.ID, "media-2")}
+					exclusions := map[string][]string{acc.ID: {media[1]}}
 					// Live template is public with no media. Queued snapshot must win.
 					payload, err := json.Marshal(map[string]any{"params": map[string]any{
 						"target_account_ids": []string{acc.ID},
