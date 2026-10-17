@@ -6,15 +6,19 @@ import (
 	"go/parser"
 	"go/token"
 	"net/http"
+	"net/http/httptest"
+	"time"
+
+	"git.f4mily.net/goloom/internal/auth"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 )
 
-// Read registrations rather than maintaining a route list: every new unsafe
-// route must pass this test, including registrations that bypass authentication.
-func TestTokenScopesEveryMutatingRoute(t *testing.T) {
+// Read registrations so new routes cannot silently bypass the token policy.
+func registeredRoutes(t *testing.T) []string {
+	t.Helper()
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -45,18 +49,22 @@ func TestTokenScopesEveryMutatingRoute(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			method, _, _ := strings.Cut(pattern, " ")
-			if method != "GET" && method != "HEAD" && method != "OPTIONS" {
-				routes = append(routes, pattern)
-			}
+			routes = append(routes, pattern)
 			return true
 		})
 	}
 	if len(routes) == 0 {
-		t.Fatal("no mutating registrations found")
+		t.Fatal("no registrations found")
 	}
-	t.Logf("checking %d registered mutating routes", len(routes))
-	for _, pattern := range routes {
+	return routes
+}
+
+func TestTokenScopesEveryMutatingRoute(t *testing.T) {
+	for _, pattern := range registeredRoutes(t) {
+		method, _, _ := strings.Cut(pattern, " ")
+		if method == "GET" || method == "HEAD" || method == "OPTIONS" {
+			continue
+		}
 		t.Run(pattern, func(t *testing.T) {
 			f := newEndpointFixture(t)
 			bearer, _, err := f.store.CreateUserAPIToken(context.Background(), f.user.ID, "reader", nil, `["read"]`, nil, "")
@@ -98,6 +106,97 @@ func TestTokenScopesEveryMutatingRoute(t *testing.T) {
 			rec = f.do(t, method, path, nil)
 			if rec.Code == http.StatusForbidden && (rec.Header().Get("X-Error-Code") == "scope_required" || strings.Contains(rec.Body.String(), "scope_required")) {
 				t.Fatalf("sufficient authority rejected: %s", rec.Body.String())
+			}
+		})
+	}
+}
+
+// Cancel only after SSE starts, leaving auth and DB reads fully exercised.
+type cancelStreamRecorder struct {
+	*httptest.ResponseRecorder
+	cancel context.CancelFunc
+}
+
+func (r cancelStreamRecorder) Flush() { r.ResponseRecorder.Flush(); r.cancel() }
+
+func TestTokenScopesEveryReadRoute(t *testing.T) {
+	for _, pattern := range registeredRoutes(t) {
+		method, path, _ := strings.Cut(pattern, " ")
+		if method != "GET" {
+			continue
+		}
+		public := path == "/healthz" || path == "/v1/version" || path == "/v1/discovery" || path == "/v1/providers" || path == "/v1/auth/status" || strings.HasPrefix(path, "/v1/oauth/")
+		crossTeam := path == "/v1/users" || path == "/v1/teams" || path == "/v1/me/review-counts" || path == "/v1/me/team-notification-prefs" || path == "/v1/me/push-subscriptions"
+		for _, method := range []string{http.MethodGet, http.MethodHead} {
+			for _, kind := range []string{"without read", "team bound", "reader", "browser"} {
+				t.Run(method+" "+path+"/"+kind, func(t *testing.T) {
+					f := newEndpointFixture(t)
+					scopes := `["write:draft"]`
+					var teamID *string
+					switch kind {
+					case "team bound":
+						scopes = ""
+						teamID = &f.team.ID
+					case "reader":
+						scopes = `["read"]`
+					case "browser":
+						scopes = ""
+					}
+					bearer, _, err := f.store.CreateUserAPIToken(context.Background(), f.user.ID, kind, nil, scopes, teamID, "")
+					if kind == "browser" {
+						bearer, _, err = f.store.CreateSessionAPIToken(context.Background(), f.user.ID, time.Hour)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					target := strings.ReplaceAll(path, "{teamID}", f.team.ID)
+					target = strings.ReplaceAll(target, "{accountID}", f.account.ID)
+					for strings.Contains(target, "{") {
+						start := strings.Index(target, "{")
+						end := strings.Index(target[start:], "}") + start
+						target = target[:start] + "missing" + target[end+1:]
+					}
+					ctx, cancel := context.WithCancel(context.Background())
+					defer cancel()
+					req := httptest.NewRequest(method, target, nil).WithContext(ctx)
+					if kind == "browser" {
+						req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: bearer})
+					} else {
+						req.Header.Set("Authorization", "Bearer "+bearer)
+					}
+					rec := httptest.NewRecorder()
+					f.handler.ServeHTTP(cancelStreamRecorder{rec, cancel}, req)
+					denied := rec.Code == http.StatusForbidden && (rec.Header().Get("X-Error-Code") == "scope_required" || strings.Contains(rec.Body.String(), "scope_required"))
+					wantDenied := !public && (kind == "without read" || (strings.HasPrefix(path, "/v1/admin/") && kind != "browser") || (crossTeam && kind == "team bound"))
+					if denied != wantDenied {
+						t.Fatalf("status=%d body=%s scope denial=%v, want %v", rec.Code, rec.Body.String(), denied, wantDenied)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestReadTokenAIJobQueryStream(t *testing.T) {
+	for _, bound := range []bool{false, true} {
+		t.Run(strconv.FormatBool(bound), func(t *testing.T) {
+			f := newEndpointFixture(t)
+			var teamID *string
+			if bound {
+				teamID = &f.team.ID
+			}
+			bearer, _, err := f.store.CreateUserAPIToken(context.Background(), f.user.ID, "SSE reader", nil, `["read"]`, teamID, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+f.team.ID+"/ai-jobs/stream?token="+bearer, nil).WithContext(ctx)
+			rec := httptest.NewRecorder()
+			f.handler.ServeHTTP(cancelStreamRecorder{rec, cancel}, req)
+			requireStatus(t, rec, http.StatusOK)
+			if rec.Header().Get("Content-Type") != "text/event-stream" {
+				t.Fatalf("not SSE: %v", rec.Header())
 			}
 		})
 	}

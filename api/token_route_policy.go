@@ -9,7 +9,7 @@ import (
 )
 
 // requireAuth applies the API's default token policy after authentication and
-// before route-specific role/feature checks. New unsafe routes inherit it.
+// before route-specific role/feature checks. New routes inherit it.
 func (a *API) requireAuth(next http.Handler) http.Handler {
 	return a.auth.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		principal := auth.PrincipalFromContext(r.Context())
@@ -35,14 +35,28 @@ func (a *API) requireAuth(next http.Handler) http.Handler {
 
 func tokenRouteAllows(principal domain.AuthenticatedPrincipal, r *http.Request) bool {
 	pattern := r.Pattern
+	_, path, _ := strings.Cut(pattern, " ")
+	// Admin data and actions require full global authority for every method.
+	if strings.HasPrefix(path, "/v1/admin/") {
+		return auth.PrincipalCanManageAPIToken(principal, nil, nil)
+	}
 	switch r.Method {
-	case http.MethodGet, http.MethodHead, http.MethodOptions:
+	case http.MethodGet, http.MethodHead:
+		// These responses aggregate global/user-wide data with no team projection.
+		switch path {
+		case "/v1/users", "/v1/teams", "/v1/me/review-counts", "/v1/me/team-notification-prefs", "/v1/me/push-subscriptions":
+			if principal.TokenTeamID != nil {
+				return false
+			}
+		}
+		return auth.PrincipalAllows(principal, auth.ScopeRead)
+	case http.MethodOptions:
 		return true
 	}
 	// Privilege management cannot be delegated to a scoped token. Unscoped
 	// team-bound tokens retain authority only within their bound team.
 	if pattern == "PATCH /v1/teams/{teamID}" ||
-		strings.Contains(pattern, " /v1/admin/") || pattern == "POST /v1/teams" ||
+		pattern == "POST /v1/teams" ||
 		strings.Contains(pattern, "/members") || strings.Contains(pattern, "/invitations") ||
 		strings.Contains(pattern, "/ai-service-config") || strings.Contains(pattern, "/accounts") {
 		var teamID *string
