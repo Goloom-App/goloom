@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -41,23 +42,25 @@ func (a *API) handleCreateKnowledgeSource(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	existing, err := a.store.ListKnowledgeSources(r.Context(), teamID)
-	if err != nil {
-		a.writeStoreError(w, r, err, "")
-		return
-	}
-	if len(existing) >= maxKnowledgeSources {
-		a.writeError(w, r, "knowledge_source_limit_reached", http.StatusConflict)
-		return
-	}
+	a.auditedHandler(func(w http.ResponseWriter, r *http.Request) {
+		existing, err := a.store.ListKnowledgeSources(r.Context(), teamID)
+		if err != nil {
+			a.writeStoreError(w, r, err, "")
+			return
+		}
+		if len(existing) >= maxKnowledgeSources {
+			a.writeError(w, r, "knowledge_source_limit_reached", http.StatusConflict)
+			return
+		}
 
-	created, err := a.store.CreateKnowledgeSource(r.Context(), teamID, input)
-	if err != nil {
-		a.writeStoreError(w, r, err, "")
-		return
-	}
-	a.recordAudit(r, teamID, "knowledge_source.create", "knowledge_source", &created.ID, "Created knowledge source: "+created.Name)
-	auth.WriteJSON(w, http.StatusCreated, created)
+		created, err := a.store.CreateKnowledgeSource(r.Context(), teamID, input)
+		if err != nil {
+			a.writeStoreError(w, r, err, "")
+			return
+		}
+		a.recordAudit(r, teamID, "knowledge_source.create", "knowledge_source", &created.ID, "Created knowledge source")
+		auth.WriteJSON(w, http.StatusCreated, created)
+	})(w, r)
 }
 
 func (a *API) handleUpdateKnowledgeSource(w http.ResponseWriter, r *http.Request) {
@@ -83,17 +86,35 @@ func (a *API) handleUpdateKnowledgeSource(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	updated, err := a.store.UpdateKnowledgeSource(r.Context(), teamID, sourceID, input)
-	if err != nil {
-		a.writeStoreError(w, r, err, "knowledge_source_not_found")
-		return
-	}
-	a.recordAudit(r, teamID, "knowledge_source.update", "knowledge_source", &sourceID, "Updated knowledge source: "+updated.Name)
-	auth.WriteJSON(w, http.StatusOK, updated)
+	a.auditedHandler(func(w http.ResponseWriter, r *http.Request) {
+		before, err := a.store.GetKnowledgeSourceByID(r.Context(), teamID, sourceID)
+		if err != nil {
+			a.writeStoreError(w, r, err, "knowledge_source_not_found")
+			return
+		}
+		updated, err := a.store.UpdateKnowledgeSource(r.Context(), teamID, sourceID, input)
+		if err != nil {
+			a.writeStoreError(w, r, err, "knowledge_source_not_found")
+			return
+		}
+		if auditChanged(before, updated) {
+			a.recordAudit(r, teamID, "knowledge_source.update", "knowledge_source", &sourceID, "Updated knowledge source")
+		}
+		auth.WriteJSON(w, http.StatusOK, updated)
+	})(w, r)
 }
 
 func (a *API) handleDeleteKnowledgeSource(w http.ResponseWriter, r *http.Request) {
 	teamID, sourceID := r.PathValue("teamID"), r.PathValue("sourceID")
+	_, err := a.store.GetKnowledgeSourceByID(r.Context(), teamID, sourceID)
+	if errors.Is(err, domain.ErrNotFound) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
 	if err := a.store.DeleteKnowledgeSource(r.Context(), teamID, sourceID); err != nil {
 		a.writeStoreError(w, r, err, "")
 		return

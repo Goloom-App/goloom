@@ -9,17 +9,30 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 )
 
-// recordAudit writes a best-effort team audit event for the current principal.
-// It never fails the caller's action: on error it logs and returns. Call it
-// after a mutation has succeeded, before writing the response (so the request
-// context is still alive). targetID/summary describe the affected object.
-func (a *API) recordAudit(r *http.Request, teamID, action, targetType string, targetID *string, summary string) {
+// recordAudit joins the mutation transaction. Insert failure marks the request
+// for rollback; handlers write their buffered response only after commit.
+func (a *API) recordAudit(r *http.Request, teamID, action, targetType string, targetID *string, summary string, details ...map[string]string) {
 	if strings.TrimSpace(teamID) == "" {
 		return
 	}
 	principal := auth.PrincipalFromContext(r.Context())
 	if principal == nil {
 		return
+	}
+	metadata := map[string]string{"channel": "rest", "outcome": "success"}
+	for _, detail := range details {
+		for key, value := range detail {
+			metadata[key] = value
+		}
+	}
+	if state, ok := r.Context().Value(auditRequestKey{}).(*auditRequestState); ok {
+		metadata["request_id"] = state.requestID
+		if state.fields != "" {
+			metadata["changed_fields"] = state.fields
+		}
+	}
+	if targetID == nil {
+		targetID = &teamID
 	}
 	event := domain.AuditEvent{
 		TeamID:      teamID,
@@ -31,6 +44,7 @@ func (a *API) recordAudit(r *http.Request, teamID, action, targetType string, ta
 		TargetType:  targetType,
 		TargetID:    targetID,
 		Summary:     summary,
+		Metadata:    metadata,
 	}
 	// Only attribute the action to a token when it is a tool/API key. A browser
 	// session also carries a TokenID (so the UI can spot its own session), but it
@@ -40,18 +54,11 @@ func (a *API) recordAudit(r *http.Request, teamID, action, targetType string, ta
 		event.TokenName = principal.TokenName
 	}
 	if err := a.store.InsertAuditEvent(r.Context(), event); err != nil {
+		if state, ok := r.Context().Value(auditRequestKey{}).(*auditRequestState); ok {
+			state.err = err
+		}
 		a.log.Error("audit event insert failed", "team_id", teamID, "action", action, "error", err)
 	}
-}
-
-// auditTitle renders a post title for an audit summary, with a placeholder when
-// the post has no title.
-func auditTitle(title string) string {
-	title = strings.TrimSpace(title)
-	if title == "" {
-		return "(untitled)"
-	}
-	return title
 }
 
 // handleListTeamAuditLog returns the team's audit events (owner-only route).

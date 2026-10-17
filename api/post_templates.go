@@ -71,6 +71,7 @@ func (a *API) handleCreatePostTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.recordAudit(r, teamID, "recurring.create", "recurring", &tmpl.ID, "Created recurring template")
 	auth.WriteJSON(w, http.StatusCreated, tmpl)
 }
 
@@ -115,10 +116,18 @@ func (a *API) handleUpdatePostTemplate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	before, err := a.store.GetPostTemplate(r.Context(), teamID, templateID)
+	if err != nil {
+		a.writeError(w, r, "not_found", http.StatusNotFound)
+		return
+	}
 	tmpl, err := a.store.UpdatePostTemplate(r.Context(), teamID, templateID, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if auditChanged(before, tmpl) {
+		a.recordAudit(r, teamID, "recurring.update", "recurring", &templateID, "Updated recurring template")
 	}
 	auth.WriteJSON(w, http.StatusOK, tmpl)
 }
@@ -141,6 +150,7 @@ func (a *API) handleDeletePostTemplate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.recordAudit(r, teamID, "recurring.delete", "recurring", &templateID, "Deleted recurring template")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -161,6 +171,27 @@ func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Re
 		a.writeError(w, r, "occurrence_at_required", http.StatusBadRequest)
 		return
 	}
+	if body.ShiftTo.IsZero() {
+		skipped, err := a.store.IsPostTemplateOccurrenceSkipped(r.Context(), templateID, body.OccurrenceAt.UTC())
+		if err != nil {
+			a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+			return
+		}
+		if skipped {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	} else {
+		shifted, err := a.store.GetPostTemplateShiftTo(r.Context(), templateID, body.OccurrenceAt.UTC())
+		if err != nil {
+			a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+			return
+		}
+		if shifted != nil && shifted.Equal(body.ShiftTo.UTC()) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
 	var shiftTo *time.Time
 	if !body.ShiftTo.IsZero() {
 		u := body.ShiftTo.UTC()
@@ -180,6 +211,7 @@ func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Re
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		a.auditRecurringOccurrence(r, teamID, templateID, body.OccurrenceAt, shiftTo)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -193,6 +225,7 @@ func (a *API) handleSkipPostTemplateOccurrence(w http.ResponseWriter, r *http.Re
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	a.auditRecurringOccurrence(r, teamID, templateID, body.OccurrenceAt, shiftTo)
 	auth.WriteJSON(w, http.StatusOK, result)
 }
 
@@ -242,5 +275,16 @@ func (a *API) handleRegeneratePostTemplate(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	}
+	a.recordAudit(r, teamID, "recurring.regenerate", "recurring", &templateID, "Regenerated recurring posts", map[string]string{"mode": mode, "occurrence_at": body.OccurrenceAt.UTC().Format(time.RFC3339Nano)})
 	auth.WriteJSON(w, http.StatusOK, result)
+}
+
+func (a *API) auditRecurringOccurrence(r *http.Request, teamID, templateID string, occurrence time.Time, shift *time.Time) {
+	action := "recurring.skip"
+	metadata := map[string]string{"occurrence_at": occurrence.UTC().Format(time.RFC3339Nano), "template_id": templateID}
+	if shift != nil {
+		action = "recurring.shift"
+		metadata["shift_to"] = shift.UTC().Format(time.RFC3339Nano)
+	}
+	a.recordAudit(r, teamID, action, "recurring", &templateID, "Changed recurring occurrence", metadata)
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"github.com/google/uuid"
 	"net/http"
 	"strings"
 	"time"
@@ -86,5 +87,10 @@ func (a *API) handleCreateAIDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metadata := map[string]string{"source": "ai_draft"}
+	if id, err := uuid.Parse(input.AIJobID); err == nil {
+		metadata["job_id"] = id.String()
+	}
+	a.recordAudit(r, teamID, "post.create", "post", &post.ID, "Created AI draft", metadata)
 	auth.WriteJSON(w, http.StatusCreated, post)
 }

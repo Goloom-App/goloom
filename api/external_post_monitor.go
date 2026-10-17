@@ -24,10 +24,18 @@ func (a *API) handleUpsertExternalPostMonitor(w http.ResponseWriter, r *http.Req
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
+	before, err := a.store.GetExternalPostMonitorSettings(r.Context(), teamID)
+	if err != nil {
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+		return
+	}
 	settings, err := a.store.UpsertExternalPostMonitorSettings(r.Context(), teamID, input)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if before.Enabled != settings.Enabled {
+		a.recordAudit(r, teamID, "external_monitor.update", "external_monitor", &teamID, "Updated external post monitor")
 	}
 	auth.WriteJSON(w, http.StatusOK, settings)
 }

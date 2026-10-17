@@ -227,6 +227,11 @@ func (a *API) handlePatchPostVersions(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
+	before, err := a.store.ListPostVersionsForTeamPost(r.Context(), teamID, postID)
+	if err != nil {
+		a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+		return
+	}
 	patches := make([]domain.PostVersion, 0, len(body.Versions))
 	for _, row := range body.Versions {
 		aid := strings.TrimSpace(row.AccountID)
@@ -255,6 +260,9 @@ func (a *API) handlePatchPostVersions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if auditVersionsChanged(before, items) {
+		a.recordAudit(r, teamID, "post.versions_update", "post", &postID, "Updated account versions", map[string]string{"changed_fields": "account_content_override"})
 	}
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"items": sliceOrEmpty(items)})
 }

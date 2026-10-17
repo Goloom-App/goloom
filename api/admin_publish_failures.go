@@ -30,6 +30,11 @@ func (a *API) handleAdminAcknowledgePublishFailure(w http.ResponseWriter, r *htt
 		a.writeError(w, r, "post_id_required", http.StatusBadRequest)
 		return
 	}
+	post, err := a.store.GetScheduledPostByID(r.Context(), postID)
+	if err != nil {
+		a.writeError(w, r, "failure_not_found", http.StatusNotFound)
+		return
+	}
 	ok, err := a.store.AdminAcknowledgeFailedPost(r.Context(), postID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -39,6 +44,7 @@ func (a *API) handleAdminAcknowledgePublishFailure(w http.ResponseWriter, r *htt
 		a.writeError(w, r, "failure_not_found", http.StatusNotFound)
 		return
 	}
+	a.recordAudit(r, post.TeamID, "post.acknowledge", "post", &postID, "Updated publish failure")
 	a.log.InfoContext(r.Context(), "admin acknowledged publish failure", "post_id", postID)
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"status": "acknowledged"})
 }
@@ -50,6 +56,11 @@ func (a *API) handleAdminRetryPublishFailure(w http.ResponseWriter, r *http.Requ
 		a.writeError(w, r, "post_id_required", http.StatusBadRequest)
 		return
 	}
+	post, err := a.store.GetScheduledPostByID(r.Context(), postID)
+	if err != nil {
+		a.writeError(w, r, "failure_not_found", http.StatusNotFound)
+		return
+	}
 	ok, err := a.store.AdminRetryFailedPost(r.Context(), postID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -59,6 +70,7 @@ func (a *API) handleAdminRetryPublishFailure(w http.ResponseWriter, r *http.Requ
 		a.writeError(w, r, "failure_not_found", http.StatusNotFound)
 		return
 	}
+	a.recordAudit(r, post.TeamID, "post.retry", "post", &postID, "Updated publish failure")
 	a.log.InfoContext(r.Context(), "admin retried publish failure", "post_id", postID)
 	auth.WriteJSON(w, http.StatusOK, map[string]any{"status": "requeued"})
 }

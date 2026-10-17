@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ func (a *API) handleUpsertTeamProfile(w http.ResponseWriter, r *http.Request) {
 	var profile domain.TeamProfile
 	var opErr error
 
-	_, err := a.store.GetTeamProfile(r.Context(), teamID)
+	before, err := a.store.GetTeamProfile(r.Context(), teamID)
 	switch {
 	case err == nil:
 		profile, opErr = a.store.UpdateTeamProfile(r.Context(), teamID, input)
@@ -43,7 +44,9 @@ func (a *API) handleUpsertTeamProfile(w http.ResponseWriter, r *http.Request) {
 		a.writeStoreError(w, r, opErr, "")
 		return
 	}
-	a.recordAudit(r, teamID, "brand_profile.update", "brand_profile", nil, "Updated brand profile")
+	if auditChanged(before, profile) {
+		a.recordAudit(r, teamID, "brand_profile.update", "brand_profile", &profile.ID, "Updated brand profile")
+	}
 	auth.WriteJSON(w, http.StatusOK, profile)
 }
 
@@ -58,11 +61,20 @@ func (a *API) handleGetTeamProfile(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleDeleteTeamProfile(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
+	profile, err := a.store.GetTeamProfile(r.Context(), teamID)
+	if errors.Is(err, domain.ErrNotFound) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
 	if err := a.store.DeleteTeamProfile(r.Context(), teamID); err != nil {
 		a.writeStoreError(w, r, err, "")
 		return
 	}
-	a.recordAudit(r, teamID, "brand_profile.delete", "brand_profile", nil, "Deleted brand profile")
+	a.recordAudit(r, teamID, "brand_profile.delete", "brand_profile", &profile.ID, "Deleted brand profile")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -82,7 +94,7 @@ func (a *API) handleCreateCampaignFormat(w http.ResponseWriter, r *http.Request)
 		a.writeStoreError(w, r, err, "")
 		return
 	}
-	a.recordAudit(r, teamID, "campaign_format.create", "campaign_format", &format.ID, "Created campaign format: "+format.Name)
+	a.recordAudit(r, teamID, "campaign_format.create", "campaign_format", &format.ID, "Created campaign format")
 	auth.WriteJSON(w, http.StatusCreated, format)
 }
 
@@ -116,17 +128,33 @@ func (a *API) handleUpdateCampaignFormat(w http.ResponseWriter, r *http.Request)
 		a.writeError(w, r, "invalid_campaign_format", http.StatusBadRequest)
 		return
 	}
+	before, err := a.store.GetCampaignFormatByID(r.Context(), teamID, formatID)
+	if err != nil {
+		a.writeStoreError(w, r, err, "campaign_format_not_found")
+		return
+	}
 	format, err := a.store.UpdateCampaignFormat(r.Context(), teamID, formatID, input)
 	if err != nil {
 		a.writeStoreError(w, r, err, "campaign_format_not_found")
 		return
 	}
-	a.recordAudit(r, teamID, "campaign_format.update", "campaign_format", &formatID, "Updated campaign format: "+format.Name)
+	if auditChanged(before, format) {
+		a.recordAudit(r, teamID, "campaign_format.update", "campaign_format", &formatID, "Updated campaign format")
+	}
 	auth.WriteJSON(w, http.StatusOK, format)
 }
 
 func (a *API) handleDeleteCampaignFormat(w http.ResponseWriter, r *http.Request) {
 	teamID, formatID := r.PathValue("teamID"), r.PathValue("formatID")
+	_, err := a.store.GetCampaignFormatByID(r.Context(), teamID, formatID)
+	if errors.Is(err, domain.ErrNotFound) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
 	if err := a.store.DeleteCampaignFormat(r.Context(), teamID, formatID); err != nil {
 		a.writeStoreError(w, r, err, "")
 		return
@@ -166,6 +194,22 @@ func (a *API) handleListStyleExamples(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleDeleteStyleExample(w http.ResponseWriter, r *http.Request) {
 	teamID, exampleID := r.PathValue("teamID"), r.PathValue("exampleID")
+	examples, err := a.store.ListStyleExamples(r.Context(), teamID)
+	if err != nil {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
+	found := false
+	for _, example := range examples {
+		if example.ID == exampleID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if err := a.store.DeleteStyleExample(r.Context(), teamID, exampleID); err != nil {
 		a.writeStoreError(w, r, err, "")
 		return
@@ -197,6 +241,7 @@ func (a *API) handleCreateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, teamID, "rss_feed.create", "rss_feed", &feed.ID, "Created RSS feed")
 	auth.WriteJSON(w, http.StatusCreated, feed)
 }
 
@@ -291,14 +336,23 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if !reflect.DeepEqual(existing, merged) {
+		a.recordAudit(r, teamID, "rss_feed.update", "rss_feed", &feedID, "Updated RSS feed")
+	}
 	auth.WriteJSON(w, http.StatusOK, feed)
 }
 
 func (a *API) handleDeleteRSSFeed(w http.ResponseWriter, r *http.Request) {
+	feedID := r.PathValue("feedID")
+	if _, err := a.store.GetRSSFeedConfigByID(r.Context(), r.PathValue("teamID"), feedID); err != nil {
+		a.writeStoreError(w, r, err, "audit mutation")
+		return
+	}
 	if err := a.store.DeleteRSSFeedConfig(r.Context(), r.PathValue("teamID"), r.PathValue("feedID")); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(r, r.PathValue("teamID"), "rss_feed.delete", "rss_feed", &feedID, "Deleted RSS feed")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -345,39 +399,48 @@ func (a *API) handleUpsertAIServiceConfig(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	apiKey := strings.TrimSpace(input.APIKey)
-	// The stored key is only kept for the endpoint it was entered for: a new
-	// provider or base_url must come with the key again, or the next LLM call
-	// would hand the existing key to whatever host was just configured.
-	if apiKey == "" {
-		existing, err := a.store.GetAIServiceConfig(r.Context(), teamID)
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			// No stored key that could leak.
-		case err != nil:
-			// Fail closed: the upsert would keep a key we could not check.
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		case existing.APIKey != "" &&
-			(existing.Provider != provider || normalizeAIBaseURL(existing.BaseURL) != normalizeAIBaseURL(baseURL)):
-			a.writeError(w, r, "ai_api_key_required", http.StatusBadRequest)
+	a.auditedHandler(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := strings.TrimSpace(input.APIKey)
+		// The stored key is only kept for the endpoint it was entered for: a new
+		// provider or base_url must come with the key again, or the next LLM call
+		// would hand the existing key to whatever host was just configured.
+		if apiKey == "" {
+			existing, err := a.store.GetAIServiceConfig(r.Context(), teamID)
+			switch {
+			case errors.Is(err, sql.ErrNoRows):
+				// No stored key that could leak.
+			case err != nil:
+				// Fail closed: the upsert would keep a key we could not check.
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			case existing.APIKey != "" &&
+				(existing.Provider != provider || normalizeAIBaseURL(existing.BaseURL) != normalizeAIBaseURL(baseURL)):
+				a.writeError(w, r, "ai_api_key_required", http.StatusBadRequest)
+				return
+			}
+		}
+		before, err := a.store.GetAIServiceConfig(r.Context(), teamID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			a.writeStoreError(w, r, err, "")
 			return
 		}
-	}
-	cfg, err := a.store.UpsertAIServiceConfig(r.Context(), teamID, domain.AIServiceConfig{
-		Provider:    provider,
-		Model:       strings.TrimSpace(input.Model),
-		BaseURL:     baseURL,
-		Description: input.Description,
-		APIKey:      apiKey,
-	})
-	if err != nil {
-		a.writeStoreError(w, r, err, "")
-		return
-	}
-	// Never include the API key in the audit summary.
-	a.recordAudit(r, teamID, "ai_config.update", "ai_config", nil, "Updated AI provider configuration ("+provider+")")
-	auth.WriteJSON(w, http.StatusOK, cfg)
+		cfg, err := a.store.UpsertAIServiceConfig(r.Context(), teamID, domain.AIServiceConfig{
+			Provider:    provider,
+			Model:       strings.TrimSpace(input.Model),
+			BaseURL:     baseURL,
+			Description: input.Description,
+			APIKey:      apiKey,
+		})
+		if err != nil {
+			a.writeStoreError(w, r, err, "")
+			return
+		}
+		// Never include the API key in the audit summary.
+		if auditChanged(before, cfg) || before.APIKey != cfg.APIKey {
+			a.recordAudit(r, teamID, "ai_config.update", "ai_config", &cfg.ID, "Updated AI provider configuration")
+		}
+		auth.WriteJSON(w, http.StatusOK, cfg)
+	})(w, r)
 }
 
 // normalizeAIBaseURL compares base URLs the way the LLM clients use them
@@ -417,12 +480,19 @@ func (a *API) handleUpsertProactiveSettings(w http.ResponseWriter, r *http.Reque
 		a.writeError(w, r, "invalid_proactive_settings", http.StatusBadRequest)
 		return
 	}
+	before, err := a.store.GetProactiveTriggerSettings(r.Context(), teamID)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		a.writeStoreError(w, r, err, "")
+		return
+	}
 	settings, err := a.store.UpsertProactiveTriggerSettings(r.Context(), teamID, input)
 	if err != nil {
 		a.writeStoreError(w, r, err, "")
 		return
 	}
-	a.recordAudit(r, teamID, "proactive_settings.update", "proactive_settings", nil, "Updated proactive trigger settings")
+	if auditChanged(before, settings) {
+		a.recordAudit(r, teamID, "proactive_settings.update", "proactive_settings", &settings.ID, "Updated proactive trigger settings")
+	}
 	auth.WriteJSON(w, http.StatusOK, settings)
 }
 
