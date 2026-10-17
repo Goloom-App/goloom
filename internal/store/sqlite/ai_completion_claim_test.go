@@ -66,14 +66,25 @@ func TestClaimAIJobCompletion(t *testing.T) {
 	if err != nil || got.ErrorMessage != "publishing failed" || got.Status != domain.AIJobStatusFailed {
 		t.Fatalf("winner failure lost: %+v %v", got, err)
 	}
-	for _, status := range []domain.AIJobStatus{domain.AIJobStatusCompleted, domain.AIJobStatusFailed, "cancelled"} {
+	for _, outcome := range []struct {
+		status  domain.AIJobStatus
+		message string
+	}{
+		{domain.AIJobStatusCompleted, ""},
+		{domain.AIJobStatusFailed, "provider failed"},
+		{domain.AIJobStatusFailed, "cancelled"},
+	} {
 		terminal := create()
-		if err := s.UpdateAIJobStatus(ctx, terminal.ID, status, nil, ""); err != nil {
+		if err := s.UpdateAIJobStatus(ctx, terminal.ID, outcome.status, nil, outcome.message); err != nil {
 			t.Fatal(err)
 		}
 		won, err := s.ClaimAIJobCompletion(ctx, terminal.ID, domain.AIJobStatusFailed, nil, "overwrite")
 		if err != nil || won {
-			t.Fatalf("terminal %s reclaimed: %v %v", status, won, err)
+			t.Fatalf("terminal %s/%q reclaimed: %v %v", outcome.status, outcome.message, won, err)
+		}
+		got, err := s.GetAIJobByIDGlobal(ctx, terminal.ID)
+		if err != nil || got.Status != outcome.status || got.ErrorMessage != outcome.message {
+			t.Fatalf("terminal outcome overwritten: %+v %v", got, err)
 		}
 	}
 	pending := create()

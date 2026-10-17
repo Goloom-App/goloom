@@ -213,6 +213,63 @@ func TestCompleteAIJob(t *testing.T) {
 	})
 }
 
+func TestCompleteAIJobPreservesCancelledFailure(t *testing.T) {
+	for _, kind := range []string{"auto-publish", "rss", "recurring"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx := context.Background()
+			f, account, template := newRecurringCallbackFixture(t)
+			if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
+				t.Fatal(err)
+			}
+			meta := map[string]any{"template_id": template.ID, "fallback_content": "template fallback"}
+			if kind == "rss" {
+				feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{account.ID}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				meta = map[string]any{"feed_id": feed.ID, "item_key": "item", "fallback_content": "template fallback"}
+			}
+			params := map[string]any{"target_account_ids": []string{account.ID}}
+			if kind != "auto-publish" {
+				params[kind+"_automation"] = meta
+			}
+			payload, _ := json.Marshal(map[string]any{"params": params})
+			job := makeRecurringJob(t, f, payload)
+			// Cancellation is a failed job with a message, never a separate status.
+			if err := f.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
+				t.Fatal(err)
+			}
+			before, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hub := sse.NewHub()
+			events, unsubscribe := hub.Subscribe(f.team.ID, "")
+			defer unsubscribe()
+			instance := api.New(nil, f.store, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, hub)
+			for _, status := range []domain.AIJobStatus{domain.AIJobStatusCompleted, domain.AIJobStatusFailed} {
+				instance.CompleteAIJob(ctx, job.ID, status, json.RawMessage(`{"content":"late AI result"}`), "late failure")
+			}
+			after, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if after.Status != domain.AIJobStatusFailed || after.ErrorMessage != "cancelled" || string(after.Result) != string(before.Result) || !after.UpdatedAt.Equal(before.UpdatedAt) {
+				t.Errorf("cancelled job overwritten: %+v", after)
+			}
+			posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+			if err != nil || len(posts) != 0 {
+				t.Fatalf("cancelled job created posts: count=%d err=%v", len(posts), err)
+			}
+			select {
+			case event := <-events:
+				t.Errorf("cancelled job emitted event: %+v", event)
+			default:
+			}
+		})
+	}
+}
+
 func callbackAccount(t *testing.T, f aiCompletionFixture, teamID string) domain.SocialAccount {
 	t.Helper()
 	account, err := f.store.CreateAccount(context.Background(), teamID, domain.ConnectedAccount{

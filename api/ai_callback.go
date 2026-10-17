@@ -42,7 +42,7 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		a.log.ErrorContext(ctx, "ai job completion: job not found", "job_id", jobID, "error", err)
 		return
 	}
-	if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed || job.Status == "cancelled" {
+	if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed {
 		return
 	}
 

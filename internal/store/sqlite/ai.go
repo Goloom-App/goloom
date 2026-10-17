@@ -902,7 +902,7 @@ func (s *Store) ClaimAIJobCompletion(ctx context.Context, id string, status doma
 		resultVal = string(result)
 	}
 	now := nowString()
-	res, err := s.db.ExecContext(ctx, `update ai_jobs set status=?, result=?, error_message=?, updated_at=?, completed_at=? where id=? and status not in ('completed','failed','cancelled')`, string(status), resultVal, nullableString(errorMsg), now, now, id)
+	res, err := s.db.ExecContext(ctx, `update ai_jobs set status=?, result=?, error_message=?, updated_at=?, completed_at=? where id=? and status not in ('completed','failed')`, string(status), resultVal, nullableString(errorMsg), now, now, id)
 	if err != nil {
 		return false, fmt.Errorf("claim AI job completion: %w", err)
 	}
