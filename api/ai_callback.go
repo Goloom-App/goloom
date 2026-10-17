@@ -17,6 +17,8 @@ import (
 // Only validation failures before insertion are safe to retry with template content.
 var errAutomationPostValidation = errors.New("invalid automation post")
 
+var errAutomationTemplateFallback = errors.New("used template fallback")
+
 // aiCallbackResult is the shape of completed AI job results consumed by the
 // completion side effects below.
 type aiCallbackResult struct {
@@ -101,11 +103,11 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 	}
 
 	if automationErr != nil {
-		a.log.ErrorContext(ctx, "ai job automation failed", "job_id", job.ID, "team_id", job.TeamID, "error", automationErr)
-		if errorMessage != "" {
-			errorMessage += "; "
+		a.log.ErrorContext(ctx, "ai job automation failed", "job_id", job.ID, "team_id", job.TeamID, "error", automationErr, "job_error", errorMessage)
+		errorMessage = "Automation failed: post could not be created"
+		if errors.Is(automationErr, errAutomationTemplateFallback) {
+			errorMessage = "Automation failed: used template fallback"
 		}
-		errorMessage += "Automation failed: " + automationErr.Error()
 		if err := a.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusFailed, resultBytes, errorMessage); err != nil {
 			a.log.ErrorContext(ctx, "ai job automation: update failure status failed", "job_id", job.ID, "error", err)
 			return

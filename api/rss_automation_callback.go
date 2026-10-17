@@ -19,7 +19,7 @@ func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, r
 			if fallbackErr := a.finishRSSAutomationFallback(ctx, job, meta); fallbackErr != nil {
 				return fmt.Errorf("decode automation result: %w; fallback failed: %w", err, fallbackErr)
 			}
-			return fmt.Errorf("decode automation result: %w; used template fallback", err)
+			return fmt.Errorf("decode automation result: %w; %w", err, errAutomationTemplateFallback)
 		}
 	}
 	content := strings.TrimSpace(res.Content)
@@ -27,7 +27,7 @@ func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, r
 		if err := a.finishRSSAutomationFallback(ctx, job, meta); err != nil {
 			return err
 		}
-		return fmt.Errorf("empty AI content; used template fallback")
+		return fmt.Errorf("empty AI content; %w", errAutomationTemplateFallback)
 	}
 	err := a.createRSSAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
 	if !errors.Is(err, errAutomationPostValidation) {
@@ -37,7 +37,7 @@ func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, r
 	if fallbackErr := a.finishRSSAutomationFallback(ctx, job, meta); fallbackErr != nil {
 		return fmt.Errorf("AI post validation: %w; fallback failed: %w", err, fallbackErr)
 	}
-	return fmt.Errorf("AI post validation: %w; used template fallback", err)
+	return fmt.Errorf("AI post validation: %w; %w", err, errAutomationTemplateFallback)
 }
 
 func (a *API) finishRSSAutomationFallback(ctx context.Context, job domain.AIJob, meta *rssAutomationMeta) error {

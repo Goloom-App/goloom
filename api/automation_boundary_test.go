@@ -21,7 +21,7 @@ import (
 
 func TestAutomationCallbackTeamBoundary(t *testing.T) {
 	for _, kind := range []string{"rss", "recurring"} {
-		for _, scenario := range []string{"valid", "valid-draft", "valid-publish-now", "fallback", "empty-result", "foreign-target", "foreign-target-fallback", "foreign-source", "foreign-source-fallback", "foreign-override", "missing-target", "missing-fallback", "insert-failure", "invalid-result", "over-limit-ai", "over-limit-version", "over-limit-ai-and-template", "foreign-target-over-limit-ai"} {
+		for _, scenario := range []string{"valid", "valid-draft", "valid-publish-now", "fallback", "empty-result", "foreign-target", "foreign-target-fallback", "unknown-target", "foreign-source", "foreign-source-fallback", "foreign-override", "missing-target", "missing-fallback", "insert-failure", "invalid-result", "over-limit-ai", "over-limit-version", "over-limit-ai-and-template", "foreign-target-over-limit-ai"} {
 			t.Run(kind+"/"+scenario, func(t *testing.T) {
 				ctx := context.Background()
 				f, account, template := newRecurringCallbackFixture(t)
@@ -50,6 +50,9 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 				targets := []string{account.ID}
 				if strings.HasPrefix(scenario, "foreign-target") {
 					targets = []string{foreign.ID}
+				}
+				if scenario == "unknown-target" {
+					targets = []string{"unknown-account-id"}
 				}
 				if scenario == "missing-target" {
 					targets = nil
@@ -109,6 +112,23 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 				}
 				usedFallback := scenario == "empty-result" || scenario == "invalid-result" || scenario == "over-limit-ai" || scenario == "over-limit-version"
 				valid := strings.HasPrefix(scenario, "valid") || scenario == "fallback" || usedFallback || scenario == "foreign-override"
+				if !valid || usedFallback {
+					wantMessage := "Automation failed: post could not be created"
+					if usedFallback {
+						wantMessage = "Automation failed: used template fallback"
+					}
+					if updated.ErrorMessage != wantMessage {
+						t.Errorf("unsafe job error: got %q want %q", updated.ErrorMessage, wantMessage)
+					}
+					for _, secret := range []string{f.team.ID, other.ID, account.ID, foreign.ID, templateID, feed.ID, "unknown-account-id", "injected post insert failure"} {
+						if strings.Contains(updated.ErrorMessage, secret) {
+							t.Errorf("job error exposes internal detail %q: %s", secret, updated.ErrorMessage)
+						}
+					}
+					if scenario == "insert-failure" && !strings.Contains(logs.String(), "injected post insert failure") {
+						t.Errorf("driver details missing from log: %s", logs.String())
+					}
+				}
 				if valid {
 					if len(posts) != 1 {
 						t.Fatalf("legitimate automation: posts=%d logs=%s", len(posts), logs.String())
@@ -166,6 +186,15 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 				select {
 				case event := <-events:
 					data, _ := json.Marshal(event)
+					var streamed struct {
+						ErrorMessage string `json:"error_message"`
+					}
+					if err := json.Unmarshal([]byte(event.Data), &streamed); err != nil {
+						t.Fatal(err)
+					}
+					if streamed.ErrorMessage != updated.ErrorMessage {
+						t.Errorf("SSE error=%q want sanitized stored error=%q", streamed.ErrorMessage, updated.ErrorMessage)
+					}
 					if (!valid || scenario == "fallback" || usedFallback) && !bytes.Contains(data, []byte("failed")) {
 						t.Errorf("SSE missing failure: %s", data)
 					}
