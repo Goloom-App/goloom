@@ -1,0 +1,56 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "goloom.fullname" . }}
+  labels:
+    {{- include "goloom.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "goloom.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Goloom serves HTTP, MCP and health probes on a single port (8080).
+    - ports:
+        - port: 8080
+          protocol: TCP
+      {{- with .Values.networkPolicy.ingress.from }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  egress:
+    # DNS. Without this the pod cannot resolve anything.
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    {{- if .Values.networkPolicy.egress.http }}
+    # Outbound HTTP(S). Goloom reaches user-configurable hosts at runtime:
+    # social instances, RSS feeds, the OIDC issuer, AI provider base URLs and
+    # web push endpoints. SSRF protection runs in-process (netguard), not via
+    # network policy, so this rule cannot be narrowed to a fixed host list.
+    - ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.networkPolicy.egress.postgres.enabled }}
+    # External PostgreSQL (database.type=postgres). Empty `to` allows any
+    # destination on the given ports; set podSelector/namespaceSelector or
+    # ipBlock to pin it down.
+    - {{- with .Values.networkPolicy.egress.postgres.to }}
+      to:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      ports:
+        {{- range .Values.networkPolicy.egress.postgres.ports }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+    {{- end }}
+{{- end }}

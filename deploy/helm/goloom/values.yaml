@@ -110,9 +110,43 @@ resources: {}
   #   memory: 128Mi
 
 serviceAccount:
+  # The chart-managed ServiceAccount carries no RBAC bindings — it exists only
+  # so the pod runs under a dedicated identity with automountServiceAccountToken
+  # disabled (Goloom needs no Kubernetes API access).
   create: true
   name: ""
   annotations: {}
+
+# --- NetworkPolicy (optional, requires a CNI that enforces them) ------------
+# Off by default. When enabled, a default-deny policy (ingress + egress) is
+# applied to the goloom pods and opened up as follows:
+# - Ingress: TCP 8080, optionally restricted via ingress.from.
+# - Egress: DNS (UDP/TCP 53) plus TCP 80/443. Goloom reaches user-configurable
+#   hosts at runtime (social instances, RSS feeds, OIDC issuer, AI provider
+#   base URLs, web push endpoints); SSRF protection runs in-process, not via
+#   network policy, so this cannot be narrowed to a fixed host list.
+networkPolicy:
+  enabled: false
+  ingress:
+    # Restrict who may reach TCP 8080. Empty = allow from anywhere. Standard
+    # Kubernetes network policy peers, e.g.:
+    #  - namespaceSelector:
+    #      matchLabels:
+    #        kubernetes.io/metadata.name: ingress-nginx
+    from: []
+  egress:
+    # Allow outbound HTTP(S). Only disable if every egress target is covered
+    # by egress.postgres or manual extra rules — disabling breaks outbound
+    # social/RSS/OIDC/AI/push traffic entirely.
+    http: true
+    postgres:
+      # Egress to an external PostgreSQL (database.type=postgres).
+      enabled: false
+      # Standard Kubernetes network policy peers. Empty = any destination on
+      # the given ports.
+      to: []
+      ports:
+        - 5432
 
 podAnnotations: {}
 
