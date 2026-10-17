@@ -75,12 +75,36 @@ func makeCallbackJob(t *testing.T, f aiCompletionFixture, status domain.AIJobSta
 		AuthorUserID: f.user.ID,
 		Type:         domain.AIJobTypeVoiceEngine,
 		Status:       status,
-		Payload:      json.RawMessage(`{"params":{}}`),
+		Payload:      json.RawMessage(`{"params":{},"_can_schedule":true}`),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return job
+}
+
+func TestCompleteAIJob_MissingScheduleAuthorityCreatesDraft(t *testing.T) {
+	ctx := context.Background()
+	f := newAICompletionFixture(t)
+	if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Jobs queued before schedule authority was recorded must fail closed.
+	job, err := f.store.CreateAIJob(ctx, domain.AIJob{
+		TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine,
+		Status: domain.AIJobStatusPending, Payload: json.RawMessage(`{"params":{}}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"legacy job content"}`), "")
+	posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 1 || posts[0].Status != domain.PostStatusDraft {
+		t.Fatalf("legacy job must create one draft, got %#v", posts)
+	}
 }
 
 func TestCompleteAIJob(t *testing.T) {

@@ -15,8 +15,9 @@ import (
 const aiJobListLimit = 20
 
 type aiTriggerRequest struct {
-	Type   domain.AIJobType `json:"type"`
-	Params json.RawMessage  `json:"params"`
+	Type        domain.AIJobType `json:"type"`
+	Params      json.RawMessage  `json:"params"`
+	CanSchedule json.RawMessage  `json:"_can_schedule"`
 }
 
 type aiTriggerResponse struct {
@@ -34,15 +35,22 @@ func (a *API) handleAITrigger(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_ai_job_type", http.StatusBadRequest)
 		return
 	}
-	// Automation context is server-owned; scheduler jobs bypass this handler.
+	// Authority and automation metadata belong to the server. User-supplied
+	// automation keys could otherwise bypass the normal completion scope check.
 	var params map[string]json.RawMessage
-	if err := json.Unmarshal(input.Params, &params); err == nil {
-		for key := range params {
-			if strings.EqualFold(key, "rss_automation") || strings.EqualFold(key, "recurring_automation") {
-				a.log.WarnContext(r.Context(), "ai trigger: reserved automation param rejected", "team_id", r.PathValue("teamID"), "param", key)
-				a.writeError(w, r, "reserved_ai_job_param", http.StatusBadRequest)
-				return
-			}
+	if err := json.Unmarshal(ensureJSONObject(input.Params), &params); err != nil {
+		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+		return
+	}
+	if input.CanSchedule != nil {
+		a.writeError(w, r, "ai_job_params_reserved", http.StatusBadRequest)
+		return
+	}
+	for key := range params {
+		if strings.EqualFold(key, "_can_schedule") || strings.EqualFold(key, "rss_automation") || strings.EqualFold(key, "recurring_automation") {
+			a.log.WarnContext(r.Context(), "ai trigger: reserved automation param rejected", "team_id", r.PathValue("teamID"), "param", key)
+			a.writeError(w, r, "ai_job_params_reserved", http.StatusBadRequest)
+			return
 		}
 	}
 
@@ -59,8 +67,9 @@ func (a *API) handleAITrigger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload, err := json.Marshal(struct {
-		Params json.RawMessage `json:"params"`
-	}{Params: enrichedParams})
+		Params      json.RawMessage `json:"params"`
+		CanSchedule bool            `json:"_can_schedule"`
+	}{Params: enrichedParams, CanSchedule: auth.PrincipalAllows(principal, auth.ScopeWriteSchedule)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

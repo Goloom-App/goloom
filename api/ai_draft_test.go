@@ -108,7 +108,7 @@ func TestAIDraft(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		scopes, _ := json.Marshal([]string{auth.ScopeWriteDraft})
+		scopes, _ := json.Marshal([]string{auth.ScopeWriteDraft, auth.ScopeWriteSchedule})
 		bearer, _, err := s.CreateUserAPIToken(ctx, u.ID, "draft-token-auto", nil, string(scopes), nil, "")
 		if err != nil {
 			t.Fatal(err)
@@ -137,6 +137,71 @@ func TestAIDraft(t *testing.T) {
 			t.Fatalf("scheduled_at = %v, want %v", got.ScheduledAt, scheduledAt)
 		}
 	})
+}
+
+func TestAIDraft_ScheduleScope(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		scopes      []string
+		schedule    bool
+		autoPublish bool
+		regularPost bool
+		wantCode    int
+		wantStatus  domain.PostStatus
+	}{
+		{name: "draft only stays draft", scopes: []string{auth.ScopeWriteDraft}, wantCode: http.StatusCreated, wantStatus: domain.PostStatusDraft},
+		{name: "draft only cannot schedule", scopes: []string{auth.ScopeWriteDraft}, schedule: true, wantCode: http.StatusForbidden},
+		{name: "draft only cannot auto publish", scopes: []string{auth.ScopeWriteDraft}, autoPublish: true, wantCode: http.StatusForbidden},
+		{name: "regular post control", scopes: []string{auth.ScopeWriteDraft}, regularPost: true, wantCode: http.StatusForbidden},
+		{name: "schedule scope can schedule", scopes: []string{auth.ScopeWriteDraft, auth.ScopeWriteSchedule}, schedule: true, wantCode: http.StatusCreated, wantStatus: domain.PostStatusPending},
+		{name: "write can auto publish", scopes: []string{auth.ScopeWrite}, autoPublish: true, wantCode: http.StatusCreated, wantStatus: domain.PostStatusPending},
+		{name: "unscoped can schedule", schedule: true, wantCode: http.StatusCreated, wantStatus: domain.PostStatusPending},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			f := newAITriggerFixture(t, nil, tc.scopes...)
+			if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: tc.autoPublish}); err != nil {
+				t.Fatal(err)
+			}
+			account, err := f.store.CreateAccount(ctx, f.team.ID, domain.ConnectedAccount{
+				Provider: "mastodon", AuthType: domain.AccountAuthTypeOAuthToken,
+				InstanceURL: "https://mastodon.social", Username: "draft-scope", AccessToken: "tok",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := "/v1/teams/" + f.team.ID + "/posts/draft"
+			body := map[string]any{
+				"content": "scope-checked AI post", "account_ids": []string{account.ID},
+				"scheduled_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339), "schedule": tc.schedule,
+			}
+			if tc.regularPost {
+				path = "/v1/teams/" + f.team.ID + "/posts"
+				body["draft"] = false
+			}
+			rec := doRequest(t, f.h, http.MethodPost, path, f.bearer, body)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("POST: got %d, want %d; body: %s", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if tc.wantCode == http.StatusForbidden {
+				if rec.Header().Get("X-Error-Code") != "scope_required" {
+					t.Fatalf("expected scope_required; body: %s", rec.Body.String())
+				}
+				posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+				if err != nil || len(posts) != 0 {
+					t.Fatalf("forbidden request created posts: %v, error: %v", posts, err)
+				}
+				return
+			}
+			var got domain.ScheduledPost
+			if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != tc.wantStatus {
+				t.Fatalf("status = %q, want %q", got.Status, tc.wantStatus)
+			}
+		})
+	}
 }
 
 func TestAIDraft_RejectsCrossTeamTarget(t *testing.T) {

@@ -177,7 +177,7 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		TargetAccounts:         targetAccounts,
 		AccountContentOverride: a.aiAccountContentOverrides(ctx, job, res.AccountContentOverride, targetAccounts),
 		ScheduledAt:            scheduledAt,
-		Draft:                  false,
+		Draft:                  !aiJobCanSchedule(job.Payload),
 		AuthorUserID:           &job.AuthorUserID,
 	}
 	aiPost.EnsureTitle()
@@ -191,6 +191,9 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 	if _, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, prepared.Input); err != nil {
 		return fmt.Errorf("create auto-publish post: %w", err)
 	}
+	if aiPost.Draft {
+		a.log.InfoContext(ctx, "ai job completion: created draft without schedule authority", "job_id", job.ID)
+	}
 	return nil
 }
 
@@ -202,6 +205,15 @@ func (a *API) aiAccountContentOverrides(ctx context.Context, job domain.AIJob, o
 		}
 	}
 	return domain.NormalizeAccountContentOverride(overrides, targets)
+}
+
+// Missing authority (including jobs queued before this field existed) fails
+// closed. Scheduler automations finish through their separate trusted paths.
+func aiJobCanSchedule(payload json.RawMessage) bool {
+	var envelope struct {
+		CanSchedule bool `json:"_can_schedule"`
+	}
+	return json.Unmarshal(payload, &envelope) == nil && envelope.CanSchedule
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {

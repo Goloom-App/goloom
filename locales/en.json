@@ -1174,6 +1174,7 @@
     "missing_principal": "missing principal",
     "frontend_bundle_unavailable": "frontend bundle is not available",
     "scope_required": "API token lacks the required scope",
+    "ai_job_params_reserved": "AI job parameters contain reserved fields",
     "token_name_reserved": "token name is reserved",
     "expires_at_rfc3339": "expires_at must be RFC3339 timestamp",
     "expires_at_future": "expires_at must be in the future",
