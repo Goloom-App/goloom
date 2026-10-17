@@ -1196,7 +1196,6 @@
     "team_profile_not_found": "Teamprofil nicht gefunden",
     "campaign_format_not_found": "Kampagnenformat nicht gefunden",
     "style_example_limit_reached": "Limit für Stilbeispiele erreicht",
-    "reserved_ai_job_param": "Automatisierungsparameter sind serverseitig erstellten Jobs vorbehalten",
     "ai_service_not_configured": "KI-Dienst ist nicht konfiguriert",
     "invalid_ai_prompt_params": "Ungültige KI-Prompt-Parameter",
     "invalid_ai_base_url": "KI-Basis-URL ist ungültig oder zeigt auf eine private Netzwerkadresse (ein Admin kann Hosts über AI_ALLOWED_PRIVATE_HOSTS freigeben)",

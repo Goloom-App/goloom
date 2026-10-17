@@ -145,7 +145,7 @@ func TestCompleteAIJob(t *testing.T) {
 		}
 
 		account := callbackAccount(t, f, f.team.ID)
-		payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}}})
+		payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": []string{account.ID}}})
 		job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
 		if err != nil {
 			t.Fatal(err)
@@ -337,7 +337,7 @@ func TestCompleteAIJobAutoPublishTargets(t *testing.T) {
 			case "same-team-versions", "hallucinated-overrides":
 				targets = []string{own.ID}
 			}
-			payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": targets}})
+			payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": targets}})
 			job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeCampaignAutopilot, Payload: payload})
 			if err != nil {
 				t.Fatal(err)
@@ -425,7 +425,7 @@ func TestCompleteAIJobStatusWriteFailureRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := callbackAccount(t, f, f.team.ID)
-	payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}}})
+	payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": []string{account.ID}}})
 	job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
 	if err != nil {
 		t.Fatal(err)
@@ -460,7 +460,7 @@ func TestCompleteAIJobAutoPublishInsertFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := callbackAccount(t, f, f.team.ID)
-	payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": []string{account.ID}}})
+	payload, _ := json.Marshal(map[string]any{"_can_schedule": true, "params": map[string]any{"target_account_ids": []string{account.ID}}})
 	job, err := f.store.CreateAIJob(ctx, domain.AIJob{TeamID: f.team.ID, AuthorUserID: f.user.ID, Type: domain.AIJobTypeCampaignAutopilot, Payload: payload})
 	if err != nil {
 		t.Fatal(err)

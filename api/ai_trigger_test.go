@@ -371,6 +371,7 @@ func TestAITrigger_CompletionPreservesScheduleAuthority(t *testing.T) {
 			ctx := context.Background()
 			runner := &delayedScopeRunner{started: make(chan struct{}), release: make(chan struct{})}
 			f := newAITriggerFixture(t, runner, tc.scopes...)
+			account := callbackAccount(t, aiCompletionFixture{store: f.store}, f.team.ID)
 			t.Cleanup(f.manager.Wait)
 			t.Cleanup(func() { close(runner.release) })
 			upsertTestLLMConfig(t, f.store, f.team.ID)
@@ -379,7 +380,7 @@ func TestAITrigger_CompletionPreservesScheduleAuthority(t *testing.T) {
 				t.Fatal(err)
 			}
 			rec := doRequest(t, f.h, http.MethodPost, "/v1/teams/"+f.team.ID+"/ai-trigger", f.bearer, map[string]any{
-				"type": domain.AIJobTypeVoiceEngine, "params": map[string]any{},
+				"type": domain.AIJobTypeVoiceEngine, "params": map[string]any{"target_account_ids": []string{account.ID}},
 			})
 			if rec.Code != http.StatusAccepted {
 				t.Fatalf("POST ai-trigger: got %d; body: %s", rec.Code, rec.Body.String())

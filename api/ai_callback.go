@@ -181,7 +181,7 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		AuthorUserID:           &job.AuthorUserID,
 	}
 	aiPost.EnsureTitle()
-	prepared, err := a.posts.Prepare(ctx, job.TeamID, aiPost, postservice.Options{RequireTeam: true, CheckLimits: true})
+	prepared, err := a.posts.Prepare(ctx, job.TeamID, aiPost, postservice.Options{RequireTeam: true, CheckLimits: !aiPost.Draft})
 	if err != nil {
 		return fmt.Errorf("validate auto-publish post: %w", err)
 	}
