@@ -111,7 +111,11 @@ export function Sidebar({
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content className="radix-dropdown-content" align="start">
+            <DropdownMenu.Content
+              className="radix-dropdown-content"
+              align="start"
+              style={{ maxHeight: 'var(--radix-dropdown-menu-content-available-height)', overflowY: 'auto' }}
+            >
               {teams.map((team) => (
                 <DropdownMenu.Item
                   key={team.id}

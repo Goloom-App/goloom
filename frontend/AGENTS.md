@@ -22,6 +22,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - Theming: CSS variables in `src/index.css`; the accent family derives from `--brand-primary` (team brand color, set inline on `<html>` by `App.tsx`; default purple fallback). Theme/breakpoint hooks in `src/hooks/useTheme.ts`
 - i18n: `src/i18n/` (i18next)
 - Components: `src/components/` (reusable UI)
+- Sidebar team selector bounds its popup to Radix available viewport height and scrolls; `e2e/create-team.spec.ts` covers access to Create Team with many teams.
 - Views: `src/views/` (route-level pages)
 - Hooks: `src/hooks/` (shared React hooks)
 - E2E tests: `e2e/` (Playwright)
