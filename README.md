@@ -127,6 +127,29 @@ Use bearer tokens:
 Authorization: Bearer <oidc-id-token-or-api-token>
 ```
 
+API tokens can carry scopes and an optional team binding:
+
+- `read` permits authenticated GET/HEAD requests. It is independent of `write`
+  and `delete`; add it when a client needs to fetch results or use AI-job SSE
+  (`/v1/teams/{teamID}/ai-jobs/stream?token=…`).
+- `write` includes `write:draft` and `write:schedule`; `delete` includes
+  `delete:draft` and `delete:schedule`.
+- An **unscoped team-bound token retains owner-level management authority inside
+  its bound team when its user is an owner**. Team binding limits which team it
+  can access; it does not make the token read-only. User roles still apply.
+- Admin routes and user-wide push subscriptions require an unscoped, unbound
+  token. Team-bound tokens cannot read `/v1/users`, `/v1/teams`,
+  `/v1/me/review-counts` or `/v1/me/team-notification-prefs`, since those responses
+  aggregate data across teams. Use team-specific routes where available.
+- Unscoped, unbound tokens and browser sessions retain full access subject to
+  user roles. Restricted tokens cannot be exchanged for browser sessions.
+
+When auto-publish saves an AI result as a draft because the job lacks scheduling
+permission (including legacy jobs without an authority marker), the completed
+job exposes `result.notice = "saved_as_draft_without_schedule_authority"`.
+The same non-error notice appears in the `job:result` SSE event. Generated result
+fields are preserved; failed jobs and jobs that create no post receive no notice.
+
 ### API quickstart (curl)
 
 Health and auth status:

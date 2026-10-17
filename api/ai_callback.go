@@ -88,7 +88,15 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			case status == domain.AIJobStatusCompleted:
 				profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 				if profErr == nil && profile.AutoPublishEnabled {
-					effectErr = a.autoCreatePostFromCallbackResult(ctx, job, result)
+					var draftResult json.RawMessage
+					draftResult, effectErr = a.autoCreatePostFromCallbackResult(ctx, job, result)
+					if effectErr == nil && draftResult != nil {
+						// Notice, draft and audit share the completion transaction.
+						effectErr = a.store.UpdateAIJobStatus(ctx, job.ID, status, draftResult, errorMessage)
+						if effectErr == nil {
+							result = draftResult
+						}
+					}
 				}
 			}
 			if errors.Is(effectErr, errAutomationTemplateFallback) {
@@ -165,17 +173,19 @@ func (a *API) NotifyAIJobStatus(ctx context.Context, jobID string) {
 	}
 }
 
-func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) error {
+// Returns an enriched result only when a post was saved as a draft. Preparing
+// JSON before insertion ensures encoding failures cannot follow a created post.
+func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) (json.RawMessage, error) {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {
 		if err := json.Unmarshal(rawResult, &res); err != nil {
-			return fmt.Errorf("decode auto-publish result: %w", err)
+			return nil, fmt.Errorf("decode auto-publish result: %w", err)
 		}
 	}
 
 	content := strings.TrimSpace(res.Content)
 	if content == "" {
-		return nil
+		return nil, nil
 	}
 
 	scheduledAt := time.Now().UTC()
@@ -194,21 +204,36 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		TargetAccounts:         targetAccounts,
 		AccountContentOverride: a.aiAccountContentOverrides(ctx, job, res.AccountContentOverride, targetAccounts),
 		ScheduledAt:            scheduledAt,
-		Draft:                  false,
+		Draft:                  !aiJobCanSchedule(job.Payload),
 		AuthorUserID:           &job.AuthorUserID,
 	}
 	aiPost.EnsureTitle()
-	prepared, err := a.posts.Prepare(ctx, job.TeamID, aiPost, postservice.Options{RequireTeam: true, CheckLimits: true})
+	prepared, err := a.posts.Prepare(ctx, job.TeamID, aiPost, postservice.Options{RequireTeam: true, CheckLimits: !aiPost.Draft})
 	if err != nil {
-		return fmt.Errorf("validate auto-publish post: %w", err)
+		return nil, fmt.Errorf("validate auto-publish post: %w", err)
 	}
 	if err := postservice.ValidationError(prepared.Validation); err != nil {
-		return err
+		return nil, err
+	}
+	var draftResult json.RawMessage
+	if aiPost.Draft {
+		var output map[string]json.RawMessage
+		if err := json.Unmarshal(rawResult, &output); err != nil {
+			return nil, err
+		}
+		output["notice"] = json.RawMessage(`"saved_as_draft_without_schedule_authority"`)
+		draftResult, err = json.Marshal(output)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if _, err := a.createJobAutomationPost(ctx, job, prepared.Input, map[string]string{}); err != nil {
-		return fmt.Errorf("create auto-publish post: %w", err)
+		return nil, fmt.Errorf("create auto-publish post: %w", err)
 	}
-	return nil
+	if aiPost.Draft {
+		a.log.InfoContext(ctx, "ai job completion: created draft without schedule authority", "job_id", job.ID)
+	}
+	return draftResult, nil
 }
 
 // AI output may invent override keys; discard them without weakening target validation.
@@ -219,6 +244,15 @@ func (a *API) aiAccountContentOverrides(ctx context.Context, job domain.AIJob, o
 		}
 	}
 	return domain.NormalizeAccountContentOverride(overrides, targets)
+}
+
+// Missing authority (including jobs queued before this field existed) fails
+// closed. Scheduler automations finish through their separate trusted paths.
+func aiJobCanSchedule(payload json.RawMessage) bool {
+	var envelope struct {
+		CanSchedule bool `json:"_can_schedule"`
+	}
+	return json.Unmarshal(payload, &envelope) == nil && envelope.CanSchedule
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {

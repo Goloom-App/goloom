@@ -375,3 +375,42 @@ func TestWriteJSON(t *testing.T) {
 		t.Fatalf("body = %q err=%v", rec.Body.String(), err)
 	}
 }
+
+func TestRequireAdminRejectsRestrictedTokens(t *testing.T) {
+	f := newAuthFixture(t)
+	u := f.user(t)
+	if _, err := f.store.SetUserAdmin(context.Background(), u.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	team, err := f.store.CreateTeam(context.Background(), u.ID, domain.CreateTeamInput{Name: "admin team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := f.service.RequireAuth(f.service.RequireAdmin(okHandler(t, nil)))
+	for _, tc := range []struct {
+		name, scopes string
+		team         *string
+		want         int
+	}{
+		{"reader", `["read"]`, nil, http.StatusForbidden},
+		{"writer", `["write"]`, nil, http.StatusForbidden},
+		{"bound", "", &team.ID, http.StatusForbidden},
+		{"full", "", nil, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bearer, _, err := f.store.CreateUserAPIToken(context.Background(), u.ID, tc.name, nil, tc.scopes, tc.team, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodPost} {
+				req := httptest.NewRequest(method, "/admin", nil)
+				req.Header.Set("Authorization", "Bearer "+bearer)
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				if rec.Code != tc.want {
+					t.Errorf("%s status=%d want %d", method, rec.Code, tc.want)
+				}
+			}
+		})
+	}
+}

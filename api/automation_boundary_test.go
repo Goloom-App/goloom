@@ -145,6 +145,9 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 							t.Errorf("dropped override must log warning without failing job: status=%s logs=%s", updated.Status, logs.String())
 						}
 					}
+					if scenario == "valid" && posts[0].Status != domain.PostStatusPending {
+						t.Errorf("scheduled automation without user authority became %s", posts[0].Status)
+					}
 					if scenario == "valid-draft" && posts[0].Status != domain.PostStatusDraft {
 						t.Errorf("draft automation became %s", posts[0].Status)
 					}

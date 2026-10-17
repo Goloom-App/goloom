@@ -324,7 +324,7 @@ func TestAITriggerRejectsReservedAutomationParams(t *testing.T) {
 					"type":   domain.AIJobTypeVoiceEngine,
 					"params": map[string]any{key: value},
 				})
-				if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "reserved_ai_job_param") {
+				if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "ai_job_params_reserved") {
 					t.Errorf("forged params: status=%d body=%s", rec.Code, rec.Body.String())
 				}
 				if !strings.Contains(logs.String(), "reserved automation param rejected") {
@@ -336,5 +336,110 @@ func TestAITriggerRejectsReservedAutomationParams(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+type delayedScopeRunner struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (r *delayedScopeRunner) RunJob(ctx context.Context, _ domain.AIJob, _ domain.AIServiceConfig, _ domain.AIContext) (json.RawMessage, error) {
+	close(r.started)
+	select {
+	case <-r.release:
+		return json.RawMessage(`{"content":"generated after trigger","scheduled_at":"2027-01-15T12:00:00Z"}`), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func TestAITrigger_CompletionPreservesScheduleAuthority(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		scopes      []string
+		autoPublish bool
+		wantStatus  domain.PostStatus
+	}{
+		{name: "draft only with auto publish", scopes: []string{auth.ScopeWriteDraft}, autoPublish: true, wantStatus: domain.PostStatusDraft},
+		{name: "draft only before profile enables auto publish", scopes: []string{auth.ScopeWriteDraft}, wantStatus: domain.PostStatusDraft},
+		{name: "schedule scope", scopes: []string{auth.ScopeWriteDraft, auth.ScopeWriteSchedule}, autoPublish: true, wantStatus: domain.PostStatusPending},
+		{name: "write scope", scopes: []string{auth.ScopeWrite}, autoPublish: true, wantStatus: domain.PostStatusPending},
+		{name: "unscoped token", autoPublish: true, wantStatus: domain.PostStatusPending},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			runner := &delayedScopeRunner{started: make(chan struct{}), release: make(chan struct{})}
+			f := newAITriggerFixture(t, runner, tc.scopes...)
+			account := callbackAccount(t, aiCompletionFixture{store: f.store}, f.team.ID)
+			t.Cleanup(f.manager.Wait)
+			t.Cleanup(func() { close(runner.release) })
+			upsertTestLLMConfig(t, f.store, f.team.ID)
+			profile, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: tc.autoPublish})
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := doRequest(t, f.h, http.MethodPost, "/v1/teams/"+f.team.ID+"/ai-trigger", f.bearer, map[string]any{
+				"type": domain.AIJobTypeVoiceEngine, "params": map[string]any{"target_account_ids": []string{account.ID}},
+			})
+			if rec.Code != http.StatusAccepted {
+				t.Fatalf("POST ai-trigger: got %d; body: %s", rec.Code, rec.Body.String())
+			}
+			select {
+			case <-runner.started:
+			case <-time.After(time.Second):
+				t.Fatal("AI job did not start")
+			}
+			if !profile.AutoPublishEnabled {
+				profile.AutoPublishEnabled = true
+				if _, err := f.store.UpdateTeamProfile(ctx, f.team.ID, profile); err != nil {
+					t.Fatal(err)
+				}
+			}
+			runner.release <- struct{}{}
+			f.manager.Wait()
+			posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(posts) != 1 {
+				t.Fatalf("posts = %d, want 1", len(posts))
+			}
+			if posts[0].Status != tc.wantStatus {
+				t.Fatalf("post status = %q, want %q", posts[0].Status, tc.wantStatus)
+			}
+		})
+	}
+}
+
+func TestAITrigger_RejectsReservedAuthorityParams(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body map[string]any
+	}{
+		{name: "top level capability", body: map[string]any{"_can_schedule": true}},
+		{name: "null capability", body: map[string]any{"_can_schedule": nil}},
+		{name: "nested capability", body: map[string]any{"params": map[string]any{"_can_schedule": true}}},
+		{name: "RSS automation", body: map[string]any{"params": map[string]any{"rss_automation": map[string]any{"feed_id": "fake", "item_key": "fake", "draft": false}}}},
+		{name: "recurring automation", body: map[string]any{"params": map[string]any{"recurring_automation": map[string]any{"template_id": "fake", "draft": false}}}},
+		{name: "case insensitive RSS automation", body: map[string]any{"params": map[string]any{"RSS_AUTOMATION": map[string]any{"feed_id": "fake", "item_key": "fake"}}}},
+		{name: "Unicode folded RSS automation", body: map[string]any{"params": map[string]any{"rſs_automation": map[string]any{"feed_id": "fake", "item_key": "fake"}}}},
+		{name: "case insensitive recurring automation", body: map[string]any{"params": map[string]any{"Recurring_Automation": map[string]any{"template_id": "fake"}}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			f := newAITriggerFixture(t, &fakeRunner{}, auth.ScopeWriteDraft)
+			t.Cleanup(f.manager.Wait)
+			upsertTestLLMConfig(t, f.store, f.team.ID)
+			tc.body["type"] = domain.AIJobTypeVoiceEngine
+			rec := doRequest(t, f.h, http.MethodPost, "/v1/teams/"+f.team.ID+"/ai-trigger", f.bearer, tc.body)
+			if rec.Code != http.StatusBadRequest || rec.Header().Get("X-Error-Code") != "ai_job_params_reserved" {
+				t.Fatalf("expected 400 ai_job_params_reserved; got %d; body: %s", rec.Code, rec.Body.String())
+			}
+			jobs, err := f.store.ListAIJobs(ctx, f.team.ID, 20)
+			if err != nil || len(jobs) != 0 {
+				t.Fatalf("reserved params submitted jobs: %v, error: %v", jobs, err)
+			}
+		})
 	}
 }

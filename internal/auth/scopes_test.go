@@ -40,7 +40,7 @@ func TestPrincipalAllows(t *testing.T) {
 	if !PrincipalAllows(domain.AuthenticatedPrincipal{Kind: "api_token"}, ScopeDelete) {
 		t.Fatal("unscoped token must be allowed")
 	}
-	// Browser session bypasses scope checks entirely.
+	// Browser sessions carry no token scopes and retain full authority.
 	if !PrincipalAllows(domain.AuthenticatedPrincipal{Kind: "oidc"}, ScopeWrite) {
 		t.Fatal("oidc principal must bypass scopes")
 	}
@@ -194,4 +194,24 @@ func newScopeTestService(t *testing.T, ctx context.Context, scopes string, teamI
 		t.Fatal(err)
 	}
 	return &Service{store: store}, plaintext
+}
+
+// Persisted API tokens once allowed the browser-session name. The store labels
+// those tokens oidc; explicit scopes must remain a boundary regardless of Kind.
+func TestPrincipalAllowsRetainsLegacyTokenScopes(t *testing.T) {
+	for _, kind := range []string{"api_token", "oidc", "session", ""} {
+		t.Run(kind, func(t *testing.T) {
+			principal := domain.AuthenticatedPrincipal{Kind: kind, Scopes: []string{ScopeRead}}
+			if PrincipalAllows(principal, ScopeWriteSchedule) {
+				t.Fatal("read-only principal can schedule")
+			}
+			if !PrincipalAllows(principal, ScopeRead) {
+				t.Fatal("reader cannot read")
+			}
+			principal.Scopes = nil
+			if !PrincipalAllows(principal, ScopeWriteSchedule) {
+				t.Fatal("unrestricted principal cannot schedule")
+			}
+		})
+	}
 }

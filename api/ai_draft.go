@@ -80,6 +80,10 @@ func (a *API) handleCreateAIDraft(w http.ResponseWriter, r *http.Request) {
 	if err == nil && profile.AutoPublishEnabled && input.ScheduledAt != nil && !input.ScheduledAt.IsZero() {
 		postInput.Draft = false
 	}
+	if !postInput.Draft && !auth.PrincipalAllows(*principal, auth.ScopeWriteSchedule) {
+		a.writeError(w, r, "scope_required", http.StatusForbidden)
+		return
+	}
 
 	post, err := a.store.CreateScheduledPost(r.Context(), teamID, *principal, postInput)
 	if err != nil {
