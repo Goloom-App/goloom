@@ -226,7 +226,7 @@ func callbackAccount(t *testing.T, f aiCompletionFixture, teamID string) domain.
 }
 
 func TestCompleteAIJobAutoPublishTargets(t *testing.T) {
-	for _, scenario := range []string{"foreign", "mixed", "unknown", "same-team-versions"} {
+	for _, scenario := range []string{"foreign", "mixed", "unknown", "same-team-versions", "hallucinated-overrides"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
 			f := newAICompletionFixture(t)
@@ -253,7 +253,7 @@ func TestCompleteAIJobAutoPublishTargets(t *testing.T) {
 				targets = []string{own.ID, foreign.ID}
 			case "unknown":
 				targets = []string{uuid.NewString()}
-			case "same-team-versions":
+			case "same-team-versions", "hallucinated-overrides":
 				targets = []string{own.ID}
 			}
 			payload, _ := json.Marshal(map[string]any{"params": map[string]any{"target_account_ids": targets}})
@@ -266,7 +266,12 @@ func TestCompleteAIJobAutoPublishTargets(t *testing.T) {
 			events, unsubscribe := hub.Subscribe(f.team.ID, "")
 			defer unsubscribe()
 			f.api = api.New(slog.New(slog.NewTextHandler(&logs, nil)), f.store, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, hub)
-			result, _ := json.Marshal(map[string]any{"content": "generated", "account_content_override": map[string]string{targets[0]: "account version"}})
+			overrides := map[string]string{targets[0]: "account version"}
+			if scenario == "hallucinated-overrides" {
+				overrides[foreign.ID] = "foreign version"
+				overrides["hallucinated-account"] = "unknown version"
+			}
+			result, _ := json.Marshal(map[string]any{"content": "generated", "account_content_override": overrides})
 			f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, result, "")
 			updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
 			if err != nil {
@@ -276,12 +281,15 @@ func TestCompleteAIJobAutoPublishTargets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if scenario == "same-team-versions" {
+			if scenario == "same-team-versions" || scenario == "hallucinated-overrides" {
 				if updated.Status != domain.AIJobStatusCompleted || len(posts) != 1 {
 					t.Fatalf("status=%s posts=%d", updated.Status, len(posts))
 				}
 				if posts[0].Status != domain.PostStatusPending || len(posts[0].TargetAccounts) != 1 || posts[0].TargetAccounts[0] != own.ID {
 					t.Fatalf("post: %+v", posts[0])
+				}
+				if scenario == "hallucinated-overrides" && (!strings.Contains(logs.String(), foreign.ID) || !strings.Contains(logs.String(), "hallucinated-account") || strings.Count(logs.String(), "WARN") != 2) {
+					t.Errorf("each dropped override must log warning: %s", logs.String())
 				}
 				versions, err := f.store.ListPostVersionsForTeamPost(ctx, f.team.ID, posts[0].ID)
 				if err != nil {

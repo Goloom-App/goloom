@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -28,7 +29,15 @@ func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, r
 		}
 		return fmt.Errorf("empty AI content; used template fallback")
 	}
-	return a.createRSSAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
+	err := a.createRSSAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
+	if !errors.Is(err, errAutomationPostValidation) {
+		return err
+	}
+	a.log.WarnContext(ctx, "rss automation: invalid AI content, trying template fallback", "job_id", job.ID, "error", err)
+	if fallbackErr := a.finishRSSAutomationFallback(ctx, job, meta); fallbackErr != nil {
+		return fmt.Errorf("AI post validation: %w; fallback failed: %w", err, fallbackErr)
+	}
+	return fmt.Errorf("AI post validation: %w; used template fallback", err)
 }
 
 func (a *API) finishRSSAutomationFallback(ctx context.Context, job domain.AIJob, meta *rssAutomationMeta) error {
@@ -69,7 +78,7 @@ func (a *API) createRSSAutomationPost(
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
-		AccountContentOverride: res.AccountContentOverride,
+		AccountContentOverride: a.aiAccountContentOverrides(ctx, job, res.AccountContentOverride, targetAccounts),
 		ScheduledAt:            scheduledAt,
 		Draft:                  draft,
 		AuthorUserID:           &job.AuthorUserID,
@@ -80,10 +89,10 @@ func (a *API) createRSSAutomationPost(
 	rssPost.EnsureTitle()
 	prepared, err := a.posts.Prepare(ctx, job.TeamID, rssPost, postservice.Options{RequireTeam: true, CheckLimits: !draft})
 	if err != nil {
-		return fmt.Errorf("validate automation post: %w", err)
+		return fmt.Errorf("%w: %w", errAutomationPostValidation, err)
 	}
 	if err := postservice.ValidationError(prepared.Validation); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errAutomationPostValidation, err)
 	}
 	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, prepared.Input)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -15,11 +16,12 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/sse"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 func TestAutomationCallbackTeamBoundary(t *testing.T) {
 	for _, kind := range []string{"rss", "recurring"} {
-		for _, scenario := range []string{"valid", "valid-draft", "valid-publish-now", "fallback", "empty-result", "foreign-target", "foreign-target-fallback", "foreign-source", "foreign-source-fallback", "foreign-override", "missing-target", "missing-fallback", "insert-failure", "invalid-result"} {
+		for _, scenario := range []string{"valid", "valid-draft", "valid-publish-now", "fallback", "empty-result", "foreign-target", "foreign-target-fallback", "foreign-source", "foreign-source-fallback", "foreign-override", "missing-target", "missing-fallback", "insert-failure", "invalid-result", "over-limit-ai", "over-limit-version", "over-limit-ai-and-template", "foreign-target-over-limit-ai"} {
 			t.Run(kind+"/"+scenario, func(t *testing.T) {
 				ctx := context.Background()
 				f, account, template := newRecurringCallbackFixture(t)
@@ -53,6 +55,9 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 					targets = nil
 				}
 				fallback := "fallback text"
+				if scenario == "over-limit-ai-and-template" {
+					fallback = strings.Repeat("x", 501)
+				}
 				if scenario == "missing-fallback" {
 					fallback = ""
 				}
@@ -87,6 +92,12 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 				if scenario == "foreign-override" {
 					result, _ = json.Marshal(map[string]any{"content": "generated", "account_content_override": map[string]string{foreign.ID: "foreign override"}})
 				}
+				if strings.Contains(scenario, "over-limit-ai") {
+					result, _ = json.Marshal(map[string]any{"content": strings.Repeat("x", 501)})
+				}
+				if scenario == "over-limit-version" {
+					result, _ = json.Marshal(map[string]any{"content": "generated", "account_content_override": map[string]string{account.ID: strings.Repeat("x", 501)}})
+				}
 				instance.CompleteAIJob(ctx, job.ID, status, result, message)
 				posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
 				if err != nil {
@@ -96,10 +107,23 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				valid := strings.HasPrefix(scenario, "valid") || scenario == "fallback" || scenario == "empty-result" || scenario == "invalid-result"
+				usedFallback := scenario == "empty-result" || scenario == "invalid-result" || scenario == "over-limit-ai" || scenario == "over-limit-version"
+				valid := strings.HasPrefix(scenario, "valid") || scenario == "fallback" || usedFallback || scenario == "foreign-override"
 				if valid {
 					if len(posts) != 1 {
 						t.Fatalf("legitimate automation: posts=%d logs=%s", len(posts), logs.String())
+					}
+					if scenario == "foreign-override" {
+						versions, err := f.store.ListPostVersionsForTeamPost(ctx, f.team.ID, posts[0].ID)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if posts[0].Content != "generated" || len(versions) != 0 {
+							t.Errorf("hallucinated override retained: %+v", posts[0])
+						}
+						if updated.Status != domain.AIJobStatusCompleted || !strings.Contains(logs.String(), foreign.ID) || !strings.Contains(logs.String(), "WARN") {
+							t.Errorf("dropped override must log warning without failing job: status=%s logs=%s", updated.Status, logs.String())
+						}
 					}
 					if scenario == "valid-draft" && posts[0].Status != domain.PostStatusDraft {
 						t.Errorf("draft automation became %s", posts[0].Status)
@@ -107,14 +131,20 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 					if scenario == "valid-publish-now" && (posts[0].Status != domain.PostStatusPending || time.Since(posts[0].ScheduledAt) > time.Minute) {
 						t.Errorf("publish-now automation changed: %+v", posts[0])
 					}
-					if (scenario == "fallback" || scenario == "empty-result" || scenario == "invalid-result") && posts[0].Content != fallback {
+					if (scenario == "fallback" || usedFallback) && posts[0].Content != fallback {
 						t.Errorf("fallback content=%q", posts[0].Content)
 					}
 					if scenario == "fallback" && (updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage != message) {
 						t.Errorf("fallback lost provider failure: %+v", updated)
 					}
-					if (scenario == "empty-result" || scenario == "invalid-result") && (updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage == "") {
+					if usedFallback && (updated.Status != domain.AIJobStatusFailed || !strings.Contains(updated.ErrorMessage, "used template fallback") || !strings.Contains(logs.String(), "used template fallback")) {
 						t.Errorf("fallback unobservable: status=%s error=%q", updated.Status, updated.ErrorMessage)
+					}
+					if kind == "rss" {
+						after, err := f.store.GetRSSFeedConfigByID(ctx, feedTeam, feed.ID)
+						if err != nil || after.CounterNext != feed.CounterNext+1 {
+							t.Errorf("RSS counter: before=%d after=%d err=%v", feed.CounterNext, after.CounterNext, err)
+						}
 					}
 				} else {
 					if len(posts) != 0 {
@@ -136,7 +166,7 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 				select {
 				case event := <-events:
 					data, _ := json.Marshal(event)
-					if (!valid || !strings.HasPrefix(scenario, "valid")) && !bytes.Contains(data, []byte("failed")) {
+					if (!valid || scenario == "fallback" || usedFallback) && !bytes.Contains(data, []byte("failed")) {
 						t.Errorf("SSE missing failure: %s", data)
 					}
 				case <-time.After(time.Second):
@@ -144,6 +174,74 @@ func TestAutomationCallbackTeamBoundary(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+type automationWriteFailureStore struct {
+	store.Store
+	operation string
+	inserts   int
+}
+
+func (s *automationWriteFailureStore) CreateScheduledPost(ctx context.Context, teamID string, principal domain.AuthenticatedPrincipal, input domain.CreatePostInput) (domain.ScheduledPost, error) {
+	s.inserts++
+	if s.operation == "insert" {
+		return domain.ScheduledPost{}, fmt.Errorf("injected automation insert failure")
+	}
+	return s.Store.CreateScheduledPost(ctx, teamID, principal, input)
+}
+
+func (s *automationWriteFailureStore) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
+	if s.operation == "link" {
+		return fmt.Errorf("injected automation link failure")
+	}
+	return s.Store.UpdateRSSImportedItemPostID(ctx, teamID, feedID, itemKey, postID)
+}
+
+func (s *automationWriteFailureStore) IncrementRSSFeedCounter(ctx context.Context, teamID, feedID string) error {
+	if s.operation == "counter" {
+		return fmt.Errorf("injected automation counter failure")
+	}
+	return s.Store.IncrementRSSFeedCounter(ctx, teamID, feedID)
+}
+
+func TestAutomationCallbackDoesNotRetryStoreFailure(t *testing.T) {
+	for _, operation := range []string{"insert", "link", "counter"} {
+		t.Run(operation, func(t *testing.T) {
+			ctx := context.Background()
+			f, account, _ := newRecurringCallbackFixture(t)
+			feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{account.ID}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := f.store.RecordRSSImportedItem(ctx, feed.ID, "item", ""); err != nil {
+				t.Fatal(err)
+			}
+			payload, _ := json.Marshal(map[string]any{"params": map[string]any{
+				"target_account_ids": []string{account.ID},
+				"rss_automation":     map[string]any{"feed_id": feed.ID, "item_key": "item", "output_mode": "scheduled", "fallback_content": "template fallback"},
+			}})
+			job := makeRecurringJob(t, f, payload)
+			s := &automationWriteFailureStore{Store: f.store, operation: operation}
+			instance := api.New(nil, s, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
+			for range 2 {
+				instance.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"generated"}`), "")
+			}
+			posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 1
+			if operation == "insert" {
+				want = 0
+			}
+			if s.inserts != 1 || len(posts) != want {
+				t.Fatalf("store failure retried: attempts=%d posts=%d want=%d", s.inserts, len(posts), want)
+			}
+			if len(posts) > 0 && posts[0].Content != "generated" {
+				t.Errorf("store failure used fallback: %+v", posts[0])
+			}
+		})
 	}
 }
 

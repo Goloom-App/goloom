@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/postservice"
 )
+
+// Only validation failures before insertion are safe to retry with template content.
+var errAutomationPostValidation = errors.New("invalid automation post")
 
 // aiCallbackResult is the shape of completed AI job results consumed by the
 // completion side effects below.
@@ -162,7 +167,7 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
-		AccountContentOverride: res.AccountContentOverride,
+		AccountContentOverride: a.aiAccountContentOverrides(ctx, job, res.AccountContentOverride, targetAccounts),
 		ScheduledAt:            scheduledAt,
 		Draft:                  false,
 		AuthorUserID:           &job.AuthorUserID,
@@ -179,6 +184,16 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		return fmt.Errorf("create auto-publish post: %w", err)
 	}
 	return nil
+}
+
+// AI output may invent override keys; discard them without weakening target validation.
+func (a *API) aiAccountContentOverrides(ctx context.Context, job domain.AIJob, overrides map[string]string, targets []string) map[string]string {
+	for id := range overrides {
+		if !slices.Contains(targets, id) {
+			a.log.WarnContext(ctx, "ai job: dropping override outside targets", "job_id", job.ID, "team_id", job.TeamID, "account_id", id)
+		}
+	}
+	return domain.NormalizeAccountContentOverride(overrides, targets)
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {

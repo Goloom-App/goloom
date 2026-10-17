@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -30,7 +31,15 @@ func (a *API) finishRecurringAutomationFromAI(ctx context.Context, job domain.AI
 		}
 		return fmt.Errorf("empty AI content; used template fallback")
 	}
-	return a.createRecurringAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
+	err := a.createRecurringAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
+	if !errors.Is(err, errAutomationPostValidation) {
+		return err
+	}
+	a.log.WarnContext(ctx, "recurring automation: invalid AI content, trying template fallback", "job_id", job.ID, "error", err)
+	if fallbackErr := a.finishRecurringAutomationFallback(ctx, job, meta); fallbackErr != nil {
+		return fmt.Errorf("AI post validation: %w; fallback failed: %w", err, fallbackErr)
+	}
+	return fmt.Errorf("AI post validation: %w; used template fallback", err)
 }
 
 func (a *API) finishRecurringAutomationFallback(ctx context.Context, job domain.AIJob, meta *recurringAutomationMeta) error {
@@ -85,7 +94,7 @@ func (a *API) createRecurringAutomationPost(
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
-		AccountContentOverride: res.AccountContentOverride,
+		AccountContentOverride: a.aiAccountContentOverrides(ctx, job, res.AccountContentOverride, targetAccounts),
 		ScheduledAt:            scheduledAt,
 		Draft:                  draft,
 		AuthorUserID:           &job.AuthorUserID,
@@ -99,10 +108,10 @@ func (a *API) createRecurringAutomationPost(
 	recPost.EnsureTitle()
 	prepared, err := a.posts.Prepare(ctx, job.TeamID, recPost, postservice.Options{RequireTeam: true, CheckLimits: !draft})
 	if err != nil {
-		return fmt.Errorf("validate automation post: %w", err)
+		return fmt.Errorf("%w: %w", errAutomationPostValidation, err)
 	}
 	if err := postservice.ValidationError(prepared.Validation); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errAutomationPostValidation, err)
 	}
 	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, prepared.Input)
 	if err != nil {
