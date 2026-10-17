@@ -88,6 +88,7 @@ function App() {
   const [calendarDragOverKey, setCalendarDragOverKey] = useState<string | null>(null)
   const prevSectionRef = useRef<AppSection | null>(null)
   const prevSectionBeforeComposerRef = useRef<AppSection | null>(null)
+  const returningFromComposerRef = useRef(false)
   const [settings, setSettings] = useState<SettingsState>(() => loadStoredSettings())
 
   // Tell the AI chat assistant which view the user is on, so it can ground its
@@ -962,14 +963,16 @@ function App() {
     : isMobile ? teamPosts.find((post) => post.id === mobilePreviewPostId)?.id
     : showPreviewColumn ? selectedPost?.id : undefined
 
-  // Navigation closes the previous selection; returning must not revive it.
+  // Preserve desktop preview across composer entry and explicit return only.
   useEffect(() => {
-    setExpandedPostId(null)
+    if (section !== 'composer' && !returningFromComposerRef.current) setExpandedPostId(null)
+    returningFromComposerRef.current = false
     setMobilePreviewPostId(null)
     if (section !== 'composer') setEditingPostId(null)
   }, [section])
 
   useEffect(() => {
+    returningFromComposerRef.current = false
     setExpandedPostId(null)
     setEditingPostId(null)
     setMobilePreviewPostId(null)
@@ -1141,6 +1144,7 @@ function App() {
   }
 
   function closeComposer() {
+    returningFromComposerRef.current = section === 'composer'
     if (prevSectionBeforeComposerRef.current) {
       setSection(prevSectionBeforeComposerRef.current)
       prevSectionBeforeComposerRef.current = null

@@ -122,6 +122,34 @@ test('new composer does not inherit expanded post identity', async ({ page }) =>
   expect((await send()).view_context?.focus?.type).not.toBe('post')
 })
 
+for (const action of ['Edit', 'New Post']) {
+  test(`${action} cancellation restores preview focus without stale composer context`, async ({ page }) => {
+    const { send, closeChat, openChat } = await setup(page)
+    await closeChat()
+    await page.getByRole('button', { name: action, exact: true }).click()
+    const composer = page.getByTestId('composer-view')
+    await expect(composer).toBeVisible()
+    await composer.getByLabel(/message.*all destinations/i).fill('Discarded composer draft')
+    await openChat()
+    await send()
+    await closeChat()
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(composer).toHaveCount(0)
+    await expect(page.getByTestId('live-preview-title')).toHaveText('Focus test post')
+    await openChat()
+    const returned = await send()
+    expect(returned.view_context?.focus).toEqual({ type: 'post', id: 'focused-post' })
+    expect(returned.view_context?.visible?.composer).toBeUndefined()
+    expect(returned.messages.at(-1)?.content).not.toContain('Discarded composer draft')
+
+    await closeChat()
+    await page.getByRole('button', { name: 'Home', exact: true }).click()
+    await openContentCalendar(page)
+    await openChat()
+    expect((await send()).view_context?.focus).toBeUndefined()
+  })
+}
+
 test('team switch clears editor draft and chat context before selecting a new destination', async ({ page }) => {
   const { send, closeChat, openChat } = await setup(page)
   await closeChat()
