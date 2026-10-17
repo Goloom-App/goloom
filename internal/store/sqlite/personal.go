@@ -78,6 +78,8 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 			created_at text not null default (datetime('now')),
 			unique (feed_id, item_key)
 		)`,
+		`alter table rss_imported_items add column attempts integer not null default 0`,
+		`alter table rss_imported_items add column retry_available integer not null default 0`,
 		`create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id)`,
 		`alter table ai_service_configs add column provider text not null default 'openai'`,
 		`alter table ai_service_configs add column model text not null default ''`,

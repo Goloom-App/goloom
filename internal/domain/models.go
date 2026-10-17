@@ -1252,6 +1252,7 @@ type CreatePostInput struct {
 	TemplatePostRole     string     `json:"-"`
 	Source               PostSource `json:"-"`
 	RSSFeedID            *string    `json:"-"`
+	RSSItemKey           string     `json:"-"`
 }
 
 func (in CreatePostInput) EffectiveContent(accountID string) string {

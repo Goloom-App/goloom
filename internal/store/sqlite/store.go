@@ -791,6 +791,11 @@ func (s *Store) CreateScheduledPost(ctx context.Context, teamID string, principa
 			return domain.ScheduledPost{}, err
 		}
 	}
+	if input.RSSFeedID != nil && input.RSSItemKey != "" {
+		if err := linkRSSItemForPost(ctx, tx, teamID, *input.RSSFeedID, input.RSSItemKey, postID); err != nil {
+			return domain.ScheduledPost{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return domain.ScheduledPost{}, err
 	}

@@ -7,6 +7,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 func TestService_RegeneratePostTemplateOccurrence(t *testing.T) {
@@ -117,5 +118,40 @@ func TestRegeneratePostTemplateHorizonIgnoresPastPostedPosts(t *testing.T) {
 	}
 	if result.DeletedPosts != 1 || result.RegeneratedOccurrences != 1 {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+type completionOnRecurringListStore struct{ store.Store }
+
+func (s completionOnRecurringListStore) ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error) {
+	jobs, err := s.Store.ListAIJobs(ctx, teamID, limit)
+	if err != nil {
+		return nil, err
+	}
+	for _, job := range jobs {
+		if _, err := s.Store.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusCompleted, []byte(`{}`), ""); err != nil {
+			return nil, err
+		}
+	}
+	return jobs, nil
+}
+
+func TestCancelRecurringAIJobsPreservesConcurrentCompletion(t *testing.T) {
+	ctx := context.Background()
+	s, _, team, user := newRecurringAIFixture(t, true)
+	job, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine, Status: domain.AIJobStatusProcessing, Payload: []byte(`{"params":{"recurring_automation":{"template_id":"template"}}}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(testLogger(), completionOnRecurringListStore{s}, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, nil)
+	if err := svc.cancelPendingRecurringAIJobs(ctx, team.ID, "template", nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetAIJobByID(ctx, team.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.AIJobStatusCompleted || got.ErrorMessage != "" {
+		t.Fatalf("completion overwritten by recurring cancellation: %+v", got)
 	}
 }

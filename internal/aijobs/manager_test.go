@@ -583,3 +583,33 @@ func TestJobCancelledBeforeStartIsNotRun(t *testing.T) {
 		t.Fatalf("cancelled job overwritten: %s/%q", got.Status, got.ErrorMessage)
 	}
 }
+
+func TestFinishWithoutCompleterPreservesCancellation(t *testing.T) {
+	s := newJobTestStore(t)
+	ctx := context.Background()
+	user, team := newJobTestTeam(t, s, true)
+	started, release := make(chan struct{}), make(chan struct{})
+	manager := aijobs.NewManager(s, funcRunner(func(context.Context, domain.AIJob) (json.RawMessage, error) {
+		close(started)
+		<-release
+		return json.RawMessage(`{"content":"late"}`), nil
+	}))
+	job, err := manager.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Type: domain.AIJobTypeVoiceEngine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	won, err := s.ClaimAIJobCompletion(ctx, job.ID, domain.AIJobStatusFailed, nil, "cancelled")
+	close(release)
+	manager.Wait()
+	if err != nil || !won {
+		t.Fatalf("cancel claim: %v %v", won, err)
+	}
+	got, err := s.GetAIJobByID(ctx, team.ID, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.AIJobStatusFailed || got.ErrorMessage != "cancelled" || len(got.Result) != 0 {
+		t.Fatalf("cancel overwritten by runner: %+v", got)
+	}
+}

@@ -1590,3 +1590,10 @@ func TestService_materializePostTemplates_skipWithoutShift(t *testing.T) {
 		t.Fatalf("expected counterNext=5 (unchanged), got %d", st.advancePostTemplateCalls[0].counterNext)
 	}
 }
+
+func (m *mockStore) ClaimRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (bool, error) {
+	return true, m.RecordRSSImportedItem(ctx, feedID, itemKey, "")
+}
+func (m *mockStore) ReleaseRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (int, error) {
+	return 1, nil
+}

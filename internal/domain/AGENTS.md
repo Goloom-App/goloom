@@ -10,6 +10,7 @@ Models in `models.go`, patch utilities in `patch_field.go`, template vars in `te
 
 ## Local Contracts
 
+- `CreatePostInput.RSSItemKey` is server-only and identifies an RSS item for atomic post/marker insertion; `MaxRSSItemAttempts` bounds automatic attempts at 3.
 - Domain types: `models.go` — User, Team, Post, Account, AIJob, etc.
 - Audit actors distinguish `oidc`, `api_token` and `system`. Automation authorship and authenticated initiators live in separate safe metadata; system actors never impersonate tokens.
 - `AuthenticatedPrincipal.TokenExpiresAt` carries the authenticating token's expiry for delegation checks; nil means no token expiry.

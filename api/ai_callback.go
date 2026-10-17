@@ -19,6 +19,9 @@ var errAutomationPostValidation = errors.New("invalid automation post")
 
 var errAutomationTemplateFallback = errors.New("used template fallback")
 
+// Only guaranteed pre-insertion failures may release an RSS reservation.
+var errAutomationPostNotCreated = errors.New("automation post not created")
+
 // aiCallbackResult is the shape of completed AI job results consumed by the
 // completion side effects below.
 type aiCallbackResult struct {
@@ -112,6 +115,14 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			action, outcome = "ai_job.fail", "failure"
 		}
 		if effectErr != nil {
+			if rssMeta != nil && errors.Is(effectErr, errAutomationPostNotCreated) {
+				attempts, releaseErr := a.store.ReleaseRSSItemAttempt(ctx, job.TeamID, rssMeta.FeedID, rssMeta.ItemKey)
+				if releaseErr != nil {
+					a.log.ErrorContext(ctx, "rss automation: release item failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey, "error", releaseErr)
+				} else {
+					a.log.WarnContext(ctx, "rss automation: item attempt failed", "job_id", job.ID, "feed_id", rssMeta.FeedID, "item_key", rssMeta.ItemKey, "attempts", attempts, "exhausted", attempts >= domain.MaxRSSItemAttempts)
+				}
+			}
 			logMessage := "ai job completion side effect failed"
 			if !automation {
 				logMessage = "ai job auto-publish failed"

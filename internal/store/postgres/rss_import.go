@@ -54,9 +54,9 @@ func (s *Store) CountRSSFeedPostsToday(ctx context.Context, feedID string) (int,
 }
 
 func (s *Store) RSSItemAlreadyImported(ctx context.Context, feedID, itemKey string) (bool, error) {
-	const query = `SELECT 1 FROM rss_imported_items WHERE feed_id = $1 AND item_key = $2 LIMIT 1`
+	const query = `SELECT 1 FROM rss_imported_items WHERE feed_id = $1 AND item_key = $2 AND (post_id IS NOT NULL OR NOT retry_available OR attempts >= $3) LIMIT 1`
 	var one int
-	err := s.pool.QueryRow(ctx, query, feedID, itemKey).Scan(&one)
+	err := s.pool.QueryRow(ctx, query, feedID, itemKey, domain.MaxRSSItemAttempts).Scan(&one)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return false, nil
@@ -70,7 +70,8 @@ func (s *Store) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, post
 	const query = `
 		INSERT INTO rss_imported_items (feed_id, item_key, post_id)
 		VALUES ($1, $2, $3)
-		ON CONFLICT (feed_id, item_key) DO NOTHING
+		ON CONFLICT (feed_id, item_key) DO UPDATE SET post_id = excluded.post_id, retry_available = false
+        WHERE rss_imported_items.post_id IS NULL AND excluded.post_id IS NOT NULL
 	`
 	var postArg any
 	if strings.TrimSpace(postID) != "" {
@@ -122,6 +123,50 @@ func (s *Store) UpdateRSSFeedLastFetched(ctx context.Context, feedID string, las
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("rss feed config not found: %w", pgx.ErrNoRows)
+	}
+	return nil
+}
+
+func (s *Store) ClaimRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, `
+ INSERT INTO rss_imported_items (feed_id, item_key, attempts, retry_available)
+ SELECT $1, $2, 1, false WHERE EXISTS (SELECT 1 FROM rss_feed_configs WHERE id = $1 AND team_id = $3)
+ ON CONFLICT(feed_id, item_key) DO UPDATE SET attempts = rss_imported_items.attempts + 1, retry_available = false
+ WHERE rss_imported_items.post_id IS NULL AND rss_imported_items.retry_available AND rss_imported_items.attempts < $4`,
+		feedID, itemKey, teamID, domain.MaxRSSItemAttempts)
+	if err != nil {
+		return false, fmt.Errorf("ClaimRSSItemAttempt: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+func (s *Store) ReleaseRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (int, error) {
+	var attempts int
+	err := s.pool.QueryRow(ctx, `UPDATE rss_imported_items
+ SET retry_available = true, attempts = CASE WHEN attempts = 0 THEN 1 ELSE attempts END
+ WHERE feed_id = $1 AND item_key = $2 AND post_id IS NULL
+ AND EXISTS (SELECT 1 FROM rss_feed_configs WHERE id = rss_imported_items.feed_id AND team_id = $3)
+ RETURNING attempts`, feedID, itemKey, teamID).Scan(&attempts)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, fmt.Errorf("rss item not found or already linked: %w", domain.ErrNotFound)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("ReleaseRSSItemAttempt: %w", err)
+	}
+	return attempts, nil
+}
+
+// Link in the post transaction; concurrent attempts cannot commit a second post.
+func linkRSSItemForPost(ctx context.Context, tx pgx.Tx, teamID, feedID, itemKey, postID string) error {
+	tag, err := tx.Exec(ctx, `INSERT INTO rss_imported_items (feed_id,item_key,post_id)
+ SELECT $1,$2,$3 WHERE EXISTS (SELECT 1 FROM rss_feed_configs WHERE id=$1 AND team_id=$4)
+ ON CONFLICT(feed_id,item_key) DO UPDATE SET post_id=excluded.post_id,retry_available=false
+ WHERE rss_imported_items.post_id IS NULL`, feedID, itemKey, postID, teamID)
+	if err != nil {
+		return fmt.Errorf("link RSS item in post transaction: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("RSS item already linked or feed not owned: %w", domain.ErrNotFound)
 	}
 	return nil
 }

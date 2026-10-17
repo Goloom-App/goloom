@@ -912,7 +912,7 @@ func (s *Store) ClaimAIJobCompletion(ctx context.Context, id string, status doma
 	if len(result) > 0 {
 		resultVal = json.RawMessage(result)
 	}
-	tag, err := s.pool.Exec(ctx, `update ai_jobs set status=$2, result=$3, error_message=NULLIF($4,''), updated_at=now(), completed_at=now() where id=$1 and status not in ('completed','failed')`, id, string(status), resultVal, errorMsg)
+	tag, err := s.pool.Exec(ctx, `update ai_jobs set status=$2, result=$3, error_message=NULLIF($4,''), updated_at=now(), completed_at=now() where id=$1 and status in ('pending','processing')`, id, string(status), resultVal, errorMsg)
 	if err != nil {
 		return false, fmt.Errorf("claim AI job completion: %w", err)
 	}

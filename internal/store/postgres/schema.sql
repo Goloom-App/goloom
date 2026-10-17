@@ -592,6 +592,8 @@ create table if not exists rss_imported_items (
     feed_id uuid not null references rss_feed_configs(id) on delete cascade,
     item_key text not null,
     post_id uuid references scheduled_posts(id) on delete set null,
+    attempts integer not null default 0,
+    retry_available boolean not null default false,
     created_at timestamptz not null default now(),
     unique (feed_id, item_key)
 );
@@ -635,3 +637,7 @@ create table if not exists audit_pending (
 );
 
 alter table ai_jobs add column if not exists origin text not null default 'user';
+
+
+alter table rss_imported_items add column if not exists attempts integer not null default 0;
+alter table rss_imported_items add column if not exists retry_available boolean not null default false;

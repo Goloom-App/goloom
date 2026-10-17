@@ -14,6 +14,10 @@ import (
 	"git.f4mily.net/goloom/internal/rss"
 )
 
+var errRSSItemReserved = errors.New("RSS item already reserved or retries exhausted")
+var errRSSItemClaim = errors.New("RSS item reservation failed")
+var errRSSPostNotCreated = errors.New("RSS post not created")
+
 func (s *Service) shouldEnhanceRSSWithAI(ctx context.Context, feed domain.RSSFeedConfig) bool {
 	if !feed.AiEnhanceEnabled || s.jobManager == nil {
 		return false
@@ -67,33 +71,30 @@ func (s *Service) submitRSSAIEnhancement(
 		return err
 	}
 
-	var job domain.AIJob
-	err = s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
-		job, err = s.jobManager.SubmitJob(ctx, domain.AIJob{
-			Origin:       domain.AIJobOriginAutomation,
-			TeamID:       feed.TeamID,
-			AuthorUserID: ownerID,
-			Type:         domain.AIJobTypeVoiceEngine,
-			Payload:      payload,
-		})
-		if err != nil {
-			if errors.Is(err, aijobs.ErrAIServiceNotConfigured) {
-				return err
-			}
-			return fmt.Errorf("submit rss ai job: %w", err)
-		}
-		if job.Status == domain.AIJobStatusFailed {
-			return fmt.Errorf("rss ai job dispatch failed")
-		}
-		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, ""); err != nil {
-			return err
-		}
-		return nil
+	// Reserve before dispatch; the outer source transaction keeps claim and job atomic.
+	claimed, err := s.store.ClaimRSSItemAttempt(ctx, feed.TeamID, feed.ID, itemKey)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errRSSItemClaim, err)
+	}
+	if !claimed {
+		return errRSSItemReserved
+	}
+	job, err := s.jobManager.SubmitJob(ctx, domain.AIJob{
+		Origin:       domain.AIJobOriginAutomation,
+		TeamID:       feed.TeamID,
+		AuthorUserID: ownerID,
+		Type:         domain.AIJobTypeVoiceEngine,
+		Payload:      payload,
 	})
 	if err != nil {
-		return err
+		if errors.Is(err, aijobs.ErrAIServiceNotConfigured) {
+			return err
+		}
+		return fmt.Errorf("submit rss ai job: %w", err)
 	}
-
+	if job.Status == domain.AIJobStatusFailed {
+		return fmt.Errorf("rss ai job dispatch failed")
+	}
 	s.logger.InfoContext(ctx, "rss import: ai enhancement queued", "feed_id", feed.ID, "job_id", job.ID, "item_key", itemKey)
 	return nil
 }
@@ -113,10 +114,6 @@ func (s *Service) createRSSPostDirect(
 		if err := s.store.LockAutomationSource(ctx, "rss_feed", feed.ID); err != nil {
 			return err
 		}
-		already, err := s.store.RSSItemAlreadyImported(ctx, feed.ID, itemKey)
-		if err != nil || already {
-			return err
-		}
 		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID, submissionFallback)
 	})
 }
@@ -132,6 +129,7 @@ func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFe
 		AuthorUserID:   &ownerID,
 		Source:         domain.PostSourceAutomation,
 		RSSFeedID:      &feedID,
+		RSSItemKey:     itemKey,
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: ownerID}, Kind: "system"}
@@ -146,7 +144,7 @@ func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFe
 		return s.store.IncrementRSSFeedCounter(ctx, feed.TeamID, feed.ID)
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errRSSPostNotCreated, err)
 	}
 	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)
 	s.notifyReviewCreated(ctx, feed.TeamID, post)

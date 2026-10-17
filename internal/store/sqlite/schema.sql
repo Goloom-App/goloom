@@ -153,6 +153,8 @@ create table if not exists rss_imported_items (
     feed_id text not null references rss_feed_configs(id) on delete cascade,
     item_key text not null,
     post_id text references scheduled_posts(id) on delete set null,
+    attempts integer not null default 0,
+    retry_available integer not null default 0,
     created_at text not null default (datetime('now')),
     unique (feed_id, item_key)
 );

@@ -35,15 +35,15 @@ func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, r
 	}
 	a.log.WarnContext(ctx, "rss automation: invalid AI content, trying template fallback", "job_id", job.ID, "error", err)
 	if fallbackErr := a.finishRSSAutomationFallback(ctx, job, meta); fallbackErr != nil {
-		return fmt.Errorf("AI post validation: %w; fallback failed: %w", err, fallbackErr)
+		return fmt.Errorf("AI post validation: %v; fallback failed: %w", err, fallbackErr)
 	}
-	return fmt.Errorf("AI post validation: %w; %w", err, errAutomationTemplateFallback)
+	return fmt.Errorf("AI post validation: %v; %w", err, errAutomationTemplateFallback)
 }
 
 func (a *API) finishRSSAutomationFallback(ctx context.Context, job domain.AIJob, meta *rssAutomationMeta) error {
 	content := meta.FallbackContent
 	if content == "" {
-		return fmt.Errorf("automation fallback content is empty")
+		return fmt.Errorf("%w: automation fallback content is empty", errAutomationPostNotCreated)
 	}
 	return a.createRSSAutomationPost(ctx, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
 }
@@ -57,10 +57,10 @@ func (a *API) createRSSAutomationPost(
 	targetAccounts []string,
 ) error {
 	if len(targetAccounts) == 0 {
-		return fmt.Errorf("automation target accounts are empty")
+		return fmt.Errorf("%w: automation target accounts are empty", errAutomationPostNotCreated)
 	}
 	if _, err := a.store.GetRSSFeedConfigByID(ctx, job.TeamID, meta.FeedID); err != nil {
-		return fmt.Errorf("load automation feed: %w", err)
+		return fmt.Errorf("%w: load automation feed: %w", errAutomationPostNotCreated, err)
 	}
 	scheduledAt := rssAutomationScheduledAt(meta, res)
 	draft := rssAutomationDraftFromMeta(meta)
@@ -80,19 +80,20 @@ func (a *API) createRSSAutomationPost(
 		AuthorUserID:           &job.AuthorUserID,
 		Source:                 domain.PostSourceAutomation,
 		RSSFeedID:              &feedID,
+		RSSItemKey:             meta.ItemKey,
 		UseVersions:            len(res.AccountContentOverride) > 0,
 	}
 	rssPost.EnsureTitle()
 	prepared, err := a.posts.Prepare(ctx, job.TeamID, rssPost, postservice.Options{RequireTeam: true, CheckLimits: !draft})
 	if err != nil {
-		return fmt.Errorf("%w: %w", errAutomationPostValidation, err)
+		return fmt.Errorf("%w: %w: %w", errAutomationPostNotCreated, errAutomationPostValidation, err)
 	}
 	if err := postservice.ValidationError(prepared.Validation); err != nil {
-		return fmt.Errorf("%w: %w", errAutomationPostValidation, err)
+		return fmt.Errorf("%w: %w: %w", errAutomationPostNotCreated, errAutomationPostValidation, err)
 	}
 	post, err := a.createJobAutomationPost(ctx, job, prepared.Input, map[string]string{"feed_id": meta.FeedID})
 	if err != nil {
-		return fmt.Errorf("create automation post: %w", err)
+		return fmt.Errorf("%w: create automation post: %w", errAutomationPostNotCreated, err)
 	}
 	a.notifyReviewCreated(ctx, job.TeamID, post)
 	if err := a.store.UpdateRSSImportedItemPostID(ctx, job.TeamID, meta.FeedID, meta.ItemKey, post.ID); err != nil {
