@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -301,5 +302,65 @@ func TestSchedulerAIJobProvenance(t *testing.T) {
 				t.Fatalf("origin=%q want=%q", jobs[0].Origin, want)
 			}
 		})
+	}
+}
+
+func TestRecurringAIJobSnapshotsPublicationProperties(t *testing.T) {
+	for _, visibility := range []string{domain.PostVisibilityPrivate, domain.PostVisibilityUnlisted} {
+		for _, kind := range []string{recurringPostKindMain, recurringPostKindAnnouncement} {
+			t.Run(visibility+"/"+kind, func(t *testing.T) {
+				ctx := context.Background()
+				st, manager, team, user := newRecurringAIFixture(t, true)
+				svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, manager)
+				tmpl := recurringTestTemplate(team, user)
+				tmpl.Visibility = visibility
+				tmpl.MediaIDs = []string{"media-1", "media-2"}
+				tmpl.MediaExcludeByAccount = map[string][]string{"acc-1": {"media-2"}}
+				at := time.Date(2027, 3, 1, 18, 0, 0, 0, time.UTC)
+				var err error
+				if kind == recurringPostKindAnnouncement {
+					err = svc.submitRecurringAnnouncementAIEnhancement(ctx, tmpl, "announcement", "title", at, at.Add(48*time.Hour))
+				} else {
+					err = svc.submitRecurringAIEnhancement(ctx, tmpl, "main", "title", at, false, at)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Later template edits must not change this job's audience or attachments.
+				tmpl.Visibility = domain.PostVisibilityPublic
+				tmpl.MediaIDs[0] = "replacement"
+				tmpl.MediaExcludeByAccount["acc-1"][0] = "replacement"
+				manager.Wait()
+				jobs, err := st.ListAIJobs(ctx, team.ID, 10)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(jobs) != 1 {
+					t.Fatalf("jobs = %d, want 1", len(jobs))
+				}
+				var payload struct {
+					Params struct {
+						Meta struct {
+							Visibility            string              `json:"visibility"`
+							MediaIDs              []string            `json:"media_ids"`
+							MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account"`
+						} `json:"recurring_automation"`
+					} `json:"params"`
+				}
+				if err := json.Unmarshal(jobs[0].Payload, &payload); err != nil {
+					t.Fatal(err)
+				}
+				meta := payload.Params.Meta
+				if meta.Visibility != visibility {
+					t.Errorf("visibility = %q, want %q", meta.Visibility, visibility)
+				}
+				if !reflect.DeepEqual(meta.MediaIDs, []string{"media-1", "media-2"}) {
+					t.Errorf("media = %v", meta.MediaIDs)
+				}
+				if !reflect.DeepEqual(meta.MediaExcludeByAccount, map[string][]string{"acc-1": {"media-2"}}) {
+					t.Errorf("exclusions = %v", meta.MediaExcludeByAccount)
+				}
+			})
+		}
 	}
 }

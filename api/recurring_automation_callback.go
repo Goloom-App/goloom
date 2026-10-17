@@ -65,8 +65,21 @@ func (a *API) createRecurringAutomationPost(
 	if len(targetAccounts) == 0 {
 		return fmt.Errorf("automation target accounts are empty")
 	}
-	if _, err := a.store.GetPostTemplate(ctx, job.TeamID, meta.TemplateID); err != nil {
+	tmpl, err := a.store.GetPostTemplate(ctx, job.TeamID, meta.TemplateID)
+	if err != nil {
 		return fmt.Errorf("load automation template: %w", err)
+	}
+	visibility, mediaIDs, mediaExcludeByAccount := meta.Visibility, meta.MediaIDs, meta.MediaExcludeByAccount
+	if !meta.HasPublicationSnapshot {
+		visibility, mediaIDs, mediaExcludeByAccount = tmpl.Visibility, tmpl.MediaIDs, tmpl.MediaExcludeByAccount
+		a.log.InfoContext(ctx, "recurring automation: legacy job using current template publication properties",
+			"job_id", job.ID, "template_id", tmpl.ID)
+	}
+	// Attachment failures are terminal: fallback would reuse the same unsafe media.
+	for _, id := range domain.NormalizeMediaIDs(mediaIDs) {
+		if _, err := a.store.GetMediaItemByID(ctx, job.TeamID, id); err != nil {
+			return fmt.Errorf("load automation media %s: %w", id, err)
+		}
 	}
 	scheduledAt := meta.ScheduledAt
 	if res.ScheduledAt != nil && !res.ScheduledAt.IsZero() {
@@ -94,6 +107,9 @@ func (a *API) createRecurringAutomationPost(
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
 		TargetAccounts:         targetAccounts,
+		Visibility:             visibility,
+		MediaIDs:               mediaIDs,
+		MediaExcludeByAccount:  mediaExcludeByAccount,
 		AccountContentOverride: a.aiAccountContentOverrides(ctx, job, res.AccountContentOverride, targetAccounts),
 		ScheduledAt:            scheduledAt,
 		Draft:                  draft,

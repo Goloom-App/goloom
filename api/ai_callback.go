@@ -46,6 +46,15 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		return
 	}
 
+	rssMeta := parseRSSAutomationMeta(job.Payload)
+	recurringMeta := parseRecurringAutomationMeta(job.Payload)
+	legacyAutomation := job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil)
+	if legacyAutomation {
+		status = domain.AIJobStatusFailed
+		errorMessage = "Automation job from before upgrade; please re-run"
+		rssMeta, recurringMeta = nil, nil
+	}
+
 	var resultBytes []byte
 	if len(result) > 0 {
 		resultBytes = []byte(result)
@@ -60,11 +69,8 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		return
 	}
 
-	rssMeta := parseRSSAutomationMeta(job.Payload)
-	recurringMeta := parseRecurringAutomationMeta(job.Payload)
-	if job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil) {
-		a.log.WarnContext(ctx, "ai job completion: ignoring automation metadata without server provenance; completing as normal job", "job_id", job.ID, "team_id", job.TeamID, "origin", job.Origin)
-		rssMeta, recurringMeta = nil, nil
+	if legacyAutomation {
+		a.log.WarnContext(ctx, "ai job completion: rejecting automation metadata without server provenance", "job_id", job.ID, "team_id", job.TeamID, "origin", job.Origin)
 	}
 	automation := job.Type == domain.AIJobTypeVoiceEngine && (rssMeta != nil || recurringMeta != nil)
 
