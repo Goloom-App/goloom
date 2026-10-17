@@ -1027,10 +1027,11 @@ function App() {
     setComposerAiNotice(null)
   }
 
-  function handleSelectTeam(teamId: string) {
-    beginComposerDraft()
-    setSelectedTeamId(teamId)
-  }
+  // Every way the active team can change (menu, create team, delete/leave,
+  // reload) lands here, so none of them needs to remember to bump the counter.
+  useEffect(() => {
+    composerDraftGenerationRef.current += 1
+  }, [effectiveSelectedTeamId])
 
   function openCreateComposer() {
     beginComposerDraft()
@@ -1809,7 +1810,7 @@ function App() {
       setSection={setSection}
       teams={teams}
       selectedTeamId={effectiveSelectedTeamId}
-      onSelectTeam={handleSelectTeam}
+      onSelectTeam={setSelectedTeamId}
       onCreateTeam={() => setCreateTeamOpen(true)}
       user={principalUser}
       onSignOut={() => {

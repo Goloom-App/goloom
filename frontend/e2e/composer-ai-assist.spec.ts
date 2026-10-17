@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { e2eBootstrapToken } from './constants'
-import { createAITeam, signIn } from './helpers'
+import { signIn } from './helpers'
 
 const DEFAULT_PLACEHOLDER = "What's on your mind?"
 const OVERRIDE_PLACEHOLDER = 'Leave aligned with default, or type a custom version for this account.'
@@ -13,6 +12,51 @@ const BLUESKY_USERNAME = 'bsky-user'
 type ComposerAIResult = {
   content: string
   accountContentOverride: Record<string, string>
+}
+
+const TEAM_ID = 'mock-ai-team'
+const OTHER_TEAM_ID = 'mock-other-team'
+
+type TeamItem = Record<string, unknown> & { id: string }
+
+/**
+ * Serves two extra AI-enabled teams from the browser-side team list only, so the
+ * shared E2E database (and every other spec's sidebar) stays untouched. A
+ * POST /v1/teams creates a third mocked team and adds it to the list.
+ */
+async function mockTeams(page: Page) {
+  const extra: TeamItem[] = []
+  const mockTeam = (id: string, name: string, template: TeamItem): TeamItem => ({
+    ...template,
+    id,
+    name,
+    is_ai_enabled: true,
+  })
+  await page.route('**/v1/teams', async (route) => {
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as { name: string }
+      const real = (await (await route.fetch({ method: 'GET' })).json()) as { items: TeamItem[] }
+      const created = mockTeam('mock-created-team', body.name, real.items[0])
+      extra.push(created)
+      await route.fulfill({ status: 201, json: created })
+      return
+    }
+    const response = await route.fetch()
+    const data = (await response.json()) as { items: TeamItem[] }
+    const template = data.items[0]
+    await route.fulfill({
+      response,
+      json: {
+        ...data,
+        items: [
+          ...data.items,
+          mockTeam(TEAM_ID, 'Mock AI team', template),
+          mockTeam(OTHER_TEAM_ID, 'Mock other team', template),
+          ...extra,
+        ],
+      },
+    })
+  })
 }
 
 /** Two destinations with different limits so per-account overrides are exercised. */
@@ -105,9 +149,10 @@ async function startOptimize(page: Page) {
 }
 
 test.describe('composer AI assist', () => {
-  test('discards a stale AI result when the composer draft changes', async ({ page, baseURL }) => {
+  test('discards a stale AI result when the composer draft changes', async ({ page }) => {
     test.setTimeout(120_000)
-    const teamId = await createAITeam(baseURL!, e2eBootstrapToken())
+    const teamId = TEAM_ID
+    await mockTeams(page)
     await mockTeamAccounts(page, teamId)
     const job = await mockComposerAI(page, teamId, {
       content: 'AI refined draft body.',
@@ -137,9 +182,10 @@ test.describe('composer AI assist', () => {
     await expect(page.getByTestId('composer-ai-notice')).toBeVisible()
   })
 
-  test('discards the AI result when the draft is edited while the job runs', async ({ page, baseURL }) => {
+  test('discards the AI result when the draft is edited while the job runs', async ({ page }) => {
     test.setTimeout(120_000)
-    const teamId = await createAITeam(baseURL!, e2eBootstrapToken())
+    const teamId = TEAM_ID
+    await mockTeams(page)
     await mockTeamAccounts(page, teamId)
     const job = await mockComposerAI(page, teamId, {
       content: 'AI refined draft body.',
@@ -165,9 +211,72 @@ test.describe('composer AI assist', () => {
     await expect(page.getByTestId('composer-ai-notice')).toBeVisible()
   })
 
-  test('keeps user-written per-account overrides and fills the remaining accounts', async ({ page, baseURL }) => {
+  test('discards the AI result when another team is selected while the job runs', async ({ page }) => {
     test.setTimeout(120_000)
-    const teamId = await createAITeam(baseURL!, e2eBootstrapToken())
+    await mockTeams(page)
+    await mockTeamAccounts(page, TEAM_ID)
+    await mockTeamAccounts(page, OTHER_TEAM_ID)
+    const job = await mockComposerAI(page, TEAM_ID, {
+      content: 'AI refined draft body.',
+      accountContentOverride: {},
+    })
+
+    await signIn(page)
+    await page.goto(`/?team=${TEAM_ID}`)
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    await page.getByRole('button', { name: 'New Post' }).click()
+
+    const defaultBody = page.getByPlaceholder(DEFAULT_PLACEHOLDER)
+    await defaultBody.fill('Draft of the first team.')
+    await startOptimize(page)
+    await expect.poll(job.triggerCount).toBe(1)
+
+    await page.locator('.sidebar-team-selector').click()
+    await page.getByRole('menuitem', { name: 'Mock other team', exact: true }).click()
+
+    job.complete()
+
+    await expect(page.getByTestId('composer-ai-notice')).toBeVisible({ timeout: 20_000 })
+    await expect(defaultBody).toHaveValue('Draft of the first team.')
+  })
+
+  test('discards the AI result when a newly created team is selected while the job runs', async ({ page }) => {
+    test.setTimeout(120_000)
+    await mockTeams(page)
+    await mockTeamAccounts(page, TEAM_ID)
+    await mockTeamAccounts(page, 'mock-created-team')
+    const job = await mockComposerAI(page, TEAM_ID, {
+      content: 'AI refined draft body.',
+      accountContentOverride: {},
+    })
+
+    await signIn(page)
+    await page.goto(`/?team=${TEAM_ID}`)
+    await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+    await page.getByRole('button', { name: 'New Post' }).click()
+
+    const defaultBody = page.getByPlaceholder(DEFAULT_PLACEHOLDER)
+    await defaultBody.fill('Draft of the first team.')
+    await startOptimize(page)
+    await expect.poll(job.triggerCount).toBe(1)
+
+    // Creating a team switches to it without going through the team menu.
+    await page.locator('.sidebar-team-selector').click()
+    await page.getByTestId('sidebar-create-team').click()
+    await page.getByTestId('create-team-name').fill('Brand new team')
+    await page.getByTestId('create-team-submit').click()
+    await expect(page.getByTestId('create-team-modal')).toBeHidden()
+
+    job.complete()
+
+    await expect(page.getByTestId('composer-ai-notice')).toBeVisible({ timeout: 20_000 })
+    await expect(defaultBody).toHaveValue('Draft of the first team.')
+  })
+
+  test('keeps user-written per-account overrides and fills the remaining accounts', async ({ page }) => {
+    test.setTimeout(120_000)
+    const teamId = TEAM_ID
+    await mockTeams(page)
     await mockTeamAccounts(page, teamId)
     const job = await mockComposerAI(page, teamId, {
       content: 'AI refined draft body.',

@@ -63,9 +63,11 @@ export function ComposerAIAssist({
   // Async job results must be compared against the draft as it is now, not the
   // render that started the request.
   const latestDraftRef = useRef(draft)
+  const latestTeamIdRef = useRef(teamId)
   useEffect(() => {
     latestDraftRef.current = draft
-  }, [draft])
+    latestTeamIdRef.current = teamId
+  }, [draft, teamId])
 
   // Results arriving after the composer closed have nowhere to land.
   const mountedRef = useRef(true)
@@ -92,6 +94,7 @@ export function ComposerAIAssist({
     setError(null)
     setStatusMessage(null)
     setOptimizing(true)
+    const startTeamId = teamId
     const startGeneration = draftGenerationRef.current
     const startContent = draft.content.trim()
     try {
@@ -118,6 +121,7 @@ export function ComposerAIAssist({
       // The user may have opened another draft, switched teams or edited the
       // text while the job ran — a result for the old draft must not land.
       if (
+        latestTeamIdRef.current !== startTeamId ||
         draftGenerationRef.current !== startGeneration ||
         latestDraftRef.current.content.trim() !== startContent
       ) {
