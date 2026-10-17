@@ -10,6 +10,8 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Local Contracts
 
+- `WithAuditTransaction` routes callback-context store calls through one transaction, including decorated stores and nested backend savepoints; callback errors/cancellation roll back mutation and audit together. Keep provider/network calls outside transactions.
+- Audit event IDs identify replayed evidence: duplicate IDs are ignored; pagination orders by `(created_at desc, id desc)`.
 - Interface: `store.go` — all business logic depends on this contract
 - `LookupAPIToken` returns the authenticating token's persisted expiry in `AuthenticatedPrincipal.TokenExpiresAt`; non-expiring tokens return nil in both backends.
 - SQLite schema: `sqlite/schema.sql`

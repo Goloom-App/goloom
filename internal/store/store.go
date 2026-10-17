@@ -16,6 +16,10 @@ import (
 )
 
 type Store interface {
+	// WithAuditTransaction atomically commits all store calls made with callback's context.
+	// Keep external I/O outside the callback. Cancellation or any error rolls back everything.
+	WithAuditTransaction(ctx context.Context, fn func(context.Context) error) error
+
 	Close()
 
 	UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error)

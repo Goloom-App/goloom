@@ -59,7 +59,7 @@ func decodePostMediaIDs(raw string, dest *[]string) error {
 }
 
 type Store struct {
-	pool       *pgxpool.Pool
+	pool       *contextPool
 	encrypter  *security.Encrypter
 	sessionTTL time.Duration
 }
@@ -88,7 +88,7 @@ func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter)
 		pool.Close()
 		return nil, fmt.Errorf("apply postgres schema: %w", err)
 	}
-	return &Store{pool: pool, encrypter: encrypter}, nil
+	return &Store{pool: &contextPool{Pool: pool}, encrypter: encrypter}, nil
 }
 
 func (s *Store) Close() {

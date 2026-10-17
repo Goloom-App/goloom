@@ -22,7 +22,7 @@ var schemaSQL string
 const sqliteTimeLayout = "2006-01-02T15:04:05.000000000Z07:00"
 
 type Store struct {
-	db         *sql.DB
+	db         *contextDB
 	encrypter  *security.Encrypter
 	sessionTTL time.Duration
 }
@@ -76,7 +76,7 @@ func New(ctx context.Context, databaseURL string, encrypter *security.Encrypter)
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 
-	return &Store{db: db, encrypter: encrypter}, nil
+	return &Store{db: &contextDB{DB: db}, encrypter: encrypter}, nil
 }
 
 func (s *Store) Close() {

@@ -24,7 +24,7 @@ func (s *Store) InsertAuditEvent(ctx context.Context, e domain.AuditEvent) error
 	_, err = s.db.ExecContext(ctx, `
 		insert into audit_events (id, team_id, actor_user_id, actor_name, actor_email, actor_kind,
 			token_id, token_name, action, target_type, target_id, summary, metadata_json, created_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(id) do nothing`,
 		e.ID, e.TeamID, e.ActorUserID, e.ActorName, e.ActorEmail, e.ActorKind,
 		nullablePtr(e.TokenID), nullablePtr(e.TokenName),
 		e.Action, e.TargetType, nullablePtr(e.TargetID),
@@ -36,7 +36,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, filter domain.AuditFilter) 
 	where, args := buildAuditWhere(filter)
 	query := `select id, team_id, actor_user_id, actor_name, actor_email, actor_kind,
 		token_id, token_name, action, target_type, target_id, summary, metadata_json, created_at
-		from audit_events ` + where + ` order by created_at desc limit ? offset ?`
+		from audit_events ` + where + ` order by created_at desc, id desc limit ? offset ?`
 	args = append(args, filterLimit(filter.Limit), filter.Offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
