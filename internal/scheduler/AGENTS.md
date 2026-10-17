@@ -14,6 +14,7 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 - AI job submissions: RSS, recurring main posts, and recurring announcements set server-only `domain.AIJob.Origin=AIJobOriginAutomation` through `aijobs`; payload metadata alone never authorizes automation completion
 - Recurring AI: `recurring_ai.go` — recurring post generation via AI
 - Recurring AI jobs snapshot template `visibility`, `media_ids`, and `media_exclude_by_account` in `params.recurring_automation` at queue time. The API callback uses that snapshot for main posts and announcements on success and template fallback; later template edits and AI output must not change those publication properties.
+- Legacy queued jobs without non-null snapshot `visibility` use the current template's visibility, media, and exclusions, loaded with `GetPostTemplate(job.TeamID, templateID)`. Snapshot presence depends on the non-null visibility field, not its value; explicit public/empty visibility and empty/null attachments must not inherit later template edits. Legacy resolution is logged.
 - Recurring callbacks resolve every attachment with `GetMediaItemByID(job.TeamID, id)` before insertion. Missing, foreign, or unreadable media aborts publication (including template fallback); completion logs details and exposes a failed job instead of silently publishing without attachments. Target accounts still pass through `postservice.Prepare(job.TeamID)`.
 - RSS AI: `rss_ai.go` — RSS-triggered AI generation
 - RSS import: `rss_import.go` — RSS feed import jobs

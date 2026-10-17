@@ -360,3 +360,113 @@ func TestRecurringAutomationPreservesPublicationSnapshot(t *testing.T) {
 		}
 	}
 }
+
+func TestRecurringAutomationLegacyPublicationProperties(t *testing.T) {
+	for _, snapshot := range []string{"legacy", "empty", "null", "empty-visibility"} {
+		for _, kind := range []string{domain.TemplatePostRoleMain, domain.TemplatePostRoleAnnouncement} {
+			for _, outcome := range []string{"completed", "failed", "empty", "invalid"} {
+				t.Run(snapshot+"/"+kind+"/"+outcome, func(t *testing.T) {
+					ctx := context.Background()
+					f, account, template := newRecurringCallbackFixture(t)
+					meta := map[string]any{
+						"template_id": template.ID, "post_kind": kind, "fallback_content": "fallback",
+						"scheduled_at": "2027-02-01T09:00:00Z", "template_occurrence_at": "2027-02-01T09:00:00Z",
+					}
+					if snapshot != "legacy" {
+						meta["visibility"] = domain.PostVisibilityPublic
+						meta["media_ids"] = []string{}
+						meta["media_exclude_by_account"] = map[string][]string{}
+						if snapshot == "null" {
+							meta["media_ids"], meta["media_exclude_by_account"] = nil, nil
+						} else if snapshot == "empty-visibility" {
+							meta["visibility"] = ""
+						}
+					}
+					payload, err := json.Marshal(map[string]any{"params": map[string]any{
+						"target_account_ids": []string{account.ID}, "recurring_automation": meta,
+					}})
+					if err != nil {
+						t.Fatal(err)
+					}
+					job := makeRecurringJob(t, f, payload)
+					// Legacy jobs must use edits made after queuing, from this team's template.
+					visibility := domain.PostVisibilityPrivate
+					media := []string{recurringMedia(t, f, f.team.ID, "first"), recurringMedia(t, f, f.team.ID, "second")}
+					exclusions := map[string][]string{account.ID: {media[1]}}
+					template, err = f.store.UpdatePostTemplate(ctx, f.team.ID, template.ID, domain.UpdatePostTemplateInput{
+						Visibility: &visibility, MediaIDs: &media, MediaExcludeByAccount: exclusions,
+					})
+					if err != nil {
+						t.Fatal(err)
+					}
+					status, result, wantContent := domain.AIJobStatusCompleted, json.RawMessage(`{"content":"generated"}`), "generated"
+					switch outcome {
+					case "failed":
+						status, result, wantContent = domain.AIJobStatusFailed, nil, "fallback"
+					case "empty":
+						result, wantContent = json.RawMessage(`{"content":" "}`), "fallback"
+					case "invalid":
+						result, wantContent = json.RawMessage(`{"content":42}`), "fallback"
+					}
+					f.api.CompleteAIJob(ctx, job.ID, status, result, "provider failed")
+					posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if len(posts) != 1 {
+						t.Fatalf("posts=%d, want 1", len(posts))
+					}
+					post := posts[0]
+					if snapshot == "legacy" {
+						if post.Visibility != template.Visibility || !reflect.DeepEqual(post.MediaIDs, template.MediaIDs) || !reflect.DeepEqual(post.MediaExcludeByAccount, template.MediaExcludeByAccount) {
+							t.Errorf("legacy publication: visibility=%q media=%v exclusions=%v; want current template %q %v %v", post.Visibility, post.MediaIDs, post.MediaExcludeByAccount, template.Visibility, template.MediaIDs, template.MediaExcludeByAccount)
+						}
+					} else if post.Visibility != domain.PostVisibilityPublic || len(post.MediaIDs) != 0 || len(post.MediaExcludeByAccount) != 0 {
+						t.Errorf("explicit empty snapshot replaced by template: visibility=%q media=%v exclusions=%v", post.Visibility, post.MediaIDs, post.MediaExcludeByAccount)
+					}
+					if post.Content != wantContent {
+						t.Errorf("content=%q, want %q", post.Content, wantContent)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestRecurringAutomationLegacyRejectsUnsafeTemplateMedia(t *testing.T) {
+	for _, scenario := range []string{"foreign", "missing"} {
+		for _, status := range []domain.AIJobStatus{domain.AIJobStatusCompleted, domain.AIJobStatusFailed} {
+			t.Run(scenario+"/"+string(status), func(t *testing.T) {
+				ctx := context.Background()
+				f, account, template := newRecurringCallbackFixture(t)
+				job := makeRecurringJob(t, f, recurringJobPayload(template.ID, account.ID, "fallback", time.Now().UTC().Add(time.Hour)))
+				media := []string{"missing-media"}
+				if scenario == "foreign" {
+					other, err := f.store.CreateTeam(ctx, f.user.ID, domain.CreateTeamInput{Name: "other"})
+					if err != nil {
+						t.Fatal(err)
+					}
+					media = []string{recurringMedia(t, f, other.ID, "foreign")}
+				}
+				if _, err := f.store.UpdatePostTemplate(ctx, f.team.ID, template.ID, domain.UpdatePostTemplateInput{MediaIDs: &media}); err != nil {
+					t.Fatal(err)
+				}
+				f.api.CompleteAIJob(ctx, job.ID, status, json.RawMessage(`{"content":"generated"}`), "provider failed")
+				posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(posts) != 0 {
+					t.Errorf("legacy job created %d posts with unsafe template media", len(posts))
+				}
+				updated, err := f.store.GetAIJobByIDGlobal(ctx, job.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage != "Automation failed: post could not be created" {
+					t.Errorf("legacy media failure not visible: %s %q", updated.Status, updated.ErrorMessage)
+				}
+			})
+		}
+	}
+}

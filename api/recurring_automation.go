@@ -9,18 +9,19 @@ import (
 )
 
 type recurringAutomationMeta struct {
-	TemplateID            string
-	PostKind              string
-	OutputMode            domain.AutomationOutputMode
-	ScheduledAt           time.Time
-	TemplateOccurrenceAt  *time.Time
-	Draft                 bool
-	PostTitle             string
-	FallbackContent       string
-	TemplateCounter       int
-	Visibility            string
-	MediaIDs              []string
-	MediaExcludeByAccount map[string][]string
+	TemplateID             string
+	PostKind               string
+	OutputMode             domain.AutomationOutputMode
+	ScheduledAt            time.Time
+	TemplateOccurrenceAt   *time.Time
+	Draft                  bool
+	PostTitle              string
+	FallbackContent        string
+	TemplateCounter        int
+	Visibility             string
+	MediaIDs               []string
+	MediaExcludeByAccount  map[string][]string
+	HasPublicationSnapshot bool
 }
 
 func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationMeta {
@@ -39,7 +40,7 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 				PostTitle             string              `json:"post_title"`
 				FallbackContent       string              `json:"fallback_content"`
 				TemplateCounter       int                 `json:"template_counter"`
-				Visibility            string              `json:"visibility"`
+				Visibility            *string             `json:"visibility"`
 				MediaIDs              []string            `json:"media_ids"`
 				MediaExcludeByAccount map[string][]string `json:"media_exclude_by_account"`
 			} `json:"recurring_automation"`
@@ -73,6 +74,10 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 			occurrenceAt = &u
 		}
 	}
+	visibility := ""
+	if raw.Visibility != nil {
+		visibility = *raw.Visibility
+	}
 	return &recurringAutomationMeta{
 		TemplateID:            raw.TemplateID,
 		PostKind:              postKind,
@@ -83,9 +88,11 @@ func parseRecurringAutomationMeta(payload json.RawMessage) *recurringAutomationM
 		PostTitle:             strings.TrimSpace(raw.PostTitle),
 		FallbackContent:       strings.TrimSpace(raw.FallbackContent),
 		TemplateCounter:       counter,
-		Visibility:            raw.Visibility,
+		Visibility:            visibility,
 		MediaIDs:              raw.MediaIDs,
 		MediaExcludeByAccount: raw.MediaExcludeByAccount,
+		// Scheduler snapshots always include visibility, even when empty or public.
+		HasPublicationSnapshot: raw.Visibility != nil,
 	}
 }
 
