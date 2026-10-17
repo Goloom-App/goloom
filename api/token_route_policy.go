@@ -36,8 +36,8 @@ func (a *API) requireAuth(next http.Handler) http.Handler {
 func tokenRouteAllows(principal domain.AuthenticatedPrincipal, r *http.Request) bool {
 	pattern := r.Pattern
 	_, path, _ := strings.Cut(pattern, " ")
-	// Admin data and actions require full global authority for every method.
-	if strings.HasPrefix(path, "/v1/admin/") {
+	// Admin access and user-wide push subscriptions require full global authority.
+	if strings.HasPrefix(path, "/v1/admin/") || path == "/v1/me/push-subscriptions" || strings.HasPrefix(path, "/v1/me/push-subscriptions/") {
 		return auth.PrincipalCanManageAPIToken(principal, nil, nil)
 	}
 	switch r.Method {

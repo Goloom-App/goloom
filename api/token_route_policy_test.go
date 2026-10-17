@@ -93,7 +93,7 @@ func TestTokenScopesEveryMutatingRoute(t *testing.T) {
 			}
 			// Broad write/delete scopes suffice for ordinary mutations; privilege
 			// management needs an unscoped token. Handlers may still reject empty input.
-			privilege := strings.HasPrefix(path, "/v1/admin/") || pattern == "POST /v1/teams" || pattern == "PATCH /v1/teams/{teamID}" || strings.Contains(path, "/members") || strings.Contains(path, "/invitations") || strings.Contains(path, "/ai-service-config") || strings.Contains(path, "/accounts")
+			privilege := strings.Contains(path, "/me/push-subscriptions") || strings.HasPrefix(path, "/v1/admin/") || pattern == "POST /v1/teams" || pattern == "PATCH /v1/teams/{teamID}" || strings.Contains(path, "/members") || strings.Contains(path, "/invitations") || strings.Contains(path, "/ai-service-config") || strings.Contains(path, "/accounts")
 			scopes := `["read","write","delete"]`
 			if privilege {
 				scopes = ""
@@ -167,7 +167,7 @@ func TestTokenScopesEveryReadRoute(t *testing.T) {
 					rec := httptest.NewRecorder()
 					f.handler.ServeHTTP(cancelStreamRecorder{rec, cancel}, req)
 					denied := rec.Code == http.StatusForbidden && (rec.Header().Get("X-Error-Code") == "scope_required" || strings.Contains(rec.Body.String(), "scope_required"))
-					wantDenied := !public && (kind == "without read" || (strings.HasPrefix(path, "/v1/admin/") && kind != "browser") || (crossTeam && kind == "team bound"))
+					wantDenied := !public && (kind == "without read" || ((strings.HasPrefix(path, "/v1/admin/") || path == "/v1/me/push-subscriptions") && kind != "browser") || (crossTeam && kind == "team bound"))
 					if denied != wantDenied {
 						t.Fatalf("status=%d body=%s scope denial=%v, want %v", rec.Code, rec.Body.String(), denied, wantDenied)
 					}
