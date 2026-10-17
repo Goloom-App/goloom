@@ -1143,6 +1143,30 @@ code, .mono {
   border-color: var(--border-strong);
 }
 
+.radix-dropdown-content.sidebar-team-menu {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--radix-dropdown-menu-content-available-height);
+  min-width: min(200px, var(--radix-dropdown-menu-content-available-width));
+  max-width: min(320px, var(--radix-dropdown-menu-content-available-width));
+  overflow: hidden;
+}
+
+.sidebar-team-menu__list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sidebar-team-menu > .divider,
+.sidebar-team-menu > .radix-dropdown-item {
+  flex-shrink: 0;
+}
+
+.sidebar-team-menu .radix-dropdown-item {
+  overflow-wrap: anywhere;
+}
+
 .divider {
   height: 1px;
   background: var(--border);
