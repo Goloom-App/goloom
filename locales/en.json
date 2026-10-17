@@ -795,7 +795,9 @@
         "ai_job_complete": "AI generation completed",
         "ai_job_fallback": "AI template fallback used",
         "ai_job_fail": "AI generation failed",
-        "post_publish_started": "Post publication started"
+        "post_publish_started": "Post publication started",
+        "media_rename": "Media renamed",
+        "post_repair": "Post repaired"
       },
       "refresh": "Refresh activity",
       "loadFailed": "Could not load activity.",

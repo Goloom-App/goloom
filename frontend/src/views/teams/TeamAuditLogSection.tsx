@@ -10,7 +10,7 @@ import type { BackendAuditEvent, createApiClient } from '../../api'
 const AUDIT_ACTIONS = [
   'post.create', 'post.update', 'post.delete', 'post.cancel', 'post.versions_update',
   'post.automation_create', 'post.publish_started', 'post.publish_success', 'post.publish_failure', 'post.publish_uncertain',
-  'post.retry', 'post.acknowledge', 'post.import', 'post.cleanup',
+  'post.repair', 'post.retry', 'post.acknowledge', 'post.import', 'post.cleanup',
   'account.connect', 'account.disconnect', 'account.update', 'account.migrate_in', 'account.migrate_out', 'account.import',
   'member.add', 'member.remove', 'member.role_change', 'team.create', 'team.update',
   'ai_config.update', 'brand_profile.update', 'brand_profile.delete',
@@ -20,7 +20,7 @@ const AUDIT_ACTIONS = [
   'knowledge_source.create', 'knowledge_source.update', 'knowledge_source.delete',
   'rss_feed.create', 'rss_feed.update', 'rss_feed.delete',
   'recurring.create', 'recurring.update', 'recurring.delete', 'recurring.skip', 'recurring.shift', 'recurring.regenerate',
-  'media.upload', 'media.delete', 'external_monitor.update', 'proactive_settings.update',
+  'media.upload', 'media.rename', 'media.delete', 'external_monitor.update', 'proactive_settings.update',
   'ai_job.submit', 'ai_job.cancel', 'ai_job.complete', 'ai_job.fallback', 'ai_job.fail',
 ]
 
@@ -147,7 +147,7 @@ export function TeamAuditLogSection({
                           {t('audit.viaApiKey', { name: e.token_name || '—' })}
                         </span>
                       ) : (
-                        <span className="badge badge--default">{t(e.actor_kind === 'system' ? 'audit.automation' : e.actor_kind === 'user' ? 'audit.member' : 'audit.unknownActor')}</span>
+                        <span className="badge badge--default">{t(e.actor_kind === 'system' ? 'audit.automation' : (e.actor_kind === 'oidc' || e.actor_kind === 'user') ? 'audit.member' : 'audit.unknownActor')}</span>
                       )}
                       {e.actor_name && e.actor_email && <span className="hint text-sm">{e.actor_email}</span>}
                     </div>

@@ -795,7 +795,9 @@
         "ai_job_complete": "AI-Erstellung abgeschlossen",
         "ai_job_fallback": "AI-Vorlagenersatz verwendet",
         "ai_job_fail": "AI-Erstellung fehlgeschlagen",
-        "post_publish_started": "Veröffentlichung gestartet"
+        "post_publish_started": "Veröffentlichung gestartet",
+        "media_rename": "Medien umbenannt",
+        "post_repair": "Beitrag repariert"
       },
       "refresh": "Aktivität aktualisieren",
       "loadFailed": "Aktivität konnte nicht geladen werden.",

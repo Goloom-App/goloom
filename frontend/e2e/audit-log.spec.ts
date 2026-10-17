@@ -149,3 +149,15 @@ test('supported action labels render in English and German', async ({ page }) =>
   await expect(page.getByRole('cell', { name: 'Wissensquelle erstellt', exact: true })).toBeVisible()
   expect(await page.locator('#audit-actions option').evaluateAll((options) => options.filter((option) => option.textContent === option.getAttribute('value')).map((option) => option.textContent))).toEqual([])
 })
+
+test('OIDC actors retain human member attribution', async ({ page }) => {
+  const team = await createAITeam(baseURL, e2eBootstrapToken())
+  await page.route(`**/v1/teams/${team}/audit-log*`, (route) => route.fulfill({ json: {
+    entries: [{ ...event(team), actor_kind: 'oidc', actor_user_id: 'human-123', actor_name: 'Test Member', actor_email: 'member@example.test' }], total: 1,
+  } }))
+  const card = await openAudit(page, team)
+  await expect(card.getByText('Test Member', { exact: true })).toBeVisible()
+  await expect(card.getByText('Member', { exact: true })).toBeVisible()
+  await expect(card.getByText('member@example.test', { exact: true })).toBeVisible()
+  await expect(card.getByText('Unknown', { exact: true })).toHaveCount(0)
+})
