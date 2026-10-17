@@ -76,7 +76,7 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 
 	// Only the atomic terminal-claim winner runs side effects, including across replicas.
 	// Automation callbacks own their separate post/fallback lifecycle below.
-	if status == domain.AIJobStatusCompleted && !automation {
+	if status == domain.AIJobStatusCompleted && !automation && !noPublishFromJobPayload(job.Payload) {
 		profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 		if profErr == nil && profile.AutoPublishEnabled {
 			if draftResult, err := a.autoCreatePostFromCallbackResult(ctx, job, result); err != nil {
@@ -234,6 +234,16 @@ func aiJobCanSchedule(payload json.RawMessage) bool {
 		CanSchedule bool `json:"_can_schedule"`
 	}
 	return json.Unmarshal(payload, &envelope) == nil && envelope.CanSchedule
+}
+
+// Editor-only jobs still complete normally, but must not create a publishable post.
+func noPublishFromJobPayload(payload json.RawMessage) bool {
+	var envelope struct {
+		Params struct {
+			NoPublish bool `json:"no_publish"`
+		} `json:"params"`
+	}
+	return json.Unmarshal(payload, &envelope) == nil && envelope.Params.NoPublish
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {
