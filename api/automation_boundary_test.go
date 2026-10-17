@@ -272,7 +272,7 @@ func TestAutomationCallbackDoesNotRetryStoreFailure(t *testing.T) {
 	}
 }
 
-func TestUserJobIgnoresPersistedAutomationMeta(t *testing.T) {
+func TestUserJobRejectsPersistedAutomationMeta(t *testing.T) {
 	for _, kind := range []string{"rss", "recurring"} {
 		for _, outcome := range []string{"completed", "failed", "recovery", "auto-publish"} {
 			t.Run(kind+"/"+outcome, func(t *testing.T) {
@@ -296,7 +296,10 @@ func TestUserJobIgnoresPersistedAutomationMeta(t *testing.T) {
 					t.Fatal(err)
 				}
 				var logs bytes.Buffer
-				instance := api.New(slog.New(slog.NewTextHandler(&logs, nil)), f.store, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, nil)
+				hub := sse.NewHub()
+				events, unsubscribe := hub.Subscribe(f.team.ID, "")
+				defer unsubscribe()
+				instance := api.New(slog.New(slog.NewTextHandler(&logs, nil)), f.store, nil, provider.NewRegistry(provider.NewMastodonProvider(provider.MastodonRegistrationConfig{})), config.Config{}, nil, nil, nil, hub)
 				if outcome == "auto-publish" {
 					if _, err := f.store.CreateTeamProfile(ctx, f.team.ID, domain.TeamProfile{AutoPublishEnabled: true}); err != nil {
 						t.Fatal(err)
@@ -318,17 +321,8 @@ func TestUserJobIgnoresPersistedAutomationMeta(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				want := 0
-				if outcome == "auto-publish" {
-					want = 1
-				}
-				if len(posts) != want {
-					t.Fatalf("user job created %d posts, want %d", len(posts), want)
-				}
-				for _, post := range posts {
-					if post.Source == domain.PostSourceAutomation || post.PostTemplateID != nil || post.RSSFeedID != nil || post.Content != "generated" {
-						t.Errorf("user job used automation metadata: %+v", post)
-					}
+				if len(posts) != 0 {
+					t.Errorf("legacy automation job created %d posts, want 0", len(posts))
 				}
 				after, err := f.store.GetRSSFeedConfigByID(ctx, f.team.ID, feed.ID)
 				if err != nil || after.CounterNext != feed.CounterNext {
@@ -338,14 +332,19 @@ func TestUserJobIgnoresPersistedAutomationMeta(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				wantStatus := domain.AIJobStatusCompleted
-				if outcome == "failed" || outcome == "recovery" {
-					wantStatus = domain.AIJobStatusFailed
+				if updated.Status != domain.AIJobStatusFailed || updated.ErrorMessage != "Automation job from before upgrade; please re-run" {
+					t.Errorf("legacy automation job status=%s error=%q", updated.Status, updated.ErrorMessage)
 				}
-				if updated.Status != wantStatus {
-					t.Errorf("normal job status=%s want=%s", updated.Status, wantStatus)
+				select {
+				case event := <-events:
+					data, err := json.Marshal(event)
+					if err != nil || !bytes.Contains(data, []byte("failed")) || !bytes.Contains(data, []byte(updated.ErrorMessage)) {
+						t.Errorf("SSE event lacks failure message: %s (err=%v)", data, err)
+					}
+				default:
+					t.Error("missing SSE failure event")
 				}
-				if !strings.Contains(logs.String(), "WARN") || !strings.Contains(logs.String(), "ignoring automation metadata") {
+				if !strings.Contains(logs.String(), "WARN") || !strings.Contains(logs.String(), "job_id="+job.ID) || !strings.Contains(logs.String(), "team_id="+f.team.ID) {
 					t.Errorf("missing provenance warning: %s", logs.String())
 				}
 			})

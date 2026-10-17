@@ -45,8 +45,10 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		}
 
 		rssMeta, recurringMeta := parseRSSAutomationMeta(job.Payload), parseRecurringAutomationMeta(job.Payload)
-		if job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil) {
-			a.log.WarnContext(ctx, "ai job completion: ignoring automation metadata without server provenance", "job_id", job.ID, "team_id", job.TeamID)
+		legacyAutomation := job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil)
+		if legacyAutomation {
+			status = domain.AIJobStatusFailed
+			errorMessage = "Automation job from before upgrade; please re-run"
 			rssMeta, recurringMeta = nil, nil
 		}
 		automation := job.Type == domain.AIJobTypeVoiceEngine && (rssMeta != nil || recurringMeta != nil)
@@ -64,6 +66,9 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		claimed, err := a.store.ClaimAIJobCompletion(ctx, job.ID, status, result, errorMessage)
 		if err != nil || !claimed {
 			return err
+		}
+		if legacyAutomation {
+			a.log.WarnContext(ctx, "ai job completion: rejecting automation metadata without server provenance", "job_id", job.ID, "team_id", job.TeamID, "origin", job.Origin)
 		}
 		var effectErr error
 		// Failed side effects roll back independently. A successful template fallback
