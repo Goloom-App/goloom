@@ -594,7 +594,7 @@ func TestHandleRSSFirstFetch_publishLatest(t *testing.T) {
 	}
 
 	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, nil)
-	svc.handleRSSFirstFetch(context.Background(), feed, items, time.Now().UTC(), 5)
+	svc.handleRSSFirstFetch(context.Background(), feed, items, time.Now().UTC())
 
 	if createCalls != 1 {
 		t.Fatalf("expected 1 post created (latest item), got %d", createCalls)
@@ -627,7 +627,7 @@ func TestHandleRSSFirstFetch_doNotPublish(t *testing.T) {
 	}
 
 	svc := New(testLogger(), st, provider.NewRegistry(), time.Minute, 1, 0, 0, 0, 0, nil)
-	svc.handleRSSFirstFetch(context.Background(), feed, items, time.Now().UTC(), 5)
+	svc.handleRSSFirstFetch(context.Background(), feed, items, time.Now().UTC())
 
 	if updateCalls != 1 {
 		t.Fatalf("expected UpdateRSSFeedLastFetched called once, got %d", updateCalls)

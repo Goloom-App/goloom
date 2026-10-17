@@ -80,12 +80,14 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 			attempts integer not null default 0,
 			retry_available integer not null default 0,
 			consumed_at text,
+			budget_date text,
 			created_at text not null default (datetime('now')),
 			unique (feed_id, item_key)
 		)`,
 		`alter table rss_imported_items add column attempts integer not null default 0`,
 		`alter table rss_imported_items add column retry_available integer not null default 0`,
 		`alter table rss_imported_items add column consumed_at text`,
+		`alter table rss_imported_items add column budget_date text`,
 		// Legacy in-flight automation markers are reservations, not tombstones.
 		// Promote once so repeated startup never extends the lease.
 		`update rss_imported_items set attempts = 1, retry_available = 0, created_at = datetime('now')
@@ -99,6 +101,8 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		// Remaining legacy baseline markers and linked imports are consumed.
 		`update rss_imported_items set consumed_at = created_at
          where consumed_at is null and (post_id is not null or attempts = 0)`,
+		`update rss_imported_items set budget_date = date(created_at)
+         where budget_date is null and (attempts > 0 or post_id is not null)`,
 		`create index if not exists idx_rss_imported_items_feed on rss_imported_items(feed_id)`,
 		`alter table ai_service_configs add column provider text not null default 'openai'`,
 		`alter table ai_service_configs add column model text not null default ''`,

@@ -11,6 +11,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/rss"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 type stubRSSFetcher struct {
@@ -323,28 +324,31 @@ func TestImportRSSFeed_logsPerFeedSummary(t *testing.T) {
 	}
 }
 
+type fullRSSBudgetStore struct{ store.Store }
+
+func (s fullRSSBudgetStore) ClaimRSSItemAttempt(context.Context, string, string, string) (bool, error) {
+	return false, domain.ErrRSSDailyLimit
+}
+
 func TestImportRSSFeed_logsDailyLimitAtInfo(t *testing.T) {
 	feed := testRSSFeed(ptrTime(time.Now().UTC().Add(-5 * time.Minute)))
 	feed.MaxPostsPerDay = 2
-
-	st := rssOwnerStore()
-	st.countRSSFeedPostsTodayFn = func(_ context.Context, _ string) (int, error) {
-		return 2, nil
-	}
-
+	itemKey := "https://user:credential@example.test/article?token=secret"
 	logger, buf := captureLogger()
-	svc := New(logger, st, nil, time.Minute, 1, 0, 0, 0, 0, nil)
-	svc.importRSSFeed(context.Background(), stubRSSFetcher{items: nil}, feed)
-
+	svc := New(logger, fullRSSBudgetStore{rssOwnerStore()}, nil, time.Minute, 1, 0, 0, 0, 0, nil)
+	svc.importRSSFeed(context.Background(), stubRSSFetcher{items: []rss.Item{{GUID: itemKey, Title: "Article", PublishedAt: time.Now().UTC()}}}, feed)
 	entry := logLine(t, buf, "rss import: daily limit reached")
 	if entry["level"] != "INFO" {
 		t.Fatalf("daily limit level = %v, want INFO", entry["level"])
 	}
-	if got, _ := entry["created_today"].(float64); got != 2 {
-		t.Fatalf("created_today = %v", entry["created_today"])
+	if entry["item_key_hash"] != sourceKey(itemKey) {
+		t.Fatalf("item key hash=%v", entry["item_key_hash"])
+	}
+	if strings.Contains(buf.String(), itemKey) || strings.Contains(buf.String(), "credential") {
+		t.Fatal("daily limit log exposes raw item key")
 	}
 	if got, _ := entry["max_posts_per_day"].(float64); got != 2 {
-		t.Fatalf("max_posts_per_day = %v", entry["max_posts_per_day"])
+		t.Fatalf("max_posts_per_day=%v", entry["max_posts_per_day"])
 	}
 }
 

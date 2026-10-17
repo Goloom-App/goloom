@@ -104,9 +104,11 @@ type Store interface {
 	UpdateRSSFeedConfig(ctx context.Context, teamID string, id string, input domain.RSSFeedConfig) (domain.RSSFeedConfig, error)
 	DeleteRSSFeedConfig(ctx context.Context, teamID string, id string) error
 	ListActiveRSSFeedConfigs(ctx context.Context, limit int) ([]domain.RSSFeedConfig, error)
+	// CountRSSFeedPostsToday counts today's UTC reservations and consumed imports, plus unmarked legacy posts.
 	CountRSSFeedPostsToday(ctx context.Context, feedID string) (int, error)
 	RSSItemAlreadyImported(ctx context.Context, feedID, itemKey string) (bool, error)
-	// ClaimRSSItemAttempt reserves a new/released item before dispatch, bounded by MaxRSSItemAttempts.
+	// ClaimRSSItemAttempt atomically reserves daily capacity and a new/released item before dispatch.
+	// Attempts are bounded by MaxRSSItemAttempts; full capacity returns domain.ErrRSSDailyLimit.
 	ClaimRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (bool, error)
 	// ReleaseRSSItemAttempt permits another poll only when no post was created; returns attempts used.
 	ReleaseRSSItemAttempt(ctx context.Context, teamID, feedID, itemKey string) (int, error)

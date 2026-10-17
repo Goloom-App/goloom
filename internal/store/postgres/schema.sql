@@ -597,6 +597,7 @@ create table if not exists rss_imported_items (
     attempts integer not null default 0,
     retry_available boolean not null default false,
     consumed_at timestamptz,
+    budget_date date,
     created_at timestamptz not null default now(),
     unique (feed_id, item_key)
 );
@@ -649,6 +650,7 @@ alter table rss_imported_items add column if not exists retry_available boolean 
 alter table scheduled_posts add column if not exists ai_job_id text;
 
 alter table rss_imported_items add column if not exists consumed_at timestamptz;
+alter table rss_imported_items add column if not exists budget_date date;
 -- Legacy in-flight automation markers are reservations, not tombstones.
 -- Promote once so repeated startup never extends the lease.
 update rss_imported_items set attempts = 1, retry_available = false, created_at = now()
@@ -662,3 +664,7 @@ where consumed_at is null and post_id is null and attempts = 0
 -- Remaining legacy baseline markers and linked imports are consumed.
 update rss_imported_items set consumed_at = created_at
 where consumed_at is null and (post_id is not null or attempts = 0);
+
+-- Reservation day stays stable through completion and post deletion.
+update rss_imported_items set budget_date = (created_at at time zone 'UTC')::date
+where budget_date is null and (attempts > 0 or post_id is not null);
