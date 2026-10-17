@@ -74,7 +74,7 @@ func TestCancelAIJob(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := f.store.UpdateAIJobStatus(context.Background(), job.ID, domain.AIJobStatusFailed, nil, "cancelled"); err != nil {
+		if err := f.store.UpdateAIJobStatus(context.Background(), job.ID, domain.AIJobStatusFailed, nil, "provider failed"); err != nil {
 			t.Fatal(err)
 		}
 

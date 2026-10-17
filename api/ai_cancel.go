@@ -28,6 +28,16 @@ func (a *API) handleCancelAIJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !won {
+		current, loadErr := a.store.GetAIJobByID(r.Context(), teamID, jobID)
+		if loadErr != nil {
+			a.log.ErrorContext(r.Context(), "load AI job after cancellation conflict failed", "job_id", job.ID, "error", loadErr)
+			a.writeError(w, r, "internal_error", http.StatusInternalServerError)
+			return
+		}
+		if current.Status == domain.AIJobStatusFailed && current.ErrorMessage == aiJobCancelledMessage {
+			auth.WriteJSON(w, http.StatusOK, current)
+			return
+		}
 		a.writeError(w, r, "ai_job_not_cancellable", http.StatusConflict)
 		return
 	}
