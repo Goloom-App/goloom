@@ -123,3 +123,68 @@ func TestVoiceEngineRSSKeepsLimitsAndOverrides(t *testing.T) {
 		t.Fatalf("limits/override not preserved: %+v", result)
 	}
 }
+
+func TestVoiceEngineRSSMetadataStaysOutOfPrompt(t *testing.T) {
+	for _, skeleton := range []string{
+		"Release 2 https://example.org/release",
+		strings.Repeat("Source summary. ", 1000) + "rss_automation feed_id fallback_content",
+	} {
+		t.Run(fmt.Sprintf("skeleton_%d_chars", len(skeleton)), func(t *testing.T) {
+			meta := map[string]any{
+				"feed_id": "private-feed-id", "item_key": "private-item-key",
+				"output_mode": "draft", "scheduled_at": "2026-10-17T12:00:00Z",
+				"fallback_content": skeleton,
+			}
+			payload, err := json.Marshal(map[string]any{"params": map[string]any{
+				"target_account_ids": []string{"acc-1"}, "schedule": false,
+				"rss_article_title": "Release 2", "rss_article_link": "https://example.org/release",
+				"rss_article_content": "Release 2 ships Friday with offline mode.",
+				"post_skeleton":       skeleton, "rss_automation": meta,
+				"recurring_automation": map[string]any{"template_id": "private-template-id"},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			job := domain.AIJob{Type: domain.AIJobTypeVoiceEngine, Payload: payload}
+			p, err := parseJobParams(job.Payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, _ := json.Marshal(p)
+			client := &scriptedClient{responses: []Response{rssVoiceResponse(t, strings.Repeat("Release 2 ships Friday with offline mode. ", 11), nil)}}
+			if _, err := runVoiceEngine(context.Background(), client, job, testContext(), p); err != nil {
+				t.Fatal(err)
+			}
+			if len(client.requests) != 1 {
+				t.Fatalf("calls = %d, want 1", len(client.requests))
+			}
+			for _, message := range client.requests[0].Messages {
+				prompt := message.Content
+				if message.Role == RoleUser {
+					wrappedSkeleton := wrapUntrusted(skeleton)
+					if strings.Count(prompt, wrappedSkeleton) != 1 {
+						t.Error("skeleton must appear once in its untrusted wrapper")
+					}
+					prompt = strings.ReplaceAll(prompt, wrappedSkeleton, "")
+				}
+				for _, unwanted := range []string{"rss_automation", "feed_id", "fallback_content", "private-feed-id", "private-item-key", "recurring_automation", "private-template-id"} {
+					if strings.Contains(prompt, unwanted) {
+						t.Errorf("metadata leaked outside untrusted skeleton: %q", unwanted)
+					}
+				}
+			}
+			after, _ := json.Marshal(p)
+			if string(before) != string(after) {
+				t.Fatal("prompt rendering changed callback params")
+			}
+			callbackParams, err := parseJobParams(job.Payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			callbackMeta := callbackParams.nested("rss_automation")
+			if callbackMeta.str("feed_id") != "private-feed-id" || callbackMeta.str("fallback_content") != skeleton {
+				t.Fatal("callback metadata lost")
+			}
+		})
+	}
+}
