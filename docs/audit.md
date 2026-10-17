@@ -119,3 +119,78 @@ recurring CRUD; roles and no-ops; both migration teams; invitation acceptance;
 validated OAuth attribution; secret exclusion; audit insert failure; request
 cancellation; concurrent AI completion/cancellation; and shared-tool rollback and
 canonical campaign semantics.
+
+## Automation entry-point matrix
+
+| Entry point | Action | Correlation and outcome |
+| --- | --- | --- |
+| RSS direct import, recurring main/announcement materialization | `post.automation_create` | Post plus feed or template, occurrence and role; RSS item keys hashed |
+| AI manager submission (REST or scheduler) | `ai_job.submit` | Job ID; authenticated submitting actor or explicit automation |
+| AI completion/recovery | `ai_job.complete`, `ai_job.fail`, `ai_job.fallback` | Job and source IDs; generated post has a separate correlated creation event |
+| Publisher claims one target attempt | `post.publish_started` | Post, account, attempt number and unique `attempt_id`; `outcome=pending` |
+| Provider confirms publication | `post.publish_success` | Same `attempt_id`; `outcome=success` |
+| Preparation fails or provider explicitly rejects HTTP 4xx except 408 | `post.publish_failure` | Same `attempt_id`; allowlisted error code; normal retry policy applies |
+| Transport error, timeout, 5xx or invalid success response | `post.publish_uncertain` | Same `attempt_id`; `provider_outcome_unknown`; automatic republication stops |
+| Scheduled external monitoring or manual historical import | `account.import` | One event per actually created post and account; empty/replayed imports silent |
+| External imported-post deduplication cleanup | `post.cleanup` | Team and removed count; zero removals silent |
+| `POST /v1/admin/repair-future-posted` | `post.repair` | Each affected post/team, status before/after, authenticated initiator IDs |
+
+Automated work uses `actor_kind=system`, never a fabricated API token. Post/job
+authorship is `author_user_id`; an arbitrary current feed owner is not claimed
+as initiator. `initiator_user_id`/`initiator_token_id` identify an authenticated
+trigger when available. Job IDs connect later completion to its submitter's
+snapshot. Pending recurring-job dedupe requires server-owned `origin=automation`;
+user-supplied automation-shaped payloads cannot suppress materialization.
+
+## Delivery, retries and reconciliation
+
+Local database changes and `InsertAuditEvent` commit together. Cancellation,
+an audit insert failure or a rejected handler rolls back the change. No success
+response is flushed before commit. Nested transactions preserve this boundary;
+rolled-back scopes discard their deferred jobs and push notifications.
+
+RSS item import, dedupe marker, counter, optional queued AI job and audit share
+one source-locked transaction. Recurring occurrences serialize on their template;
+main/announcement posts, counters and materialization cursor commit together.
+An audit failure leaves the source retryable. Conditional AI terminal claims
+prevent callback/recovery replay; successful template fallback remains visible
+as a failed AI result with `ai_job.fallback` and its generated post event.
+
+Provider calls run outside database transactions. Before a publish call, the
+target is durably claimed with pending evidence. The observed target result and
+an event in `audit_pending` then commit together. Delivery copies pending events
+to `audit_events` and removes them atomically. Event IDs make re-delivery
+idempotent; delivery never calls a provider. Batches contain at most 100 events,
+drained at scheduler startup, every poll, and after persisted outcomes.
+
+Operators monitor `audit delivery pending` and the database-backed
+`audit_pending` count. Restore database/audit-table availability; the next drain
+replays evidence without repeating publication. Local DB mutation failures are
+logged as rolled-back mutations and can be retried through the original entry
+point. Source locks do not retain leases after commit, so explicit later
+regeneration remains possible.
+
+An attempt with only `post.publish_started` may have crossed the provider
+boundary before a process stopped. A processing target with
+`publication_outcome_unknown` stays outside automatic retries. Reconcile it
+separately against the remote account using post/account/attempt IDs and time:
+confirm remote publication before recording success, or confirm absence before
+authorizing a fresh attempt. Keep the original uncertain evidence; do not replay
+the provider call merely to recover audit delivery. This change does not infer
+absence from a timeout or provide automatic remote reconciliation.
+
+## UI and verification
+
+Audit results are bound to team/filter/page. Team changes reset controls and
+ignore old responses; failed queries retain an explicit error/retry state.
+Successful team mutations, window focus and visible-page 30-second polling
+refresh the log. Unknown/historical actions remain readable and exact-filterable.
+The UI displays only documented safe metadata, even for historical payloads.
+
+Regression coverage includes cancellation and injected insert failures, both
+migration teams, OAuth and membership actors, repeated callbacks, concurrent
+source work, partial/uncertain publication and outbox recovery without another
+publication call. Both real database backends test fresh schemas, insert/list/
+count/filter ordering, source claims and replay. Browser tests cover errors,
+team/page races, mutation refresh, automation polling, historical actions and
+DE/EN action labels.

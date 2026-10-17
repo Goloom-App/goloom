@@ -32,7 +32,7 @@ func TestRSSDirectCreationAudit(t *testing.T) {
 		t.Fatalf("audit events = %d, want 1", len(events))
 	}
 	e := events[0]
-	if e.Action != "post.automation_create" || e.ActorKind != "system" || e.ActorUserID != "" || e.TargetType != "post" || e.TargetID == nil || e.Metadata["feed_id"] != feed.ID || e.Metadata["initiator_user_id"] != user.ID || e.Metadata["channel"] != "scheduler" {
+	if e.Action != "post.automation_create" || e.ActorKind != "system" || e.ActorUserID != "" || e.TargetType != "post" || e.TargetID == nil || e.Metadata["feed_id"] != feed.ID || e.Metadata["author_user_id"] != user.ID || e.Metadata["channel"] != "scheduler" {
 		t.Fatalf("wrong attribution: %+v", e)
 	}
 	raw, _ := json.Marshal(e)

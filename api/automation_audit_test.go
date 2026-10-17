@@ -12,8 +12,8 @@ import (
 	"git.f4mily.net/goloom/api"
 	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
-	"git.f4mily.net/goloom/internal/store"
 	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/store"
 )
 
 type callbackAuditFailure struct{ store.Store }
@@ -39,7 +39,7 @@ func TestAutomationCallbackAuditReplay(t *testing.T) {
 	actions := map[string]bool{}
 	for _, e := range events {
 		actions[e.Action] = true
-		if e.ActorKind != "system" || e.ActorUserID != "" || e.TokenID != nil || e.Metadata["job_id"] != job.ID || e.Metadata["initiator_user_id"] != f.user.ID {
+		if e.ActorKind != "system" || e.ActorUserID != "" || e.TokenID != nil || e.Metadata["job_id"] != job.ID || e.Metadata["author_user_id"] != f.user.ID {
 			t.Fatalf("wrong automation identity/correlation: %+v", e)
 		}
 		raw, _ := json.Marshal(e)

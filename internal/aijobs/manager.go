@@ -227,12 +227,17 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 		if err != nil {
 			return err
 		}
-		event := domain.AuditEvent{ID: uuid.NewString(), TeamID: job.TeamID, ActorKind: "system", ActorName: "Automation", Action: "ai_job.submit", TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": "scheduler", "outcome": "success", "job_id": job.ID, "initiator_user_id": job.AuthorUserID}}
+		event := domain.AuditEvent{ID: uuid.NewString(), TeamID: job.TeamID, ActorKind: domain.AuditActorSystem, ActorName: "Automation", Action: "ai_job.submit", TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": "scheduler", "outcome": "success", "job_id": job.ID, "author_user_id": job.AuthorUserID}}
 		if p := auth.PrincipalFromContext(ctx); p != nil {
-			event.ActorUserID, event.ActorName, event.ActorEmail, event.ActorKind = p.User.ID, p.User.Name, p.User.Email, p.Kind
-			event.Metadata["channel"] = "rest"
-			if p.Kind == domain.AuditActorToken {
-				event.TokenID, event.TokenName = p.TokenID, p.TokenName
+			event.Metadata["channel"], event.Metadata["initiator_user_id"] = "rest", p.User.ID
+			if p.Kind == domain.AuditActorToken && p.TokenID != nil {
+				event.Metadata["initiator_token_id"] = *p.TokenID
+			}
+			if job.Origin != domain.AIJobOriginAutomation {
+				event.ActorUserID, event.ActorName, event.ActorEmail, event.ActorKind = p.User.ID, p.User.Name, p.User.Email, p.Kind
+				if p.Kind == domain.AuditActorToken {
+					event.TokenID, event.TokenName = p.TokenID, p.TokenName
+				}
 			}
 		}
 		return m.store.InsertAuditEvent(ctx, event)
@@ -346,7 +351,7 @@ func (m *Manager) persistCompletion(ctx context.Context, jobID string, status do
 		if status == domain.AIJobStatusFailed {
 			action, outcome = "ai_job.fail", "failure"
 		}
-		return m.store.InsertAuditEvent(ctx, domain.AuditEvent{TeamID: job.TeamID, ActorKind: "system", ActorName: "Automation", Action: action, TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": "ai", "outcome": outcome, "job_id": job.ID, "initiator_user_id": job.AuthorUserID}})
+		return m.store.InsertAuditEvent(ctx, domain.AuditEvent{TeamID: job.TeamID, ActorKind: domain.AuditActorSystem, ActorName: "Automation", Action: action, TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": "ai", "outcome": outcome, "job_id": job.ID, "author_user_id": job.AuthorUserID}})
 	})
 }
 

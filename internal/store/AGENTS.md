@@ -53,6 +53,7 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Child DOX Index
 
-- `sqlite/` — SQLite implementation (43 files)
-- `postgres/` — PostgreSQL implementation (34 files)
+- `sqlite/` — SQLite implementation
+- `postgres/` — PostgreSQL implementation
 - `seriesfill/` — Time series gap filling utility
+- `txcontext/` — Nested transaction commit hooks and clean side-effect contexts

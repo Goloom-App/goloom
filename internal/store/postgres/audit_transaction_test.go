@@ -405,7 +405,7 @@ func TestAutomationSourceLockAndPendingOccurrence(t *testing.T) {
 				if err != nil || exists {
 					return err
 				}
-				_, err = s.CreateAIJob(txctx, domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
+				_, err = s.CreateAIJob(txctx, domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Origin: domain.AIJobOriginAutomation, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
 				return err
 			})
 		}()
@@ -441,7 +441,7 @@ func TestAutomationSourceLockAndPendingOccurrence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: otherTeam.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload}); err != nil {
+	if _, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: otherTeam.ID, AuthorUserID: u.ID, Origin: domain.AIJobOriginAutomation, Type: domain.AIJobTypeVoiceEngine, Payload: payload}); err != nil {
 		t.Fatal(err)
 	}
 	exists, err := s.HasPostTemplateRoleMaterialized(ctx, template.ID, occurrence, "main")

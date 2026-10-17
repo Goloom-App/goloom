@@ -1447,11 +1447,11 @@ type LogFilter struct {
 	Offset    int
 }
 
-// Audit actor kinds distinguish a human acting through the web app from an
-// automation acting through an API key/tool.
+// Audit actor kinds distinguish browser users, API-token callers and background systems.
 const (
-	AuditActorHuman = "oidc"
-	AuditActorToken = "api_token"
+	AuditActorHuman  = "oidc"
+	AuditActorToken  = "api_token"
+	AuditActorSystem = "system"
 )
 
 // AuditEvent is a team-scoped record of a user/tool action, so a team can trace
@@ -1463,7 +1463,7 @@ type AuditEvent struct {
 	ActorUserID string            `json:"actor_user_id"`
 	ActorName   string            `json:"actor_name"`
 	ActorEmail  string            `json:"actor_email"`
-	ActorKind   string            `json:"actor_kind"` // AuditActorHuman | AuditActorToken
+	ActorKind   string            `json:"actor_kind"` // AuditActorHuman | AuditActorToken | AuditActorSystem
 	TokenID     *string           `json:"token_id,omitempty"`
 	TokenName   *string           `json:"token_name,omitempty"`
 	Action      string            `json:"action"`      // e.g. "post.create"

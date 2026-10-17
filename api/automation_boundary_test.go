@@ -260,10 +260,8 @@ func TestAutomationCallbackDoesNotRetryStoreFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := 1
-			if operation == "insert" {
-				want = 0
-			}
+			// Post, RSS link/counter and their audit are one transaction.
+			want := 0
 			if s.inserts != 1 || len(posts) != want {
 				t.Fatalf("store failure retried: attempts=%d posts=%d want=%d", s.inserts, len(posts), want)
 			}

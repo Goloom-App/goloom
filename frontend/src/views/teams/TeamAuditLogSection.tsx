@@ -31,7 +31,7 @@ const DETAIL_KEYS = new Set([
   'post_id', 'account_id', 'source_team_id', 'destination_team_id', 'initiator_user_id',
   'initiator_token_id', 'error_code', 'created_count', 'deleted_count', 'imported_count',
   'occurrence_at', 'shift_to', 'mode', 'size_bytes', 'provider', 'source', 'attempt', 'item_key_hash',
-  'removed_count', 'status_before', 'status_after',
+  'removed_count', 'status_before', 'status_after', 'author_user_id', 'attempt_id',
 ])
 
 function actionLabel(t: TFunction, action: string): string {

@@ -27,6 +27,7 @@ func (m *mockStore) ClaimPostTargetPublication(context.Context, string, string) 
 	return true, nil
 }
 
+func (m *mockStore) LockAutomationSource(context.Context, string, string) error { return nil }
 
 // mockStore implements store.Store for scheduler tests. Unconfigured methods return safe zero values.
 type mockStore struct {

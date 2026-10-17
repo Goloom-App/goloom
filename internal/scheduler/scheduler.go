@@ -18,6 +18,7 @@ import (
 	"git.f4mily.net/goloom/internal/push"
 	"git.f4mily.net/goloom/internal/socialtokens"
 	"git.f4mily.net/goloom/internal/store"
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -230,6 +231,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 	var firstErr error
 	for _, account := range accounts {
+		attemptID := uuid.NewString()
 		claimed := false
 		err := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
 			var err error
@@ -237,10 +239,11 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			if err != nil || !claimed {
 				return err
 			}
-			return s.store.EnqueueAuditEvent(ctx, publicationEvent(post, account.ID, "post.publish_started", "pending", ""))
+			return s.store.EnqueueAuditEvent(ctx, publicationEvent(post, account.ID, attemptID, "post.publish_started", "pending", ""))
 		})
 		if err != nil {
 			s.logger.Error("publication claim failed", "post_id", post.ID, "account_id", account.ID, "error", err)
+			s.failPost(ctx, post, fmt.Errorf("publication claim unavailable"))
 			return
 		}
 		if !claimed {
@@ -251,7 +254,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		providerImpl, ok := s.providers.Get(account.Provider)
 		if !ok {
 			err := fmt.Errorf("unsupported provider %q", account.Provider)
-			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
 				return
 			}
 			if firstErr == nil {
@@ -262,7 +265,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		acc, err := socialtokens.EnsureMastodonFresh(ctx, s.store, s.providers, account)
 		if err != nil {
-			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
 				return
 			}
 			if firstErr == nil {
@@ -274,7 +277,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		token, err := s.store.DecryptAccessToken(account)
 		if err != nil {
-			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
 				return
 			}
 			if firstErr == nil {
@@ -285,7 +288,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 
 		refreshToken, err := s.store.DecryptRefreshToken(account)
 		if err != nil {
-			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
 				return
 			}
 			if firstErr == nil {
@@ -309,7 +312,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 			RefreshToken: refreshToken,
 		})
 		if err != nil {
-			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
+			if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "preparation_failed"); persistErr != nil {
 				return
 			}
 			if firstErr == nil {
@@ -330,7 +333,7 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		if err != nil {
 			var rejected *provider.PublicationRejectedError
 			if errors.As(err, &rejected) || provider.IsRateLimitError(err) {
-				if persistErr := s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "provider_rejected"); persistErr != nil {
+				if persistErr := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusFailed, "", err.Error(), nil, "", "post.publish_failure", "failure", "provider_rejected"); persistErr != nil {
 					return
 				}
 				if firstErr == nil {
@@ -338,12 +341,12 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 				}
 				continue
 			}
-			_ = s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusProcessing, "", "publication_outcome_unknown", nil, "", "post.publish_uncertain", "uncertain", "provider_outcome_unknown")
+			_ = s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusProcessing, "", "publication_outcome_unknown", nil, "", "post.publish_uncertain", "uncertain", "provider_outcome_unknown")
 			s.logger.Warn("provider publication outcome unknown; reconciliation required", "post_id", post.ID, "account_id", account.ID)
 			return
 		}
 
-		if err := s.persistTargetOutcome(ctx, post, account.ID, domain.PostStatusPosted, result.URL, "", result.Metadata, provider.ResolveRemotePostID(account.Provider, result), "post.publish_success", "success", ""); err != nil {
+		if err := s.persistTargetOutcome(ctx, post, account.ID, attemptID, domain.PostStatusPosted, result.URL, "", result.Metadata, provider.ResolveRemotePostID(account.Provider, result), "post.publish_success", "success", ""); err != nil {
 			return
 		}
 		if err := s.store.ReplacePostHashtags(ctx, post.ID, account.ID, hashtag.Extract(content)); err != nil {
@@ -365,7 +368,9 @@ func (s *Service) processPost(ctx context.Context, post domain.ScheduledPost) {
 		return
 	}
 
-	if err := s.store.MarkPostResult(ctx, post.ID, post.AttemptCount+1, domain.PostStatusPosted, "", nil); err != nil {
+	resultCtx, cancelResult := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancelResult()
+	if err := s.store.MarkPostResult(resultCtx, post.ID, post.AttemptCount+1, domain.PostStatusPosted, "", nil); err != nil {
 		s.logger.Error("failed to mark post as posted", "post_id", post.ID, "error", err)
 	}
 }
@@ -578,6 +583,8 @@ func (s *Service) syncOnePostTargetMetrics(ctx context.Context, row domain.Poste
 }
 
 func (s *Service) failPost(ctx context.Context, post domain.ScheduledPost, err error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
 	attemptCount := post.AttemptCount + 1
 	if attemptCount >= 5 {
 		if markErr := s.store.MarkPostResult(ctx, post.ID, attemptCount, domain.PostStatusFailed, err.Error(), nil); markErr != nil {
@@ -739,6 +746,19 @@ func (s *Service) maybeShiftOccurrence(ctx context.Context, tmpl *domain.PostTem
 }
 
 func (s *Service) createScheduledPostFromTemplate(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time, occurrenceAt time.Time, role string) error {
+	return s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		if err := s.store.LockAutomationSource(ctx, "post_template", tmpl.ID); err != nil {
+			return err
+		}
+		exists, err := s.store.HasPostTemplateRoleMaterialized(ctx, tmpl.ID, occurrenceAt, role)
+		if err != nil || exists {
+			return err
+		}
+		return s.createScheduledPostFromTemplateOnce(ctx, tmpl, scheduledAt, occurrenceAt, role)
+	})
+}
+
+func (s *Service) createScheduledPostFromTemplateOnce(ctx context.Context, tmpl *domain.PostTemplate, scheduledAt time.Time, occurrenceAt time.Time, role string) error {
 	counterVal := tmpl.CounterNext
 	// Content is NOT expanded here - it stays with {counter} placeholders
 	// and is expanded at publish time in processPost using TemplateCounter

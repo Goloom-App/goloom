@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
-import { createAITeam, signIn } from './helpers'
+import { createAITeam, getFirstTeamId, signIn } from './helpers'
 import { e2eBootstrapToken } from './constants'
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${process.env.PLAYWRIGHT_SERVER_PORT || '18080'}`
@@ -16,7 +16,7 @@ test.afterEach(({ page }) => {
 const event = (team: string, summary = 'Activity one', action = 'team.update') => ({
   id: `${team}-${summary}`, team_id: team, actor_user_id: 'system', actor_name: '', actor_email: '',
   actor_kind: 'system', action, target_type: 'post', target_id: 'post-123', summary,
-  metadata: { channel: 'scheduler', job_id: 'job-123', outcome: 'success', removed_count: '2', status_before: 'failed', status_after: 'scheduled', api_key: 'never-show-secret' },
+  metadata: { channel: 'scheduler', job_id: 'job-123', outcome: 'success', removed_count: '2', status_before: 'failed', status_after: 'scheduled', author_user_id: 'author-123', attempt_id: 'attempt-123', api_key: 'never-show-secret' },
   created_at: '2026-06-01T12:00:00Z',
 })
 const reply = (route: Route, entries: ReturnType<typeof event>[], total = entries.length) =>
@@ -96,16 +96,19 @@ test('team switch resets filter and page and ignores delayed previous-team respo
 })
 
 test('successful mutation immediately refreshes activity', async ({ page }) => {
+  const defaultTeam = await getFirstTeamId(baseURL, e2eBootstrapToken())
   const team = await createAITeam(baseURL, e2eBootstrapToken())
   let calls = 0
   await page.route(`**/v1/teams/${team}/audit-log*`, (route) => reply(route, [event(team, `Revision ${++calls}`)]))
   const card = await openAudit(page, team)
   await expect(card.getByText('Revision 1')).toBeVisible()
   const before = calls
-  await page.getByLabel('Team name', { exact: true }).fill(`Audit updated ${Date.now()}`)
+  await page.getByLabel('Team name', { exact: true }).fill(`E2E AI Updated ${Date.now()}`)
   await page.locator('section.brand-card').filter({ has: page.getByLabel('Team name', { exact: true }) }).getByRole('button', { name: 'Save Changes', exact: true }).click()
   await expect.poll(() => calls).toBeGreaterThan(before)
   await expect(card.getByText(`Revision ${calls}`)).toBeVisible()
+  // Shared specs sign into the first team; a renamed fixture must not displace it.
+  expect(await getFirstTeamId(baseURL, e2eBootstrapToken())).toBe(defaultTeam)
 })
 
 test('polls new activity, shows safe automation details and filters historical actions', async ({ page }) => {
@@ -126,6 +129,8 @@ test('polls new activity, shows safe automation details and filters historical a
   await expect(card.getByText('removed_count: 2')).toBeVisible()
   await expect(card.getByText('status_before: failed')).toBeVisible()
   await expect(card.getByText('status_after: scheduled')).toBeVisible()
+  await expect(card.getByText('author_user_id: author-123')).toBeVisible()
+  await expect(card.getByText('attempt_id: attempt-123')).toBeVisible()
   await expect(card.getByText('never-show-secret')).toHaveCount(0)
   await expect(card.getByText('historical.custom_action', { exact: true })).toBeVisible()
   await card.getByLabel('Filter by action').fill('historical.custom_action')

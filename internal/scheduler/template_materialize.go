@@ -57,6 +57,28 @@ func (s *Service) materializeTemplateHorizon(ctx context.Context, tmpl domain.Po
 }
 
 func (s *Service) materializeTemplateOccurrence(ctx context.Context, tmpl *domain.PostTemplate, occ time.Time) (bool, error) {
+	advanced := false
+	err := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		if err := s.store.LockAutomationSource(ctx, "post_template", tmpl.ID); err != nil {
+			return err
+		}
+		fresh, err := s.store.GetPostTemplate(ctx, tmpl.TeamID, tmpl.ID)
+		if err != nil {
+			return err
+		}
+		if fresh.ID != "" {
+			if fresh.NextMaterializeAt == nil || !fresh.NextMaterializeAt.Equal(occ) {
+				return nil
+			}
+			*tmpl = fresh
+		}
+		advanced, err = s.materializeTemplateOccurrenceOnce(ctx, tmpl, occ)
+		return err
+	})
+	return advanced && err == nil, err
+}
+
+func (s *Service) materializeTemplateOccurrenceOnce(ctx context.Context, tmpl *domain.PostTemplate, occ time.Time) (bool, error) {
 	rule, err := scheduling.ParseRecurrenceJSON(tmpl.RecurrenceJSON)
 	if err != nil {
 		s.logger.Warn("invalid template recurrence_json", "template_id", tmpl.ID, "error", err)
@@ -96,7 +118,7 @@ func (s *Service) materializeTemplateOccurrence(ctx context.Context, tmpl *domai
 	nextCounter := tmpl.CounterNext
 	if !mainExists {
 		if err := s.createScheduledPostFromTemplate(ctx, tmpl, occ, occ, domain.TemplatePostRoleMain); err != nil {
-			return false, nil
+			return false, err
 		}
 		nextCounter = tmpl.CounterNext + 1
 	}
@@ -104,7 +126,7 @@ func (s *Service) materializeTemplateOccurrence(ctx context.Context, tmpl *domai
 		return false, err
 	}
 	if err := s.materializeAnnouncement(ctx, tmpl, createAt, !mainExists); err != nil {
-		s.logger.Error("announcement materialize failed", "template_id", tmpl.ID, "error", err)
+		return false, err
 	}
 	return true, nil
 }

@@ -133,6 +133,71 @@ paths:
                 $ref: "#/components/schemas/Team"
         "400":
           $ref: "#/components/responses/BadRequest"
+  /v1/teams/{teamID}/audit-log:
+    get:
+      tags: [Teams]
+      operationId: listTeamAuditLog
+      summary: List team activity (owner or admin)
+      description: |
+        Requires token read scope and access to the selected team. Returns
+        actor snapshots and safe change/correlation metadata, with deterministic
+        ordering by created_at descending, then id descending. Historical and
+        unknown action names remain valid exact filters. System actors use
+        actor_kind=system; authenticated initiators are separate metadata.
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - in: query
+          name: actor
+          schema: { type: string }
+          description: Exact actor user ID.
+        - in: query
+          name: action
+          schema: { type: string }
+          description: Exact action name, including historical aliases.
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Activity entries and total matching count.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, total]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, team_id, actor_kind, action, target_type, created_at]
+                      properties:
+                        id: { type: string }
+                        team_id: { type: string }
+                        actor_user_id: { type: string }
+                        actor_name: { type: string }
+                        actor_email: { type: string }
+                        actor_kind: { type: string, enum: [oidc, api_token, system] }
+                        token_id: { type: string }
+                        token_name: { type: string }
+                        action: { type: string }
+                        target_type: { type: string }
+                        target_id: { type: string }
+                        summary: { type: string }
+                        metadata:
+                          type: object
+                          additionalProperties: { type: string }
+                        created_at: { type: string, format: date-time }
+                  total: { type: integer, minimum: 0 }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Missing read scope, owner role or team access.
+        "500":
+          description: Audit query failed; clients must not present an empty log.
   /v1/teams/{teamID}/invitations:
     post:
       tags: [Teams]
@@ -1125,6 +1190,8 @@ components:
   responses:
     Unauthorized:
       description: Missing or invalid bearer token
+    Forbidden:
+      description: Missing scope, role or team access
     BadRequest:
       description: Invalid request body or parameters
     NotFound:
@@ -1893,13 +1960,11 @@ components:
         enabled:
           type: boolean
         backfill_completed_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
         last_sync_at:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
         created_at:
           type: string
           format: date-time

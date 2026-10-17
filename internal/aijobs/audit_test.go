@@ -7,6 +7,7 @@ import (
 
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store"
 )
 
@@ -69,5 +70,26 @@ func TestJobDispatchWaitsForOuterCommit(t *testing.T) {
 	jobs, err := s.ListAIJobs(context.Background(), team.ID, 100)
 	if err != nil || len(jobs) != 0 {
 		t.Fatalf("rolled back jobs = %v, %v", jobs, err)
+	}
+}
+
+func TestAutomationJobKeepsSystemActorWithAuthenticatedInitiator(t *testing.T) {
+	s := newJobTestStore(t)
+	user, team := newJobTestTeam(t, s, true)
+	tokenID := "initiating-token"
+	ctx := security.WithPrincipal(context.Background(), domain.AuthenticatedPrincipal{User: user, Kind: domain.AuditActorToken, TokenID: &tokenID})
+	m := aijobs.NewManager(s, &fakeRunner{})
+	_, err := m.SubmitJob(ctx, domain.AIJob{TeamID: team.ID, AuthorUserID: user.ID, Origin: domain.AIJobOriginAutomation, Type: domain.AIJobTypeVoiceEngine})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Wait()
+	events, err := s.ListAuditEvents(ctx, domain.AuditFilter{TeamID: team.ID, Action: "ai_job.submit"})
+	if err != nil || len(events) != 1 {
+		t.Fatalf("submission events: %v, %v", events, err)
+	}
+	e := events[0]
+	if e.ActorKind != domain.AuditActorSystem || e.TokenID != nil || e.Metadata["initiator_user_id"] != user.ID || e.Metadata["initiator_token_id"] != tokenID {
+		t.Fatalf("automation falsely attributed to request actor: %+v", e)
 	}
 }

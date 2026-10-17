@@ -31,6 +31,7 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 - Automated post creation and `post.automation_create` audit commit together. RSS dedupe/counters share that transaction; recurring events correlate occurrence and role. System actors retain initiators separately.
 - Claim publication targets before fallible preparation. Persist provider outcomes with `EnqueueAuditEvent` in one transaction; drain at startup/poll and after outcomes. Delivery retries never invoke providers. Unknown processing targets require reconciliation; explicit rejections and preparation failures remain retryable.
 - External calls and review push stay outside database transactions; defer side effects with `store.AfterAuditCommit` when callers can supply a transaction.
+- Source locks serialize RSS imports and recurring generation with callback/skip/regeneration. Pending dedupe accepts only same-team jobs with server-owned automation provenance; authorship never substitutes for an authenticated initiator.
 
 ## Verification
 

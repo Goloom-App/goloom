@@ -2,6 +2,8 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
@@ -22,6 +24,12 @@ import (
 // round owned, which lets the re-walk step over the skipped slot without burning
 // the edition number and hand it to the next round instead.
 func (s *Service) SkipPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time, shiftTo *time.Time) (domain.PostTemplateRegenerateResult, error) {
+	return s.mutatePostTemplate(ctx, templateID, func(ctx context.Context) (domain.PostTemplateRegenerateResult, error) {
+		return s.skipPostTemplateOccurrence(ctx, teamID, templateID, occurrenceAt, shiftTo)
+	})
+}
+
+func (s *Service) skipPostTemplateOccurrence(ctx context.Context, teamID, templateID string, occurrenceAt time.Time, shiftTo *time.Time) (domain.PostTemplateRegenerateResult, error) {
 	tmpl, err := s.store.GetPostTemplate(ctx, teamID, templateID)
 	if err != nil {
 		return domain.PostTemplateRegenerateResult{}, err
@@ -49,8 +57,39 @@ func (s *Service) SkipPostTemplateOccurrence(ctx context.Context, teamID, templa
 
 	regenerable := regenerableLinkedPosts(scope)
 	if len(regenerable) == 0 {
-		// The cursor has not reached occ yet: nothing is materialized, so the
-		// skip row on its own does the job when the walk gets there.
+		// AI-only rounds may have advanced the cursor without a linked post.
+		// Preserve later pending rounds; this path changes only the exact slot.
+		pending, err := s.pendingRecurringAIJobs(ctx, teamID, templateID, func(at *time.Time) bool { return at != nil && at.Equal(occ) })
+		if err != nil {
+			return domain.PostTemplateRegenerateResult{}, err
+		}
+		if len(pending) == 0 {
+			return domain.PostTemplateRegenerateResult{}, nil
+		}
+		mainCounter, annCounter := 0, 0
+		if shiftTo != nil {
+			for _, job := range pending {
+				meta := parseRecurringAutomationMetaFromPayload(job.Payload)
+				switch meta.PostKind {
+				case domain.TemplatePostRoleMain:
+					mainCounter = meta.TemplateCounter
+				case domain.TemplatePostRoleAnnouncement:
+					annCounter = meta.TemplateCounter
+				}
+			}
+			if mainCounter <= 0 || (tmpl.AnnouncementEnabled && strings.TrimSpace(tmpl.AnnouncementContent) != "" && annCounter <= 0) {
+				return domain.PostTemplateRegenerateResult{}, fmt.Errorf("shift pending occurrence: original counters unavailable")
+			}
+		}
+		if err := s.cancelPendingRecurringAIJobs(ctx, teamID, templateID, &occ); err != nil {
+			return domain.PostTemplateRegenerateResult{}, err
+		}
+		if shiftTo != nil {
+			if err := s.rematerializeOccurrence(ctx, tmpl, occ, mainCounter, annCounter); err != nil {
+				return domain.PostTemplateRegenerateResult{}, err
+			}
+			return domain.PostTemplateRegenerateResult{RegeneratedOccurrences: 1}, nil
+		}
 		return domain.PostTemplateRegenerateResult{}, nil
 	}
 
