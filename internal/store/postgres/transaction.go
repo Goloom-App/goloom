@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/store/txcontext"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -61,4 +63,30 @@ func (s *Store) WithAuditTransaction(ctx context.Context, fn func(context.Contex
 	err = tx.Commit(ctx)
 	committed = err == nil
 	return err
+}
+
+// LockAutomationSource serializes work by source row without retaining a lease
+// after commit, so deliberate regeneration remains possible.
+func (s *Store) LockAutomationSource(ctx context.Context, kind, id string) error {
+	if _, ok := ctx.Value(postgresTxKey{s.pool}).(pgx.Tx); !ok {
+		return fmt.Errorf("automation source lock requires active transaction")
+	}
+	var table string
+	switch kind {
+	case "rss_feed":
+		table = "rss_feed_configs"
+	case "post_template":
+		table = "post_templates"
+	default:
+		return fmt.Errorf("invalid automation source kind")
+	}
+	result, err := s.pool.Exec(ctx, "update "+table+" set id=id where id=$1", id)
+	if err != nil {
+		return err
+	}
+	n := result.RowsAffected()
+	if n != 1 {
+		return fmt.Errorf("automation source: %w", domain.ErrNotFound)
+	}
+	return nil
 }

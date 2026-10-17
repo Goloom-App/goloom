@@ -3,10 +3,13 @@ package sqlite_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/store"
 	"github.com/google/uuid"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -349,4 +352,104 @@ func TestRepairFuturePostedPostsAuditsBothTeams(t *testing.T) {
 	if err != nil || n != 0 {
 		t.Fatalf("repair replay %d: %v", n, err)
 	}
+}
+func TestAutomationSourceLockAndPendingOccurrence(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, err := s.UpsertOIDCUser(ctx, uuid.NewString(), "source@example.test", "Owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	team, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "Source-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	template, err := s.CreatePostTemplate(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostTemplateInput{Title: "Template", Content: "secret", RecurrenceJSON: `{"kind":"weekly","weekdays":[1],"hour":9,"minute":0,"timezone":"UTC"}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	feed, err := s.CreateRSSFeedConfig(ctx, team.ID, domain.RSSFeedConfig{Name: "Feed", FeedURL: "https://example.test/feed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LockAutomationSource(ctx, "post_template", template.ID); err == nil {
+		t.Fatal("lock outside transaction accepted")
+	}
+	for _, item := range []struct{ kind, id string }{{"rss_feed", feed.ID}, {"post_template", template.ID}} {
+		if err := s.WithAuditTransaction(ctx, func(txctx context.Context) error { return s.LockAutomationSource(txctx, item.kind, item.id) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.WithAuditTransaction(ctx, func(txctx context.Context) error { return s.LockAutomationSource(txctx, "invalid", template.ID) }); err == nil {
+		t.Fatal("unknown lock kind accepted")
+	}
+	if err := s.WithAuditTransaction(ctx, func(txctx context.Context) error {
+		return s.LockAutomationSource(txctx, "post_template", uuid.NewString())
+	}); err == nil {
+		t.Fatal("missing source accepted")
+	}
+	occurrence := time.Now().UTC().Truncate(time.Second)
+	payload := []byte(fmt.Sprintf(`{"params":{"recurring_automation":{"template_id":%q,"template_occurrence_at":%q,"post_kind":"main"}}}`, template.ID, occurrence.Format(time.RFC3339)))
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	start := make(chan struct{})
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs <- s.WithAuditTransaction(ctx, func(txctx context.Context) error {
+				if err := s.LockAutomationSource(txctx, "post_template", template.ID); err != nil {
+					return err
+				}
+				exists, err := s.HasPostTemplateRoleMaterialized(txctx, template.ID, occurrence, "main")
+				if err != nil || exists {
+					return err
+				}
+				_, err = s.CreateAIJob(txctx, domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload})
+				return err
+			})
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			if !strings.Contains(err.Error(), "locked") && !strings.Contains(err.Error(), "busy") {
+				t.Fatal(err)
+			}
+		}
+	}
+	jobs, err := s.ListAIJobs(ctx, team.ID, 20)
+	if err != nil || len(jobs) != 1 {
+		t.Fatalf("duplicate source jobs %d: %v", len(jobs), err)
+	}
+	for _, status := range []domain.AIJobStatus{domain.AIJobStatusPending, domain.AIJobStatusProcessing, domain.AIJobStatusCompleted, domain.AIJobStatusFailed} {
+		if err := s.UpdateAIJobStatus(ctx, jobs[0].ID, status, nil, ""); err != nil {
+			t.Fatal(err)
+		}
+		exists, err := s.HasPostTemplateRoleMaterialized(ctx, template.ID, occurrence, "main")
+		want := status == domain.AIJobStatusPending || status == domain.AIJobStatusProcessing
+		if err != nil || exists != want {
+			t.Fatalf("pending occurrence %s = %v, want %v: %v", status, exists, want, err)
+		}
+		other, err := s.HasPostTemplateRoleMaterialized(ctx, template.ID, occurrence, "announcement")
+		if err != nil || other {
+			t.Fatalf("different role matched: %v %v", other, err)
+		}
+	}
+	// Reserved automation metadata from another team must never claim this source.
+	otherTeam, err := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "Other-source-" + uuid.NewString()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateAIJob(ctx, domain.AIJob{TeamID: otherTeam.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Payload: payload}); err != nil {
+		t.Fatal(err)
+	}
+	exists, err := s.HasPostTemplateRoleMaterialized(ctx, template.ID, occurrence, "main")
+	if err != nil || exists {
+		t.Fatalf("foreign-team job claimed source: %v %v", exists, err)
+	}
+
 }

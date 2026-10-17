@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/store/txcontext"
 	"strings"
 
@@ -126,4 +128,33 @@ func (s *Store) WithAuditTransaction(ctx context.Context, fn func(context.Contex
 		return ctx.Err()
 	}
 	return err
+}
+
+// LockAutomationSource serializes work by source row without retaining a lease
+// after commit, so deliberate regeneration remains possible.
+func (s *Store) LockAutomationSource(ctx context.Context, kind, id string) error {
+	if _, ok := ctx.Value(sqliteTxKey{s.db}).(*sql.Tx); !ok {
+		return fmt.Errorf("automation source lock requires active transaction")
+	}
+	var table string
+	switch kind {
+	case "rss_feed":
+		table = "rss_feed_configs"
+	case "post_template":
+		table = "post_templates"
+	default:
+		return fmt.Errorf("invalid automation source kind")
+	}
+	result, err := s.db.ExecContext(ctx, "update "+table+" set id=id where id=?", id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("automation source: %w", domain.ErrNotFound)
+	}
+	return nil
 }
