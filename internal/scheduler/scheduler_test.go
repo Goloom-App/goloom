@@ -16,9 +16,25 @@ import (
 	"git.f4mily.net/goloom/internal/store"
 )
 
+func (m *mockStore) WithAuditTransaction(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}
+func (m *mockStore) EnqueueAuditEvent(ctx context.Context, e domain.AuditEvent) error {
+	return m.InsertAuditEvent(ctx, e)
+}
+func (m *mockStore) DrainAuditEvents(context.Context) error { return nil }
+func (m *mockStore) ClaimPostTargetPublication(context.Context, string, string) (bool, error) {
+	return true, nil
+}
+func (m *mockStore) ClaimAIJobCompletion(context.Context, string, domain.AIJobStatus, []byte, string) (bool, error) {
+	return true, nil
+}
+
 // mockStore implements store.Store for scheduler tests. Unconfigured methods return safe zero values.
 type mockStore struct {
-	mu sync.Mutex
+	mu          sync.Mutex
+	auditEvents []domain.AuditEvent
+	auditErr    error
 
 	listDuePostsFn func(ctx context.Context, limit int) ([]domain.ScheduledPost, error)
 	listDuePosts   []domain.ScheduledPost
@@ -358,7 +374,9 @@ func (m *mockStore) UpdatePushSubscriptionEnabled(ctx context.Context, userID, s
 	return domain.PushSubscription{}, nil
 }
 
-func (m *mockStore) DeletePushSubscription(ctx context.Context, userID, subID string) error { return nil }
+func (m *mockStore) DeletePushSubscription(ctx context.Context, userID, subID string) error {
+	return nil
+}
 
 func (m *mockStore) RetirePushSubscription(ctx context.Context, subID string) error { return nil }
 
@@ -993,7 +1011,12 @@ func (m *mockStore) ListLogEntries(ctx context.Context, filter domain.LogFilter)
 func (m *mockStore) CountLogEntries(ctx context.Context, filter domain.LogFilter) (int, error) {
 	return 0, nil
 }
-func (m *mockStore) InsertAuditEvent(ctx context.Context, e domain.AuditEvent) error { return nil }
+func (m *mockStore) InsertAuditEvent(ctx context.Context, e domain.AuditEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.auditEvents = append(m.auditEvents, e)
+	return m.auditErr
+}
 func (m *mockStore) ListAuditEvents(ctx context.Context, filter domain.AuditFilter) ([]domain.AuditEvent, error) {
 	return nil, nil
 }
@@ -1318,8 +1341,11 @@ func TestService_processPost_publishError(t *testing.T) {
 	svc.processPost(context.Background(), domain.ScheduledPost{ID: "p1", AttemptCount: 0})
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	if len(st.markTargetCalls) != 1 || st.markTargetCalls[0].status != domain.PostStatusFailed {
+	if len(st.markTargetCalls) != 1 || st.markTargetCalls[0].status != domain.PostStatusProcessing {
 		t.Fatalf("calls %#v", st.markTargetCalls)
+	}
+	if len(st.markPostCalls) != 0 {
+		t.Fatal("ambiguous provider outcome must not schedule automatic publication retry")
 	}
 }
 

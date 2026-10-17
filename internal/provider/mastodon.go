@@ -429,7 +429,7 @@ func (p *MastodonProvider) Publish(ctx context.Context, account domain.SocialAcc
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return PublishResult{}, fmt.Errorf("mastodon publish failed with status %d", resp.StatusCode)
+		return PublishResult{}, publicationHTTPError(resp.StatusCode, fmt.Errorf("mastodon publish failed with status %d", resp.StatusCode))
 	}
 
 	var statusPayload mastodonStatusResponse

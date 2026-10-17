@@ -9,25 +9,24 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 )
 
-func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, rawResult json.RawMessage, meta *rssAutomationMeta) {
+func (a *API) finishRSSAutomationFromAI(ctx context.Context, job domain.AIJob, rawResult json.RawMessage, meta *rssAutomationMeta) error {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {
 		_ = json.Unmarshal(rawResult, &res)
 	}
 	content := strings.TrimSpace(res.Content)
 	if content == "" {
-		a.finishRSSAutomationFallback(ctx, job, meta)
-		return
+		return a.finishRSSAutomationFallback(ctx, job, meta)
 	}
-	a.createRSSAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
+	return a.createRSSAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
 }
 
-func (a *API) finishRSSAutomationFallback(ctx context.Context, job domain.AIJob, meta *rssAutomationMeta) {
+func (a *API) finishRSSAutomationFallback(ctx context.Context, job domain.AIJob, meta *rssAutomationMeta) error {
 	content := meta.FallbackContent
 	if content == "" {
-		return
+		return nil
 	}
-	a.createRSSAutomationPost(ctx, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
+	return a.createRSSAutomationPost(ctx, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
 }
 
 func (a *API) createRSSAutomationPost(
@@ -37,9 +36,9 @@ func (a *API) createRSSAutomationPost(
 	content string,
 	res aiCallbackResult,
 	targetAccounts []string,
-) {
+) error {
 	if len(targetAccounts) == 0 {
-		return
+		return nil
 	}
 	normalizedOverrides := domain.NormalizeAccountContentOverride(res.AccountContentOverride, targetAccounts)
 	scheduledAt := rssAutomationScheduledAt(meta, res)
@@ -50,10 +49,6 @@ func (a *API) createRSSAutomationPost(
 	}
 
 	feedID := meta.FeedID
-	principal := domain.AuthenticatedPrincipal{
-		User: domain.User{ID: job.AuthorUserID},
-		Kind: "api_token",
-	}
 	rssPost := domain.CreatePostInput{
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
@@ -67,11 +62,13 @@ func (a *API) createRSSAutomationPost(
 		UseVersions:            len(normalizedOverrides) > 0,
 	}
 	rssPost.EnsureTitle()
-	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, rssPost)
+	post, err := a.createJobAutomationPost(ctx, job, rssPost, map[string]string{"feed_id": meta.FeedID})
 	if err != nil {
-		return
+		return err
 	}
 	a.notifyReviewCreated(ctx, job.TeamID, post)
-	_ = a.store.UpdateRSSImportedItemPostID(ctx, meta.FeedID, meta.ItemKey, post.ID)
-	_ = a.store.IncrementRSSFeedCounter(ctx, meta.FeedID)
+	if err := a.store.UpdateRSSImportedItemPostID(ctx, meta.FeedID, meta.ItemKey, post.ID); err != nil {
+		return err
+	}
+	return a.store.IncrementRSSFeedCounter(ctx, meta.FeedID)
 }

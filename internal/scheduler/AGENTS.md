@@ -26,6 +26,9 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 - Job failures logged, not fatal
 - Template materialization uses domain template variables
 - Integration with store for job persistence
+- Automated post creation and `post.automation_create` audit commit together. RSS dedupe/counters share that transaction; recurring events correlate occurrence and role. System actors retain initiators separately.
+- Claim publication targets before fallible preparation. Persist provider outcomes with `EnqueueAuditEvent` in one transaction; drain at startup/poll and after outcomes. Delivery retries never invoke providers. Unknown processing targets require reconciliation; explicit rejections and preparation failures remain retryable.
+- External calls and review push stay outside database transactions; defer side effects with `store.AfterAuditCommit` when callers can supply a transaction.
 
 ## Verification
 

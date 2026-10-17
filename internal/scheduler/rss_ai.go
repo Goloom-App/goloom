@@ -99,6 +99,16 @@ func (s *Service) createRSSPostDirect(
 	draft bool,
 	ownerID string,
 ) error {
+	return s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		already, err := s.store.RSSItemAlreadyImported(ctx, feed.ID, itemKey)
+		if err != nil || already {
+			return err
+		}
+		return s.createRSSPostDirectOnce(ctx, feed, itemKey, content, title, scheduledAt, draft, ownerID)
+	})
+}
+
+func (s *Service) createRSSPostDirectOnce(ctx context.Context, feed domain.RSSFeedConfig, itemKey, content, title string, scheduledAt time.Time, draft bool, ownerID string) error {
 	feedID := feed.ID
 	input := domain.CreatePostInput{
 		Title:          title,
@@ -112,14 +122,13 @@ func (s *Service) createRSSPostDirect(
 	}
 	input.EnsureTitle()
 	principal := domain.AuthenticatedPrincipal{User: domain.User{ID: ownerID}, Kind: "system"}
-	post, err := s.store.CreateScheduledPost(ctx, feed.TeamID, principal, input)
+	post, err := s.createAutomationPost(ctx, feed.TeamID, principal, input, map[string]string{"feed_id": feed.ID, "item_key_hash": sourceKey(itemKey)}, func(ctx context.Context, post domain.ScheduledPost) error {
+		if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
+			return err
+		}
+		return s.store.IncrementRSSFeedCounter(ctx, feed.ID)
+	})
 	if err != nil {
-		return err
-	}
-	if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
-		return err
-	}
-	if err := s.store.IncrementRSSFeedCounter(ctx, feed.ID); err != nil {
 		return err
 	}
 	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)

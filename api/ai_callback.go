@@ -28,51 +28,79 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 		return
 	}
 
-	job, err := a.store.GetAIJobByIDGlobal(ctx, jobID)
-	if err != nil {
-		a.log.ErrorContext(ctx, "ai job completion: job not found", "job_id", jobID, "error", err)
-		return
-	}
-	if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed {
-		return
-	}
-
-	var resultBytes []byte
-	if len(result) > 0 {
-		resultBytes = []byte(result)
-	}
-	if err := a.store.UpdateAIJobStatus(ctx, job.ID, status, resultBytes, errorMessage); err != nil {
-		a.log.ErrorContext(ctx, "ai job completion: update status failed", "job_id", jobID, "error", err)
-		return
-	}
-
-	updatedJob, err := a.store.GetAIJobByIDGlobal(ctx, job.ID)
-	if err != nil {
-		a.log.ErrorContext(ctx, "ai job completion: reload job failed", "job_id", jobID, "error", err)
-		return
-	}
-
-	if status == domain.AIJobStatusCompleted {
-		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRSSAutomationFromAI(ctx, job, result, meta)
-		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRecurringAutomationFromAI(ctx, job, result, meta)
-		} else {
+	var completed *domain.AIJob
+	err := a.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		job, err := a.store.GetAIJobByIDGlobal(ctx, jobID)
+		if err != nil {
+			return err
+		}
+		if job.Status == domain.AIJobStatusCompleted || job.Status == domain.AIJobStatusFailed {
+			return nil
+		}
+		claimed, err := a.store.ClaimAIJobCompletion(ctx, job.ID, status, result, errorMessage)
+		if err != nil || !claimed {
+			return err
+		}
+		action := "ai_job.complete"
+		outcome := "success"
+		if status == domain.AIJobStatusFailed {
+			action, outcome = "ai_job.fail", "failure"
+		}
+		rssMeta := parseRSSAutomationMeta(job.Payload)
+		recurringMeta := parseRecurringAutomationMeta(job.Payload)
+		var res aiCallbackResult
+		_ = json.Unmarshal(result, &res)
+		fallback := status == domain.AIJobStatusFailed || strings.TrimSpace(res.Content) == ""
+		if job.Type == domain.AIJobTypeVoiceEngine && (rssMeta != nil || recurringMeta != nil) {
+			if fallback {
+				action, outcome = "ai_job.fallback", "fallback"
+			}
+			switch {
+			case rssMeta != nil && fallback:
+				err = a.finishRSSAutomationFallback(ctx, job, rssMeta)
+			case rssMeta != nil:
+				err = a.finishRSSAutomationFromAI(ctx, job, result, rssMeta)
+			case fallback:
+				err = a.finishRecurringAutomationFallback(ctx, job, recurringMeta)
+			default:
+				err = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
+			}
+		} else if status == domain.AIJobStatusCompleted {
 			profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 			if profErr == nil && profile.AutoPublishEnabled {
-				a.autoCreatePostFromCallbackResult(ctx, job, result)
+				err = a.autoCreatePostFromCallbackResult(ctx, job, result)
 			}
 		}
-	} else {
-		if meta := parseRSSAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRSSAutomationFallback(ctx, job, meta)
-		} else if meta := parseRecurringAutomationMeta(job.Payload); meta != nil && job.Type == domain.AIJobTypeVoiceEngine {
-			a.finishRecurringAutomationFallback(ctx, job, meta)
+		if err != nil {
+			return err
 		}
+		metadata := map[string]string{"outcome": outcome}
+		if rssMeta != nil {
+			metadata["feed_id"] = rssMeta.FeedID
+		}
+		if recurringMeta != nil {
+			metadata["template_id"], metadata["post_kind"] = recurringMeta.TemplateID, recurringMeta.PostKind
+			if recurringMeta.TemplateOccurrenceAt != nil {
+				metadata["occurrence_at"] = recurringMeta.TemplateOccurrenceAt.UTC().Format(time.RFC3339Nano)
+			}
+		}
+		if err := a.store.InsertAuditEvent(ctx, jobAuditEvent(job, action, "ai_job", job.ID, metadata)); err != nil {
+			return err
+		}
+		updated, err := a.store.GetAIJobByIDGlobal(ctx, job.ID)
+		if err == nil {
+			completed = &updated
+		}
+		return err
+	})
+	if err != nil {
+		a.log.ErrorContext(ctx, "ai job completion transaction failed", "job_id", jobID, "error", err)
+		return
 	}
-
-	if event, evErr := aiJobStreamEvent(updatedJob); evErr == nil {
-		a.hub.Publish(job.TeamID, event)
+	if completed != nil {
+		if event, err := aiJobStreamEvent(*completed); err == nil {
+			a.hub.Publish(completed.TeamID, event)
+		}
 	}
 }
 
@@ -89,7 +117,7 @@ func (a *API) NotifyAIJobStatus(ctx context.Context, jobID string) {
 	}
 }
 
-func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) {
+func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.AIJob, rawResult json.RawMessage) error {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {
 		_ = json.Unmarshal(rawResult, &res)
@@ -97,7 +125,7 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 
 	content := strings.TrimSpace(res.Content)
 	if content == "" {
-		return
+		return nil
 	}
 
 	scheduledAt := time.Now().UTC()
@@ -111,11 +139,6 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 	targetAccounts := targetAccountIDsFromJobPayload(job.Payload)
 	overrides := domain.NormalizeAccountContentOverride(res.AccountContentOverride, targetAccounts)
 
-	principal := domain.AuthenticatedPrincipal{
-		User: domain.User{ID: job.AuthorUserID},
-		Kind: "api_token",
-	}
-
 	aiPost := domain.CreatePostInput{
 		Title:                  strings.TrimSpace(res.Title),
 		Content:                content,
@@ -127,7 +150,8 @@ func (a *API) autoCreatePostFromCallbackResult(ctx context.Context, job domain.A
 		UseVersions:            len(overrides) > 0,
 	}
 	aiPost.EnsureTitle()
-	_, _ = a.store.CreateScheduledPost(ctx, job.TeamID, principal, aiPost)
+	_, err := a.createJobAutomationPost(ctx, job, aiPost, map[string]string{})
+	return err
 }
 
 func targetAccountIDsFromJobPayload(payload json.RawMessage) []string {

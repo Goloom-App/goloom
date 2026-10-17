@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/socialtokens"
@@ -61,7 +62,16 @@ func (s *Service) importExternalPostsForTeam(ctx context.Context, settings domai
 		since = settings.LastSyncAt.UTC()
 	}
 
-	if removed, err := s.store.DeleteRedundantImportedPosts(ctx, teamID); err != nil {
+	removed := 0
+	cleanupErr := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		removed, err = s.store.DeleteRedundantImportedPosts(ctx, teamID)
+		if err != nil || removed == 0 {
+			return err
+		}
+		return s.store.InsertAuditEvent(ctx, automationEvent(teamID, "post.cleanup", "team", teamID, map[string]string{"removed_count": fmt.Sprint(removed)}))
+	})
+	if err := cleanupErr; err != nil {
 		s.logger.WarnContext(ctx, "external post import: duplicate cleanup failed", "team_id", teamID, "error", err)
 	} else if removed > 0 {
 		s.logger.InfoContext(ctx, "external post import: removed duplicate imported posts", "team_id", teamID, "removed", removed)
@@ -145,13 +155,24 @@ func (s *Service) importExternalPostsForAccount(ctx context.Context, teamID, own
 		if exists {
 			continue
 		}
-		created, err := s.store.CreateImportedPost(ctx, teamID, ownerID, domain.ImportedPostInput{
-			AccountID:       account.ID,
-			RemotePostID:    ap.RemoteID,
-			Content:         ap.Content,
-			PublishedAt:     ap.PublishedAt,
-			PublishedURL:    ap.URL,
-			PublishMetadata: ap.Metadata,
+		var created domain.ScheduledPost
+		err = s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+			created, err = s.store.CreateImportedPost(ctx, teamID, ownerID, domain.ImportedPostInput{
+				AccountID:       account.ID,
+				RemotePostID:    ap.RemoteID,
+				Content:         ap.Content,
+				PublishedAt:     ap.PublishedAt,
+				PublishedURL:    ap.URL,
+				PublishMetadata: ap.Metadata,
+			})
+			if err != nil {
+				return err
+			}
+			metadata := map[string]string{"account_id": account.ID, "post_id": created.ID}
+			if p := auth.PrincipalFromContext(ctx); p != nil {
+				metadata["initiator_user_id"] = p.User.ID
+			}
+			return s.store.InsertAuditEvent(ctx, automationEvent(teamID, "account.import", "account", account.ID, metadata))
 		})
 		if err != nil {
 			s.logger.WarnContext(ctx, "external post import create failed", "remote_id", ap.RemoteID, "error", err)

@@ -17,8 +17,10 @@ import (
 
 	"git.f4mily.net/goloom/internal/ai"
 	"git.f4mily.net/goloom/internal/aicontext"
+	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
 	storepkg "git.f4mily.net/goloom/internal/store"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -184,7 +186,7 @@ func (m *Manager) RecoverInterrupted(ctx context.Context) (int, error) {
 			completer.CompleteAIJob(ctx, job.ID, domain.AIJobStatusFailed, nil, InterruptedMessage)
 			continue
 		}
-		if err := m.store.UpdateAIJobStatus(ctx, job.ID, domain.AIJobStatusFailed, nil, InterruptedMessage); err != nil {
+		if err := m.persistCompletion(ctx, job.ID, domain.AIJobStatusFailed, nil, InterruptedMessage); err != nil {
 			return 0, fmt.Errorf("Manager.RecoverInterrupted: fail job %s: %w", job.ID, err)
 		}
 	}
@@ -218,20 +220,39 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 		return domain.AIJob{}, fmt.Errorf("Manager.SubmitJob: get ai context: %w", err)
 	}
 
-	job, err := m.store.CreateAIJob(ctx, input)
+	var job domain.AIJob
+	err = m.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		var err error
+		job, err = m.store.CreateAIJob(ctx, input)
+		if err != nil {
+			return err
+		}
+		event := domain.AuditEvent{ID: uuid.NewString(), TeamID: job.TeamID, ActorKind: "system", ActorName: "Automation", Action: "ai_job.submit", TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": "scheduler", "outcome": "success", "job_id": job.ID, "initiator_user_id": job.AuthorUserID}}
+		if p := auth.PrincipalFromContext(ctx); p != nil {
+			event.ActorUserID, event.ActorName, event.ActorEmail, event.ActorKind = p.User.ID, p.User.Name, p.User.Email, p.Kind
+			event.Metadata["channel"] = "rest"
+			if p.Kind == domain.AuditActorToken {
+				event.TokenID, event.TokenName = p.TokenID, p.TokenName
+			}
+		}
+		return m.store.InsertAuditEvent(ctx, event)
+	})
 	if err != nil {
 		return domain.AIJob{}, fmt.Errorf("Manager.SubmitJob: create ai job: %w", err)
 	}
 
-	// The job intentionally outlives the submitting request: it keeps the
-	// request's values but not its cancellation; Cancel/execute end it.
-	jobCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	m.cancelMu.Lock()
-	m.cancels[job.ID] = cancel
-	m.cancelMu.Unlock()
+	storepkg.AfterAuditCommit(ctx, func(ctx context.Context) {
+		// The job intentionally outlives the submitting request: it keeps the
+		// request's values but not its cancellation; Cancel/execute end it.
+		jobCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		m.cancelMu.Lock()
+		m.cancels[job.ID] = cancel
+		m.cancelMu.Unlock()
 
-	m.wg.Add(1)
-	go m.execute(jobCtx, cancel, m.slots, job, config, aiContext) // #nosec G118 -- background job, decoupled from request lifecycle; cancelled via Cancel/execute
+		m.wg.Add(1)
+		go m.execute(jobCtx, cancel, m.slots, job, config, aiContext) // #nosec G118 -- background job, decoupled from request lifecycle; cancelled via Cancel/execute
+
+	})
 
 	return job, nil
 }
@@ -306,7 +327,27 @@ func (m *Manager) finish(ctx context.Context, jobID string, status domain.AIJobS
 		completer.CompleteAIJob(ctx, jobID, status, result, errorMessage)
 		return
 	}
-	_ = m.store.UpdateAIJobStatus(ctx, jobID, status, result, errorMessage)
+	if err := m.persistCompletion(ctx, jobID, status, result, errorMessage); err != nil {
+		m.log().Error("AI completion audit transaction failed", "job_id", jobID, "error", err)
+	}
+}
+
+func (m *Manager) persistCompletion(ctx context.Context, jobID string, status domain.AIJobStatus, result json.RawMessage, errorMessage string) error {
+	return m.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
+		claimed, err := m.store.ClaimAIJobCompletion(ctx, jobID, status, result, errorMessage)
+		if err != nil || !claimed {
+			return err
+		}
+		job, err := m.store.GetAIJobByIDGlobal(ctx, jobID)
+		if err != nil {
+			return err
+		}
+		action, outcome := "ai_job.complete", "success"
+		if status == domain.AIJobStatusFailed {
+			action, outcome = "ai_job.fail", "failure"
+		}
+		return m.store.InsertAuditEvent(ctx, domain.AuditEvent{TeamID: job.TeamID, ActorKind: "system", ActorName: "Automation", Action: action, TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": "ai", "outcome": outcome, "job_id": job.ID, "initiator_user_id": job.AuthorUserID}})
+	})
 }
 
 func isMissingAIServiceConfig(err error) bool {

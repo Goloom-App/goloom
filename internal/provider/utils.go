@@ -19,6 +19,20 @@ import (
 
 var defaultHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
+// PublicationRejectedError means the provider explicitly rejected the write.
+// Transport failures, timeouts and 5xx responses can have accepted the post.
+type PublicationRejectedError struct{ Err error }
+
+func (e *PublicationRejectedError) Error() string { return e.Err.Error() }
+func (e *PublicationRejectedError) Unwrap() error { return e.Err }
+
+func publicationHTTPError(status int, err error) error {
+	if status >= 400 && status < 500 && status != http.StatusRequestTimeout {
+		return &PublicationRejectedError{Err: err}
+	}
+	return err
+}
+
 // RateLimitError indicates the provider returned HTTP 429 Too Many Requests.
 type RateLimitError struct {
 	RetryAfter time.Duration

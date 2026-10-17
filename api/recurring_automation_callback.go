@@ -9,7 +9,7 @@ import (
 	"git.f4mily.net/goloom/internal/domain"
 )
 
-func (a *API) finishRecurringAutomationFromAI(ctx context.Context, job domain.AIJob, rawResult json.RawMessage, meta *recurringAutomationMeta) {
+func (a *API) finishRecurringAutomationFromAI(ctx context.Context, job domain.AIJob, rawResult json.RawMessage, meta *recurringAutomationMeta) error {
 	var res aiCallbackResult
 	if len(rawResult) > 0 {
 		_ = json.Unmarshal(rawResult, &res)
@@ -18,22 +18,21 @@ func (a *API) finishRecurringAutomationFromAI(ctx context.Context, job domain.AI
 	if content == "" {
 		a.log.WarnContext(ctx, "recurring automation: empty ai content, using template fallback",
 			"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind)
-		a.finishRecurringAutomationFallback(ctx, job, meta)
-		return
+		return a.finishRecurringAutomationFallback(ctx, job, meta)
 	}
-	a.createRecurringAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
+	return a.createRecurringAutomationPost(ctx, job, meta, content, res, targetAccountIDsFromJobPayload(job.Payload))
 }
 
-func (a *API) finishRecurringAutomationFallback(ctx context.Context, job domain.AIJob, meta *recurringAutomationMeta) {
+func (a *API) finishRecurringAutomationFallback(ctx context.Context, job domain.AIJob, meta *recurringAutomationMeta) error {
 	content := meta.FallbackContent
 	if content == "" {
 		a.log.WarnContext(ctx, "recurring automation: fallback skipped, no template content",
 			"job_id", job.ID, "template_id", meta.TemplateID)
-		return
+		return nil
 	}
 	a.log.WarnContext(ctx, "recurring automation: using expanded template fallback",
 		"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind)
-	a.createRecurringAutomationPost(ctx, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
+	return a.createRecurringAutomationPost(ctx, job, meta, content, aiCallbackResult{}, targetAccountIDsFromJobPayload(job.Payload))
 }
 
 func (a *API) createRecurringAutomationPost(
@@ -43,9 +42,9 @@ func (a *API) createRecurringAutomationPost(
 	content string,
 	res aiCallbackResult,
 	targetAccounts []string,
-) {
+) error {
 	if len(targetAccounts) == 0 {
-		return
+		return nil
 	}
 	normalizedOverrides := domain.NormalizeAccountContentOverride(res.AccountContentOverride, targetAccounts)
 	scheduledAt := meta.ScheduledAt
@@ -66,10 +65,6 @@ func (a *API) createRecurringAutomationPost(
 	if meta.PostKind == domain.TemplatePostRoleAnnouncement {
 		role = domain.TemplatePostRoleAnnouncement
 	}
-	principal := domain.AuthenticatedPrincipal{
-		User: domain.User{ID: job.AuthorUserID},
-		Kind: "api_token",
-	}
 	recPost := domain.CreatePostInput{
 		Title:                  domain.ResolveAutomationPostTitle(meta.PostTitle, res.Title),
 		Content:                content,
@@ -86,11 +81,12 @@ func (a *API) createRecurringAutomationPost(
 		UseVersions:            len(normalizedOverrides) > 0,
 	}
 	recPost.EnsureTitle()
-	post, err := a.store.CreateScheduledPost(ctx, job.TeamID, principal, recPost)
+	post, err := a.createJobAutomationPost(ctx, job, recPost, map[string]string{"template_id": meta.TemplateID, "post_kind": meta.PostKind})
 	if err != nil {
 		a.log.ErrorContext(ctx, "recurring automation: create scheduled post failed",
 			"job_id", job.ID, "template_id", meta.TemplateID, "post_kind", meta.PostKind, "error", err)
-		return
+		return err
 	}
 	a.notifyReviewCreated(ctx, job.TeamID, post)
+	return nil
 }
