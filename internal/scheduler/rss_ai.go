@@ -68,6 +68,7 @@ func (s *Service) submitRSSAIEnhancement(
 	}
 
 	job, err := s.jobManager.SubmitJob(ctx, domain.AIJob{
+		Origin:       domain.AIJobOriginAutomation,
 		TeamID:       feed.TeamID,
 		AuthorUserID: ownerID,
 		Type:         domain.AIJobTypeVoiceEngine,
@@ -119,7 +120,7 @@ func (s *Service) createRSSPostDirect(
 	if err := s.store.RecordRSSImportedItem(ctx, feed.ID, itemKey, post.ID); err != nil {
 		return err
 	}
-	if err := s.store.IncrementRSSFeedCounter(ctx, feed.ID); err != nil {
+	if err := s.store.IncrementRSSFeedCounter(ctx, feed.TeamID, feed.ID); err != nil {
 		return err
 	}
 	s.logger.InfoContext(ctx, "rss import: post created", "feed_id", feed.ID, "post_id", post.ID, "status", post.Status)

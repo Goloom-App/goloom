@@ -17,6 +17,7 @@ import (
 
 func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
+		`alter table ai_jobs add column origin text not null default 'user'`,
 		`alter table teams add column scheduling_prefs text not null default '{}'`,
 		`alter table scheduled_posts add column post_template_id text`,
 		`alter table scheduled_posts add column template_counter integer`,
@@ -177,7 +178,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 }
 
 // migrateSQLiteProviderConstraint relaxes the hard-coded provider enum CHECK on
-// provider_instances and social_accounts to `provider <> ''`, so new Mastodon-compatible
+// provider_instances and social_accounts to `provider <> ”`, so new Mastodon-compatible
 // providers (e.g. pixelfed) are accepted. The provider registry validates names at runtime.
 func migrateSQLiteProviderConstraint(ctx context.Context, db *sql.DB) error {
 	if err := rebuildSQLiteProviderTable(ctx, db, "provider_instances", `
@@ -264,7 +265,7 @@ func migrateSQLiteEmbeddedAnnouncements(ctx context.Context, db *sql.DB) error {
 	defer rows.Close()
 	type childRow struct {
 		id, parentID, title, content, targets string
-		daysBefore, counterNext                int
+		daysBefore, counterNext               int
 	}
 	var children []childRow
 	for rows.Next() {

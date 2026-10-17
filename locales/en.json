@@ -1194,6 +1194,7 @@
     "team_profile_not_found": "team profile not found",
     "campaign_format_not_found": "campaign format not found",
     "style_example_limit_reached": "style example limit reached",
+    "reserved_ai_job_param": "Automation parameters are reserved for server-created jobs",
     "ai_service_not_configured": "AI service is not configured",
     "invalid_ai_prompt_params": "invalid AI prompt parameters",
     "invalid_ai_base_url": "AI base URL is invalid or points to a private network address (an admin can allow hosts via AI_ALLOWED_PRIVATE_HOSTS)",

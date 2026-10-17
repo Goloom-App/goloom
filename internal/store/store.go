@@ -68,6 +68,8 @@ type Store interface {
 	GetAIJobByID(ctx context.Context, teamID string, id string) (domain.AIJob, error)
 	GetAIJobByIDGlobal(ctx context.Context, id string) (domain.AIJob, error)
 	ListAIJobs(ctx context.Context, teamID string, limit int) ([]domain.AIJob, error)
+	// ClaimAIJobCompletion persists terminal status only for the winning caller.
+	ClaimAIJobCompletion(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) (bool, error)
 	UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) error
 	ListPendingAIJobs(ctx context.Context, limit int) ([]domain.AIJob, error)
 	// ListUnfinishedAIJobs returns pending and processing jobs whose last
@@ -92,8 +94,8 @@ type Store interface {
 	CountRSSFeedPostsToday(ctx context.Context, feedID string) (int, error)
 	RSSItemAlreadyImported(ctx context.Context, feedID, itemKey string) (bool, error)
 	RecordRSSImportedItem(ctx context.Context, feedID, itemKey, postID string) error
-	UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error
-	IncrementRSSFeedCounter(ctx context.Context, feedID string) error
+	UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error
+	IncrementRSSFeedCounter(ctx context.Context, teamID, feedID string) error
 	UpdateRSSFeedLastFetched(ctx context.Context, feedID string, lastFetchedAt time.Time) error
 	ListAutomationReviewDrafts(ctx context.Context, teamID string, limit int) ([]domain.ReviewQueueItem, error)
 

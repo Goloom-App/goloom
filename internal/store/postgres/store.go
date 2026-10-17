@@ -1318,7 +1318,8 @@ func (s *Store) LoadPostTargets(ctx context.Context, postID string) ([]domain.So
 		       a.avatar_url,
 		       a.access_token_ciphertext, a.refresh_token_ciphertext, a.max_chars_override, a.access_token_expires_at, a.created_at
 		from scheduled_post_targets t
-		join social_accounts a on a.id = t.account_id
+		join scheduled_posts p on p.id = t.post_id
+		join social_accounts a on a.id = t.account_id and a.team_id = p.team_id
 		where t.post_id = $1 and t.status <> 'posted'
 	`
 

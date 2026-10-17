@@ -51,7 +51,7 @@ type Options struct {
 	// immediate publish. Mutating callers (create/update/schedule) set it; the
 	// validate preview leaves it false so the composer can still report
 	// per-destination limits without a hard failure, and automation paths that
-	// legitimately publish at the current time bypass Prepare entirely.
+	// legitimately publish at the current time leave it false.
 	// Drafts and publish_now requests are always exempt.
 	RejectPastScheduledAt bool
 }

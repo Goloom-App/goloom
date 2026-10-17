@@ -309,6 +309,7 @@ create table if not exists ai_jobs (
     author_user_id uuid not null references users(id),
     job_type text not null,
     status text not null default 'pending',
+    origin text not null default 'user',
     payload jsonb not null default '{}',
     result jsonb,
     error_message text,
@@ -625,3 +626,5 @@ create table if not exists vapid_keys (
     private_key text not null,
     updated_at timestamptz not null default now()
 );
+
+alter table ai_jobs add column if not exists origin text not null default 'user';

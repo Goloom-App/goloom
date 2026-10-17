@@ -203,7 +203,7 @@ func coreModifyPost(ctx context.Context, d Deps, inv Invocation, in ModifyPostIn
 		return ModifyPostOutput{}, err
 	}
 
-	existing, err := d.Store.GetScheduledPostByID(ctx, in.PostID)
+	existing, err := d.Store.GetScheduledPost(ctx, in.TeamID, in.PostID)
 	if err != nil {
 		return ModifyPostOutput{}, err
 	}
@@ -274,7 +274,7 @@ func coreDeletePost(ctx context.Context, d Deps, inv Invocation, in DeletePostIn
 	if err := requireScope(inv, auth.ScopeDelete); err != nil {
 		return DeletePostOutput{}, err
 	}
-	existing, err := d.Store.GetScheduledPostByID(ctx, in.PostID)
+	existing, err := d.Store.GetScheduledPost(ctx, in.TeamID, in.PostID)
 	if err != nil {
 		return DeletePostOutput{}, err
 	}
@@ -300,7 +300,7 @@ func confirmModifyPost(ctx context.Context, d Deps, args json.RawMessage) (bool,
 	if in.ScheduledAt != nil || in.TargetAccounts != nil {
 		return true, "it changes the schedule or target accounts of a post."
 	}
-	existing, err := d.Store.GetScheduledPostByID(ctx, in.PostID)
+	existing, err := d.Store.GetScheduledPost(ctx, in.TeamID, in.PostID)
 	if err != nil {
 		return true, "the post could not be checked."
 	}

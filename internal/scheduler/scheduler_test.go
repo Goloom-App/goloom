@@ -234,6 +234,10 @@ func (m *mockStore) ListAIJobs(ctx context.Context, teamID string, limit int) ([
 	return nil, nil
 }
 
+func (m *mockStore) ClaimAIJobCompletion(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) (bool, error) {
+	return true, nil
+}
+
 func (m *mockStore) UpdateAIJobStatus(ctx context.Context, id string, status domain.AIJobStatus, result []byte, errorMsg string) error {
 	return nil
 }
@@ -312,11 +316,11 @@ func (m *mockStore) RecordRSSImportedItem(ctx context.Context, feedID, itemKey, 
 	return nil
 }
 
-func (m *mockStore) UpdateRSSImportedItemPostID(ctx context.Context, feedID, itemKey, postID string) error {
+func (m *mockStore) UpdateRSSImportedItemPostID(ctx context.Context, teamID, feedID, itemKey, postID string) error {
 	return nil
 }
 
-func (m *mockStore) IncrementRSSFeedCounter(ctx context.Context, feedID string) error {
+func (m *mockStore) IncrementRSSFeedCounter(ctx context.Context, teamID, feedID string) error {
 	return nil
 }
 
@@ -358,7 +362,9 @@ func (m *mockStore) UpdatePushSubscriptionEnabled(ctx context.Context, userID, s
 	return domain.PushSubscription{}, nil
 }
 
-func (m *mockStore) DeletePushSubscription(ctx context.Context, userID, subID string) error { return nil }
+func (m *mockStore) DeletePushSubscription(ctx context.Context, userID, subID string) error {
+	return nil
+}
 
 func (m *mockStore) RetirePushSubscription(ctx context.Context, subID string) error { return nil }
 

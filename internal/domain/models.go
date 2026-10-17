@@ -321,7 +321,13 @@ type StyleExample struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+const (
+	AIJobOriginUser       = "user"
+	AIJobOriginAutomation = "automation"
+)
+
 type AIJob struct {
+	Origin       string          `json:"-"`
 	ID           string          `json:"id"`
 	TeamID       string          `json:"team_id"`
 	AuthorUserID string          `json:"author_user_id"`

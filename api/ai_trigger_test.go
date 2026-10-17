@@ -1,16 +1,24 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
+	"git.f4mily.net/goloom/api"
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/auth"
+	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/security"
 	sqlitestore "git.f4mily.net/goloom/internal/store/sqlite"
 	"github.com/google/uuid"
 )
@@ -96,7 +104,8 @@ func TestAITrigger(t *testing.T) {
 
 		rec := doRequest(t, fixture.h, http.MethodPost, "/v1/teams/"+fixture.team.ID+"/ai-trigger", fixture.bearer, map[string]any{
 			"type":   domain.AIJobTypeVoiceEngine,
-			"params": map[string]any{"prompt_hint": "ship it"},
+			"origin": "automation",
+			"params": map[string]any{"prompt_hint": "ship it", "origin": "automation"},
 		})
 		if rec.Code != http.StatusAccepted {
 			t.Fatalf("POST ai-trigger: got %d; body: %s", rec.Code, rec.Body.String())
@@ -126,6 +135,9 @@ func TestAITrigger(t *testing.T) {
 		job, err := fixture.store.GetAIJobByID(ctx, fixture.team.ID, got.JobID)
 		if err != nil {
 			t.Fatalf("GetAIJobByID: %v", err)
+		}
+		if job.Origin != domain.AIJobOriginUser {
+			t.Fatalf("API origin = %q, want user", job.Origin)
 		}
 		if job.AuthorUserID != fixture.user.ID {
 			t.Fatalf("author_user_id = %q, want %q", job.AuthorUserID, fixture.user.ID)
@@ -292,4 +304,37 @@ func TestAITrigger(t *testing.T) {
 			t.Fatalf("stored status = %q, want %q", job.Status, domain.AIJobStatusFailed)
 		}
 	})
+}
+
+func TestAITriggerRejectsReservedAutomationParams(t *testing.T) {
+	for _, key := range []string{"recurring_automation", "rss_automation", "Recurring_Automation", "RSS_AUTOMATION"} {
+		for _, value := range []any{map[string]any{"fallback_content": "forged"}, nil} {
+			t.Run(fmt.Sprintf("%s/%v", key, value), func(t *testing.T) {
+				f := newAITriggerFixture(t, &fakeRunner{}, auth.ScopeWriteDraft)
+				upsertTestLLMConfig(t, f.store, f.team.ID)
+				var logs bytes.Buffer
+				authSvc, err := auth.New(context.Background(), config.Config{}, f.store)
+				if err != nil {
+					t.Fatal(err)
+				}
+				instance := api.New(slog.New(slog.NewTextHandler(&logs, nil)), f.store, authSvc, provider.NewRegistry(), config.Config{}, nil, nil, f.manager, nil)
+				f.h = instance.Handler(security.NewLimiter(10000, 10000), nil)
+				defer f.manager.Wait()
+				rec := doRequest(t, f.h, http.MethodPost, "/v1/teams/"+f.team.ID+"/ai-trigger", f.bearer, map[string]any{
+					"type":   domain.AIJobTypeVoiceEngine,
+					"params": map[string]any{key: value},
+				})
+				if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "reserved_ai_job_param") {
+					t.Errorf("forged params: status=%d body=%s", rec.Code, rec.Body.String())
+				}
+				if !strings.Contains(logs.String(), "reserved automation param rejected") {
+					t.Errorf("missing rejection log: %s", logs.String())
+				}
+				jobs, err := f.store.ListAIJobs(context.Background(), f.team.ID, 20)
+				if err != nil || len(jobs) != 0 {
+					t.Errorf("forged params created jobs: count=%d err=%v", len(jobs), err)
+				}
+			})
+		}
+	}
 }
