@@ -17,6 +17,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - API client: `src/api.ts`
 - AI Generator prompt preview defaults to the plain “Generieren” action with current settings, even when an existing draft also offers “Neu generieren”; covered by `e2e/ai-prompt-preview.spec.ts`
 - Team AI setup: saving provider config in `App.tsx` enables a newly toggled team only after the config save succeeds; keep this sequence covered by `e2e/team-ai-setup.spec.ts`
+- Team audit UI: keep audit results component-local (outside persisted query cache), bind responses to the current team/filter/page, reset controls on team switches, distinguish failed queries from empty results, and retain navigation on empty pages. Successful API team mutations dispatch `goloom:team-mutation`; audit also refreshes every 30 seconds while visible and on window focus. Render only allowlisted metadata; action filters accept historical/unknown names.
 - Local-storage helpers: `src/appStorage.ts` (settings, last section/team keys)
 - Theming: CSS variables in `src/index.css`; the accent family derives from `--brand-primary` (team brand color, set inline on `<html>` by `App.tsx`; default purple fallback). Theme/breakpoint hooks in `src/hooks/useTheme.ts`
 - i18n: `src/i18n/` (i18next)
@@ -56,4 +57,4 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 
 - `src/views/` — Route-level view components (13 views)
 - `src/components/` — Reusable component library (10 subdirectories)
-- `e2e/` — Playwright E2E tests (13 spec files)
+- `e2e/` — Playwright E2E tests, including audit failure/race/refresh and DE/EN action-label coverage
