@@ -1,5 +1,93 @@
 # Changelog
 
+## [0.3.0](https://github.com/Goloom-App/goloom/compare/v0.2.9...v0.3.0) (2026-10-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** require full authority for member, admin, account and AI config routes
+* **ai:** keep draft-only tokens from scheduling through AI drafts and jobs
+* **auth:** enforce token scopes on every route
+* **auth:** refuse restricted API tokens for browser session login
+* **ai:** guard AI provider config against key leak and SSRF ([#130](https://github.com/Goloom-App/goloom/issues/130))
+
+### Features
+
+* **chat:** ground AI chat requests in the focused post ([d7e3f92](https://github.com/Goloom-App/goloom/commit/d7e3f927df82523973c7c5878e950c8b701de24e))
+
+
+### Bug Fixes
+
+* **agenttools:** bind chat post changes to the active team ([caa085b](https://github.com/Goloom-App/goloom/commit/caa085be9ea232aa88cfd53335816e8b21037f21))
+* **agenttools:** describe focused posts by identity only ([d7e3f92](https://github.com/Goloom-App/goloom/commit/d7e3f927df82523973c7c5878e950c8b701de24e))
+* **ai-chat:** confirm post changes and harden fetched content ([#134](https://github.com/Goloom-App/goloom/issues/134)) ([d33c042](https://github.com/Goloom-App/goloom/commit/d33c042c1222b67abf95b5fdaf107a7b8b4331b9))
+* **ai-chat:** keep tool results in history and bound it ([#138](https://github.com/Goloom-App/goloom/issues/138)) ([4880fcf](https://github.com/Goloom-App/goloom/commit/4880fcf1c92ce295bb00990cbca9844a92943eee))
+* **ai:** ask for a teaser when an RSS item has no body ([a65cfa9](https://github.com/Goloom-App/goloom/commit/a65cfa9e53e68a1fe1cf8e8411eb9edc58bea974))
+* **ai:** claim AI job completion atomically to prevent duplicate posts ([caa085b](https://github.com/Goloom-App/goloom/commit/caa085be9ea232aa88cfd53335816e8b21037f21))
+* **ai:** consistent prompt constraints with social-media defaults ([#131](https://github.com/Goloom-App/goloom/issues/131)) ([81e21b7](https://github.com/Goloom-App/goloom/commit/81e21b7a65c89d71ff72fe1eae492df1b3ede525))
+* **ai:** enable team AI after provider setup ([#117](https://github.com/Goloom-App/goloom/issues/117)) ([27266ab](https://github.com/Goloom-App/goloom/commit/27266abd59b558b270e8c429940d1820f61fcdde))
+* **ai:** enforce team boundaries and server-owned automation context ([caa085b](https://github.com/Goloom-App/goloom/commit/caa085be9ea232aa88cfd53335816e8b21037f21))
+* **ai:** fail automation jobs queued before the origin migration ([b279acd](https://github.com/Goloom-App/goloom/commit/b279acd8bbe98d582f7a22ab5805aed01b5dbd55))
+* **ai:** fall back to the template when AI output fails validation ([caa085b](https://github.com/Goloom-App/goloom/commit/caa085be9ea232aa88cfd53335816e8b21037f21))
+* **ai:** guard AI provider config against key leak and SSRF ([#130](https://github.com/Goloom-App/goloom/issues/130)) ([19c9d29](https://github.com/Goloom-App/goloom/commit/19c9d291ccce63233495b61745c55ad91814659b))
+* **aijobs:** close job lifecycle gaps ([#137](https://github.com/Goloom-App/goloom/issues/137)) ([00ea7be](https://github.com/Goloom-App/goloom/commit/00ea7be1d2b19c4d64c824c89b5d750c13f1add5))
+* **ai:** keep Composer optimize from auto-publishing ([767bd75](https://github.com/Goloom-App/goloom/commit/767bd7581a4b38e31cff58ec27aabdc3e21aaa6e))
+* **ai:** keep draft-only tokens from scheduling through AI drafts and jobs ([d464c17](https://github.com/Goloom-App/goloom/commit/d464c17d889de11ddf0103633cb0b00aa92b0800))
+* **ai:** keep RSS automation metadata out of prompts ([a65cfa9](https://github.com/Goloom-App/goloom/commit/a65cfa9e53e68a1fe1cf8e8411eb9edc58bea974))
+* **ai:** let RSS posts follow their source ([a65cfa9](https://github.com/Goloom-App/goloom/commit/a65cfa9e53e68a1fe1cf8e8411eb9edc58bea974))
+* **ai:** make AI job cancellation conditional and idempotent ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **ai:** reject client-supplied automation metadata on ai-trigger ([caa085b](https://github.com/Goloom-App/goloom/commit/caa085be9ea232aa88cfd53335816e8b21037f21))
+* **ai:** reject foreign target accounts on AI auto-publish ([caa085b](https://github.com/Goloom-App/goloom/commit/caa085be9ea232aa88cfd53335816e8b21037f21))
+* **ai:** share voice prompt preparation with preview ([2d2ae8e](https://github.com/Goloom-App/goloom/commit/2d2ae8eb6787e9772506f0fd1038cae1ae1750a6))
+* **ai:** take the character limit from the selected primary account ([2d2ae8e](https://github.com/Goloom-App/goloom/commit/2d2ae8eb6787e9772506f0fd1038cae1ae1750a6))
+* **ai:** validate and audit team AI settings endpoints ([#133](https://github.com/Goloom-App/goloom/issues/133)) ([fbeab76](https://github.com/Goloom-App/goloom/commit/fbeab76f29cf18b21b309667a842cad628cfb628))
+* **audit:** commit state changes with durable audit evidence ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **audit:** complete team activity across REST, MCP and chat ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **audit:** enforce read scope and exclude sensitive event data ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **audit:** preserve actor identity and source correlations ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **auth:** cap API token management authority ([38b115d](https://github.com/Goloom-App/goloom/commit/38b115d0cb10f5440a8f185900cffccafa9b2216))
+* **auth:** enforce token scopes on every route ([d464c17](https://github.com/Goloom-App/goloom/commit/d464c17d889de11ddf0103633cb0b00aa92b0800))
+* **auth:** hide unmanageable tokens from restricted callers ([38b115d](https://github.com/Goloom-App/goloom/commit/38b115d0cb10f5440a8f185900cffccafa9b2216))
+* **auth:** keep child tokens from outliving their parent token ([38b115d](https://github.com/Goloom-App/goloom/commit/38b115d0cb10f5440a8f185900cffccafa9b2216))
+* **auth:** refuse restricted API tokens for browser session login ([38b115d](https://github.com/Goloom-App/goloom/commit/38b115d0cb10f5440a8f185900cffccafa9b2216))
+* **auth:** require full authority for member, admin, account and AI config routes ([d464c17](https://github.com/Goloom-App/goloom/commit/d464c17d889de11ddf0103633cb0b00aa92b0800))
+* **auth:** require read scope for GET routes ([d464c17](https://github.com/Goloom-App/goloom/commit/d464c17d889de11ddf0103633cb0b00aa92b0800))
+* **auth:** restrict user-wide push subscriptions to unbound tokens ([d464c17](https://github.com/Goloom-App/goloom/commit/d464c17d889de11ddf0103633cb0b00aa92b0800))
+* **automation:** expose template fallbacks after failed AI submissions ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **automation:** make callbacks, imports and recurring retries idempotent ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **automation:** show template fallbacks on posts with reason and job ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **chat:** stop sending detached composer context ([982969c](https://github.com/Goloom-App/goloom/commit/982969cf7d5f46fb713dc1a6b4274875f72448c1))
+* **composer:** discard stale editor loads after draft or team change ([a3f0096](https://github.com/Goloom-App/goloom/commit/a3f0096fd9e78658c8fab0434a4dce1fcd6fed37))
+* **composer:** drop stale AI results for other drafts and teams ([a3f0096](https://github.com/Goloom-App/goloom/commit/a3f0096fd9e78658c8fab0434a4dce1fcd6fed37))
+* **composer:** keep user account overrides on AI refine ([a3f0096](https://github.com/Goloom-App/goloom/commit/a3f0096fd9e78658c8fab0434a4dce1fcd6fed37))
+* **composer:** surface scheduling errors ([#113](https://github.com/Goloom-App/goloom/issues/113)) ([614ad48](https://github.com/Goloom-App/goloom/commit/614ad48471d1d093abc23075fd95e40e8580d5c1))
+* **deps:** update module github.com/mmcdole/gofeed to v1.5.0 ([#109](https://github.com/Goloom-App/goloom/issues/109)) ([fcf9e10](https://github.com/Goloom-App/goloom/commit/fcf9e1051747886e208a8df00a58411596826ffc))
+* **deps:** update module modernc.org/sqlite to v1.60.1 ([#112](https://github.com/Goloom-App/goloom/issues/112)) ([691e0ee](https://github.com/Goloom-App/goloom/commit/691e0ee02b2c70357298d28a680dc8f977a8a429))
+* **generator:** keep completed job targets, variants and schedule ([982969c](https://github.com/Goloom-App/goloom/commit/982969cf7d5f46fb713dc1a6b4274875f72448c1))
+* **profile:** reset brand profile form when switching teams ([982969c](https://github.com/Goloom-App/goloom/commit/982969cf7d5f46fb713dc1a6b4274875f72448c1))
+* **publish:** persist outcomes without replaying publication ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **recurring:** preserve visibility and media in AI jobs ([b279acd](https://github.com/Goloom-App/goloom/commit/b279acd8bbe98d582f7a22ab5805aed01b5dbd55))
+* **recurring:** reject media from other teams in recurring AI jobs ([b279acd](https://github.com/Goloom-App/goloom/commit/b279acd8bbe98d582f7a22ab5805aed01b5dbd55))
+* **rss:** commit post, marker and feed counter atomically ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **rss:** count in-flight AI items toward the daily limit ([758c312](https://github.com/Goloom-App/goloom/commit/758c31239ef9d1e994a5707070ddfb4858bd6b19))
+* **rss:** enforce the daily limit atomically across replicas ([758c312](https://github.com/Goloom-App/goloom/commit/758c31239ef9d1e994a5707070ddfb4858bd6b19))
+* **rss:** keep deleted RSS imports from reappearing ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **rss:** reclaim orphaned RSS reservations by lease ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **rss:** redact RSS item keys in logs ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **rss:** retry RSS AI items whose post was never created ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **rss:** show exhausted RSS items on feeds ([14e7852](https://github.com/Goloom-App/goloom/commit/14e78521fab21793c4aeca2459421d5d0f0b973c))
+* **scheduler:** refuse posts whose targets belong to another team ([caa085b](https://github.com/Goloom-App/goloom/commit/caa085be9ea232aa88cfd53335816e8b21037f21))
+* **sidebar:** keep team menu scrollable with many teams ([982969c](https://github.com/Goloom-App/goloom/commit/982969cf7d5f46fb713dc1a6b4274875f72448c1))
+* **sqlite:** prevent writer conflicts and enforce connection settings ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **ui:** distinguish audit errors and discard stale team responses ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **ui:** refresh audit activity and filter historical actions ([2f77768](https://github.com/Goloom-App/goloom/commit/2f7776865f5c6e17e60fe51a677d0e2860ecf635))
+* **website:** use supported Starlight description ([#119](https://github.com/Goloom-App/goloom/issues/119)) ([89ae46a](https://github.com/Goloom-App/goloom/commit/89ae46a3ac79effeb90145f5deb3acdc2fd07cfd))
+
+
+### Performance Improvements
+
+* **ai:** budget knowledge base and cache prompts ([#136](https://github.com/Goloom-App/goloom/issues/136)) ([910361d](https://github.com/Goloom-App/goloom/commit/910361d53d85b32376ef8e733fc21cb3679cc6c5))
+
 ## [0.2.9](https://github.com/Goloom-App/goloom/compare/v0.2.8...v0.2.9) (2026-09-27)
 
 
