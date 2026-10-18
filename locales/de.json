@@ -471,8 +471,6 @@
       "cardsHint": "Jede Karte zeigt Mitglieder, verbundene Konten und Beitragsaktivität für diesen Arbeitsbereich.",
       "plannedPosts": "Geplante Beiträge",
       "published": "Veröffentlicht",
-      "settingsTitle": "Team-Einstellungen",
-      "settingsHint": "Mitglieder verwalten, Zugriff aktualisieren und Inhaberschaft für {{teamName}} übertragen.",
       "memberViewHint": "Du bist Mitglied dieses Teams. Nur Team-Inhaber können hier Einstellungen ändern.",
       "aiAgentTitle": "KI-Agent",
       "aiAgentHint": "KI-gestützte Inhaltserstellung für diesen Arbeitsbereich aktivieren.",

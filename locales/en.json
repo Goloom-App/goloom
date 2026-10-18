@@ -471,8 +471,6 @@
       "cardsHint": "Each card shows members, connected accounts, and post activity for that workspace.",
       "plannedPosts": "Planned posts",
       "published": "Published",
-      "settingsTitle": "Team settings",
-      "settingsHint": "Manage members, update access, and transfer ownership for {{teamName}}.",
       "memberViewHint": "You are a member of this team. Only team owners can change settings here.",
       "aiAgentTitle": "AI Agent",
       "aiAgentHint": "Enable AI-powered content generation for this workspace.",
