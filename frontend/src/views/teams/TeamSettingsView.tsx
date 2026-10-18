@@ -170,14 +170,6 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
 
   return (
     <div className="brand-wizard stack stack--lg">
-      <SectionCard
-        icon={<Settings size={18} />}
-        title={t('teams.settingsTitle')}
-        subtitle={t('teams.settingsHint', { teamName: selectedTeam.name })}
-      >
-        {!isOwner ? <p className="hint">{t('teams.memberViewHint')}</p> : null}
-      </SectionCard>
-
       {isOwner ? (
         <>
           <SectionCard icon={<Settings size={18} />} title={t('common.general')}>
@@ -297,6 +289,7 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
         </>
       ) : (
         <SectionCard icon={<Users size={18} />} title={t('common.members')}>
+          <p className="hint">{t('teams.memberViewHint')}</p>
           <div className="stack stack--sm">
             {selectedTeam.members.map((m) => (
               <div key={m.userId} className="member-list-item">
