@@ -14,6 +14,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 
 - RSS feeds display API `exhausted_items_count` as a localized warning when positive; mocked coverage: `e2e/rss-feeds.spec.ts`.
 - Build output: `../internal/webui/dist` (critical cross-boundary contract)
+- Team invitations: owners generate one-time links bound to entered email addresses; UI explains seven-day expiry and recipient sign-in check, supports copy and a `mailto:` draft without claiming goloom sent mail, and retains pending/revoke controls. Browser coverage: `e2e/team-invitations.spec.ts`.
 - API proxy: `vite.config.ts` proxies `/api` to `localhost:8080`
 - Entry: `index.html` → `src/main.tsx` → `src/App.tsx`
 - Domain types: `src/types.ts` (single source of truth)
