@@ -23,6 +23,7 @@ export function TeamInvitationsSection({
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'editor' | 'viewer'>('editor')
   const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [invitedEmail, setInvitedEmail] = useState('')
   const [copied, setCopied] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +40,7 @@ export function TeamInvitationsSection({
 
   useEffect(() => {
     setInviteLink(null)
+    setInvitedEmail('')
     setCopied(false)
     setError(null)
     void load()
@@ -52,6 +54,7 @@ export function TeamInvitationsSection({
     try {
       const res = await api.createTeamInvitation(teamId, { email: email.trim(), role })
       setInviteLink(buildInviteLink(window.location.origin, window.location.pathname, res.token))
+      setInvitedEmail(email.trim())
       setEmail('')
       await load()
     } catch (cause) {
@@ -130,6 +133,13 @@ export function TeamInvitationsSection({
             <button type="button" className="btn btn--secondary btn--sm" onClick={() => void copyLink()}>
               {copied ? t('teams.inviteCopied') : t('teams.inviteCopy')}
             </button>
+            <a
+              className="btn btn--secondary btn--sm"
+              href={`mailto:${encodeURIComponent(invitedEmail).replace('%40', '@')}?subject=${encodeURIComponent(t('teams.inviteMailSubject'))}&body=${encodeURIComponent(t('teams.inviteMailBody', { link: inviteLink }))}`}
+              data-testid="invite-send-email"
+            >
+              {t('teams.inviteSendEmail')}
+            </a>
           </div>
         </div>
       ) : null}
