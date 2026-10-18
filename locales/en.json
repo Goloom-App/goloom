@@ -511,6 +511,7 @@
       "importOldPostsResult": "{{count}} posts imported.",
       "addMember": "Add Member",
       "selectUser": "Select user…",
+      "noUsersToAdd": "No users available to add.",
       "addToTeam": "Add to Team",
       "inviteTitle": "Invites",
       "inviteHint": "Generate a link bound to the entered email address. The recipient must sign in with that address to join this team. Links expire after seven days.",
