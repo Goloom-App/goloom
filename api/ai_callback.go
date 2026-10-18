@@ -47,7 +47,11 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 			return err
 		}
 
-		rssMeta, recurringMeta := parseRSSAutomationMeta(job.Payload), parseRecurringAutomationMeta(job.Payload)
+		preview := job.Origin == domain.AIJobOriginPreview
+		rssMeta, recurringMeta := (*rssAutomationMeta)(nil), (*recurringAutomationMeta)(nil)
+		if !preview {
+			rssMeta, recurringMeta = parseRSSAutomationMeta(job.Payload), parseRecurringAutomationMeta(job.Payload)
+		}
 		legacyAutomation := job.Origin != domain.AIJobOriginAutomation && (rssMeta != nil || recurringMeta != nil)
 		if legacyAutomation {
 			status = domain.AIJobStatusFailed
@@ -88,6 +92,8 @@ func (a *API) CompleteAIJob(ctx context.Context, jobID string, status domain.AIJ
 				effectErr = a.finishRecurringAutomationFromAI(ctx, job, result, recurringMeta)
 			case automation:
 				effectErr = a.finishRecurringAutomationFallback(ctx, job, recurringMeta, "provider_failure")
+			case preview:
+				// Preview jobs preserve generated result without any post or automation side effects.
 			case status == domain.AIJobStatusCompleted && !noPublishFromJobPayload(job.Payload):
 				profile, profErr := a.store.GetTeamProfile(ctx, job.TeamID)
 				if profErr == nil && profile.AutoPublishEnabled {

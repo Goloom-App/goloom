@@ -227,9 +227,16 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 		if err != nil {
 			return err
 		}
-		event := domain.AuditEvent{ID: uuid.NewString(), TeamID: job.TeamID, ActorKind: domain.AuditActorSystem, ActorName: "Automation", Action: "ai_job.submit", TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": "scheduler", "outcome": "success", "job_id": job.ID, "author_user_id": job.AuthorUserID}}
+		channel := "scheduler"
+		if job.Origin == domain.AIJobOriginPreview {
+			channel = "preview"
+		}
+		event := domain.AuditEvent{ID: uuid.NewString(), TeamID: job.TeamID, ActorKind: domain.AuditActorSystem, ActorName: "Automation", Action: "ai_job.submit", TargetType: "ai_job", TargetID: &job.ID, Metadata: map[string]string{"channel": channel, "outcome": "success", "job_id": job.ID, "author_user_id": job.AuthorUserID}}
 		if p := auth.PrincipalFromContext(ctx); p != nil {
-			event.Metadata["channel"], event.Metadata["initiator_user_id"] = "rest", p.User.ID
+			if job.Origin != domain.AIJobOriginPreview {
+				event.Metadata["channel"] = "rest"
+			}
+			event.Metadata["initiator_user_id"] = p.User.ID
 			if p.Kind == domain.AuditActorToken && p.TokenID != nil {
 				event.Metadata["initiator_token_id"] = *p.TokenID
 			}

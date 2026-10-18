@@ -20,6 +20,7 @@ Models in `models.go`, patch utilities in `patch_field.go`, template vars in `te
 - `ScheduledPost.AIFallbackReason=article_fetch_failed` is a source warning after article retrieval failed while AI used feed content; it is not a template fallback.
 - Domain types: `models.go` — User, Team, Post, Account, AIJob, etc.
 - Audit actors distinguish `oidc`, `api_token` and `system`. Automation authorship and authenticated initiators live in separate safe metadata; system actors never impersonate tokens.
+- AI job provenance is server-owned: `AIJobOriginUser` jobs follow normal completion, `AIJobOriginAutomation` jobs may run RSS/recurring callbacks, and `AIJobOriginPreview` jobs retain generated results without creating posts or changing automation state.
 - `AuthenticatedPrincipal.TokenExpiresAt` carries the authenticating token's expiry for delegation checks; nil means no token expiry.
 - Patch semantics: `update_post_patch.go` — partial update rules
 - Template variables: `templatevars.go` — post template variable handling

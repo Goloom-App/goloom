@@ -9,6 +9,7 @@ import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
 import { getViewContext, setViewFocus, setViewVisible } from '../../components/ai/viewContextBridge'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
+import { AutomationAIPreview } from '../../components/ai/AutomationAIPreview'
 import { Segmented, ToggleSwitch } from '../../components/ui'
 import { useAIJobStream } from '../../hooks/useSSE'
 import { translateApiError } from '../../i18n/translateApiError'
@@ -118,6 +119,8 @@ export function RecurringPostsView({
   const [outputMode, setOutputMode] = useState<AutomationOutputMode>('scheduled')
   const [promptHint, setPromptHint] = useState('')
   const [titleHint, setTitleHint] = useState('')
+  const [previewOccurrenceAt, setPreviewOccurrenceAt] = useState('')
+  const [previewPostKind, setPreviewPostKind] = useState<'main' | 'announcement'>('main')
 
   useEffect(() => {
     if (!editorOpen) return
@@ -160,6 +163,24 @@ export function RecurringPostsView({
     const occ = computeOccurrences(recState, 1)
     return occ.length > 0 ? occ[0] : null
   }, [recState])
+  const previewOccurrences = useMemo(() => computeOccurrences(recState, 5), [recState])
+  const previewOccurrenceOptions = useMemo(() => previewOccurrences.map((date) => date.toISOString()), [previewOccurrences])
+  const selectedPreviewOccurrence = previewOccurrenceOptions.includes(previewOccurrenceAt)
+    ? previewOccurrenceAt
+    : previewOccurrenceOptions[0] ?? ''
+  const effectivePreviewPostKind = announcementEnabled ? previewPostKind : 'main'
+
+  useEffect(() => {
+    if (previewOccurrenceAt && !previewOccurrenceOptions.includes(previewOccurrenceAt)) {
+      setPreviewOccurrenceAt('')
+    }
+  }, [previewOccurrenceAt, previewOccurrenceOptions])
+
+  useEffect(() => {
+    if (!announcementEnabled && previewPostKind !== 'main') {
+      setPreviewPostKind('main')
+    }
+  }, [announcementEnabled, previewPostKind])
 
   const announcementPreviewDate = useMemo(() => {
     if (!announcementEnabled || !firstOccurrence) {
@@ -233,6 +254,8 @@ export function RecurringPostsView({
 
   function resetEditorFields() {
     setEditingId(null)
+    setPreviewOccurrenceAt('')
+    setPreviewPostKind('main')
     setTitle('')
     setContent('')
     setCounterStart(1)
@@ -268,6 +291,8 @@ export function RecurringPostsView({
 
   function openEditorForEdit(item: BackendPostTemplate) {
     editorBaselineRef.current = ''
+    setPreviewOccurrenceAt('')
+    setPreviewPostKind('main')
     setEditingId(item.id)
     setTitle(item.title)
     setContent(item.content)
@@ -318,6 +343,24 @@ export function RecurringPostsView({
       payload.announcement_enabled = false
     }
     return payload
+  }
+
+  function buildAIPreviewConfig() {
+    return {
+      title: title.trim(),
+      content: content.trim(),
+      prompt_hint: promptHint.trim(),
+      title_hint: titleHint.trim(),
+      target_account_ids: targetIds,
+      announcement_enabled: announcementEnabled,
+      announcement_title: announcementTitle.trim(),
+      announcement_content: announcementContent.trim(),
+      announcement_days_before: announcementDaysBefore,
+      announcement_target_account_ids: announcementDifferentTargets ? announcementTargetIds : [],
+      recurrence_json: recurrenceStateToJSON(recState),
+      counter_next: Math.max(1, counterStart),
+      announcement_counter_next: Math.max(1, announcementCounterStart),
+    }
   }
 
   async function handleSave() {
@@ -710,7 +753,7 @@ export function RecurringPostsView({
 
                 <label className="field">
                   <span>{t('common.content')}</span>
-                  <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} />
+                  <textarea rows={5} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('recurring.contentPlaceholder')} data-testid="recurring-content" />
                 </label>
 
                 <RecurrenceForm state={recState} onChange={setRecState} />
@@ -795,7 +838,7 @@ export function RecurringPostsView({
                         ) : null}
                         <label className="field">
                           <span>{t('rss.aiPrompt')}</span>
-                          <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('recurring.aiPromptPlaceholder')} />
+                          <textarea rows={3} value={promptHint} onChange={(e) => setPromptHint(e.target.value)} placeholder={t('recurring.aiPromptPlaceholder')} data-testid="recurring-ai-prompt" />
                           <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
                             {t('recurring.aiPromptHint')}
                           </p>
@@ -901,9 +944,43 @@ export function RecurringPostsView({
                   />
                 </div>
 
+                {editingId && aiEnhanceEnabled && team?.isAiEnabled ? (
+                  <div className="stack stack--sm" data-testid="recurring-ai-preview-controls">
+                    <label className="field">
+                      <span>{t('automationPreview.selectOccurrence')}</span>
+                      <select value={selectedPreviewOccurrence} onChange={(event) => setPreviewOccurrenceAt(event.target.value)} data-testid="recurring-preview-occurrence">
+                        {previewOccurrences.map((date) => {
+                          const iso = date.toISOString()
+                          return <option key={iso} value={iso}>{date.toLocaleString()}</option>
+                        })}
+                      </select>
+                    </label>
+                    <div className="field">
+                      <span>{t('automationPreview.postKind')}</span>
+                      <Segmented<'main' | 'announcement'>
+                        value={effectivePreviewPostKind}
+                        options={[
+                          { id: 'main', label: t('automationPreview.mainPost') },
+                          ...(announcementEnabled ? [{ id: 'announcement' as const, label: t('automationPreview.announcement') }] : []),
+                        ]}
+                        onChange={setPreviewPostKind}
+                        testIdPrefix="recurring-preview-kind"
+                      />
+                    </div>
+                    <AutomationAIPreview
+                      key={`recurring-${editingId}`}
+                      teamId={teamId}
+                      accounts={accounts}
+                      testId="recurring-ai-preview"
+                      storageKey={`recurring-${editingId}`}
+                      requestPreview={() => api.previewPostTemplateAI(teamId, editingId, selectedPreviewOccurrence, effectivePreviewPostKind, buildAIPreviewConfig())}
+                    />
+                  </div>
+                ) : null}
+
                 <div className="flex-row--end gap-2 mt-4">
                   <Dialog.Close asChild>
-                    <button type="button" className="btn btn--ghost">{t('common.cancel')}</button>
+                          <button type="button" className="btn btn--ghost">{t('common.cancel')}</button>
                   </Dialog.Close>
                   <button type="button" className="btn btn--primary" onClick={() => void handleSave()} data-testid="recurring-template-save">
                     {editingId ? t('common.save') : t('common.create')}

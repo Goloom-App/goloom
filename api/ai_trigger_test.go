@@ -419,6 +419,8 @@ func TestAITrigger_RejectsReservedAuthorityParams(t *testing.T) {
 	}{
 		{name: "top level capability", body: map[string]any{"_can_schedule": true}},
 		{name: "null capability", body: map[string]any{"_can_schedule": nil}},
+		{name: "top level preview provenance", body: map[string]any{"_preview": true}},
+		{name: "null preview provenance", body: map[string]any{"_preview": nil}},
 		{name: "nested capability", body: map[string]any{"params": map[string]any{"_can_schedule": true}}},
 		{name: "RSS automation", body: map[string]any{"params": map[string]any{"rss_automation": map[string]any{"feed_id": "fake", "item_key": "fake", "draft": false}}}},
 		{name: "recurring automation", body: map[string]any{"params": map[string]any{"recurring_automation": map[string]any{"template_id": "fake", "draft": false}}}},

@@ -18,6 +18,7 @@ type aiTriggerRequest struct {
 	Type        domain.AIJobType `json:"type"`
 	Params      json.RawMessage  `json:"params"`
 	CanSchedule json.RawMessage  `json:"_can_schedule"`
+	Preview     json.RawMessage  `json:"_preview"`
 }
 
 type aiTriggerResponse struct {
@@ -42,12 +43,12 @@ func (a *API) handleAITrigger(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
-	if input.CanSchedule != nil {
+	if input.CanSchedule != nil || input.Preview != nil {
 		a.writeError(w, r, "ai_job_params_reserved", http.StatusBadRequest)
 		return
 	}
 	for key := range params {
-		if strings.EqualFold(key, "_can_schedule") || strings.EqualFold(key, "rss_automation") || strings.EqualFold(key, "recurring_automation") {
+		if strings.EqualFold(key, "_can_schedule") || strings.EqualFold(key, "_preview") || strings.EqualFold(key, "rss_automation") || strings.EqualFold(key, "recurring_automation") {
 			a.log.WarnContext(r.Context(), "ai trigger: reserved automation param rejected", "team_id", r.PathValue("teamID"), "param", key)
 			a.writeError(w, r, "ai_job_params_reserved", http.StatusBadRequest)
 			return

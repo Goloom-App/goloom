@@ -1200,6 +1200,26 @@
       "deviceEnabled": "enabled",
       "deviceDisabled": "disabled",
       "otherDevicesHint": "Other devices keep their own notifications until you remove them there."
+    },
+    "automationPreview": {
+      "open": "Preview AI output",
+      "run": "Generate preview",
+      "generating": "Generating preview…",
+      "resume": "Resume preview",
+      "loading": "Loading recent feed entries…",
+      "noItems": "No recent feed entries available.",
+      "selectSource": "Source article",
+      "selectOccurrence": "Occurrence",
+      "postKind": "Post type",
+      "mainPost": "Main post",
+      "announcement": "Announcement",
+      "result": "Preview result",
+      "source": "Source",
+      "template": "Expanded template",
+      "inputs": "Generation inputs",
+      "characters": "{{count}} characters",
+      "failed": "Preview failed.",
+      "timeout": "Preview timed out."
     }
   },
   "api": {

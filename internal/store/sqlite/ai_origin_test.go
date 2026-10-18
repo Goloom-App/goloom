@@ -13,7 +13,7 @@ func TestAIJobOrigin(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 	u, team := makeAITeam(t, s)
-	for _, origin := range []string{"", "automation"} {
+	for _, origin := range []string{"", domain.AIJobOriginAutomation, domain.AIJobOriginPreview} {
 		input := domain.AIJob{TeamID: team.ID, AuthorUserID: u.ID, Type: domain.AIJobTypeVoiceEngine, Origin: origin}
 		job, err := s.CreateAIJob(ctx, input)
 		if err != nil {

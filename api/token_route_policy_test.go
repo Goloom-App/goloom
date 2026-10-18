@@ -82,7 +82,7 @@ func TestTokenScopesEveryMutatingRoute(t *testing.T) {
 				end := strings.Index(path[start:], "}") + start
 				path = path[:start] + "missing" + path[end+1:]
 			}
-			readOperation := pattern == "POST /v1/auth/oidc/start" || pattern == "POST /v1/auth/session/token" || pattern == "POST /v1/auth/logout" || pattern == "POST /v1/me/api-tokens" || pattern == "DELETE /v1/me/api-tokens/{tokenID}" || strings.HasSuffix(pattern, "/posts/validate") || strings.HasSuffix(pattern, "/ai/prompt-preview") || strings.HasSuffix(pattern, "/ai/chat")
+			readOperation := pattern == "POST /v1/auth/oidc/start" || pattern == "POST /v1/auth/session/token" || pattern == "POST /v1/auth/logout" || pattern == "POST /v1/me/api-tokens" || pattern == "DELETE /v1/me/api-tokens/{tokenID}" || strings.HasSuffix(pattern, "/posts/validate") || strings.HasSuffix(pattern, "/ai/prompt-preview") || strings.HasSuffix(pattern, "/ai/chat") || strings.HasSuffix(pattern, "/preview-items")
 			rec := f.do(t, method, path, nil)
 			denied := rec.Code == http.StatusForbidden && (strings.Contains(rec.Body.String(), "scope_required") || rec.Header().Get("X-Error-Code") == "scope_required")
 			if !readOperation && !denied {

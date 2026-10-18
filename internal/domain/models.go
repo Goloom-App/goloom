@@ -328,6 +328,7 @@ type StyleExample struct {
 const (
 	AIJobOriginUser       = "user"
 	AIJobOriginAutomation = "automation"
+	AIJobOriginPreview    = "preview"
 )
 
 type AIJob struct {

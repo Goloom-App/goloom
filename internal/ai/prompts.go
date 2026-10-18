@@ -818,6 +818,7 @@ var technicalNoteSkipKeys = map[string]bool{
 	"format": true, "platform": true, "recurring_post_kind": true, "recurring_automation": true,
 	"post_scheduled_at": true, "main_event_at": true, "days_before_main_event": true,
 	"template_occurrence_at": true,
+	"no_publish":             true,
 }
 
 func technicalNotes(p params) []string {

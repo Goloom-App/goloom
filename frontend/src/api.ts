@@ -90,6 +90,14 @@ export interface BackendPostTemplateLinkedPost {
   template_counter?: number
 }
 
+export interface BackendRSSPreviewItem {
+  item_key: string
+  title: string
+  content: string
+  link: string
+  published_at?: string
+}
+
 export interface BackendMembership {
   user_id: string
   team_id: string
@@ -1215,6 +1223,23 @@ export function createApiClient(options: ApiClientOptions) {
         headers: buildHeaders(options.token, false),
       })
     },
+    previewPostTemplateAI(
+      teamID: string,
+      templateID: string,
+      occurrenceAt: string,
+      postKind: 'main' | 'announcement',
+      config: Record<string, unknown>,
+    ) {
+      return request<BackendAITriggerResponse>(
+        options,
+        `/v1/teams/${teamID}/post-templates/${templateID}/ai-preview`,
+        {
+          method: 'POST',
+          headers: buildHeaders(options.token),
+          body: JSON.stringify({ occurrence_at: occurrenceAt, post_kind: postKind, config }),
+        },
+      )
+    },
     listAllPostVersions(teamID: string) {
       return request<{ items: BackendPostVersion[] }>(options, `/v1/teams/${teamID}/versions`, {
         headers: buildHeaders(options.token, false),
@@ -1631,6 +1656,24 @@ export function createApiClient(options: ApiClientOptions) {
       return request<{ items: BackendRSSFeedConfig[] }>(options, `/v1/teams/${teamID}/rss-feeds`, {
         headers: buildHeaders(options.token, false),
       })
+    },
+    listRSSPreviewItems(teamID: string, feedID: string) {
+      return request<{ items: BackendRSSPreviewItem[] }>(
+        options,
+        `/v1/teams/${teamID}/rss-feeds/${feedID}/preview-items`,
+        { headers: buildHeaders(options.token, false) },
+      )
+    },
+    previewRSSFeedAI(teamID: string, feedID: string, itemKey: string, config: Record<string, unknown>) {
+      return request<BackendAITriggerResponse>(
+        options,
+        `/v1/teams/${teamID}/rss-feeds/${feedID}/ai-preview`,
+        {
+          method: 'POST',
+          headers: buildHeaders(options.token),
+          body: JSON.stringify({ item_key: itemKey, config }),
+        },
+      )
     },
     createRSSFeed(
       teamID: string,
