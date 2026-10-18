@@ -18,7 +18,10 @@ test('campaign editor saves specific, none and inherited knowledge, retaining mi
   const open = () => page.getByTestId('campaign-format-selected-format').locator('button').first().click()
   await open()
   await expect(page.getByTestId('knowledge-missing')).toBeVisible()
-  await page.getByLabel('deleted (unavailable)').uncheck()
+  // Removing a missing source unmounts its checkbox instead of leaving it unchecked.
+  await page.getByLabel('deleted (unavailable)').click()
+  await expect(page.getByLabel('deleted (unavailable)')).toHaveCount(0)
+  await expect(page.getByTestId('knowledge-missing')).toHaveCount(0)
   await page.getByLabel('Brand facts', { exact: true }).check()
   await page.getByTestId('campaign-dialog-save').click()
   await expect.poll(() => format.knowledge_source_ids).toEqual(['source'])
