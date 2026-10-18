@@ -646,13 +646,13 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 	query := `
 		INSERT INTO rss_feed_configs (
 			team_id, feed_url, name, is_active, ai_enhance_enabled, article_enrichment_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day,
-			prompt_hint, target_account_ids, tonality, initial_sync_mode
+			prompt_hint, editorial_goal, desired_length, target_account_ids, tonality, initial_sync_mode
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		RETURNING ` + strings.TrimSpace(rssFeedConfigSelectList)
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
 		teamID, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, input.ArticleEnrichmentEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
-		input.PromptHint, targetJSON, input.Tonality, syncMode,
+		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode,
 	))
 	if err != nil {
 		return domain.RSSFeedConfig{}, fmt.Errorf("CreateRSSFeedConfig: %w", err)
@@ -708,14 +708,14 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 	query := `
 		UPDATE rss_feed_configs
 		SET feed_url = $3, name = $4, is_active = $5, ai_enhance_enabled = $6, article_enrichment_enabled = $7, content_template = $8, title_template = $9, title_hint = $10,
-		    output_mode = $11, max_posts_per_day = $12, prompt_hint = $13, target_account_ids = $14, tonality = $15,
-		    initial_sync_mode = $16, last_fetched_at = COALESCE($17, last_fetched_at)
+		    output_mode = $11, max_posts_per_day = $12, prompt_hint = $13, editorial_goal = $14, desired_length = $15, target_account_ids = $16, tonality = $17,
+		    initial_sync_mode = $18, last_fetched_at = COALESCE($19, last_fetched_at)
 		WHERE team_id = $1 AND id = $2
 		RETURNING ` + strings.TrimSpace(rssFeedConfigSelectList)
 	syncMode := string(domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode)))
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
 		teamID, id, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, input.ArticleEnrichmentEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
-		input.PromptHint, targetJSON, input.Tonality, syncMode, input.LastFetchedAt,
+		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, input.LastFetchedAt,
 	))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -755,6 +755,8 @@ func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeed
 		&feed.MaxPostsPerDay,
 		&feed.CounterNext,
 		&feed.PromptHint,
+		&feed.EditorialGoal,
+		&feed.DesiredLength,
 		&targetRaw,
 		&feed.Tonality,
 		&syncMode,
@@ -768,6 +770,8 @@ func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeed
 		return domain.RSSFeedConfig{}, err
 	}
 	feed.OutputMode = domain.NormalizeAutomationOutputMode(outputMode)
+	feed.EditorialGoal = domain.NormalizeRSSEditorialGoal(feed.EditorialGoal)
+	feed.DesiredLength = domain.NormalizeRSSDesiredLength(feed.DesiredLength)
 	feed.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(syncMode)
 	if lastFetched.Valid {
 		t := lastFetched.Time.UTC()

@@ -115,6 +115,7 @@ func prepareVoicePrompt(aiContext domain.AIContext, p params) (preparedVoiceProm
 			refineMode:          refineMode,
 			recurringGeneration: recurringGeneration,
 			rssGeneration:       hasRSSSource(p),
+			rssDesiredLength:    p.str("rss_desired_length"),
 			includeTitle:        includeTitle,
 		},
 		scheduledAt: scheduledAt, piiKinds: piiKinds, injectionHits: injectionHits,
@@ -291,6 +292,7 @@ func rssGenerationRules(p params) string {
 		"- This is a NEW post written from the feed item body, not a polish of a previous draft.\n" +
 		"- Keep the title and any numbers/identifiers exactly as in the source.\n" +
 		"- Use the item link from the source — never substitute the RSS feed subscription URL.\n" +
+		"- Source facts and each account's hard character limit take priority. The structured goal and desired length take priority over free-text editorial direction when they conflict.\n" +
 		"- " + rssDetailGuidance(p) + "\n\n"
 }
 
@@ -351,7 +353,7 @@ func buildMultiAccountPrompt(aiContext domain.AIContext, p params, selected []do
 
 	lengthRule := fmt.Sprintf("- Write \"content\" ONLY for the primary account. Make it as long and complete as possible, targeting roughly %d to %d characters.\n", primaryLimit-20, primaryLimit)
 	if hasRSSSource(p) {
-		lengthRule = fmt.Sprintf("- Write \"content\" ONLY for the primary account, as long as the source supports, max %d characters.\n", primaryLimit)
+		lengthRule = "- Write \"content\" ONLY for the primary account, " + rssLengthGuidance(p.str("rss_desired_length"), primaryLimit) + "\n"
 	}
 
 	return basePrompt + "\n\n" +
@@ -372,6 +374,17 @@ func buildMultiAccountPrompt(aiContext domain.AIContext, p params, selected []do
 		"- \"platform_metadata\": object\n" +
 		"Accounts:\n" + accountLines(selected) +
 		"\nTarget schedule (UTC): " + scheduleLabel + "."
+}
+
+func rssLengthGuidance(length string, limit int) string {
+	switch length {
+	case "short":
+		return fmt.Sprintf("write a concise short post, max %d characters; include only source-supported facts and never pad.", limit)
+	case "detailed":
+		return fmt.Sprintf("cover supported key points in detail when the source allows, max %d characters; a short source may yield a short post, never invent facts or pad.", limit)
+	default:
+		return fmt.Sprintf("as long as the source supports, max %d characters.", limit)
+	}
 }
 
 func buildRefinePrompt(aiContext domain.AIContext, p params, selected []domain.AIAccountSummary, primaryLimit int, primaryAccountID string, scheduledAt *time.Time, includeTitle bool) string {
@@ -433,6 +446,7 @@ type generateAttempt struct {
 	refineMode          bool
 	recurringGeneration bool
 	rssGeneration       bool
+	rssDesiredLength    string
 	includeTitle        bool
 }
 
@@ -484,7 +498,7 @@ func generateWithRetries(ctx context.Context, client Client, attempt generateAtt
 		case attempt.rssGeneration:
 			currentPrompt = attempt.prompt + "\n\nRevise the previous answer and return JSON only. " +
 				"Fix this issue: " + lastError + ". " +
-				fmt.Sprintf("Write primary content as long as the source supports, max %d characters. ", attempt.primaryLimit) +
+				rssLengthGuidance(attempt.rssDesiredLength, attempt.primaryLimit) + " " +
 				"Do not invent facts or add filler. " +
 				"Only add account_content_override entries for lower-limit accounts that cannot fit the primary text."
 		case attempt.recurringGeneration:

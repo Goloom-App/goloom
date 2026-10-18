@@ -10,7 +10,7 @@ import { DestinationPicker } from '../../components/ai/DestinationPicker'
 import { AutomationAIPreview } from '../../components/ai/AutomationAIPreview'
 import { Segmented, ToggleSwitch } from '../../components/ui'
 import { getApiClient, useCreateRSSFeed, useDeleteRSSFeed, useRSSFeeds, useUpdateRSSFeed } from '../../hooks/useAI'
-import type { AccountRecord, AutomationOutputMode, RSSFeedConfig, RSSInitialSyncMode, TeamRecord } from '../../types'
+import type { AccountRecord, AutomationOutputMode, RSSFeedConfig, RSSInitialSyncMode, RSSEditorialGoal, RSSDesiredLength, TeamRecord } from '../../types'
 import type { BackendRSSPreviewItem } from '../../api'
 
 interface RSSFeedsViewProps {
@@ -31,6 +31,8 @@ type FeedFormState = {
   outputMode: AutomationOutputMode
   maxPostsPerDay: number
   promptHint: string
+  editorialGoal: RSSEditorialGoal
+  desiredLength: RSSDesiredLength
   targetAccountIds: string[]
   initialSyncMode: RSSInitialSyncMode
 }
@@ -50,6 +52,8 @@ const emptyFeedForm = (): FeedFormState => ({
   outputMode: 'draft',
   maxPostsPerDay: 10,
   promptHint: '',
+  editorialGoal: 'auto',
+  desiredLength: 'auto',
   targetAccountIds: [],
   initialSyncMode: 'baseline',
 })
@@ -67,6 +71,8 @@ function feedToForm(feed: RSSFeedConfig): FeedFormState {
     outputMode: feed.outputMode,
     maxPostsPerDay: feed.maxPostsPerDay ?? 10,
     promptHint: feed.promptHint,
+    editorialGoal: feed.editorialGoal,
+    desiredLength: feed.desiredLength,
     targetAccountIds: feed.targetAccountIds,
     initialSyncMode: feed.initialSyncMode,
   }
@@ -124,7 +130,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       title: feedForm.name.slice(0, 500), content: feedForm.contentTemplate.slice(0, 4000),
       title_template: feedForm.titleTemplate.slice(0, 500),
       output_mode: feedForm.outputMode, target_account_ids: feedForm.targetAccountIds.slice(0, 50),
-      ai_enhance_enabled: feedForm.aiEnhanceEnabled, prompt_hint: feedForm.promptHint.slice(0, 1000),
+      ai_enhance_enabled: feedForm.aiEnhanceEnabled, editorial_goal: feedForm.editorialGoal, desired_length: feedForm.desiredLength, prompt_hint: feedForm.promptHint.slice(0, 1000),
     } }
     setViewFocus(editingFeedId ? { type: 'rss_feed', id: editingFeedId } : { type: 'rss_feed' })
     setViewVisible(visible)
@@ -169,11 +175,6 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       setError(t('rss.templateRequired'))
       return
     }
-    if (feedForm.aiEnhanceEnabled && team.isAiEnabled && !feedForm.promptHint.trim()) {
-      setError(t('rss.promptRequired'))
-      return
-    }
-
     setError(null)
     setStatusMessage(null)
     const payload = {
@@ -188,6 +189,8 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       output_mode: feedForm.outputMode,
       max_posts_per_day: feedForm.maxPostsPerDay,
       prompt_hint: feedForm.promptHint.trim(),
+      editorial_goal: feedForm.editorialGoal,
+      desired_length: feedForm.desiredLength,
       target_account_ids: feedForm.targetAccountIds,
       initial_sync_mode: feedForm.initialSyncMode,
     }
@@ -374,6 +377,23 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                             description={t('rss.articleEnrichmentHint')}
                             testId="rss-article-enrichment"
                           />
+                          <label className="field">
+                            <span>{t('rss.editorialGoal')}</span>
+                            <select data-testid="rss-editorial-goal" value={feedForm.editorialGoal} onChange={(e) => setFeedForm((prev) => ({ ...prev, editorialGoal: e.target.value as RSSEditorialGoal }))}>
+                              <option value="auto">{t('rss.goalAuto')}</option>
+                              <option value="teaser">{t('rss.goalTeaser')}</option>
+                              <option value="summary">{t('rss.goalSummary')}</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>{t('rss.desiredLength')}</span>
+                            <select data-testid="rss-desired-length" value={feedForm.desiredLength} onChange={(e) => setFeedForm((prev) => ({ ...prev, desiredLength: e.target.value as RSSDesiredLength }))}>
+                              <option value="auto">{t('rss.lengthAuto')}</option>
+                              <option value="short">{t('rss.lengthShort')}</option>
+                              <option value="detailed">{t('rss.lengthDetailed')}</option>
+                            </select>
+                            <p className="hint">{t('rss.editorialPrecedence')}</p>
+                          </label>
                           <label className="field">
                             <span>{t('rss.aiPrompt')}</span>
                             <textarea

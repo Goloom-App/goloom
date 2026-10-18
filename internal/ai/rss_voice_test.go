@@ -105,6 +105,43 @@ func TestVoiceEngineRSSRetryStaysSourceGrounded(t *testing.T) {
 	}
 }
 
+func TestVoiceEngineRSSGoalAndLengthReachEveryRequest(t *testing.T) {
+	for _, tc := range []struct {
+		goal, length, want string
+	}{
+		{"teaser", "short", "short teaser"},
+		{"summary", "detailed", "supported key points"},
+	} {
+		t.Run(tc.goal+"/"+tc.length, func(t *testing.T) {
+			client := &scriptedClient{responses: []Response{
+				rssVoiceResponse(t, "", nil),
+				rssVoiceResponse(t, groundedRSSPost, nil),
+			}}
+			_, err := runVoiceEngine(context.Background(), client, domain.AIJob{Type: domain.AIJobTypeVoiceEngine}, testContext(), params{
+				"rss_article_title": "Release 2", "rss_article_content": "Release 2 ships Friday with offline mode.",
+				"rss_article_link": "https://example.org/release", "schedule": false,
+				"target_account_ids": []string{"acc-1", "acc-2"}, "rss_editorial_goal": tc.goal,
+				"rss_desired_length": tc.length, "occasion": "Focus on release",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(client.requests) != 2 {
+				t.Fatalf("requests=%d", len(client.requests))
+			}
+			for _, req := range client.requests {
+				prompt := req.Messages[len(req.Messages)-1].Content
+				if !strings.Contains(prompt, tc.want) || !strings.Contains(prompt, "Focus on release") {
+					t.Fatalf("prompt missing setting: %s", prompt)
+				}
+				if strings.Contains(prompt, "targeting roughly") || strings.Contains(prompt, "must be long") {
+					t.Fatalf("prompt demands padding: %s", prompt)
+				}
+			}
+		})
+	}
+}
+
 func TestVoiceEngineRSSKeepsLimitsAndOverrides(t *testing.T) {
 	client := &scriptedClient{responses: []Response{
 		rssVoiceResponse(t, strings.Repeat("Long source text. ", 40), nil),

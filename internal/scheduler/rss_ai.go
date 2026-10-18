@@ -51,6 +51,8 @@ func (s *Service) submitRSSAIEnhancement(
 	}
 	params := map[string]any{
 		"occasion":            strings.TrimSpace(feed.PromptHint),
+		"rss_editorial_goal":  domain.NormalizeRSSEditorialGoal(feed.EditorialGoal),
+		"rss_desired_length":  domain.NormalizeRSSDesiredLength(feed.DesiredLength),
 		"post_skeleton":       templateContent,
 		"rss_article_title":   strings.TrimSpace(item.Title),
 		"rss_article_content": articleText,
@@ -68,6 +70,9 @@ func (s *Service) submitRSSAIEnhancement(
 			"fallback_content":     templateContent,
 			"article_fetch_failed": articleFetchFailed,
 		},
+	}
+	if domain.NormalizeRSSEditorialGoal(feed.EditorialGoal) == "teaser" {
+		params["output_format"] = "teaser"
 	}
 	paramsRaw, err := json.Marshal(params)
 	if err != nil {
