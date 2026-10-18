@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.3.1](https://github.com/Goloom-App/goloom/compare/v0.3.0...v0.3.1) (2026-10-18)
+
+
+### Features
+
+* **automation:** preview AI output without publishing ([#198](https://github.com/Goloom-App/goloom/issues/198)) ([921a1f1](https://github.com/Goloom-App/goloom/commit/921a1f133e61f854478dd30329ad82887675323a)), closes [#161](https://github.com/Goloom-App/goloom/issues/161)
+* **chart:** add optional NetworkPolicy ([e0067d4](https://github.com/Goloom-App/goloom/commit/e0067d42fecb3c0389efbe845ca3fa925e9b6268))
+* **chart:** disable service account token automount ([e0067d4](https://github.com/Goloom-App/goloom/commit/e0067d42fecb3c0389efbe845ca3fa925e9b6268))
+* **chat:** ground campaign and automation editors ([#197](https://github.com/Goloom-App/goloom/issues/197)) ([98216a1](https://github.com/Goloom-App/goloom/commit/98216a134d65871d648a7fe9ec1fb77e796efbde))
+* **composer:** preview and selectively apply AI edits ([#201](https://github.com/Goloom-App/goloom/issues/201)) ([5e07d89](https://github.com/Goloom-App/goloom/commit/5e07d890f63ac00f0da2c54ef457595724f0e671))
+* **rss:** configure editorial goal and desired length ([#199](https://github.com/Goloom-App/goloom/issues/199)) ([ca1d768](https://github.com/Goloom-App/goloom/commit/ca1d7689e3bbf120383d19eddfa728ea2b51a6d7))
+* **rss:** enrich thin feed items from linked articles ([#194](https://github.com/Goloom-App/goloom/issues/194)) ([c5b1be4](https://github.com/Goloom-App/goloom/commit/c5b1be417c912b322114658716bfc9e1e5267b28)), closes [#180](https://github.com/Goloom-App/goloom/issues/180)
+* **teams:** make invite links explicit and shareable ([#192](https://github.com/Goloom-App/goloom/issues/192)) ([edfa357](https://github.com/Goloom-App/goloom/commit/edfa357d4f20f48da3756de76440c325462148b8)), closes [#186](https://github.com/Goloom-App/goloom/issues/186)
+* **teams:** move Add Member into Members header ([#196](https://github.com/Goloom-App/goloom/issues/196)) ([c5c2839](https://github.com/Goloom-App/goloom/commit/c5c283966ab34757d2679594d8520f6f7a24a802)), closes [#185](https://github.com/Goloom-App/goloom/issues/185)
+* **teams:** remove duplicate settings header card ([#193](https://github.com/Goloom-App/goloom/issues/193)) ([ebacb12](https://github.com/Goloom-App/goloom/commit/ebacb12d5a29d2418c808e4a8828fdcdf9ce323c)), closes [#187](https://github.com/Goloom-App/goloom/issues/187)
+* **teams:** show user pictures in member rows ([#195](https://github.com/Goloom-App/goloom/issues/195)) ([902e689](https://github.com/Goloom-App/goloom/commit/902e689d6caac9e3572bd2e9c95f4cb15331fe6a)), closes [#188](https://github.com/Goloom-App/goloom/issues/188)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/go-jose/go-jose/v4 to v4.1.6 ([#189](https://github.com/Goloom-App/goloom/issues/189)) ([2926f5c](https://github.com/Goloom-App/goloom/commit/2926f5cc0a07b81f06188107557248f122f2164a))
+
+
+### Performance Improvements
+
+* **ci:** shard Playwright E2E tests ([#200](https://github.com/Goloom-App/goloom/issues/200)) ([8bcdbb0](https://github.com/Goloom-App/goloom/commit/8bcdbb064621ebd4feb4c475ba0c132f0ea05ef0))
+
 ## [0.3.0](https://github.com/Goloom-App/goloom/compare/v0.2.9...v0.3.0) (2026-10-17)
 
 
