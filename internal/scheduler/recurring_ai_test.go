@@ -278,7 +278,7 @@ func TestSchedulerAIJobProvenance(t *testing.T) {
 				if createErr != nil {
 					t.Fatal(createErr)
 				}
-				err = svc.submitRSSAIEnhancement(ctx, feed, rss.Item{Title: "item", Content: "article"}, "item", "fallback", "title", at, false, user.ID)
+				err = svc.submitRSSAIEnhancement(ctx, feed, rss.Item{Title: "item", Content: "feed teaser", Link: "https://example.org/item"}, "item", "fallback", "title", at, false, user.ID, rssArticleMaterial{Text: "concrete linked article details"})
 			case "recurring-main":
 				err = svc.submitRecurringAIEnhancement(ctx, tmpl, "fallback", "title", at, false, at)
 			case "recurring-announcement":
@@ -300,6 +300,23 @@ func TestSchedulerAIJobProvenance(t *testing.T) {
 			}
 			if jobs[0].Origin != want {
 				t.Fatalf("origin=%q want=%q", jobs[0].Origin, want)
+			}
+			if kind == "rss" {
+				var payload struct {
+					Params struct {
+						Content    string `json:"rss_article_content"`
+						Link       string `json:"rss_article_link"`
+						Automation struct {
+							FetchFailed bool `json:"article_fetch_failed"`
+						} `json:"rss_automation"`
+					} `json:"params"`
+				}
+				if err := json.Unmarshal(jobs[0].Payload, &payload); err != nil {
+					t.Fatal(err)
+				}
+				if payload.Params.Content != "concrete linked article details" || payload.Params.Link != "https://example.org/item" || payload.Params.Automation.FetchFailed {
+					t.Fatalf("RSS article source/notice lost: %+v", payload.Params)
+				}
 			}
 		})
 	}

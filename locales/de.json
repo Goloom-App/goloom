@@ -653,12 +653,14 @@
       "actionFailed": "Review-Aktion fehlgeschlagen.",
       "pastTime": "Die gewählte Zeit liegt in der Vergangenheit. Korrigiere sie oder",
       "aiFallbackBadge": "Vorlage statt KI",
+      "articleFetchFailedBadge": "Artikelabruf fehlgeschlagen",
       "aiFallbackReasons": {
         "provider_failure": "KI-Anbieter fehlgeschlagen. Inhalt aus Vorlage verwendet.",
         "empty_content": "KI lieferte keinen Inhalt. Inhalt aus Vorlage verwendet.",
         "invalid_output": "KI-Ausgabe unlesbar. Inhalt aus Vorlage verwendet.",
         "validation_failed": "KI-Inhalt ungültig. Inhalt aus Vorlage verwendet.",
         "dispatch_failed": "KI-Generierung konnte nicht starten. Inhalt aus Vorlage verwendet.",
+        "article_fetch_failed": "Verlinkter Artikel konnte nicht geladen werden. KI nutzte Feed-Inhalt.",
         "unknown": "KI-Generierung fehlgeschlagen. Inhalt aus Vorlage verwendet."
       },
       "aiFallbackJob": "KI-Auftrag: {{id}}"
@@ -674,6 +676,8 @@
       "title": "RSS-Feeds",
       "hint": "Erstellt automatisch Beiträge bei neuen Artikeln. Nutze ein Template oder aktiviere KI, um aus dem Artikeltext zu schreiben.",
       "aiEnhanceEnabled": "Mit KI verbessern",
+      "articleEnrichmentEnabled": "Verlinkte Artikel bei kurzen Feed-Einträgen laden",
+      "articleEnrichmentHint": "Optional. Lädt einen kurzen Auszug bei reinen Teasern. Bei Fehlern nutzt die KI den Feed-Text; der Beitrag erhält einen Hinweis.",
       "aiPrompt": "KI-Anweisung",
       "aiPromptPlaceholder": "z. B. Fasse die Kernaussage zusammen und stelle eine Frage zur Diskussion.",
       "aiPromptHint": "Aufgaben-spezifische Anweisung für diesen Feed (z. B. Fokus auf Releases). Der Marken-Vibe kommt aus dem KI Studio.",

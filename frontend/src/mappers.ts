@@ -304,6 +304,7 @@ export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
     name: raw.name,
     isActive: raw.is_active,
     aiEnhanceEnabled: Boolean(raw.ai_enhance_enabled),
+    articleEnrichmentEnabled: Boolean(raw.article_enrichment_enabled),
     contentTemplate: raw.content_template ?? '{title}\n\n{link}',
     titleTemplate: raw.title_template ?? '{title}',
     titleHint: raw.title_hint ?? '',

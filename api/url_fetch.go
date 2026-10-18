@@ -3,14 +3,12 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
-	"git.f4mily.net/goloom/internal/netguard"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	"git.f4mily.net/goloom/internal/htmltext"
+	"git.f4mily.net/goloom/internal/netguard"
+	"git.f4mily.net/goloom/internal/pagefetch"
 )
 
 // urlFetchPolicy guards page fetches: URLs come from users and the chat model
@@ -18,51 +16,7 @@ import (
 var urlFetchPolicy = netguard.NewPolicy(nil)
 
 func fetchURLBody(ctx context.Context, rawURL string) (string, error) {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" {
-		return "", errors.New("source_url is required")
-	}
-
-	// GitHub web pages render their content client-side, so fetch the raw source
-	// (README/blob) instead. Candidates are tried in order; the original URL is
-	// the final fallback, so non-GitHub URLs and unrewritable pages behave as
-	// before.
-	urls := append(githubRawCandidates(rawURL), rawURL)
-	var lastErr error
-	for _, u := range urls {
-		body, err := httpGetBody(ctx, u)
-		if err == nil {
-			return body, nil
-		}
-		lastErr = err
-	}
-	return "", lastErr
-}
-
-func httpGetBody(ctx context.Context, rawURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("User-Agent", "goloom-page-fetch/1.0")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8")
-
-	client := urlFetchPolicy.HTTPClient(20 * time.Second)
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("url fetch failed: HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
-	}
-
-	return string(body), nil
+	return pagefetch.FetchBody(ctx, rawURL, urlFetchPolicy, 20*time.Second)
 }
 
 func fetchURLText(ctx context.Context, rawURL string) (string, error) {

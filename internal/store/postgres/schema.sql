@@ -353,6 +353,7 @@ create table if not exists rss_feed_configs (
     feed_url text not null,
     name text not null,
     is_active boolean not null default true,
+    article_enrichment_enabled boolean not null default false,
     prompt_hint text not null default '',
     target_account_ids text not null default '[]',
     tonality text not null default '',
@@ -578,6 +579,7 @@ alter table rss_feed_configs add column if not exists output_mode text not null 
 alter table rss_feed_configs add column if not exists max_posts_per_day integer not null default 10;
 alter table rss_feed_configs add column if not exists counter_next integer not null default 1;
 alter table rss_feed_configs add column if not exists ai_enhance_enabled boolean not null default false;
+alter table rss_feed_configs add column if not exists article_enrichment_enabled boolean not null default false;
 
 alter table scheduled_posts add column if not exists rss_feed_id uuid references rss_feed_configs(id) on delete set null;
 

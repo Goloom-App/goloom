@@ -9,13 +9,14 @@ import (
 )
 
 type rssAutomationMeta struct {
-	FeedID          string
-	ItemKey         string
-	OutputMode      domain.AutomationOutputMode
-	ScheduledAt     time.Time
-	Draft           bool
-	PostTitle       string
-	FallbackContent string
+	FeedID             string
+	ItemKey            string
+	OutputMode         domain.AutomationOutputMode
+	ScheduledAt        time.Time
+	Draft              bool
+	PostTitle          string
+	FallbackContent    string
+	ArticleFetchFailed bool
 }
 
 func parseRSSAutomationMeta(payload json.RawMessage) *rssAutomationMeta {
@@ -25,13 +26,14 @@ func parseRSSAutomationMeta(payload json.RawMessage) *rssAutomationMeta {
 	var envelope struct {
 		Params struct {
 			RSSAutomation *struct {
-				FeedID          string `json:"feed_id"`
-				ItemKey         string `json:"item_key"`
-				OutputMode      string `json:"output_mode"`
-				ScheduledAt     string `json:"scheduled_at"`
-				Draft           bool   `json:"draft"`
-				PostTitle       string `json:"post_title"`
-				FallbackContent string `json:"fallback_content"`
+				FeedID             string `json:"feed_id"`
+				ItemKey            string `json:"item_key"`
+				OutputMode         string `json:"output_mode"`
+				ScheduledAt        string `json:"scheduled_at"`
+				Draft              bool   `json:"draft"`
+				PostTitle          string `json:"post_title"`
+				FallbackContent    string `json:"fallback_content"`
+				ArticleFetchFailed bool   `json:"article_fetch_failed"`
 			} `json:"rss_automation"`
 		} `json:"params"`
 	}
@@ -49,13 +51,14 @@ func parseRSSAutomationMeta(payload json.RawMessage) *rssAutomationMeta {
 		}
 	}
 	return &rssAutomationMeta{
-		FeedID:          raw.FeedID,
-		ItemKey:         raw.ItemKey,
-		OutputMode:      domain.NormalizeAutomationOutputMode(raw.OutputMode),
-		ScheduledAt:     scheduledAt,
-		Draft:           raw.Draft,
-		PostTitle:       strings.TrimSpace(raw.PostTitle),
-		FallbackContent: strings.TrimSpace(raw.FallbackContent),
+		FeedID:             raw.FeedID,
+		ItemKey:            raw.ItemKey,
+		OutputMode:         domain.NormalizeAutomationOutputMode(raw.OutputMode),
+		ScheduledAt:        scheduledAt,
+		Draft:              raw.Draft,
+		PostTitle:          strings.TrimSpace(raw.PostTitle),
+		FallbackContent:    strings.TrimSpace(raw.FallbackContent),
+		ArticleFetchFailed: raw.ArticleFetchFailed,
 	}
 }
 

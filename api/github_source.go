@@ -1,9 +1,6 @@
 package api
 
-import (
-	"net/url"
-	"strings"
-)
+import "git.f4mily.net/goloom/internal/pagefetch"
 
 // githubRawCandidates rewrites a github.com web URL to the raw source URLs that
 // actually hold its text. GitHub renders READMEs and file blobs client-side, so
@@ -17,47 +14,5 @@ import (
 // non-GitHub hosts) — those keep their normal HTML fetch. README filenames vary,
 // so repo-root and directory URLs return several candidates to try in order.
 func githubRawCandidates(rawURL string) []string {
-	u, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil {
-		return nil
-	}
-	if host := strings.ToLower(u.Hostname()); host != "github.com" && host != "www.github.com" {
-		return nil
-	}
-
-	parts := strings.Split(strings.Trim(u.EscapedPath(), "/"), "/")
-	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
-		return nil
-	}
-	owner := parts[0]
-	repo := strings.TrimSuffix(parts[1], ".git")
-	rawBase := "https://raw.githubusercontent.com/" + owner + "/" + repo + "/"
-
-	// readmes lists the likely README files under ref (and optional dir), in
-	// descending order of how common the filename is.
-	readmes := func(ref, dir string) []string {
-		prefix := ref + "/"
-		if dir != "" {
-			prefix += dir + "/"
-		}
-		return []string{
-			rawBase + prefix + "README.md",
-			rawBase + prefix + "readme.md",
-			rawBase + prefix + "README.rst",
-		}
-	}
-
-	switch {
-	case len(parts) == 2:
-		// Repo root: HEAD resolves the default branch without an API call.
-		return readmes("HEAD", "")
-	case parts[2] == "blob" && len(parts) >= 5:
-		return []string{rawBase + parts[3] + "/" + strings.Join(parts[4:], "/")}
-	case parts[2] == "raw" && len(parts) >= 5:
-		return []string{rawBase + parts[3] + "/" + strings.Join(parts[4:], "/")}
-	case parts[2] == "tree" && len(parts) >= 4:
-		return readmes(parts[3], strings.Join(parts[4:], "/"))
-	default:
-		return nil
-	}
+	return pagefetch.GitHubRawCandidates(rawURL)
 }

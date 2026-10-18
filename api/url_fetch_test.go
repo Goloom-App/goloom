@@ -82,9 +82,12 @@ func TestFetchURLBody_RefusesDisallowedSchemesAndHosts(t *testing.T) {
 		"gopher://example.com/",
 	} {
 		_, err := fetchURLBody(context.Background(), target)
-		if err == nil || !strings.Contains(err.Error(), "unsupported protocol scheme") {
-			t.Errorf("fetch of %q must fail with unsupported protocol scheme, got %v", target, err)
+		if err == nil || !strings.Contains(err.Error(), "url must use http or https") {
+			t.Errorf("fetch of %q must fail URL validation, got %v", target, err)
 		}
+	}
+	if _, err := fetchURLBody(context.Background(), "http://user:pass@127.0.0.1/"); err == nil || !strings.Contains(err.Error(), "credentials") {
+		t.Fatalf("credential-bearing URL must fail validation, got %v", err)
 	}
 	for _, target := range []string{
 		"http://localhost/",

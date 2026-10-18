@@ -249,15 +249,16 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 
 	// Create
 	cfg, err := s.CreateRSSFeedConfig(ctx, team.ID, domain.RSSFeedConfig{
-		FeedURL:          "https://example.com/feed.xml",
-		Name:             "Blog",
-		IsActive:         true,
-		AiEnhanceEnabled: false,
-		ContentTemplate:  "{title}\n{link}",
-		OutputMode:       domain.AutomationOutputDraft,
-		MaxPostsPerDay:   5,
-		TargetAccountIDs: []string{acc.ID},
-		InitialSyncMode:  domain.RSSInitialSyncBaseline,
+		FeedURL:                  "https://example.com/feed.xml",
+		Name:                     "Blog",
+		IsActive:                 true,
+		AiEnhanceEnabled:         false,
+		ArticleEnrichmentEnabled: true,
+		ContentTemplate:          "{title}\n{link}",
+		OutputMode:               domain.AutomationOutputDraft,
+		MaxPostsPerDay:           5,
+		TargetAccountIDs:         []string{acc.ID},
+		InitialSyncMode:          domain.RSSInitialSyncBaseline,
 	})
 	if err != nil {
 		t.Fatalf("CreateRSSFeedConfig: %v", err)
@@ -270,6 +271,9 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 	}
 	if !cfg.IsActive {
 		t.Fatal("expected IsActive=true")
+	}
+	if !cfg.ArticleEnrichmentEnabled {
+		t.Fatal("article enrichment setting lost on create")
 	}
 	if cfg.OutputMode != domain.AutomationOutputDraft {
 		t.Fatalf("OutputMode: got %q", cfg.OutputMode)
@@ -288,6 +292,9 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 	}
 	if got.Name != "Blog" {
 		t.Fatalf("Name: got %q", got.Name)
+	}
+	if !got.ArticleEnrichmentEnabled {
+		t.Fatal("article enrichment setting lost on read")
 	}
 
 	// GetByID - not found
@@ -330,6 +337,9 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 	}
 	if updated.Name != "Blog Updated" {
 		t.Fatalf("Name after update: got %q", updated.Name)
+	}
+	if updated.ArticleEnrichmentEnabled {
+		t.Fatal("article enrichment setting not disabled on update")
 	}
 	if updated.IsActive {
 		t.Fatal("expected IsActive=false after update")

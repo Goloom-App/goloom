@@ -255,20 +255,21 @@ func (a *API) handleListRSSFeeds(w http.ResponseWriter, r *http.Request) {
 }
 
 type rssFeedPatchRequest struct {
-	FeedURL          *string    `json:"feed_url"`
-	Name             *string    `json:"name"`
-	IsActive         *bool      `json:"is_active"`
-	ContentTemplate  *string    `json:"content_template"`
-	TitleTemplate    *string    `json:"title_template"`
-	TitleHint        *string    `json:"title_hint"`
-	OutputMode       *string    `json:"output_mode"`
-	MaxPostsPerDay   *int       `json:"max_posts_per_day"`
-	AiEnhanceEnabled *bool      `json:"ai_enhance_enabled"`
-	PromptHint       *string    `json:"prompt_hint"`
-	TargetAccountIDs *[]string  `json:"target_account_ids"`
-	Tonality         *string    `json:"tonality"`
-	LastFetchedAt    *time.Time `json:"last_fetched_at"`
-	InitialSyncMode  *string    `json:"initial_sync_mode"`
+	FeedURL                  *string    `json:"feed_url"`
+	Name                     *string    `json:"name"`
+	IsActive                 *bool      `json:"is_active"`
+	ContentTemplate          *string    `json:"content_template"`
+	TitleTemplate            *string    `json:"title_template"`
+	TitleHint                *string    `json:"title_hint"`
+	OutputMode               *string    `json:"output_mode"`
+	MaxPostsPerDay           *int       `json:"max_posts_per_day"`
+	AiEnhanceEnabled         *bool      `json:"ai_enhance_enabled"`
+	ArticleEnrichmentEnabled *bool      `json:"article_enrichment_enabled"`
+	PromptHint               *string    `json:"prompt_hint"`
+	TargetAccountIDs         *[]string  `json:"target_account_ids"`
+	Tonality                 *string    `json:"tonality"`
+	LastFetchedAt            *time.Time `json:"last_fetched_at"`
+	InitialSyncMode          *string    `json:"initial_sync_mode"`
 }
 
 func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
@@ -313,6 +314,9 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	if patch.AiEnhanceEnabled != nil {
 		merged.AiEnhanceEnabled = *patch.AiEnhanceEnabled
+	}
+	if patch.ArticleEnrichmentEnabled != nil {
+		merged.ArticleEnrichmentEnabled = *patch.ArticleEnrichmentEnabled
 	}
 	if patch.PromptHint != nil {
 		merged.PromptHint = *patch.PromptHint

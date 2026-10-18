@@ -169,6 +169,30 @@ func makeRecurringJob(t *testing.T, f aiCompletionFixture, payload json.RawMessa
 	return job
 }
 
+func TestRSSArticleFetchFailureVisibleOnPost(t *testing.T) {
+	ctx := context.Background()
+	f, account, _ := newRecurringCallbackFixture(t)
+	feed, err := f.store.CreateRSSFeedConfig(ctx, f.team.ID, domain.RSSFeedConfig{
+		FeedURL: "https://example.org/feed", Name: "Article feed", TargetAccountIDs: []string{account.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]any{"params": map[string]any{
+		"target_account_ids": []string{account.ID},
+		"rss_automation":     map[string]any{"feed_id": feed.ID, "item_key": "article-1", "fallback_content": "Feed teaser", "draft": true, "article_fetch_failed": true},
+	}})
+	job := makeRecurringJob(t, f, payload)
+	f.api.CompleteAIJob(ctx, job.ID, domain.AIJobStatusCompleted, json.RawMessage(`{"content":"AI post from feed teaser"}`), "")
+	posts, err := f.store.ListTeamPosts(ctx, f.team.ID)
+	if err != nil || len(posts) != 1 {
+		t.Fatalf("posts=%d err=%v", len(posts), err)
+	}
+	if posts[0].AIFallbackReason == nil || *posts[0].AIFallbackReason != "article_fetch_failed" {
+		t.Fatalf("article failure note missing: %+v", posts[0])
+	}
+}
+
 func TestRecurringAutomationCallback(t *testing.T) {
 	scheduledAt := time.Date(2027, 2, 1, 9, 0, 0, 0, time.UTC)
 

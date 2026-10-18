@@ -27,3 +27,20 @@ test('shows exhausted RSS items from API', async ({ page, baseURL }) => {
   await page.getByTestId('automation-tab-rss').click()
   await expect(page.getByTestId('rss-exhausted-items')).toHaveText('2 items exhausted automatic retries')
 })
+
+test('article enrichment is an optional feed setting', async ({ page }) => {
+  await page.route('**/v1/teams', async route => {
+    const response = await route.fetch()
+    const data = await response.json() as { items: Record<string, unknown>[] }
+    await route.fulfill({ response, json: { ...data, items: data.items.map(item => ({ ...item, is_ai_enabled: true })) } })
+  })
+  await signIn(page)
+  await page.getByRole('button', { name: /^Automation$/i }).click()
+  await page.getByTestId('automation-tab-rss').click()
+  await page.getByRole('button', { name: /add feed/i }).click()
+  await page.getByTestId('rss-ai-enhance').click()
+  const articleToggle = page.getByTestId('rss-article-enrichment').locator('input')
+  await expect(articleToggle).not.toBeChecked()
+  await page.getByTestId('rss-article-enrichment').click()
+  await expect(articleToggle).toBeChecked()
+})

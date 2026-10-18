@@ -24,6 +24,7 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
 - AI post callbacks discard and log every generated override key outside the payload targets before `Prepare`; targets remain subject to team validation. RSS/recurring AI validation failures before insertion retry with template content through the same pipeline, with logs and a failed-job error even when fallback succeeds. Insert/link/counter failures never retry post creation. Automation callback errors expose only fixed category messages in jobs/SSE; account/team IDs and store error details remain in logs.
 - AI jobs with client-supplied `params.no_publish: true` skip ordinary auto-publish post creation while retaining terminal completion, results and SSE. Server-origin automation callbacks retain their separate lifecycle. `refine_content` alone does not disable auto-publish.
 - AI cancellation returns 200 for already failed/`cancelled` jobs, including concurrent cancellations, without repeating completion side effects; other terminal jobs return 409 and foreign jobs remain 404.
+- RSS article enrichment is per-feed `article_enrichment_enabled`, default off. Only AI-enabled thin items fetch linked articles; guarded page fetching runs outside the RSS source transaction, and failed fetches keep feed text while marking the resulting post with `ai_fallback_reason=article_fetch_failed` (a source warning, not a template fallback).
 
 ## Work Guidance
 
@@ -380,6 +381,7 @@ Output: Logical commits (Conventional Commits)
 | [`internal/auth/AGENTS.md`](internal/auth/AGENTS.md) | Auth, authorization, OIDC, feature flags | Security-critical: middleware chains, scope definitions, bootstrap token lifecycle |
 | [`internal/domain/AGENTS.md`](internal/domain/AGENTS.md) | Domain models shared across all packages | Pure data types: patch semantics, template variables |
 | [`internal/provider/AGENTS.md`](internal/provider/AGENTS.md) | Social media provider integrations | Bluesky, Friendica, Mastodon implementations per Provider interface |
+| [`internal/pagefetch/AGENTS.md`](internal/pagefetch/AGENTS.md) | Public web page fetch | SSRF guard, response/time limits, GitHub raw rewrite |
 | [`internal/scheduler/AGENTS.md`](internal/scheduler/AGENTS.md) | Background job scheduler | Recurring/RSS automation, worker pool, template materialization |
 | [`internal/store/AGENTS.md`](internal/store/AGENTS.md) | Data access layer (SQLite + PostgreSQL) | Store interface (80+ methods), dual-backend schema contract |
 | [`develop/AGENTS.md`](develop/AGENTS.md) | Planning docs, feature catalogs, design specs | Plan structure conventions, feature catalog format |
