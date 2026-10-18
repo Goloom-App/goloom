@@ -82,6 +82,8 @@ type rssPreviewConfig struct {
 	ContentTemplate          *string   `json:"content_template,omitempty"`
 	TitleTemplate            *string   `json:"title_template,omitempty"`
 	PromptHint               *string   `json:"prompt_hint,omitempty"`
+	EditorialGoal            *string   `json:"editorial_goal,omitempty"`
+	DesiredLength            *string   `json:"desired_length,omitempty"`
 	TitleHint                *string   `json:"title_hint,omitempty"`
 	TargetAccountIDs         *[]string `json:"target_account_ids,omitempty"`
 	ArticleEnrichmentEnabled *bool     `json:"article_enrichment_enabled,omitempty"`
@@ -91,6 +93,11 @@ func (a *API) handleRSSAIPreview(w http.ResponseWriter, r *http.Request) {
 	var input rssAIPreviewRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil || strings.TrimSpace(input.ItemKey) == "" {
 		a.writeError(w, r, "invalid_rss_preview_item", http.StatusBadRequest)
+		return
+	}
+	if input.Config != nil && ((input.Config.EditorialGoal != nil && !validRSSEditorialOptions(*input.Config.EditorialGoal, "")) ||
+		(input.Config.DesiredLength != nil && !validRSSEditorialOptions("", *input.Config.DesiredLength))) {
+		a.writeError(w, r, "invalid_rss_editorial_options", http.StatusBadRequest)
 		return
 	}
 	teamID, feedID := r.PathValue("teamID"), r.PathValue("feedID")
@@ -267,7 +274,22 @@ func (a *API) handleRecurringAIPreview(w http.ResponseWriter, r *http.Request) {
 
 func rssPreviewParams(feed domain.RSSFeedConfig, item rss.Item) map[string]any {
 	fields := rss.ItemFields{Title: item.Title, Link: item.Link, Summary: item.Content, FeedName: feed.Name, PublishedAt: item.PublishedAt, Counter: feed.CounterNext}
-	return map[string]any{"occasion": strings.TrimSpace(feed.PromptHint), "post_skeleton": rss.ExpandContent(feed.NormalizedContentTemplate(), fields), "rss_article_title": item.Title, "rss_article_content": htmltext.ExtractReadableText(item.Content), "rss_article_link": item.Link, "title_hint": strings.TrimSpace(feed.TitleHint), "target_account_ids": feed.TargetAccountIDs, "schedule": false}
+	params := map[string]any{
+		"occasion":            strings.TrimSpace(feed.PromptHint),
+		"post_skeleton":       rss.ExpandContent(feed.NormalizedContentTemplate(), fields),
+		"rss_article_title":   item.Title,
+		"rss_article_content": htmltext.ExtractReadableText(item.Content),
+		"rss_article_link":    item.Link,
+		"title_hint":          strings.TrimSpace(feed.TitleHint),
+		"target_account_ids":  feed.TargetAccountIDs,
+		"schedule":            false,
+		"rss_editorial_goal":  domain.NormalizeRSSEditorialGoal(feed.EditorialGoal),
+		"rss_desired_length":  domain.NormalizeRSSDesiredLength(feed.DesiredLength),
+	}
+	if domain.NormalizeRSSEditorialGoal(feed.EditorialGoal) == "teaser" {
+		params["output_format"] = "teaser"
+	}
+	return params
 }
 
 func applyRSSPreviewConfig(feed domain.RSSFeedConfig, config *rssPreviewConfig) domain.RSSFeedConfig {
@@ -282,6 +304,12 @@ func applyRSSPreviewConfig(feed domain.RSSFeedConfig, config *rssPreviewConfig) 
 	}
 	if config.PromptHint != nil {
 		feed.PromptHint = strings.TrimSpace(*config.PromptHint)
+	}
+	if config.EditorialGoal != nil {
+		feed.EditorialGoal = domain.NormalizeRSSEditorialGoal(*config.EditorialGoal)
+	}
+	if config.DesiredLength != nil {
+		feed.DesiredLength = domain.NormalizeRSSDesiredLength(*config.DesiredLength)
 	}
 	if config.TitleHint != nil {
 		feed.TitleHint = strings.TrimSpace(*config.TitleHint)

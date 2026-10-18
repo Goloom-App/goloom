@@ -16,7 +16,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 - RSS feed editor exposes `editorial_goal` and `desired_length` with AI enhancement, defaults both to `auto`, and keeps free-text guidance optional. `e2e/rss-feeds.spec.ts` covers save and reload.
 
 - RSS feeds display API `exhausted_items_count` as a localized warning when positive; mocked coverage: `e2e/rss-feeds.spec.ts`.
-- RSS and recurring AI previews select a real feed item or concrete occurrence from the current recurrence rule, send unsaved editor settings (including counters, announcement, and enrichment) as preview-only overrides, show source/template/generation-input snapshots and per-account text with provider-aware character counts, and never create posts or import items; coverage: `e2e/rss-feeds.spec.ts` and `e2e/recurring-form.spec.ts`.
+- RSS and recurring AI previews select a real feed item or concrete occurrence from the current recurrence rule, send unsaved editor settings (including RSS editorial goal/length, counters, announcement, and enrichment) as preview-only overrides, show source/template/generation-input snapshots and per-account text with provider-aware character counts, and never create posts or import items; coverage: `e2e/rss-feeds.spec.ts` and `e2e/recurring-form.spec.ts`.
 - Build output: `../internal/webui/dist` (critical cross-boundary contract)
 - Team invitations: owners generate one-time links bound to entered email addresses; UI explains seven-day expiry and recipient sign-in check, supports copy and a `mailto:` draft without claiming goloom sent mail, and retains pending/revoke controls. Browser coverage: `e2e/team-invitations.spec.ts`.
 - API proxy: `vite.config.ts` proxies `/api` to `localhost:8080`

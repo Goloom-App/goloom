@@ -453,6 +453,8 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                                 content_template: feedForm.contentTemplate,
                                 title_template: feedForm.titleTemplate,
                                 prompt_hint: feedForm.promptHint,
+                                editorial_goal: feedForm.editorialGoal,
+                                desired_length: feedForm.desiredLength,
                                 title_hint: feedForm.titleHint,
                                 target_account_ids: feedForm.targetAccountIds,
                                 article_enrichment_enabled: feedForm.articleEnrichmentEnabled,

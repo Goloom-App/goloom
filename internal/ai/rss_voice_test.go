@@ -107,10 +107,12 @@ func TestVoiceEngineRSSRetryStaysSourceGrounded(t *testing.T) {
 
 func TestVoiceEngineRSSGoalAndLengthReachEveryRequest(t *testing.T) {
 	for _, tc := range []struct {
-		goal, length, want string
+		goal, length, wantGoal, wantLength string
 	}{
-		{"teaser", "short", "short teaser"},
-		{"summary", "detailed", "supported key points"},
+		{"teaser", "short", "short teaser", "concise short post"},
+		{"teaser", "detailed", "short teaser", "source allows"},
+		{"summary", "short", "supported key points", "concise short post"},
+		{"summary", "detailed", "supported key points", "source allows"},
 	} {
 		t.Run(tc.goal+"/"+tc.length, func(t *testing.T) {
 			client := &scriptedClient{responses: []Response{
@@ -131,7 +133,7 @@ func TestVoiceEngineRSSGoalAndLengthReachEveryRequest(t *testing.T) {
 			}
 			for _, req := range client.requests {
 				prompt := req.Messages[len(req.Messages)-1].Content
-				if !strings.Contains(prompt, tc.want) || !strings.Contains(prompt, "Focus on release") {
+				if !strings.Contains(prompt, tc.wantGoal) || !strings.Contains(prompt, tc.wantLength) || !strings.Contains(prompt, "Focus on release") {
 					t.Fatalf("prompt missing setting: %s", prompt)
 				}
 				if strings.Contains(prompt, "targeting roughly") || strings.Contains(prompt, "must be long") {

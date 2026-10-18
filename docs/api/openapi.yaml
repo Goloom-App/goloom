@@ -1848,6 +1848,8 @@ components:
             content_template: { type: string }
             title_template: { type: string }
             prompt_hint: { type: string }
+            editorial_goal: { type: string, enum: [auto, teaser, summary] }
+            desired_length: { type: string, enum: [auto, short, detailed] }
             title_hint: { type: string }
             target_account_ids:
               type: array

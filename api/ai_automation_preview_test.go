@@ -189,7 +189,11 @@ func TestRSSAIPreviewRunsWithoutImportOrPostSideEffects(t *testing.T) {
 	if selectRec.Code != http.StatusOK || !strings.Contains(selectRec.Body.String(), "item-161") {
 		t.Fatalf("preview items: %d %s", selectRec.Code, selectRec.Body.String())
 	}
-	created := doRequest(t, h, http.MethodPost, "/v1/teams/"+f.team.ID+"/rss-feeds/"+feed.ID+"/ai-preview", f.bearer, map[string]any{"item_key": "item-161", "config": map[string]any{"content_template": "{title} — {summary}", "prompt_hint": "Unsaved hint", "title_hint": "Unsaved title", "target_account_ids": []string{account.ID}}})
+	bad := doRequest(t, h, http.MethodPost, "/v1/teams/"+f.team.ID+"/rss-feeds/"+feed.ID+"/ai-preview", f.bearer, map[string]any{"item_key": "item-161", "config": map[string]any{"editorial_goal": "invent"}})
+	if bad.Code != http.StatusBadRequest {
+		t.Fatalf("invalid editorial preview option: %d %s", bad.Code, bad.Body.String())
+	}
+	created := doRequest(t, h, http.MethodPost, "/v1/teams/"+f.team.ID+"/rss-feeds/"+feed.ID+"/ai-preview", f.bearer, map[string]any{"item_key": "item-161", "config": map[string]any{"content_template": "{title} — {summary}", "prompt_hint": "Unsaved hint", "title_hint": "Unsaved title", "target_account_ids": []string{account.ID}, "editorial_goal": "summary", "desired_length": "detailed"}})
 	if created.Code != http.StatusAccepted {
 		t.Fatalf("preview submit: %d %s", created.Code, created.Body.String())
 	}
@@ -238,7 +242,7 @@ func TestRSSAIPreviewRunsWithoutImportOrPostSideEffects(t *testing.T) {
 		t.Fatal(err)
 	}
 	actualRaw, _ := json.Marshal(payload.Params)
-	wantParams := map[string]any{"occasion": "Unsaved hint", "post_skeleton": "Release — Source details", "rss_article_title": "Release", "rss_article_content": "Source details", "rss_article_link": "https://news.example.test/story", "title_hint": "Unsaved title", "target_account_ids": []string{account.ID}, "schedule": false}
+	wantParams := map[string]any{"occasion": "Unsaved hint", "post_skeleton": "Release — Source details", "rss_article_title": "Release", "rss_article_content": "Source details", "rss_article_link": "https://news.example.test/story", "title_hint": "Unsaved title", "target_account_ids": []string{account.ID}, "schedule": false, "rss_editorial_goal": "summary", "rss_desired_length": "detailed"}
 	wantRaw, _ := json.Marshal(wantParams)
 	gotSystem, gotTask, err := ai.PrepareVoicePrompt(aiCtx, actualRaw)
 	if err != nil {

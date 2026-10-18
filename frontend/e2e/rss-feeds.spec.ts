@@ -106,6 +106,8 @@ test('RSS AI preview shows per-account output without importing or creating post
   await page.getByTestId('automation-tab-rss').click()
   await page.getByRole('button', { name: /edit feed/i }).click()
   await page.getByTestId('rss-ai-prompt').fill('Changed preview prompt.')
+  await page.getByTestId('rss-editorial-goal').selectOption('summary')
+  await page.getByTestId('rss-desired-length').selectOption('detailed')
   await page.getByTestId('rss-content-template').fill('Draft preview: {title}')
   await page.getByTestId('rss-preview-load').click()
   await page.getByTestId('rss-ai-preview').getByRole('button', { name: /generate preview|vorschau generieren/i }).click()
@@ -119,6 +121,8 @@ test('RSS AI preview shows per-account output without importing or creating post
     item_key: 'article-1',
     config: {
       prompt_hint: 'Changed preview prompt.',
+      editorial_goal: 'summary',
+      desired_length: 'detailed',
       content_template: 'Draft preview: {title}',
       target_account_ids: [accountID],
     },
