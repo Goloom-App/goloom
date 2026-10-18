@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"git.f4mily.net/goloom/internal/ai"
@@ -38,6 +39,15 @@ func (a *API) handleAIPromptPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	aiContext, err = aicontext.Select(aiContext, enrichedParams)
+	if err != nil {
+		code := "invalid_ai_prompt_params"
+		if errors.Is(err, aicontext.ErrKnowledgeSourceUnavailable) {
+			code = "knowledge_source_unavailable"
+		}
+		a.writeError(w, r, code, http.StatusBadRequest)
+		return
+	}
 	systemPrompt, generationPrompt, err := ai.PrepareVoicePrompt(aiContext, enrichedParams)
 	if err != nil {
 		a.writeError(w, r, "invalid_ai_prompt_params", http.StatusBadRequest)

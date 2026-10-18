@@ -821,6 +821,7 @@ var technicalNoteSkipKeys = map[string]bool{
 	"rss_editorial_goal": true, "rss_desired_length": true,
 	"rss_article_summary": true, "rss_article_link": true, "rss_automation": true,
 	"announcement_reference_content": true, "announcement_reference_title": true,
+	"knowledge_source_ids": true,
 	"campaign_format_id": true, "campaignFormatId": true, "output_format": true,
 	"format": true, "platform": true, "recurring_post_kind": true, "recurring_automation": true,
 	"post_scheduled_at": true, "main_event_at": true, "days_before_main_event": true,

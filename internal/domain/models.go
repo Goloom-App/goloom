@@ -305,15 +305,17 @@ type TeamProfile struct {
 }
 
 type CampaignFormat struct {
-	ID               string          `json:"id"`
-	TeamID           string          `json:"team_id"`
-	Name             string          `json:"name"`
-	Weekday          *int            `json:"weekday,omitempty"`
-	Structure        json.RawMessage `json:"structure"`
-	RequiredHashtags []string        `json:"required_hashtags"`
-	IsActive         bool            `json:"is_active"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
+	// Nil inherits team knowledge; empty explicitly disables additional knowledge.
+	KnowledgeSourceIDs []string        `json:"knowledge_source_ids"`
+	ID                 string          `json:"id"`
+	TeamID             string          `json:"team_id"`
+	Name               string          `json:"name"`
+	Weekday            *int            `json:"weekday,omitempty"`
+	Structure          json.RawMessage `json:"structure"`
+	RequiredHashtags   []string        `json:"required_hashtags"`
+	IsActive           bool            `json:"is_active"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
 }
 
 type StyleExample struct {
@@ -400,6 +402,8 @@ func NormalizeAutomationOutputMode(raw string) AutomationOutputMode {
 }
 
 type RSSFeedConfig struct {
+	// Nil inherits team knowledge; empty explicitly disables additional knowledge.
+	KnowledgeSourceIDs       []string             `json:"knowledge_source_ids"`
 	ExhaustedItemsCount      int                  `json:"exhausted_items_count"`
 	ID                       string               `json:"id"`
 	TeamID                   string               `json:"team_id"`

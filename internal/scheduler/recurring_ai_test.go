@@ -274,7 +274,7 @@ func TestSchedulerAIJobProvenance(t *testing.T) {
 			var err error
 			switch kind {
 			case "rss":
-				feed, createErr := s.CreateRSSFeedConfig(ctx, team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{"acc-1"}, EditorialGoal: "summary", DesiredLength: "detailed"})
+				feed, createErr := s.CreateRSSFeedConfig(ctx, team.ID, domain.RSSFeedConfig{FeedURL: "https://example.test/feed", Name: "test", TargetAccountIDs: []string{"acc-1"}, KnowledgeSourceIDs: []string{}, EditorialGoal: "summary", DesiredLength: "detailed"})
 				if createErr != nil {
 					t.Fatal(createErr)
 				}
@@ -304,11 +304,12 @@ func TestSchedulerAIJobProvenance(t *testing.T) {
 			if kind == "rss" {
 				var payload struct {
 					Params struct {
-						Content    string `json:"rss_article_content"`
-						Link       string `json:"rss_article_link"`
-						Goal       string `json:"rss_editorial_goal"`
-						Length     string `json:"rss_desired_length"`
-						Automation struct {
+						KnowledgeSourceIDs []string `json:"knowledge_source_ids"`
+						Content            string   `json:"rss_article_content"`
+						Link               string   `json:"rss_article_link"`
+						Goal               string   `json:"rss_editorial_goal"`
+						Length             string   `json:"rss_desired_length"`
+						Automation         struct {
 							FetchFailed bool `json:"article_fetch_failed"`
 						} `json:"rss_automation"`
 					} `json:"params"`
@@ -316,7 +317,7 @@ func TestSchedulerAIJobProvenance(t *testing.T) {
 				if err := json.Unmarshal(jobs[0].Payload, &payload); err != nil {
 					t.Fatal(err)
 				}
-				if payload.Params.Content != "concrete linked article details" || payload.Params.Link != "https://example.org/item" || payload.Params.Goal != "summary" || payload.Params.Length != "detailed" || payload.Params.Automation.FetchFailed {
+				if payload.Params.KnowledgeSourceIDs == nil || payload.Params.Content != "concrete linked article details" || payload.Params.Link != "https://example.org/item" || payload.Params.Goal != "summary" || payload.Params.Length != "detailed" || payload.Params.Automation.FetchFailed {
 					t.Fatalf("RSS article source/notice lost: %+v", payload.Params)
 				}
 			}

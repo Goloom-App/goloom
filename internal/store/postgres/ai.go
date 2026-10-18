@@ -98,16 +98,16 @@ func scanTeamProfile(row interface{ Scan(dest ...any) error }) (domain.TeamProfi
 
 func (s *Store) CreateCampaignFormat(ctx context.Context, teamID string, input domain.CampaignFormat) (domain.CampaignFormat, error) {
 	const query = `
-		INSERT INTO campaign_formats (team_id, name, weekday, structure, required_hashtags, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at
+		INSERT INTO campaign_formats (team_id, name, weekday, structure, required_hashtags, is_active, knowledge_source_ids)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at, knowledge_source_ids
 	`
 	hashtags := input.RequiredHashtags
 	if hashtags == nil {
 		hashtags = []string{}
 	}
 	cf, err := scanCampaignFormat(s.pool.QueryRow(ctx, query,
-		teamID, input.Name, input.Weekday, input.Structure, hashtags, input.IsActive,
+		teamID, input.Name, input.Weekday, input.Structure, hashtags, input.IsActive, knowledgeSelectionJSON(input.KnowledgeSourceIDs),
 	))
 	if err != nil {
 		return domain.CampaignFormat{}, fmt.Errorf("CreateCampaignFormat: %w", err)
@@ -117,7 +117,7 @@ func (s *Store) CreateCampaignFormat(ctx context.Context, teamID string, input d
 
 func (s *Store) ListCampaignFormats(ctx context.Context, teamID string) ([]domain.CampaignFormat, error) {
 	const query = `
-		SELECT id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at
+		SELECT id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at, knowledge_source_ids
 		FROM campaign_formats
 		WHERE team_id = $1
 		ORDER BY created_at ASC
@@ -141,7 +141,7 @@ func (s *Store) ListCampaignFormats(ctx context.Context, teamID string) ([]domai
 
 func (s *Store) GetCampaignFormatByID(ctx context.Context, teamID string, id string) (domain.CampaignFormat, error) {
 	const query = `
-		SELECT id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at
+		SELECT id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at, knowledge_source_ids
 		FROM campaign_formats
 		WHERE team_id = $1 AND id = $2
 	`
@@ -158,16 +158,16 @@ func (s *Store) GetCampaignFormatByID(ctx context.Context, teamID string, id str
 func (s *Store) UpdateCampaignFormat(ctx context.Context, teamID string, id string, input domain.CampaignFormat) (domain.CampaignFormat, error) {
 	const query = `
 		UPDATE campaign_formats
-		SET name = $3, weekday = $4, structure = $5, required_hashtags = $6, is_active = $7, updated_at = now()
+		SET name = $3, weekday = $4, structure = $5, required_hashtags = $6, is_active = $7, updated_at = now(), knowledge_source_ids = $8
 		WHERE team_id = $1 AND id = $2
-		RETURNING id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at
+		RETURNING id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at, knowledge_source_ids
 	`
 	hashtags := input.RequiredHashtags
 	if hashtags == nil {
 		hashtags = []string{}
 	}
 	cf, err := scanCampaignFormat(s.pool.QueryRow(ctx, query,
-		teamID, id, input.Name, input.Weekday, input.Structure, hashtags, input.IsActive,
+		teamID, id, input.Name, input.Weekday, input.Structure, hashtags, input.IsActive, knowledgeSelectionJSON(input.KnowledgeSourceIDs),
 	))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -190,6 +190,7 @@ func scanCampaignFormat(row interface{ Scan(dest ...any) error }) (domain.Campai
 	var cf domain.CampaignFormat
 	var weekday sql.NullInt32
 	var structRaw []byte
+	var selectionRaw string
 	if err := row.Scan(
 		&cf.ID,
 		&cf.TeamID,
@@ -200,12 +201,16 @@ func scanCampaignFormat(row interface{ Scan(dest ...any) error }) (domain.Campai
 		&cf.IsActive,
 		&cf.CreatedAt,
 		&cf.UpdatedAt,
+		&selectionRaw,
 	); err != nil {
 		return domain.CampaignFormat{}, err
 	}
 	if weekday.Valid {
 		v := int(weekday.Int32)
 		cf.Weekday = &v
+	}
+	if err := json.Unmarshal([]byte(selectionRaw), &cf.KnowledgeSourceIDs); err != nil {
+		return domain.CampaignFormat{}, err
 	}
 	cf.Structure = json.RawMessage(structRaw)
 	if cf.RequiredHashtags == nil {
@@ -646,13 +651,13 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 	query := `
 		INSERT INTO rss_feed_configs (
 			team_id, feed_url, name, is_active, ai_enhance_enabled, article_enrichment_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day,
-			prompt_hint, editorial_goal, desired_length, target_account_ids, tonality, initial_sync_mode
+			prompt_hint, editorial_goal, desired_length, target_account_ids, tonality, initial_sync_mode, knowledge_source_ids
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		RETURNING ` + strings.TrimSpace(rssFeedConfigSelectList)
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
 		teamID, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, input.ArticleEnrichmentEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
-		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode,
+		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, knowledgeSelectionJSON(input.KnowledgeSourceIDs),
 	))
 	if err != nil {
 		return domain.RSSFeedConfig{}, fmt.Errorf("CreateRSSFeedConfig: %w", err)
@@ -709,13 +714,13 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 		UPDATE rss_feed_configs
 		SET feed_url = $3, name = $4, is_active = $5, ai_enhance_enabled = $6, article_enrichment_enabled = $7, content_template = $8, title_template = $9, title_hint = $10,
 		    output_mode = $11, max_posts_per_day = $12, prompt_hint = $13, editorial_goal = $14, desired_length = $15, target_account_ids = $16, tonality = $17,
-		    initial_sync_mode = $18, last_fetched_at = COALESCE($19, last_fetched_at)
+		    initial_sync_mode = $18, last_fetched_at = COALESCE($19, last_fetched_at), knowledge_source_ids = $20
 		WHERE team_id = $1 AND id = $2
 		RETURNING ` + strings.TrimSpace(rssFeedConfigSelectList)
 	syncMode := string(domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode)))
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
 		teamID, id, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, input.ArticleEnrichmentEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
-		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, input.LastFetchedAt,
+		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, input.LastFetchedAt, knowledgeSelectionJSON(input.KnowledgeSourceIDs),
 	))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -737,6 +742,7 @@ func (s *Store) DeleteRSSFeedConfig(ctx context.Context, teamID string, id strin
 func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeedConfig, error) {
 	var feed domain.RSSFeedConfig
 	var targetRaw string
+	var selectionRaw string
 	var lastFetched sql.NullTime
 	var syncMode string
 	var outputMode string
@@ -762,8 +768,12 @@ func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeed
 		&syncMode,
 		&lastFetched,
 		&feed.CreatedAt,
+		&selectionRaw,
 		&feed.ExhaustedItemsCount,
 	); err != nil {
+		return domain.RSSFeedConfig{}, err
+	}
+	if err := json.Unmarshal([]byte(selectionRaw), &feed.KnowledgeSourceIDs); err != nil {
 		return domain.RSSFeedConfig{}, err
 	}
 	if err := decodePostMediaIDs(targetRaw, &feed.TargetAccountIDs); err != nil {

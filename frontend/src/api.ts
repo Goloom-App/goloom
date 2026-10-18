@@ -445,6 +445,7 @@ export interface BackendTeamProfile {
 }
 
 export interface BackendCampaignFormat {
+  knowledge_source_ids?: string[] | null
   id: string
   team_id: string
   name: string
@@ -553,6 +554,7 @@ export interface BackendReviewCounts {
 }
 
 export interface BackendRSSFeedConfig {
+  knowledge_source_ids?: string[] | null
   exhausted_items_count?: number
   id: string
   team_id: string
@@ -1442,6 +1444,7 @@ export function createApiClient(options: ApiClientOptions) {
         name: string
         weekday: number | null
         structure: Record<string, unknown>
+        knowledge_source_ids?: string[] | null
         required_hashtags: string[]
         is_active: boolean
       },
@@ -1459,6 +1462,7 @@ export function createApiClient(options: ApiClientOptions) {
         name?: string
         weekday?: number | null
         structure?: Record<string, unknown>
+        knowledge_source_ids?: string[] | null
         required_hashtags?: string[]
         is_active?: boolean
       },
@@ -1680,6 +1684,7 @@ export function createApiClient(options: ApiClientOptions) {
     createRSSFeed(
       teamID: string,
       payload: {
+        knowledge_source_ids?: string[] | null
         feed_url: string
         name: string
         is_active: boolean
@@ -1708,6 +1713,7 @@ export function createApiClient(options: ApiClientOptions) {
       teamID: string,
       feedID: string,
       payload: {
+        knowledge_source_ids?: string[] | null
         feed_url?: string
         name?: string
         is_active?: boolean
