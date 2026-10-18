@@ -551,6 +551,7 @@ export interface BackendRSSFeedConfig {
   name: string
   is_active: boolean
   ai_enhance_enabled?: boolean
+  article_enrichment_enabled?: boolean
   content_template?: string
   title_template?: string
   title_hint?: string
@@ -1637,6 +1638,7 @@ export function createApiClient(options: ApiClientOptions) {
         name: string
         is_active: boolean
         ai_enhance_enabled?: boolean
+        article_enrichment_enabled?: boolean
         content_template?: string
         title_template?: string
         title_hint?: string
@@ -1662,6 +1664,7 @@ export function createApiClient(options: ApiClientOptions) {
         name?: string
         is_active?: boolean
         ai_enhance_enabled?: boolean
+        article_enrichment_enabled?: boolean
         content_template?: string
         title_template?: string
         title_hint?: string

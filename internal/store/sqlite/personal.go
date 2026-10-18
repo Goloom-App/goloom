@@ -67,6 +67,7 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table rss_feed_configs add column max_posts_per_day integer not null default 10`,
 		`alter table rss_feed_configs add column counter_next integer not null default 1`,
 		`alter table rss_feed_configs add column ai_enhance_enabled integer not null default 0`,
+		`alter table rss_feed_configs add column article_enrichment_enabled integer not null default 0`,
 		`alter table rss_feed_configs add column title_template text not null default '{title}'`,
 		`alter table rss_feed_configs add column title_hint text not null default ''`,
 		`alter table scheduled_posts add column ai_fallback_reason text`,

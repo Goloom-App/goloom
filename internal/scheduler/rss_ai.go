@@ -10,7 +10,6 @@ import (
 
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/domain"
-	"git.f4mily.net/goloom/internal/htmltext"
 	"git.f4mily.net/goloom/internal/rss"
 )
 
@@ -40,8 +39,16 @@ func (s *Service) submitRSSAIEnhancement(
 	scheduledAt time.Time,
 	draft bool,
 	ownerID string,
+	materials ...rssArticleMaterial,
 ) error {
-	articleText := htmltext.ExtractReadableText(strings.TrimSpace(item.Content))
+	articleText := ""
+	articleFetchFailed := false
+	if len(materials) > 0 {
+		articleText = materials[0].Text
+		articleFetchFailed = materials[0].FetchFailed
+	} else {
+		articleText = strings.TrimSpace(item.Content)
+	}
 	params := map[string]any{
 		"occasion":            strings.TrimSpace(feed.PromptHint),
 		"post_skeleton":       templateContent,
@@ -52,13 +59,14 @@ func (s *Service) submitRSSAIEnhancement(
 		"target_account_ids":  feed.TargetAccountIDs,
 		"schedule":            false,
 		"rss_automation": map[string]any{
-			"feed_id":          feed.ID,
-			"item_key":         itemKey,
-			"output_mode":      string(feed.OutputMode),
-			"scheduled_at":     scheduledAt.UTC().Format(time.RFC3339),
-			"draft":            draft,
-			"post_title":       title,
-			"fallback_content": templateContent,
+			"feed_id":              feed.ID,
+			"item_key":             itemKey,
+			"output_mode":          string(feed.OutputMode),
+			"scheduled_at":         scheduledAt.UTC().Format(time.RFC3339),
+			"draft":                draft,
+			"post_title":           title,
+			"fallback_content":     templateContent,
+			"article_fetch_failed": articleFetchFailed,
 		},
 	}
 	paramsRaw, err := json.Marshal(params)

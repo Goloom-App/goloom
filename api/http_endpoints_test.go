@@ -209,14 +209,17 @@ func TestRSSFeedEndpoints(t *testing.T) {
 	if feed.ID == "" || feed.Name != "Blog" {
 		t.Fatalf("feed: %+v", feed)
 	}
+	if feed.ArticleEnrichmentEnabled {
+		t.Fatal("article enrichment must default off")
+	}
 
 	rec = f.do(t, http.MethodGet, base, nil)
 	requireStatus(t, rec, http.StatusOK)
 
-	rec = f.do(t, http.MethodPatch, base+"/"+feed.ID, map[string]any{"name": "Blog 2"})
+	rec = f.do(t, http.MethodPatch, base+"/"+feed.ID, map[string]any{"name": "Blog 2", "article_enrichment_enabled": true})
 	requireStatus(t, rec, http.StatusOK)
 	updated := decodeJSON[domain.RSSFeedConfig](t, rec)
-	if updated.Name != "Blog 2" {
+	if updated.Name != "Blog 2" || !updated.ArticleEnrichmentEnabled {
 		t.Fatalf("updated feed: %+v", updated)
 	}
 

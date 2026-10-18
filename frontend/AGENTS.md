@@ -10,7 +10,8 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 
 ## Local Contracts
 
-- Automation template fallbacks carry optional API `ai_fallback_reason`, mapped to `PostRecord.aiFallbackReason`; PostCard and review queue share a warning badge with localized reason tooltip including optional `ai_job_id` (`PostRecord.aiJobId`) to identify the failed job. Ordinary posts show no fallback badge. Mocked API coverage: `e2e/ai-fallback-badge.spec.ts`.
+- Automation template fallbacks and RSS article-fetch failures carry optional API `ai_fallback_reason`, mapped to `PostRecord.aiFallbackReason`; PostCard and review queue share a warning badge with localized reason tooltip including optional `ai_job_id` (`PostRecord.aiJobId`). `article_fetch_failed` uses its own badge label and means AI used feed text. Ordinary posts show no warning badge. Mocked API coverage: `e2e/ai-fallback-badge.spec.ts`.
+- RSS feed editor exposes `article_enrichment_enabled` only with AI enhancement; default is off. `e2e/rss-feeds.spec.ts` covers toggle and feed warnings.
 
 - RSS feeds display API `exhausted_items_count` as a localized warning when positive; mocked coverage: `e2e/rss-feeds.spec.ts`.
 - Build output: `../internal/webui/dist` (critical cross-boundary contract)

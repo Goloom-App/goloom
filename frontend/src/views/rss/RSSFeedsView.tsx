@@ -21,6 +21,7 @@ type FeedFormState = {
   feedUrl: string
   isActive: boolean
   aiEnhanceEnabled: boolean
+  articleEnrichmentEnabled: boolean
   contentTemplate: string
   titleTemplate: string
   titleHint: string
@@ -39,6 +40,7 @@ const emptyFeedForm = (): FeedFormState => ({
   feedUrl: '',
   isActive: true,
   aiEnhanceEnabled: false,
+  articleEnrichmentEnabled: false,
   contentTemplate: defaultTemplate,
   titleTemplate: defaultTitleTemplate,
   titleHint: '',
@@ -55,6 +57,7 @@ function feedToForm(feed: RSSFeedConfig): FeedFormState {
     feedUrl: feed.feedUrl,
     isActive: feed.isActive,
     aiEnhanceEnabled: feed.aiEnhanceEnabled,
+    articleEnrichmentEnabled: feed.articleEnrichmentEnabled,
     contentTemplate: feed.contentTemplate || defaultTemplate,
     titleTemplate: feed.titleTemplate || defaultTitleTemplate,
     titleHint: feed.titleHint ?? '',
@@ -128,6 +131,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
       feed_url: feedForm.feedUrl.trim(),
       is_active: feedForm.isActive,
       ai_enhance_enabled: feedForm.aiEnhanceEnabled,
+      article_enrichment_enabled: feedForm.articleEnrichmentEnabled,
       content_template: feedForm.contentTemplate.trim(),
       title_template: feedForm.titleTemplate.trim(),
       title_hint: feedForm.titleHint.trim(),
@@ -307,6 +311,13 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                       />
                       {feedForm.aiEnhanceEnabled ? (
                         <>
+                          <ToggleSwitch
+                            checked={feedForm.articleEnrichmentEnabled}
+                            onChange={(next) => setFeedForm((prev) => ({ ...prev, articleEnrichmentEnabled: next }))}
+                            title={t('rss.articleEnrichmentEnabled')}
+                            description={t('rss.articleEnrichmentHint')}
+                            testId="rss-article-enrichment"
+                          />
                           <label className="field">
                             <span>{t('rss.aiPrompt')}</span>
                             <textarea

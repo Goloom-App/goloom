@@ -645,13 +645,13 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 	titleTemplate := input.NormalizedTitleTemplate()
 	query := `
 		INSERT INTO rss_feed_configs (
-			team_id, feed_url, name, is_active, ai_enhance_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day,
+			team_id, feed_url, name, is_active, ai_enhance_enabled, article_enrichment_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day,
 			prompt_hint, target_account_ids, tonality, initial_sync_mode
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING ` + strings.TrimSpace(rssFeedConfigSelectList)
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
-		teamID, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
+		teamID, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, input.ArticleEnrichmentEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
 		input.PromptHint, targetJSON, input.Tonality, syncMode,
 	))
 	if err != nil {
@@ -707,14 +707,14 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 	maxPosts := input.NormalizedMaxPostsPerDay()
 	query := `
 		UPDATE rss_feed_configs
-		SET feed_url = $3, name = $4, is_active = $5, ai_enhance_enabled = $6, content_template = $7, title_template = $8, title_hint = $9,
-		    output_mode = $10, max_posts_per_day = $11, prompt_hint = $12, target_account_ids = $13, tonality = $14,
-		    initial_sync_mode = $15, last_fetched_at = COALESCE($16, last_fetched_at)
+		SET feed_url = $3, name = $4, is_active = $5, ai_enhance_enabled = $6, article_enrichment_enabled = $7, content_template = $8, title_template = $9, title_hint = $10,
+		    output_mode = $11, max_posts_per_day = $12, prompt_hint = $13, target_account_ids = $14, tonality = $15,
+		    initial_sync_mode = $16, last_fetched_at = COALESCE($17, last_fetched_at)
 		WHERE team_id = $1 AND id = $2
 		RETURNING ` + strings.TrimSpace(rssFeedConfigSelectList)
 	syncMode := string(domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode)))
 	feed, err := scanRSSFeedConfig(s.pool.QueryRow(ctx, query,
-		teamID, id, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
+		teamID, id, input.FeedURL, input.Name, input.IsActive, input.AiEnhanceEnabled, input.ArticleEnrichmentEnabled, contentTemplate, titleTemplate, input.TitleHint, outputMode, maxPosts,
 		input.PromptHint, targetJSON, input.Tonality, syncMode, input.LastFetchedAt,
 	))
 	if err != nil {
@@ -747,6 +747,7 @@ func scanRSSFeedConfig(row interface{ Scan(dest ...any) error }) (domain.RSSFeed
 		&feed.Name,
 		&feed.IsActive,
 		&feed.AiEnhanceEnabled,
+		&feed.ArticleEnrichmentEnabled,
 		&feed.ContentTemplate,
 		&feed.TitleTemplate,
 		&feed.TitleHint,

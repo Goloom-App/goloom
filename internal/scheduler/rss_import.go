@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/htmltext"
+	"git.f4mily.net/goloom/internal/netguard"
+	"git.f4mily.net/goloom/internal/pagefetch"
 	"git.f4mily.net/goloom/internal/rss"
 )
 
@@ -22,6 +25,47 @@ type rssFeedFetcher interface {
 // decide novelty — the rss_imported_items dedupe does. The window only keeps
 // the dedupe from re-considering a feed's entire backlog on every poll.
 const rssImportLookback = 7 * 24 * time.Hour
+
+const rssThinTextChars = 280
+
+type rssArticleMaterial struct {
+	Text        string
+	FetchFailed bool
+}
+
+func rssArticleSource(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item, fetch func(context.Context, string) (string, error)) rssArticleMaterial {
+	feedText := htmltext.ExtractReadableText(strings.TrimSpace(item.Content))
+	material := rssArticleMaterial{Text: feedText}
+	if !feed.ArticleEnrichmentEnabled || strings.TrimSpace(item.Link) == "" || len([]rune(feedText)) >= rssThinTextChars {
+		return material
+	}
+	article, err := fetch(ctx, item.Link)
+	if err != nil || strings.TrimSpace(article) == "" {
+		material.FetchFailed = true
+		return material
+	}
+	material.Text = article
+	return material
+}
+
+func (s *Service) prepareRSSArticle(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item, fetch func(context.Context, string) (string, error)) (rssArticleMaterial, bool, error) {
+	key := rss.ItemKey(item)
+	if key == "" {
+		return rssArticleMaterial{}, false, fmt.Errorf("rss item has no guid or link")
+	}
+	already, err := s.store.RSSItemAlreadyImported(ctx, feed.ID, key)
+	if err != nil || already {
+		return rssArticleMaterial{}, already, err
+	}
+	used, err := s.store.CountRSSFeedPostsToday(ctx, feed.ID)
+	if err != nil {
+		return rssArticleMaterial{}, false, err
+	}
+	if used >= feed.NormalizedMaxPostsPerDay() {
+		return rssArticleMaterial{}, false, domain.ErrRSSDailyLimit
+	}
+	return rssArticleSource(ctx, feed, item, fetch), false, nil
+}
 
 func (s *Service) runRSSImportLoop(ctx context.Context) {
 	s.rssImportJob(ctx)
@@ -188,6 +232,22 @@ func filterRSSItemsSince(items []rss.Item, since time.Time) []rss.Item {
 // AI job) was actually created: already-imported items return (false, nil) so
 // they do not count against the daily budget.
 func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) (bool, error) {
+	// Network I/O stays outside the source transaction. The locked path below
+	// repeats the dedupe check before reserving or inserting the item.
+	material := rssArticleMaterial{Text: htmltext.ExtractReadableText(strings.TrimSpace(item.Content))}
+	if feed.ArticleEnrichmentEnabled && s.shouldEnhanceRSSWithAI(ctx, feed) {
+		var already bool
+		var err error
+		material, already, err = s.prepareRSSArticle(ctx, feed, item, func(ctx context.Context, link string) (string, error) {
+			return pagefetch.FetchText(ctx, link, netguard.NewPolicy(nil), 8*time.Second)
+		})
+		if err != nil || already {
+			return false, err
+		}
+		if material.FetchFailed {
+			s.logger.WarnContext(ctx, "rss article enrichment failed; using feed content", "feed_id", feed.ID, "item_key_hash", sourceKey(rss.ItemKey(item)))
+		}
+	}
 	created := false
 	var importErr error
 	err := s.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
@@ -195,7 +255,7 @@ func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeed
 			return err
 		}
 		var err error
-		created, err = s.createPostFromRSSItemOnce(ctx, feed, item)
+		created, err = s.createPostFromRSSItemOnce(ctx, feed, item, material)
 		if errors.Is(err, errRSSAttemptReleased) {
 			// Preserve the failed attempt after the post savepoint rolled back.
 			importErr = err
@@ -209,7 +269,7 @@ func (s *Service) createPostFromRSSItem(ctx context.Context, feed domain.RSSFeed
 	return created, importErr
 }
 
-func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item) (bool, error) {
+func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSSFeedConfig, item rss.Item, material rssArticleMaterial) (bool, error) {
 	itemKey := rss.ItemKey(item)
 	if itemKey == "" {
 		return false, fmt.Errorf("rss item has no guid or link")
@@ -252,7 +312,7 @@ func (s *Service) createPostFromRSSItemOnce(ctx context.Context, feed domain.RSS
 
 	var fallbackReason *string
 	if s.shouldEnhanceRSSWithAI(ctx, feed) {
-		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID); err != nil {
+		if err := s.submitRSSAIEnhancement(ctx, feed, item, itemKey, content, title, scheduledAt, draft, ownerID, material); err != nil {
 			if errors.Is(err, errRSSItemReserved) {
 				return false, nil
 			}

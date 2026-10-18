@@ -13,14 +13,15 @@ func TestListActiveRSSFeedConfigs_scansAllColumns(t *testing.T) {
 	_, team := newAITestTeam(t, s)
 
 	active, err := s.CreateRSSFeedConfig(ctx, team.ID, domain.RSSFeedConfig{
-		TeamID:           team.ID,
-		FeedURL:          "https://blog.example/active.xml",
-		Name:             "Active Feed",
-		IsActive:         true,
-		AiEnhanceEnabled: true,
-		TargetAccountIDs: []string{"acct-1"},
-		ContentTemplate:  "{title}",
-		OutputMode:       domain.AutomationOutputDraft,
+		TeamID:                   team.ID,
+		FeedURL:                  "https://blog.example/active.xml",
+		Name:                     "Active Feed",
+		IsActive:                 true,
+		AiEnhanceEnabled:         true,
+		ArticleEnrichmentEnabled: true,
+		TargetAccountIDs:         []string{"acct-1"},
+		ContentTemplate:          "{title}",
+		OutputMode:               domain.AutomationOutputDraft,
 	})
 	if err != nil {
 		t.Fatalf("CreateRSSFeedConfig active: %v", err)
@@ -50,6 +51,9 @@ func TestListActiveRSSFeedConfigs_scansAllColumns(t *testing.T) {
 	}
 	if !got.AiEnhanceEnabled {
 		t.Fatal("expected ai_enhance_enabled=true to scan correctly")
+	}
+	if !got.ArticleEnrichmentEnabled {
+		t.Fatal("article_enrichment_enabled lost from active feed")
 	}
 	if got.ContentTemplate == "" {
 		t.Fatal("expected content_template to scan correctly")

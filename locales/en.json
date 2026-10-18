@@ -650,12 +650,14 @@
       "actionFailed": "Review action failed.",
       "pastTime": "The chosen time is in the past. Adjust it or",
       "aiFallbackBadge": "Template fallback",
+      "articleFetchFailedBadge": "Article fetch failed",
       "aiFallbackReasons": {
         "provider_failure": "AI provider failed. Template content used.",
         "empty_content": "AI returned empty content. Template content used.",
         "invalid_output": "AI returned unreadable output. Template content used.",
         "validation_failed": "AI content failed validation. Template content used.",
         "dispatch_failed": "AI generation could not start. Template content used.",
+        "article_fetch_failed": "Linked article could not be fetched. AI used feed content.",
         "unknown": "AI generation failed. Template content used."
       },
       "aiFallbackJob": "AI job: {{id}}"
@@ -671,6 +673,8 @@
       "title": "RSS feeds",
       "hint": "Automatically create posts when new articles appear. Use a template, or enable AI to rewrite posts from the article text.",
       "aiEnhanceEnabled": "Enhance with AI",
+      "articleEnrichmentEnabled": "Fetch linked articles for thin feed items",
+      "articleEnrichmentHint": "Optional. Fetches a short excerpt when an item has only a teaser. A failed fetch uses the feed text and marks the post.",
       "aiPrompt": "AI instructions",
       "aiPromptPlaceholder": "e.g. Summarize the key takeaway and add a question for engagement.",
       "aiPromptHint": "Task-specific instruction for this feed (e.g. focus on releases). Brand voice comes from AI Studio.",

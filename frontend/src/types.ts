@@ -221,6 +221,7 @@ export interface RSSFeedConfig {
   name: string
   isActive: boolean
   aiEnhanceEnabled: boolean
+  articleEnrichmentEnabled: boolean
   contentTemplate: string
   titleTemplate: string
   titleHint: string

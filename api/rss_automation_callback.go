@@ -90,6 +90,11 @@ func (a *API) createRSSAutomationPost(
 			rssPost.AIJobID = &job.ID
 		}
 	}
+	if rssPost.AIFallbackReason == nil && meta.ArticleFetchFailed {
+		reason := "article_fetch_failed"
+		rssPost.AIFallbackReason = &reason
+		rssPost.AIJobID = &job.ID
+	}
 	rssPost.EnsureTitle()
 	prepared, err := a.posts.Prepare(ctx, job.TeamID, rssPost, postservice.Options{RequireTeam: true, CheckLimits: !draft})
 	if err != nil {
@@ -103,7 +108,11 @@ func (a *API) createRSSAutomationPost(
 		return fmt.Errorf("%w: create automation post: %w", errAutomationPostNotCreated, err)
 	}
 	if post.AIFallbackReason != nil {
-		a.log.WarnContext(ctx, "automation: used template fallback", "job_id", job.ID, "feed_id", meta.FeedID, "post_id", post.ID, "reason", *post.AIFallbackReason)
+		message := "automation: used template fallback"
+		if *post.AIFallbackReason == "article_fetch_failed" {
+			message = "rss automation: article fetch failed; post used feed content"
+		}
+		a.log.WarnContext(ctx, message, "job_id", job.ID, "feed_id", meta.FeedID, "post_id", post.ID, "reason", *post.AIFallbackReason)
 	}
 	a.notifyReviewCreated(ctx, job.TeamID, post)
 	return nil
