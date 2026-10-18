@@ -511,6 +511,7 @@
       "importOldPostsResult": "{{count}} Posts importiert.",
       "addMember": "Mitglied hinzufügen",
       "selectUser": "Nutzer wählen…",
+      "noUsersToAdd": "Keine Nutzer zum Hinzufügen verfügbar.",
       "addToTeam": "Zum Team hinzufügen",
       "inviteTitle": "Einladungen",
       "inviteHint": "Erstelle einen Link, der an die eingegebene E-Mail-Adresse gebunden ist. Die eingeladene Person muss sich mit dieser Adresse anmelden. Links laufen nach sieben Tagen ab.",

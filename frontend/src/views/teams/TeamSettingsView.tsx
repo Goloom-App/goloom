@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useState, type Dispatch, type SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Activity, Bot, Palette, Settings, Users } from 'lucide-react'
 
@@ -42,7 +42,7 @@ interface TeamSettingsViewProps {
   onUpdateTeam: () => void
   onSaveAiServiceConfig: () => void
   onSaveBrandColor: (color: string) => void
-  onAddTeamMember: () => void
+  onAddTeamMember: (onSuccess: () => void) => void
   onRemoveTeamMember: (userId: string) => void
   onChangeTeamMemberRole: (userId: string) => void
 }
@@ -64,6 +64,13 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
   } = props
 
   const isOwner = myRoleInSelectedTeam === 'owner'
+  const [addMemberOpen, setAddMemberOpen] = useState(false)
+  const availableUsers = directoryUsers.filter((user) => !selectedTeam.members.some((member) => member.userId === user.id))
+
+  function toggleAddMember() {
+    setAddMemberUserId('')
+    setAddMemberOpen((open) => !open)
+  }
 
   function directoryUserLabel(userId: string) {
     const user = directoryUsers.find((u) => u.id === userId)
@@ -227,8 +234,51 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
             )}
           </SectionCard>
 
-          <SectionCard icon={<Users size={18} />} title={t('common.members')}>
+          <SectionCard
+            icon={<Users size={18} />}
+            title={t('common.members')}
+            headerExtra={
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={toggleAddMember}
+                disabled={syncing}
+                aria-expanded={addMemberOpen}
+              >
+                {t('teams.addMember')}
+              </button>
+            }
+          >
             <div className="stack stack--sm">
+              {addMemberOpen && (
+                <div className="glass-panel glass-panel--compact" data-testid="team-add-member-panel">
+                  {availableUsers.length === 0 && <p className="hint">{t('teams.noUsersToAdd')}</p>}
+                  <div className="inline-cluster flex-wrap">
+                    <select
+                      className="grow"
+                      aria-label={t('teams.selectUser')}
+                      value={addMemberUserId}
+                      onChange={(event) => setAddMemberUserId(event.target.value)}
+                      disabled={syncing || availableUsers.length === 0}
+                    >
+                      <option value="">{t('teams.selectUser')}</option>
+                      {availableUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name} ({user.email})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => props.onAddTeamMember(() => setAddMemberOpen(false))}
+                      disabled={syncing || !availableUsers.some((user) => user.id === addMemberUserId)}
+                    >
+                      {t('teams.addToTeam')}
+                    </button>
+                  </div>
+                </div>
+              )}
               {selectedTeam.members.map((m) => (
                 <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between">
                   <div>
@@ -262,24 +312,6 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
                   </div>
                 </div>
               ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard icon={<Users size={18} />} title={t('teams.addMember')}>
-            <div className="inline-cluster flex-wrap">
-              <select className="grow" value={addMemberUserId} onChange={(event) => setAddMemberUserId(event.target.value)}>
-                <option value="">{t('teams.selectUser')}</option>
-                {directoryUsers
-                  .filter((u) => !selectedTeam.members.some((m) => m.userId === u.id))
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.email})
-                    </option>
-                  ))}
-              </select>
-              <button className="btn btn--primary" onClick={props.onAddTeamMember} disabled={syncing || !addMemberUserId}>
-                {t('teams.addToTeam')}
-              </button>
             </div>
           </SectionCard>
 

@@ -51,6 +51,7 @@ for (const viewport of viewports) {
         await expect(page.getByText('Only team owners can change settings here.')).toHaveCount(0)
       } else {
         await expect(page.locator('.brand-card__title').first()).toHaveText('Members')
+        await expect(page.getByRole('button', { name: 'Add Member' })).toHaveCount(0)
         await expect(page.getByText('You are a member of this team. Only team owners can change settings here.')).toBeVisible()
         await expect(page.getByLabel('Team name')).toHaveCount(0)
       }

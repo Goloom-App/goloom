@@ -1333,7 +1333,7 @@ function App() {
     }
   }
 
-  async function handleAddTeamMember() {
+  async function handleAddTeamMember(onSuccess: () => void) {
     if (!api || !selectedTeam || !addMemberUserId.trim()) {
       return
     }
@@ -1341,6 +1341,7 @@ function App() {
       await api.addTeamMember(selectedTeam.id, { user_id: addMemberUserId.trim(), role: 'editor' })
       setAddMemberUserId('')
       await loadDashboard({ silent: true })
+      onSuccess()
     }, t('status.memberAdded'))
   }
 
@@ -2210,6 +2211,7 @@ function App() {
 
         {section === 'teams' && selectedTeam && (
           <TeamSettingsView
+            key={selectedTeam.id}
             api={api}
             selectedTeam={selectedTeam}
             myRoleInSelectedTeam={myRoleInSelectedTeam}
@@ -2243,7 +2245,7 @@ function App() {
             onUpdateTeam={() => void handleUpdateTeam()}
             onSaveAiServiceConfig={() => void handleSaveAiServiceConfig()}
             onSaveBrandColor={(color) => void handleSaveTeamBrandColor(color)}
-            onAddTeamMember={() => void handleAddTeamMember()}
+            onAddTeamMember={(onSuccess) => void handleAddTeamMember(onSuccess)}
             onRemoveTeamMember={(userId) => void handleRemoveTeamMember(userId)}
             onChangeTeamMemberRole={(userId) => void handleChangeTeamMemberRole(userId)}
           />
