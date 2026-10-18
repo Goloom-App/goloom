@@ -3,6 +3,7 @@ create table if not exists users (
     subject text not null unique,
     email text not null,
     name text not null,
+    picture_url text not null default '',
     is_admin integer not null default 0,
     tour_done integer not null default 0,
     created_at text not null,

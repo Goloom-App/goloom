@@ -4843,6 +4843,10 @@ select {
   border-bottom: 1px solid var(--border);
 }
 
+.member-identity { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.member-identity__text { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.team-member-row { flex-wrap: wrap; gap: var(--space-3); }
+
 .sr-only {
   position: absolute;
   width: 1px;

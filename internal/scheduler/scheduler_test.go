@@ -141,6 +141,10 @@ func (m *mockStore) UpsertOIDCUser(ctx context.Context, subject, email, name str
 	return domain.User{}, nil
 }
 
+func (m *mockStore) UpsertOIDCUserWithPicture(ctx context.Context, subject, email, name, pictureURL string) (domain.User, error) {
+	return m.UpsertOIDCUser(ctx, subject, email, name)
+}
+
 func (m *mockStore) LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error) {
 	return domain.AuthenticatedPrincipal{}, nil
 }

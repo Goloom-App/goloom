@@ -49,7 +49,9 @@ test('owner adds an existing user from the Members header', async ({ page }) => 
   await members.getByRole('combobox', { name: 'Select user…' }).selectOption(newUser.id)
   await members.getByRole('button', { name: 'Add to Team' }).click()
 
-  await expect(members.getByText(`${newUser.name} · ${newUser.email}`)).toBeVisible()
+  const newMember = members.locator('.team-member-row').filter({ hasText: newUser.email })
+  await expect(newMember.getByText(newUser.name, { exact: true })).toBeVisible()
+  await expect(newMember.getByText(newUser.email, { exact: true })).toBeVisible()
   await expect(members.getByRole('combobox', { name: 'Select user…' })).toHaveCount(0)
   expect(addRequests).toBe(1)
 })

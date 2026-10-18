@@ -10,6 +10,8 @@ Store interface in `store.go` (80+ methods). Backend implementations in `sqlite/
 
 ## Local Contracts
 
+- `UpsertOIDCUserWithPicture` saves the platform user's OIDC picture on insert and update; all user reads, including token lookup and `ListUsers`, return `picture_url`. `UpsertOIDCUser` retains pictureless callers. SQLite and PostgreSQL migrate existing users with an empty default.
+
 - `WithAuditTransaction` routes callback-context store calls through one transaction, including decorated stores and nested backend savepoints; callback errors/cancellation roll back mutation and audit together. Keep provider/network calls outside transactions.
 - `AfterAuditCommit` defers background dispatch/notifications until successful outer commit, discards hooks on rollback, and supplies the pre-transaction context.
 - `EnqueueAuditEvent` atomically records observed external outcomes in `audit_pending`; `DrainAuditEvents` delivers bounded batches without repeating external work. Drain failures must be logged and retried by the caller.

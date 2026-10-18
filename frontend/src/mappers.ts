@@ -77,6 +77,7 @@ export function toUserRecord(user: BackendUser): UserRecord {
     id: user.id,
     name: user.name,
     email: user.email,
+    pictureUrl: user.picture_url?.trim() || undefined,
     globalRole: user.is_admin ? 'admin' : 'member',
     title: user.is_admin ? 'Administrator' : 'Team Member',
     tourDone: user.tour_done ?? false,

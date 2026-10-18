@@ -49,6 +49,25 @@ interface TeamSettingsViewProps {
 
 const DEFAULT_PICKER_COLOR = '#8b5cf6'
 
+function MemberIdentity({ user, userId }: { user?: UserRecord; userId: string }) {
+  const [failedPicture, setFailedPicture] = useState<string | null>(null)
+  const label = user?.name || user?.email || userId
+  const initials = label.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+  return (
+    <div className="member-identity">
+      <span className="avatar avatar--sm" aria-hidden="true">
+        {user?.pictureUrl && failedPicture !== user.pictureUrl ? (
+          <img className="avatar__img" src={user.pictureUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedPicture(user.pictureUrl!)} />
+        ) : <span className="avatar__placeholder">{initials}</span>}
+      </span>
+      <span className="member-identity__text">
+        <strong>{label}</strong>
+        {user?.email && <span className="eyebrow">{user.email}</span>}
+      </span>
+    </div>
+  )
+}
+
 export function TeamSettingsView(props: TeamSettingsViewProps) {
   const { t } = useTranslation()
   const {
@@ -70,11 +89,6 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
   function toggleAddMember() {
     setAddMemberUserId('')
     setAddMemberOpen((open) => !open)
-  }
-
-  function directoryUserLabel(userId: string) {
-    const user = directoryUsers.find((u) => u.id === userId)
-    return user ? `${user.name} · ${user.email}` : userId
   }
 
   const aiConfigFields = (
@@ -280,11 +294,8 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
                 </div>
               )}
               {selectedTeam.members.map((m) => (
-                <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between">
-                  <div>
-                    <strong>{directoryUserLabel(m.userId)}</strong>
-                    <p className="eyebrow">{m.role}</p>
-                  </div>
+                <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between team-member-row">
+                  <MemberIdentity user={directoryUsers.find((u) => u.id === m.userId)} userId={m.userId} />
                   <div className="inline-cluster">
                     <select
                       className="select--sm"
@@ -325,7 +336,8 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
           <div className="stack stack--sm">
             {selectedTeam.members.map((m) => (
               <div key={m.userId} className="member-list-item">
-                {directoryUserLabel(m.userId)} ({m.role})
+                <MemberIdentity user={directoryUsers.find((u) => u.id === m.userId)} userId={m.userId} />
+                <span className="eyebrow">{m.role}</span>
               </div>
             ))}
           </div>

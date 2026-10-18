@@ -134,25 +134,31 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 }
 
 func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {
+	return s.UpsertOIDCUserWithPicture(ctx, subject, email, name, "")
+}
+
+func (s *Store) UpsertOIDCUserWithPicture(ctx context.Context, subject, email, name, pictureURL string) (domain.User, error) {
 	const query = `
 		with first_oidc_admin as (
 			select (count(*) filter (where subject <> $4::text) = 0) as grant_admin from users
 		)
-		insert into users (subject, email, name, is_admin)
-		select $1, $2, $3, grant_admin
+		insert into users (subject, email, name, picture_url, is_admin)
+		select $1, $2, $3, $5, grant_admin
 		from first_oidc_admin
 		on conflict (subject) do update
 		set email = excluded.email,
 		    name = excluded.name,
+		    picture_url = excluded.picture_url,
 		    updated_at = now()
-		returning id, email, name, subject, is_admin, tour_done, created_at
+		returning id, email, name, picture_url, subject, is_admin, tour_done, created_at
 	`
 
 	var user domain.User
-	err := s.pool.QueryRow(ctx, query, subject, email, name, domain.BootstrapAdminSubject).Scan(
+	err := s.pool.QueryRow(ctx, query, subject, email, name, domain.BootstrapAdminSubject, pictureURL).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Name,
+		&user.PictureURL,
 		&user.Subject,
 		&user.IsAdmin,
 		&user.TourDone,
@@ -166,7 +172,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 
 func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error) {
 	const query = `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.tour_done, u.created_at, t.scopes, t.team_id, t.name, t.id, t.expires_at
+		select u.id, u.email, u.name, u.picture_url, u.subject, u.is_admin, u.tour_done, u.created_at, t.scopes, t.team_id, t.name, t.id, t.expires_at
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = $1
@@ -184,6 +190,7 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		&principal.User.ID,
 		&principal.User.Email,
 		&principal.User.Name,
+		&principal.User.PictureURL,
 		&principal.User.Subject,
 		&principal.User.IsAdmin,
 		&principal.User.TourDone,
@@ -239,7 +246,7 @@ func parseTokenScopes(raw string) ([]string, error) {
 
 func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
 	const query = `
-		select id, email, name, subject, is_admin, tour_done, created_at
+		select id, email, name, picture_url, subject, is_admin, tour_done, created_at
 		from users
 		order by name asc, email asc
 	`
@@ -257,6 +264,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
 			&user.ID,
 			&user.Email,
 			&user.Name,
+			&user.PictureURL,
 			&user.Subject,
 			&user.IsAdmin,
 			&user.TourDone,
@@ -275,7 +283,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 		set is_admin = $1,
 		    updated_at = now()
 		where id = $2
-		returning id, email, name, subject, is_admin, tour_done, created_at
+		returning id, email, name, picture_url, subject, is_admin, tour_done, created_at
 	`
 
 	var user domain.User
@@ -283,6 +291,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 		&user.ID,
 		&user.Email,
 		&user.Name,
+		&user.PictureURL,
 		&user.Subject,
 		&user.IsAdmin,
 		&user.TourDone,
@@ -297,7 +306,7 @@ func (s *Store) SetUserTourDone(ctx context.Context, userID string, done bool) (
 		set tour_done = $1,
 		    updated_at = now()
 		where id = $2
-		returning id, email, name, subject, is_admin, tour_done, created_at
+		returning id, email, name, picture_url, subject, is_admin, tour_done, created_at
 	`
 
 	var user domain.User
@@ -305,6 +314,7 @@ func (s *Store) SetUserTourDone(ctx context.Context, userID string, done bool) (
 		&user.ID,
 		&user.Email,
 		&user.Name,
+		&user.PictureURL,
 		&user.Subject,
 		&user.IsAdmin,
 		&user.TourDone,

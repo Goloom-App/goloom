@@ -223,13 +223,14 @@ func FilterMediaIDsForAccount(all []string, excludeByAccount map[string][]string
 }
 
 type User struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	Subject   string    `json:"subject"`
-	IsAdmin   bool      `json:"is_admin"`
-	TourDone  bool      `json:"tour_done"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         string    `json:"id"`
+	Email      string    `json:"email"`
+	Name       string    `json:"name"`
+	PictureURL string    `json:"picture_url"`
+	Subject    string    `json:"subject"`
+	IsAdmin    bool      `json:"is_admin"`
+	TourDone   bool      `json:"tour_done"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type Team struct {
