@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// scanRSSFeedConfig reads 22 columns from the database row.
-const rssFeedConfigScanFieldCount = 22
+// scanRSSFeedConfig reads 23 columns from the database row.
+const rssFeedConfigScanFieldCount = 23
 
 func TestRSSFeedConfigSelectListMatchesScannerArity(t *testing.T) {
 	t.Helper()

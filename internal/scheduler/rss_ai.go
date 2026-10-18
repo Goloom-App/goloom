@@ -50,16 +50,17 @@ func (s *Service) submitRSSAIEnhancement(
 		articleText = strings.TrimSpace(item.Content)
 	}
 	params := map[string]any{
-		"occasion":            strings.TrimSpace(feed.PromptHint),
-		"rss_editorial_goal":  domain.NormalizeRSSEditorialGoal(feed.EditorialGoal),
-		"rss_desired_length":  domain.NormalizeRSSDesiredLength(feed.DesiredLength),
-		"post_skeleton":       templateContent,
-		"rss_article_title":   strings.TrimSpace(item.Title),
-		"rss_article_content": articleText,
-		"rss_article_link":    strings.TrimSpace(item.Link),
-		"title_hint":          strings.TrimSpace(feed.TitleHint),
-		"target_account_ids":  feed.TargetAccountIDs,
-		"schedule":            false,
+		"knowledge_source_ids": feed.KnowledgeSourceIDs,
+		"occasion":             strings.TrimSpace(feed.PromptHint),
+		"rss_editorial_goal":   domain.NormalizeRSSEditorialGoal(feed.EditorialGoal),
+		"rss_desired_length":   domain.NormalizeRSSDesiredLength(feed.DesiredLength),
+		"post_skeleton":        templateContent,
+		"rss_article_title":    strings.TrimSpace(item.Title),
+		"rss_article_content":  articleText,
+		"rss_article_link":     strings.TrimSpace(item.Link),
+		"title_hint":           strings.TrimSpace(feed.TitleHint),
+		"target_account_ids":   feed.TargetAccountIDs,
+		"schedule":             false,
 		"rss_automation": map[string]any{
 			"feed_id":              feed.ID,
 			"item_key":             itemKey,

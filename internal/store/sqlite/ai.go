@@ -102,9 +102,9 @@ func (s *Store) CreateCampaignFormat(ctx context.Context, teamID string, input d
 	id := uuid.NewString()
 	now := nowString()
 	_, err = s.db.ExecContext(ctx, `
-		insert into campaign_formats (id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, teamID, input.Name, intPtrToAny(input.Weekday), structureJSON, hashtagsJSON, boolToInt(input.IsActive), now, now,
+		insert into campaign_formats (id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at, knowledge_source_ids)
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, teamID, input.Name, intPtrToAny(input.Weekday), structureJSON, hashtagsJSON, boolToInt(input.IsActive), now, now, knowledgeSelectionJSON(input.KnowledgeSourceIDs),
 	)
 	if err != nil {
 		return domain.CampaignFormat{}, err
@@ -114,7 +114,7 @@ func (s *Store) CreateCampaignFormat(ctx context.Context, teamID string, input d
 
 func (s *Store) ListCampaignFormats(ctx context.Context, teamID string) ([]domain.CampaignFormat, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at
+		select id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at, knowledge_source_ids
 		from campaign_formats
 		where team_id = ?
 		order by created_at asc`, teamID)
@@ -127,7 +127,7 @@ func (s *Store) ListCampaignFormats(ctx context.Context, teamID string) ([]domai
 
 func (s *Store) GetCampaignFormatByID(ctx context.Context, teamID string, id string) (domain.CampaignFormat, error) {
 	row := s.db.QueryRowContext(ctx, `
-		select id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at
+		select id, team_id, name, weekday, structure, required_hashtags, is_active, created_at, updated_at, knowledge_source_ids
 		from campaign_formats
 		where team_id = ? and id = ?`, teamID, id)
 	return scanCampaignFormat(row)
@@ -142,9 +142,9 @@ func (s *Store) UpdateCampaignFormat(ctx context.Context, teamID string, id stri
 	now := nowString()
 	_, err = s.db.ExecContext(ctx, `
 		update campaign_formats
-		set name = ?, weekday = ?, structure = ?, required_hashtags = ?, is_active = ?, updated_at = ?
+		set name = ?, weekday = ?, structure = ?, required_hashtags = ?, is_active = ?, updated_at = ?, knowledge_source_ids = ?
 		where team_id = ? and id = ?`,
-		input.Name, intPtrToAny(input.Weekday), structureJSON, hashtagsJSON, boolToInt(input.IsActive), now, teamID, id,
+		input.Name, intPtrToAny(input.Weekday), structureJSON, hashtagsJSON, boolToInt(input.IsActive), now, knowledgeSelectionJSON(input.KnowledgeSourceIDs), teamID, id,
 	)
 	if err != nil {
 		return domain.CampaignFormat{}, err
@@ -163,11 +163,12 @@ func scanCampaignFormat(scanner rowScanner) (domain.CampaignFormat, error) {
 		weekday      sql.NullInt64
 		structureRaw string
 		hashtagsRaw  string
+		selectionRaw string
 		isActive     int
 		createdAt    string
 		updatedAt    string
 	)
-	if err := scanner.Scan(&cf.ID, &cf.TeamID, &cf.Name, &weekday, &structureRaw, &hashtagsRaw, &isActive, &createdAt, &updatedAt); err != nil {
+	if err := scanner.Scan(&cf.ID, &cf.TeamID, &cf.Name, &weekday, &structureRaw, &hashtagsRaw, &isActive, &createdAt, &updatedAt, &selectionRaw); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.CampaignFormat{}, fmt.Errorf("campaign format: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
 		}
@@ -176,6 +177,9 @@ func scanCampaignFormat(scanner rowScanner) (domain.CampaignFormat, error) {
 	if weekday.Valid {
 		v := int(weekday.Int64)
 		cf.Weekday = &v
+	}
+	if err := json.Unmarshal([]byte(selectionRaw), &cf.KnowledgeSourceIDs); err != nil {
+		return domain.CampaignFormat{}, err
 	}
 	cf.Structure = json.RawMessage(structureRaw)
 	if err := json.Unmarshal([]byte(hashtagsRaw), &cf.RequiredHashtags); err != nil {
@@ -604,11 +608,11 @@ func (s *Store) CreateRSSFeedConfig(ctx context.Context, teamID string, input do
 	_, err = s.db.ExecContext(ctx, `
 		insert into rss_feed_configs (
 			id, team_id, feed_url, name, is_active, ai_enhance_enabled, article_enrichment_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day,
-			prompt_hint, editorial_goal, desired_length, target_account_ids, tonality, initial_sync_mode, created_at
+			prompt_hint, editorial_goal, desired_length, target_account_ids, tonality, initial_sync_mode, created_at, knowledge_source_ids
 		)
-		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, teamID, input.FeedURL, input.Name, boolToInt(input.IsActive), boolToInt(input.AiEnhanceEnabled), boolToInt(input.ArticleEnrichmentEnabled), contentTemplate, input.NormalizedTitleTemplate(), input.TitleHint, outputMode, maxPosts,
-		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, now,
+		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, now, knowledgeSelectionJSON(input.KnowledgeSourceIDs),
 	)
 	if err != nil {
 		return domain.RSSFeedConfig{}, err
@@ -658,10 +662,10 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 		update rss_feed_configs
 		set feed_url = ?, name = ?, is_active = ?, ai_enhance_enabled = ?, article_enrichment_enabled = ?, content_template = ?, title_template = ?, title_hint = ?, output_mode = ?, max_posts_per_day = ?,
 		    prompt_hint = ?, editorial_goal = ?, desired_length = ?, target_account_ids = ?, tonality = ?,
-		    initial_sync_mode = ?, last_fetched_at = coalesce(?, last_fetched_at)
+		    initial_sync_mode = ?, last_fetched_at = coalesce(?, last_fetched_at), knowledge_source_ids = ?
 		where team_id = ? and id = ?`,
 		input.FeedURL, input.Name, boolToInt(input.IsActive), boolToInt(input.AiEnhanceEnabled), boolToInt(input.ArticleEnrichmentEnabled), contentTemplate, input.NormalizedTitleTemplate(), input.TitleHint, outputMode, maxPosts,
-		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, lastFetched, teamID, id,
+		input.PromptHint, domain.NormalizeRSSEditorialGoal(input.EditorialGoal), domain.NormalizeRSSDesiredLength(input.DesiredLength), targetJSON, input.Tonality, syncMode, lastFetched, knowledgeSelectionJSON(input.KnowledgeSourceIDs), teamID, id,
 	)
 	if err != nil {
 		return domain.RSSFeedConfig{}, err
@@ -672,7 +676,7 @@ func (s *Store) UpdateRSSFeedConfig(ctx context.Context, teamID string, id strin
 
 const rssFeedSelectQuery = `
 		select id, team_id, feed_url, name, is_active, ai_enhance_enabled, article_enrichment_enabled, content_template, title_template, title_hint, output_mode, max_posts_per_day, counter_next,
-		       prompt_hint, editorial_goal, desired_length, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at,
+		       prompt_hint, editorial_goal, desired_length, target_account_ids, tonality, initial_sync_mode, last_fetched_at, created_at, knowledge_source_ids,
  (select count(*) from rss_imported_items where feed_id = rss_feed_configs.id and post_id is null and attempts >= 3 and ` + rssItemRetryEligible + `) as exhausted_items_count
 		from rss_feed_configs
 `
@@ -689,6 +693,7 @@ func scanRSSFeedConfig(scanner rowScanner) (domain.RSSFeedConfig, error) {
 		aiEnhanceEnabled         int
 		articleEnrichmentEnabled int
 		targetRaw                string
+		selectionRaw             string
 		lastFetchedAt            sql.NullString
 		createdAt                string
 		outputMode               string
@@ -696,11 +701,14 @@ func scanRSSFeedConfig(scanner rowScanner) (domain.RSSFeedConfig, error) {
 	var syncMode string
 	if err := scanner.Scan(
 		&cfg.ID, &cfg.TeamID, &cfg.FeedURL, &cfg.Name, &isActive, &aiEnhanceEnabled, &articleEnrichmentEnabled, &cfg.ContentTemplate, &cfg.TitleTemplate, &cfg.TitleHint, &outputMode, &cfg.MaxPostsPerDay, &cfg.CounterNext,
-		&cfg.PromptHint, &cfg.EditorialGoal, &cfg.DesiredLength, &targetRaw, &cfg.Tonality, &syncMode, &lastFetchedAt, &createdAt, &cfg.ExhaustedItemsCount,
+		&cfg.PromptHint, &cfg.EditorialGoal, &cfg.DesiredLength, &targetRaw, &cfg.Tonality, &syncMode, &lastFetchedAt, &createdAt, &selectionRaw, &cfg.ExhaustedItemsCount,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.RSSFeedConfig{}, fmt.Errorf("rss feed config not found: %w", sql.ErrNoRows)
 		}
+		return domain.RSSFeedConfig{}, err
+	}
+	if err := json.Unmarshal([]byte(selectionRaw), &cfg.KnowledgeSourceIDs); err != nil {
 		return domain.RSSFeedConfig{}, err
 	}
 	cfg.IsActive = isActive != 0

@@ -1674,9 +1674,18 @@ components:
           $ref: "#/components/schemas/StyleMetadata"
         auto_publish_enabled:
           type: boolean
+    KnowledgeSourceSelection:
+      type: [array, "null"]
+      description: Null inherits team knowledge; an empty array disables additional knowledge. Nonempty arrays select exact active-team source IDs. Missing or deleted selections block AI generation (knowledge_source_unavailable), never substitute unrelated sources. Knowledge does not override current-item factual boundaries. PATCH omission preserves the saved selection.
+      maxItems: 50
+      items:
+        type: string
+        format: uuid
     CampaignFormat:
       type: object
       properties:
+        knowledge_source_ids:
+          $ref: "#/components/schemas/KnowledgeSourceSelection"
         id:
           type: string
           format: uuid
@@ -1706,6 +1715,8 @@ components:
       type: object
       required: [name, structure]
       properties:
+        knowledge_source_ids:
+          $ref: "#/components/schemas/KnowledgeSourceSelection"
         name:
           type: string
         weekday:
@@ -1722,6 +1733,8 @@ components:
     UpdateCampaignFormatInput:
       type: object
       properties:
+        knowledge_source_ids:
+          $ref: "#/components/schemas/KnowledgeSourceSelection"
         name:
           type: string
         weekday:
@@ -1932,6 +1945,8 @@ components:
     RSSFeedConfig:
       type: object
       properties:
+        knowledge_source_ids:
+          $ref: "#/components/schemas/KnowledgeSourceSelection"
         id:
           type: string
           format: uuid
@@ -1988,6 +2003,8 @@ components:
       type: object
       required: [feed_url, name]
       properties:
+        knowledge_source_ids:
+          $ref: "#/components/schemas/KnowledgeSourceSelection"
         feed_url:
           type: string
           format: uri
@@ -2028,6 +2045,8 @@ components:
     UpdateRSSFeedInput:
       type: object
       properties:
+        knowledge_source_ids:
+          $ref: "#/components/schemas/KnowledgeSourceSelection"
         feed_url:
           type: string
           format: uri

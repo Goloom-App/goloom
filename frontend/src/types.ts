@@ -166,6 +166,7 @@ export interface TeamProfile {
 }
 
 export interface CampaignFormat {
+  knowledgeSourceIds: string[] | null
   id: string
   teamId: string
   name: string
@@ -219,6 +220,7 @@ export type RSSInitialSyncMode = 'baseline' | 'publish_latest'
 export type AutomationOutputMode = 'draft' | 'scheduled' | 'publish_now'
 
 export interface RSSFeedConfig {
+  knowledgeSourceIds: string[] | null
   id: string
   teamId: string
   feedUrl: string
