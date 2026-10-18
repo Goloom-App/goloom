@@ -10,6 +10,7 @@ Models in `models.go`, patch utilities in `patch_field.go`, template vars in `te
 
 ## Local Contracts
 
+- `User.PictureURL` is the platform-user picture from OIDC, serialized as `picture_url`; connected social-account avatars remain separate.
 - `ScheduledPost.AIFallbackReason` is a nullable, persisted machine reason for automation template fallback or RSS article-fetch warning. `ScheduledPost.AIJobID` identifies the related automation job; `CreatePostInput.AIJobID` and `CreatePostInput.AIFallbackReason` are server-only (`json:"-"`); user payloads cannot forge provenance. Reasons are `provider_failure`, `empty_content`, `invalid_output`, `validation_failed`, `dispatch_failed`, and `article_fetch_failed`.
 
 - `CreatePostInput.RSSItemKey` is server-only and identifies an RSS item for atomic post/marker insertion; `MaxRSSItemAttempts` bounds automatic attempts at 3.

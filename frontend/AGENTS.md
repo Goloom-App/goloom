@@ -10,6 +10,7 @@ Own package manager (pnpm), own build pipeline (tsc + vite), own test framework 
 
 ## Local Contracts
 
+- Team member rows show platform-user `picture_url` from `BackendUser` and initials when absent or image load fails. Keep names/emails visible and role controls usable at mobile widths; cover picture and fallback in `e2e/team-member-pictures.spec.ts`.
 - Automation template fallbacks and RSS article-fetch failures carry optional API `ai_fallback_reason`, mapped to `PostRecord.aiFallbackReason`; PostCard and review queue share a warning badge with localized reason tooltip including optional `ai_job_id` (`PostRecord.aiJobId`). `article_fetch_failed` uses its own badge label and means AI used feed text. Ordinary posts show no warning badge. Mocked API coverage: `e2e/ai-fallback-badge.spec.ts`.
 - RSS feed editor exposes `article_enrichment_enabled` only with AI enhancement; default is off. `e2e/rss-feeds.spec.ts` covers toggle and feed warnings.
 

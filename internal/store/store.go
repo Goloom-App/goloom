@@ -32,6 +32,7 @@ type Store interface {
 	Close()
 
 	UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error)
+	UpsertOIDCUserWithPicture(ctx context.Context, subject, email, name, pictureURL string) (domain.User, error)
 	LookupAPIToken(ctx context.Context, bearerToken string) (domain.AuthenticatedPrincipal, error)
 	ListUsers(ctx context.Context) ([]domain.User, error)
 	SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (domain.User, error)

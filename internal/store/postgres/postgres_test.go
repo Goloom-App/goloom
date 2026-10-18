@@ -77,15 +77,28 @@ func TestPostgres_UpsertOIDCUser_updatesExisting(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 	sub := "sub-pg-" + uuid.NewString()
-	if _, err := s.UpsertOIDCUser(ctx, sub, "old@pg.test", "Old"); err != nil {
+	if _, err := s.UpsertOIDCUserWithPicture(ctx, sub, "old@pg.test", "Old", "https://example.test/old.png"); err != nil {
 		t.Fatal(err)
 	}
-	u, err := s.UpsertOIDCUser(ctx, sub, "new@pg.test", "New")
+	u, err := s.UpsertOIDCUserWithPicture(ctx, sub, "new@pg.test", "New", "https://example.test/new.png")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Email != "new@pg.test" || u.Name != "New" {
+	if u.Email != "new@pg.test" || u.Name != "New" || u.PictureURL != "https://example.test/new.png" {
 		t.Fatalf("user: %+v", u)
+	}
+	users, err := s.ListUsers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, candidate := range users {
+		if candidate.ID == u.ID && candidate.PictureURL == u.PictureURL {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("ListUsers lost picture: %+v", users)
 	}
 }
 

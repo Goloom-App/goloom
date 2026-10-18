@@ -11,6 +11,7 @@ Auth service in `auth.go`, feature flags in `feature_flags.go`, scopes in `scope
 ## Local Contracts
 
 - Auth service: `auth.go` — token validation, middleware, OIDC, bootstrap
+- OIDC sign-in and direct ID-token auth persist the `picture` claim through `UpsertOIDCUserWithPicture`; absent claims store an empty picture URL.
 - `RequireAdmin` requires both an admin user and full global token authority (no scopes or team binding), for every HTTP method. Browser sessions retain access.
 - Feature flags: `feature_flags.go` — runtime feature toggles
 - Scopes: `scopes.go` — permission scope definitions; `PrincipalAllows` enforces explicit scopes regardless of `Kind` (legacy API tokens named like browser sessions are classified as OIDC). Callers without scopes, including browser sessions, retain full authority

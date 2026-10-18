@@ -129,6 +129,10 @@ func (s *Store) EnsureBootstrapAdmin(ctx context.Context, email, name, token str
 }
 
 func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string) (domain.User, error) {
+	return s.UpsertOIDCUserWithPicture(ctx, subject, email, name, "")
+}
+
+func (s *Store) UpsertOIDCUserWithPicture(ctx context.Context, subject, email, name, pictureURL string) (domain.User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return domain.User{}, err
@@ -141,12 +145,12 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 	case err == nil:
 		now := nowString()
 		if _, err := tx.ExecContext(ctx,
-			`update users set email = ?, name = ?, updated_at = ? where id = ?`,
-			email, name, now, existingID,
+			`update users set email = ?, name = ?, picture_url = ?, updated_at = ? where id = ?`,
+			email, name, pictureURL, now, existingID,
 		); err != nil {
 			return domain.User{}, err
 		}
-		user, err := queryUser(ctx, tx, `select id, email, name, subject, is_admin, tour_done, created_at from users where id = ?`, existingID)
+		user, err := queryUser(ctx, tx, `select id, email, name, picture_url, subject, is_admin, tour_done, created_at from users where id = ?`, existingID)
 		if err != nil {
 			return domain.User{}, err
 		}
@@ -166,17 +170,18 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, subject, email, name string)
 
 	now := nowString()
 	user := domain.User{
-		ID:        uuid.NewString(),
-		Email:     email,
-		Name:      name,
-		Subject:   subject,
-		IsAdmin:   isFirst,
-		CreatedAt: mustParseTime(now),
+		ID:         uuid.NewString(),
+		Email:      email,
+		Name:       name,
+		PictureURL: pictureURL,
+		Subject:    subject,
+		IsAdmin:    isFirst,
+		CreatedAt:  mustParseTime(now),
 	}
 	if _, err := tx.ExecContext(ctx, `
-		insert into users (id, subject, email, name, is_admin, created_at, updated_at)
-		values (?, ?, ?, ?, ?, ?, ?)`,
-		user.ID, subject, email, name, boolToInt(isFirst), now, now,
+		insert into users (id, subject, email, name, picture_url, is_admin, created_at, updated_at)
+		values (?, ?, ?, ?, ?, ?, ?, ?)`,
+		user.ID, subject, email, name, user.PictureURL, boolToInt(isFirst), now, now,
 	); err != nil {
 		return domain.User{}, err
 	}
@@ -198,7 +203,7 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 	var tokenID string
 	var expiresAt sql.NullString
 	row := s.db.QueryRowContext(ctx, `
-		select u.id, u.email, u.name, u.subject, u.is_admin, u.tour_done, u.created_at, t.scopes, t.team_id, t.name, t.id, t.expires_at
+		select u.id, u.email, u.name, u.picture_url, u.subject, u.is_admin, u.tour_done, u.created_at, t.scopes, t.team_id, t.name, t.id, t.expires_at
 		from api_tokens t
 		join users u on u.id = t.user_id
 		where t.token_hash = ?
@@ -209,6 +214,7 @@ func (s *Store) LookupAPIToken(ctx context.Context, bearerToken string) (domain.
 		&principal.User.ID,
 		&principal.User.Email,
 		&principal.User.Name,
+		&principal.User.PictureURL,
 		&principal.User.Subject,
 		&principal.User.IsAdmin,
 		&principal.User.TourDone,
@@ -272,7 +278,7 @@ func parseTokenScopes(raw string) ([]string, error) {
 
 func (s *Store) ListUsers(ctx context.Context) ([]domain.User, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select id, email, name, subject, is_admin, tour_done, created_at
+		select id, email, name, picture_url, subject, is_admin, tour_done, created_at
 		from users
 		order by name asc, email asc`,
 	)
@@ -288,7 +294,7 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID string, isAdmin bool) (
 	if err != nil {
 		return domain.User{}, err
 	}
-	return queryUser(ctx, s.db, `select id, email, name, subject, is_admin, tour_done, created_at from users where id = ?`, userID)
+	return queryUser(ctx, s.db, `select id, email, name, picture_url, subject, is_admin, tour_done, created_at from users where id = ?`, userID)
 }
 
 func (s *Store) SetUserTourDone(ctx context.Context, userID string, done bool) (domain.User, error) {
@@ -296,7 +302,7 @@ func (s *Store) SetUserTourDone(ctx context.Context, userID string, done bool) (
 	if err != nil {
 		return domain.User{}, err
 	}
-	return queryUser(ctx, s.db, `select id, email, name, subject, is_admin, tour_done, created_at from users where id = ?`, userID)
+	return queryUser(ctx, s.db, `select id, email, name, picture_url, subject, is_admin, tour_done, created_at from users where id = ?`, userID)
 }
 
 func (s *Store) ListTeamsForUser(ctx context.Context, userID string, isAdmin bool) ([]domain.Team, error) {
@@ -1317,7 +1323,7 @@ func scanUser(scanner userScanner) (domain.User, error) {
 		tourDone  int
 		createdAt string
 	)
-	if err := scanner.Scan(&user.ID, &user.Email, &user.Name, &user.Subject, &isAdmin, &tourDone, &createdAt); err != nil {
+	if err := scanner.Scan(&user.ID, &user.Email, &user.Name, &user.PictureURL, &user.Subject, &isAdmin, &tourDone, &createdAt); err != nil {
 		return domain.User{}, err
 	}
 	user.IsAdmin = isAdmin != 0

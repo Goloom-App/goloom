@@ -102,6 +102,7 @@ export interface UserRecord {
   id: string
   name: string
   email: string
+  pictureUrl?: string
   globalRole: GlobalRole
   title: string
   /** Whether this account has finished (or skipped) the platform tour. */

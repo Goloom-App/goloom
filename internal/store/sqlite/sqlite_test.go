@@ -52,15 +52,19 @@ func TestSQLite_UpsertOIDCUser_firstIsAdmin(t *testing.T) {
 func TestSQLite_UpsertOIDCUser_updatesExisting(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
-	if _, err := s.UpsertOIDCUser(ctx, "same", "old@x", "Old"); err != nil {
+	if _, err := s.UpsertOIDCUserWithPicture(ctx, "same", "old@x", "Old", "https://example.test/old.png"); err != nil {
 		t.Fatal(err)
 	}
-	u, err := s.UpsertOIDCUser(ctx, "same", "new@x", "New")
+	u, err := s.UpsertOIDCUserWithPicture(ctx, "same", "new@x", "New", "https://example.test/new.png")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Email != "new@x" || u.Name != "New" {
+	if u.Email != "new@x" || u.Name != "New" || u.PictureURL != "https://example.test/new.png" {
 		t.Fatalf("user: %+v", u)
+	}
+	users, err := s.ListUsers(ctx)
+	if err != nil || len(users) != 1 || users[0].PictureURL != u.PictureURL {
+		t.Fatalf("ListUsers picture: %+v, %v", users, err)
 	}
 }
 
@@ -304,9 +308,9 @@ func TestSQLite_ScheduledPostsLifecycle(t *testing.T) {
 		t.Fatalf("ListTeamPosts: %v", err)
 	}
 	updated, err := s.PatchScheduledPost(ctx, team.ID, post.ID, domain.UpdatePostPatch{
-		Title:       domain.PatchField[string]{Set: true, Value: "T2"},
-		Content:     domain.PatchField[string]{Set: true, Value: "new"},
-		ScheduledAt: domain.PatchField[time.Time]{Set: true, Value: when.Add(time.Hour)},
+		Title:          domain.PatchField[string]{Set: true, Value: "T2"},
+		Content:        domain.PatchField[string]{Set: true, Value: "new"},
+		ScheduledAt:    domain.PatchField[time.Time]{Set: true, Value: when.Add(time.Hour)},
 		TargetAccounts: domain.PatchField[[]string]{Set: true, Value: []string{acc.ID}},
 	})
 	if err != nil || updated.Content != "new" {

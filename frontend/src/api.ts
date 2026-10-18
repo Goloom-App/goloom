@@ -28,6 +28,7 @@ export interface BackendUser {
   id: string
   email: string
   name: string
+  picture_url?: string
   subject: string
   is_admin: boolean
   tour_done: boolean

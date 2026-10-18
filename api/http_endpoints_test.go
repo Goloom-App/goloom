@@ -108,6 +108,22 @@ func TestPublicEndpoints(t *testing.T) {
 	requireStatus(t, f.do(t, http.MethodGet, "/v1/auth/status", nil), http.StatusOK)
 }
 
+func TestListUsersIncludesOIDCPicture(t *testing.T) {
+	f := newEndpointFixture(t)
+	const picture = "https://example.test/member.png"
+	if _, err := f.store.UpsertOIDCUserWithPicture(context.Background(), f.user.Subject, f.user.Email, f.user.Name, picture); err != nil {
+		t.Fatal(err)
+	}
+	rec := f.do(t, http.MethodGet, "/v1/users", nil)
+	requireStatus(t, rec, http.StatusOK)
+	body := decodeJSON[struct {
+		Items []domain.User `json:"items"`
+	}](t, rec)
+	if len(body.Items) != 1 || body.Items[0].PictureURL != picture {
+		t.Fatalf("users: %+v", body.Items)
+	}
+}
+
 func TestMeAndAPITokens(t *testing.T) {
 	f := newEndpointFixture(t)
 

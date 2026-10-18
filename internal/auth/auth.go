@@ -30,6 +30,7 @@ type oidcClaims struct {
 	Subject string `json:"sub"`
 	Email   string `json:"email"`
 	Name    string `json:"name"`
+	Picture string `json:"picture"`
 }
 
 func New(ctx context.Context, cfg config.Config, store store.Store) (*Service, error) {
@@ -107,7 +108,7 @@ func (s *Service) OIDCExchangeCode(ctx context.Context, code, nonce, pkceVerifie
 	if err := idToken.Claims(&claims); err != nil {
 		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("id_token Claims: %w", err)
 	}
-	user, err := s.store.UpsertOIDCUser(ctx, claims.Subject, claims.Email, claims.Name)
+	user, err := s.store.UpsertOIDCUserWithPicture(ctx, claims.Subject, claims.Email, claims.Name, claims.Picture)
 	if err != nil {
 		return "", domain.AuthenticatedPrincipal{}, fmt.Errorf("UpsertOIDCUser: %w", err)
 	}
@@ -253,7 +254,7 @@ func (s *Service) authenticate(ctx context.Context, token string) (domain.Authen
 			if err := idToken.Claims(&claims); err != nil {
 				return domain.AuthenticatedPrincipal{}, err
 			}
-			user, err := s.store.UpsertOIDCUser(ctx, claims.Subject, claims.Email, claims.Name)
+			user, err := s.store.UpsertOIDCUserWithPicture(ctx, claims.Subject, claims.Email, claims.Name, claims.Picture)
 			if err != nil {
 				return domain.AuthenticatedPrincipal{}, err
 			}

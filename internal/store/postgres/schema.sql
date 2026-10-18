@@ -5,11 +5,15 @@ create table if not exists users (
     subject text not null unique,
     email text not null,
     name text not null,
+    picture_url text not null default '',
     is_admin boolean not null default false,
     tour_done boolean not null default false,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
+
+alter table if exists users
+    add column if not exists picture_url text not null default '';
 
 alter table if exists users
     add column if not exists tour_done boolean not null default false;
