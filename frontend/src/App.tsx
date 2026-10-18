@@ -2135,6 +2135,7 @@ function App() {
 
         {section === 'automation' && selectedTeam && api ? (
           <AutomationView
+            key={selectedTeam.id}
             team={selectedTeam}
             api={api}
             accounts={teamAccounts}
@@ -2307,7 +2308,7 @@ function App() {
         )}
 
         {section === 'aiCampaigns' && selectedTeam && (
-          <CampaignFormatView team={selectedTeam} />
+          <CampaignFormatView key={selectedTeam.id} team={selectedTeam} />
         )}
 
         {section === 'admin' && principalUser?.globalRole === 'admin' && (
