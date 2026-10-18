@@ -211,6 +211,9 @@ export interface AIServiceConfig {
   createdAt: string
 }
 
+export type RSSEditorialGoal = 'auto' | 'teaser' | 'summary'
+export type RSSDesiredLength = 'auto' | 'short' | 'detailed'
+
 export type RSSInitialSyncMode = 'baseline' | 'publish_latest'
 
 export type AutomationOutputMode = 'draft' | 'scheduled' | 'publish_now'
@@ -231,6 +234,8 @@ export interface RSSFeedConfig {
   counterNext?: number
   exhaustedItemsCount?: number
   promptHint: string
+  editorialGoal: RSSEditorialGoal
+  desiredLength: RSSDesiredLength
   targetAccountIds: string[]
   tonality: string
   initialSyncMode: RSSInitialSyncMode

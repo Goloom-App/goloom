@@ -265,6 +265,8 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 		Name:             "Example Blog",
 		IsActive:         true,
 		PromptHint:       "Summarize this article for social media.",
+		EditorialGoal:    "teaser",
+		DesiredLength:    "short",
 		TargetAccountIDs: []string{"acct-1", "acct-2"},
 		Tonality:         "professional",
 	}
@@ -282,6 +284,9 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 	if created.PromptHint != input.PromptHint {
 		t.Fatalf("PromptHint: got %q, want %q", created.PromptHint, input.PromptHint)
 	}
+	if created.EditorialGoal != "teaser" || created.DesiredLength != "short" {
+		t.Fatalf("editorial options lost on create: %+v", created)
+	}
 	if len(created.TargetAccountIDs) != 2 {
 		t.Fatalf("TargetAccountIDs: got %v", created.TargetAccountIDs)
 	}
@@ -298,6 +303,8 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 	}
 
 	input.Name = "Updated Blog"
+	input.EditorialGoal = "summary"
+	input.DesiredLength = "detailed"
 	input.IsActive = false
 	fetchedAt := time.Now().UTC().Truncate(time.Second)
 	input.LastFetchedAt = &fetchedAt
@@ -307,6 +314,9 @@ func TestAIRSSFeedConfigCRUD(t *testing.T) {
 	}
 	if updated.Name != "Updated Blog" {
 		t.Fatalf("Name after update: got %q", updated.Name)
+	}
+	if updated.EditorialGoal != "summary" || updated.DesiredLength != "detailed" {
+		t.Fatalf("editorial options lost on update: %+v", updated)
 	}
 	if updated.IsActive {
 		t.Fatal("IsActive should be false after update")

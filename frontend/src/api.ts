@@ -568,6 +568,8 @@ export interface BackendRSSFeedConfig {
   max_posts_per_day?: number
   counter_next?: number
   prompt_hint: string
+  editorial_goal?: 'auto' | 'teaser' | 'summary'
+  desired_length?: 'auto' | 'short' | 'detailed'
   target_account_ids: string[]
   tonality: string
   initial_sync_mode?: 'baseline' | 'publish_latest'
@@ -1689,6 +1691,8 @@ export function createApiClient(options: ApiClientOptions) {
         output_mode?: 'draft' | 'scheduled' | 'publish_now'
         max_posts_per_day?: number
         prompt_hint?: string
+        editorial_goal?: 'auto' | 'teaser' | 'summary'
+        desired_length?: 'auto' | 'short' | 'detailed'
         target_account_ids?: string[]
         tonality?: string
         initial_sync_mode?: 'baseline' | 'publish_latest'
@@ -1715,6 +1719,8 @@ export function createApiClient(options: ApiClientOptions) {
         output_mode?: 'draft' | 'scheduled' | 'publish_now'
         max_posts_per_day?: number
         prompt_hint?: string
+        editorial_goal?: 'auto' | 'teaser' | 'summary'
+        desired_length?: 'auto' | 'short' | 'detailed'
         target_account_ids?: string[]
         tonality?: string
         initial_sync_mode?: 'baseline' | 'publish_latest'

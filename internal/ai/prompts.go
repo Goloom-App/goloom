@@ -635,6 +635,12 @@ func webPageSourceSection(p params) string {
 }
 
 func rssDetailGuidance(p params) string {
+	switch p.str("rss_editorial_goal") {
+	case "teaser":
+		return "Write a short teaser emphasizing the main news and source link; use a hook and link/CTA without unsupported details."
+	case "summary":
+		return "Summarize supported key points from the actual source; if source text is thin, use a short title-and-link summary. Do not invent facts or add filler."
+	}
 	if p.str("rss_article_content", "rss_article_summary") == "" {
 		return "Write a short teaser from the title and link. Do not invent facts or add filler."
 	}
@@ -812,6 +818,7 @@ var technicalNoteSkipKeys = map[string]bool{
 	"source_content": true, "existing_content": true, "source_url": true, "sourceUrl": true,
 	"page_title": true, "post_skeleton": true, "rss_feed_url": true, "refine_content": true,
 	"refine": true, "rss_article_title": true, "rss_article_content": true,
+	"rss_editorial_goal": true, "rss_desired_length": true,
 	"rss_article_summary": true, "rss_article_link": true, "rss_automation": true,
 	"announcement_reference_content": true, "announcement_reference_title": true,
 	"campaign_format_id": true, "campaignFormatId": true, "output_format": true,

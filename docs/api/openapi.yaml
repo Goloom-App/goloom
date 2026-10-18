@@ -1848,6 +1848,8 @@ components:
             content_template: { type: string }
             title_template: { type: string }
             prompt_hint: { type: string }
+            editorial_goal: { type: string, enum: [auto, teaser, summary] }
+            desired_length: { type: string, enum: [auto, short, detailed] }
             title_hint: { type: string }
             target_account_ids:
               type: array
@@ -1956,6 +1958,15 @@ components:
           type: integer
         prompt_hint:
           type: string
+          description: Optional feed-specific focus and tone; source facts, account limits, and structured editorial settings take precedence.
+        editorial_goal:
+          type: string
+          enum: [auto, teaser, summary]
+          default: auto
+        desired_length:
+          type: string
+          enum: [auto, short, detailed]
+          default: auto
         target_account_ids:
           type: array
           items:
@@ -1995,6 +2006,15 @@ components:
           type: integer
         prompt_hint:
           type: string
+          description: Optional feed-specific focus and tone; source facts, account limits, and structured editorial settings take precedence.
+        editorial_goal:
+          type: string
+          enum: [auto, teaser, summary]
+          default: auto
+        desired_length:
+          type: string
+          enum: [auto, short, detailed]
+          default: auto
         target_account_ids:
           type: array
           items:
@@ -2026,6 +2046,15 @@ components:
           type: integer
         prompt_hint:
           type: string
+          description: Optional feed-specific focus and tone; source facts, account limits, and structured editorial settings take precedence.
+        editorial_goal:
+          type: string
+          enum: [auto, teaser, summary]
+          default: auto
+        desired_length:
+          type: string
+          enum: [auto, short, detailed]
+          default: auto
         target_account_ids:
           type: array
           items:

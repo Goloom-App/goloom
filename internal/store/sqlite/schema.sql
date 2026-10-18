@@ -143,6 +143,8 @@ create table if not exists rss_feed_configs (
     max_posts_per_day integer not null default 10,
     counter_next integer not null default 1,
     prompt_hint text not null default '',
+    editorial_goal text not null default 'auto',
+    desired_length text not null default 'auto',
     target_account_ids text not null default '[]',
     tonality text not null default '',
     initial_sync_mode text not null default 'baseline',

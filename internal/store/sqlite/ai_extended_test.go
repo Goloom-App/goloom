@@ -254,6 +254,8 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 		IsActive:                 true,
 		AiEnhanceEnabled:         false,
 		ArticleEnrichmentEnabled: true,
+		EditorialGoal:            "teaser",
+		DesiredLength:            "short",
 		ContentTemplate:          "{title}\n{link}",
 		OutputMode:               domain.AutomationOutputDraft,
 		MaxPostsPerDay:           5,
@@ -274,6 +276,9 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 	}
 	if !cfg.ArticleEnrichmentEnabled {
 		t.Fatal("article enrichment setting lost on create")
+	}
+	if cfg.EditorialGoal != "teaser" || cfg.DesiredLength != "short" {
+		t.Fatalf("editorial options lost on create: %+v", cfg)
 	}
 	if cfg.OutputMode != domain.AutomationOutputDraft {
 		t.Fatalf("OutputMode: got %q", cfg.OutputMode)
@@ -327,6 +332,8 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 	updated, err := s.UpdateRSSFeedConfig(ctx, team.ID, cfg.ID, domain.RSSFeedConfig{
 		FeedURL:        "https://example.com/feed-v2.xml",
 		Name:           "Blog Updated",
+		EditorialGoal:  "summary",
+		DesiredLength:  "detailed",
 		IsActive:       false,
 		OutputMode:     domain.AutomationOutputScheduled,
 		MaxPostsPerDay: 10,
@@ -337,6 +344,9 @@ func TestSQLite_RSSFeedConfig_CRUD(t *testing.T) {
 	}
 	if updated.Name != "Blog Updated" {
 		t.Fatalf("Name after update: got %q", updated.Name)
+	}
+	if updated.EditorialGoal != "summary" || updated.DesiredLength != "detailed" {
+		t.Fatalf("editorial options lost on update: %+v", updated)
 	}
 	if updated.ArticleEnrichmentEnabled {
 		t.Fatal("article enrichment setting not disabled on update")
