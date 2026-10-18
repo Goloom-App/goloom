@@ -182,6 +182,10 @@ jobs:
     name: "E2E (Playwright + Go)"
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     container:
       image: ghcr.io/psarossy/node:lts
     steps:
@@ -254,7 +258,7 @@ jobs:
           pnpm --dir frontend exec playwright install chromium
 
       - name: E2E — Playwright tests
-        run: pnpm --dir frontend test:e2e
+        run: pnpm --dir frontend test:e2e --shard=${{ matrix.shard }}/2
 
   # The postgres store tests skip without TEST_POSTGRES_URL, so 'go test ./...'
   # alone never exercises them — this job is the gate for the Postgres backend

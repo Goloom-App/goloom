@@ -168,6 +168,10 @@ jobs:
     name: "E2E (Playwright + Go)"
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
 
@@ -196,7 +200,7 @@ jobs:
 
       # test:e2e builds the frontend and the Go server before running the suite.
       - name: Playwright tests
-        run: pnpm --dir frontend test:e2e
+        run: pnpm --dir frontend test:e2e --shard=${{ matrix.shard }}/2
 
   # Go vulnerability scan (govulncheck) + static security analysis (gosec).
   # govulncheck only reports advisories reachable from code actually used, so it

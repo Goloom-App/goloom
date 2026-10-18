@@ -42,7 +42,8 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
 - `make test-postgres` must pass when the store layer changed
 - `pnpm --dir frontend build` (includes `tsc -b`) and `pnpm --dir frontend lint` must pass when the frontend changed
 - `make cover` reports total coverage — it must not drop through a change; raising it is part of the work (state: ~33 % total, 2026-06)
-- CI (`.forgejo/workflows/ci.yaml`) enforces all of the above on push/PR — including the Postgres store suite, which `go test ./...` alone skips — and gates the image publish on it
+- CI (`.forgejo/workflows/ci.yaml` and `.github/workflows/ci.yml`) enforces tests on push/PR, including the Postgres store suite, which `go test ./...` alone skips; Forgejo gates image publication on them
+- PR E2E runs in two Playwright file shards with one worker per job; each shard starts its own server and fresh SQLite database. Both shards together cover the full suite.
 
 ---
 
