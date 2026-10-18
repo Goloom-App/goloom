@@ -21,6 +21,7 @@ import (
 	"git.f4mily.net/goloom/internal/postvalidate"
 	"git.f4mily.net/goloom/internal/provider"
 	"git.f4mily.net/goloom/internal/push"
+	"git.f4mily.net/goloom/internal/rss"
 	"git.f4mily.net/goloom/internal/security"
 	"git.f4mily.net/goloom/internal/sse"
 	"git.f4mily.net/goloom/internal/store"
@@ -28,19 +29,20 @@ import (
 )
 
 type API struct {
-	log         *slog.Logger
-	store       store.Store
-	auth        *auth.Service
-	providers   *provider.Registry
-	posts       *postservice.Service
-	config      config.Config
-	metricsSync metricsSyncRunner
-	i18n        *i18n.Catalog
-	jobManager  *aijobs.Manager
-	hub         *sse.Hub
-	push        *push.Sender
-	release     releaseStatusProvider
-	aiService   *ai.Service
+	log             *slog.Logger
+	store           store.Store
+	auth            *auth.Service
+	providers       *provider.Registry
+	posts           *postservice.Service
+	config          config.Config
+	metricsSync     metricsSyncRunner
+	i18n            *i18n.Catalog
+	jobManager      *aijobs.Manager
+	hub             *sse.Hub
+	push            *push.Sender
+	release         releaseStatusProvider
+	aiService       *ai.Service
+	rssPreviewFetch func(context.Context, string) ([]rss.Item, error)
 }
 
 // releaseStatusProvider supplies the cached update-check state for GET /v1/version.
@@ -226,6 +228,7 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("DELETE /v1/teams/{teamID}/post-templates/{templateID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeletePostTemplate))))
 	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/skip", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleSkipPostTemplateOccurrence))))
 	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/regenerate", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleRegeneratePostTemplate))))
+	mux.Handle("POST /v1/teams/{teamID}/post-templates/{templateID}/ai-preview", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleRecurringAIPreview)))))
 	mux.Handle("PUT /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpsertTeamProfile)))))
 	mux.Handle("GET /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetTeamProfile)))))
 	mux.Handle("DELETE /v1/teams/{teamID}/profile", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeleteTeamProfile)))))
@@ -246,6 +249,8 @@ func (a *API) Handler(limiter *security.Limiter, allowedOrigins []string) http.H
 	mux.Handle("PUT /v1/teams/{teamID}/proactive-settings", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpsertProactiveSettings)))))
 	mux.Handle("POST /v1/teams/{teamID}/rss-feeds", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleCreateRSSFeed))))
 	mux.Handle("GET /v1/teams/{teamID}/rss-feeds", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListRSSFeeds))))
+	mux.Handle("GET /v1/teams/{teamID}/rss-feeds/{feedID}/preview-items", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleListRSSPreviewItems)))))
+	mux.Handle("POST /v1/teams/{teamID}/rss-feeds/{feedID}/ai-preview", a.requireAuth(a.auth.RequireAIEnabled("teamID")(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleRSSAIPreview)))))
 	mux.Handle("PATCH /v1/teams/{teamID}/rss-feeds/{feedID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleUpdateRSSFeed))))
 	mux.Handle("DELETE /v1/teams/{teamID}/rss-feeds/{feedID}", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleEditor, domain.RoleOwner)(a.auditedHandler(a.handleDeleteRSSFeed))))
 	mux.Handle("GET /v1/teams/{teamID}/ai-service-config", a.requireAuth(a.auth.RequireTeamRole("teamID", domain.RoleViewer, domain.RoleEditor, domain.RoleOwner)(http.HandlerFunc(a.handleGetAIServiceConfig))))

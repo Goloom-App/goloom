@@ -922,6 +922,36 @@ paths:
                 $ref: "#/components/schemas/RSSFeedConfig"
         "400":
           $ref: "#/components/responses/BadRequest"
+  /v1/teams/{teamID}/post-templates/{templateID}/ai-preview:
+    post:
+      tags: [AI]
+      summary: Generate a non-publishing AI preview for a recurring occurrence
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/templateID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringAIPreviewRequest"
+      responses:
+        "202":
+          description: Preview job accepted; preview provenance is available in AIJob.payload.preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AITriggerResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Occurrence is skipped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/teams/{teamID}/rss-feeds/{feedID}:
     patch:
       tags: [AI]
@@ -957,6 +987,63 @@ paths:
           description: RSS feed config deleted
         "404":
           $ref: "#/components/responses/NotFound"
+  /v1/teams/{teamID}/rss-feeds/{feedID}/preview-items:
+    get:
+      tags: [AI]
+      summary: List recent feed entries available for an AI preview
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/feedID"
+      responses:
+        "200":
+          description: Recent feed entries (up to 50)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RSSPreviewItem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Feed could not be fetched safely
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/teams/{teamID}/rss-feeds/{feedID}/ai-preview:
+    post:
+      tags: [AI]
+      summary: Generate a non-publishing AI preview for a feed entry
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/feedID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RSSAIPreviewRequest"
+      responses:
+        "202":
+          description: Preview job accepted; preview provenance is available in AIJob.payload.preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AITriggerResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: Feed could not be fetched safely
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/teams/{teamID}/review-queue:
     get:
       tags: [Posts]
@@ -1176,6 +1263,13 @@ components:
     feedID:
       in: path
       name: feedID
+      required: true
+      schema:
+        type: string
+        format: uuid
+    templateID:
+      in: path
+      name: templateID
       required: true
       schema:
         type: string
@@ -1725,6 +1819,77 @@ components:
         completed_at:
           type: string
           format: date-time
+
+    RSSPreviewItem:
+      type: object
+      properties:
+        item_key:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        link:
+          type: string
+          format: uri
+        published_at:
+          type: string
+          format: date-time
+    RSSAIPreviewRequest:
+      type: object
+      required: [item_key]
+      properties:
+        item_key:
+          type: string
+        config:
+          type: object
+          description: Optional unsaved feed settings; never persisted.
+          properties:
+            content_template: { type: string }
+            title_template: { type: string }
+            prompt_hint: { type: string }
+            title_hint: { type: string }
+            target_account_ids:
+              type: array
+              items: { type: string, format: uuid }
+            article_enrichment_enabled: { type: boolean }
+    RecurringAIPreviewRequest:
+      type: object
+      required: [occurrence_at]
+      properties:
+        occurrence_at:
+          type: string
+          format: date-time
+        post_kind:
+          type: string
+          enum: [main, announcement]
+        config:
+          type: object
+          description: Optional unsaved template settings; never persisted.
+          properties:
+            title: { type: string }
+            content: { type: string }
+            recurrence_json:
+              type: string
+              description: Optional draft recurrence rule used to validate occurrence_at; never persisted.
+            counter_next:
+              type: integer
+              minimum: 1
+            prompt_hint: { type: string }
+            title_hint: { type: string }
+            target_account_ids:
+              type: array
+              items: { type: string, format: uuid }
+            announcement_enabled: { type: boolean }
+            announcement_title: { type: string }
+            announcement_content: { type: string }
+            announcement_days_before: { type: integer }
+            announcement_counter_next:
+              type: integer
+              minimum: 1
+            announcement_target_account_ids:
+              type: array
+              items: { type: string, format: uuid }
 
     AITriggerRequest:
       type: object

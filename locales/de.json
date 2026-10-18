@@ -1200,6 +1200,26 @@
       "deviceEnabled": "aktiviert",
       "deviceDisabled": "deaktiviert",
       "otherDevicesHint": "Weitere Geräte behalten ihre eigenen Benachrichtigungen, bis du sie dort entfernst."
+    },
+    "automationPreview": {
+      "open": "KI-Ausgabe vorschauen",
+      "run": "Vorschau generieren",
+      "generating": "Vorschau wird erstellt…",
+      "resume": "Vorschau fortsetzen",
+      "loading": "Aktuelle Feed-Einträge werden geladen…",
+      "noItems": "Keine aktuellen Feed-Einträge verfügbar.",
+      "selectSource": "Quellartikel",
+      "selectOccurrence": "Termin",
+      "postKind": "Beitragsart",
+      "mainPost": "Hauptbeitrag",
+      "announcement": "Ankündigung",
+      "result": "Vorschau-Ergebnis",
+      "source": "Quelle",
+      "template": "Erweitertes Template",
+      "inputs": "Generierungseingaben",
+      "characters": "{{count}} Zeichen",
+      "failed": "Vorschau fehlgeschlagen.",
+      "timeout": "Zeitüberschreitung bei Vorschau."
     }
   },
   "api": {

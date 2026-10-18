@@ -142,6 +142,7 @@ export function RecurrenceForm({
                   type="button"
                   className={`recurrence-form__weekday-btn${active ? ' recurrence-form__weekday-btn--active' : ''}`}
                   onClick={() => toggleWeekday(goWd)}
+                  data-testid={`recurring-weekday-${key}`}
                 >
                   {t(`weekdays.${key}` as 'weekdays.mon').slice(0, 2)}
                 </button>

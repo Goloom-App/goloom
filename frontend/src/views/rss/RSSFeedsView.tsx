@@ -7,9 +7,11 @@ import { useTranslation } from 'react-i18next'
 
 import { getViewContext, setViewFocus, setViewVisible } from '../../components/ai/viewContextBridge'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
+import { AutomationAIPreview } from '../../components/ai/AutomationAIPreview'
 import { Segmented, ToggleSwitch } from '../../components/ui'
-import { useCreateRSSFeed, useDeleteRSSFeed, useRSSFeeds, useUpdateRSSFeed } from '../../hooks/useAI'
+import { getApiClient, useCreateRSSFeed, useDeleteRSSFeed, useRSSFeeds, useUpdateRSSFeed } from '../../hooks/useAI'
 import type { AccountRecord, AutomationOutputMode, RSSFeedConfig, RSSInitialSyncMode, TeamRecord } from '../../types'
+import type { BackendRSSPreviewItem } from '../../api'
 
 interface RSSFeedsViewProps {
   team: TeamRecord
@@ -89,6 +91,28 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
   const [feedForm, setFeedForm] = useState<FeedFormState>(emptyFeedForm)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [previewFeedId, setPreviewFeedId] = useState<string | null>(null)
+  const [previewItems, setPreviewItems] = useState<BackendRSSPreviewItem[]>([])
+  const [previewItemKey, setPreviewItemKey] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+
+  const openFeedPreview = async (feedId: string) => {
+    setPreviewFeedId(feedId)
+    setPreviewItems([])
+    setPreviewItemKey('')
+    setPreviewError('')
+    setPreviewLoading(true)
+    try {
+      const response = await getApiClient().listRSSPreviewItems(team.id, feedId)
+      setPreviewItems(response.items ?? [])
+      setPreviewItemKey(response.items?.[0]?.item_key ?? '')
+    } catch (cause) {
+      setPreviewError(cause instanceof Error ? cause.message : t('automationPreview.failed'))
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!isFeedDialogOpen) return
@@ -285,6 +309,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                       rows={5}
                       value={feedForm.contentTemplate}
                       onChange={(e) => setFeedForm((prev) => ({ ...prev, contentTemplate: e.target.value }))}
+                      data-testid="rss-content-template"
                     />
                     <p className="hint" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
                       {t('rss.templateVars')}
@@ -379,6 +404,45 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                   ) : (
                     <p className="hint">{t('rss.aiRequiresTeam')}</p>
                   )}
+                  {editingFeedId && feedForm.aiEnhanceEnabled && team.isAiEnabled ? (
+                    <div className="stack stack--sm" data-testid="rss-ai-preview-controls">
+                      <button type="button" className="btn btn--secondary btn--xs" onClick={() => void openFeedPreview(editingFeedId)} data-testid="rss-preview-load">
+                        {t('automationPreview.open')}
+                      </button>
+                      {previewLoading ? <p className="hint">{t('automationPreview.loading')}</p> : null}
+                      {previewError ? <p className="status-banner__error" role="alert">{previewError}</p> : null}
+                      {previewFeedId === editingFeedId && !previewLoading && !previewError && previewItems.length === 0 ? (
+                        <p className="hint">{t('automationPreview.noItems')}</p>
+                      ) : null}
+                      {previewFeedId === editingFeedId && previewItems.length > 0 ? (
+                        <>
+                          <label className="field">
+                            <span>{t('automationPreview.selectSource')}</span>
+                            <select value={previewItemKey} onChange={(event) => setPreviewItemKey(event.target.value)} data-testid="rss-preview-item">
+                              {previewItems.map((item) => <option key={item.item_key} value={item.item_key}>{item.title || item.link}</option>)}
+                            </select>
+                          </label>
+                          {previewItemKey ? (
+                            <AutomationAIPreview
+                              key={`rss-${editingFeedId}`}
+                              teamId={team.id}
+                              accounts={accounts}
+                              testId="rss-ai-preview"
+                              storageKey={`rss-${editingFeedId}`}
+                              requestPreview={() => getApiClient().previewRSSFeedAI(team.id, editingFeedId, previewItemKey, {
+                                content_template: feedForm.contentTemplate,
+                                title_template: feedForm.titleTemplate,
+                                prompt_hint: feedForm.promptHint,
+                                title_hint: feedForm.titleHint,
+                                target_account_ids: feedForm.targetAccountIds,
+                                article_enrichment_enabled: feedForm.articleEnrichmentEnabled,
+                              })}
+                            />
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="field">
                     <span>{t('rss.targetAccounts')}</span>
                     <DestinationPicker
@@ -487,7 +551,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                 ) : null}
               </div>
 
-              <div className="recurring-template-card__meta">
+                <div className="recurring-template-card__meta">
                 <div className="recurring-template-card__meta-row" style={{ wordBreak: 'break-all' }}>
                   <Rss size={14} />
                   <span>{feed.feedUrl}</span>

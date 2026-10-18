@@ -72,6 +72,8 @@ func tokenRouteAllows(principal domain.AuthenticatedPrincipal, r *http.Request) 
 	case "POST /v1/auth/logout", "POST /v1/teams/{teamID}/posts/validate",
 		"POST /v1/teams/{teamID}/ai/prompt-preview", "POST /v1/teams/{teamID}/ai/chat":
 		return auth.PrincipalAllows(principal, auth.ScopeRead)
+	case "GET /v1/teams/{teamID}/rss-feeds/{feedID}/preview-items":
+		return auth.PrincipalAllows(principal, auth.ScopeRead)
 	case "POST /v1/teams/{teamID}/posts", "PATCH /v1/teams/{teamID}/posts/{postID}",
 		"POST /v1/teams/{teamID}/posts/{postID}/cancel":
 		// Handlers enforce the scope for the actual post target state.
@@ -79,6 +81,8 @@ func tokenRouteAllows(principal domain.AuthenticatedPrincipal, r *http.Request) 
 	case "DELETE /v1/teams/{teamID}/posts/{postID}":
 		return auth.PrincipalAllows(principal, auth.ScopeDeleteDraft) || auth.PrincipalAllows(principal, auth.ScopeDeleteSchedule)
 	case "POST /v1/teams/{teamID}/posts/draft", "POST /v1/teams/{teamID}/ai-trigger",
+		"POST /v1/teams/{teamID}/rss-feeds/{feedID}/ai-preview",
+		"POST /v1/teams/{teamID}/post-templates/{templateID}/ai-preview",
 		"POST /v1/teams/{teamID}/ai-jobs/{jobID}/cancel":
 		return auth.PrincipalAllows(principal, auth.ScopeWriteDraft)
 	case "POST /v1/teams/{teamID}/ai/confirm-action":
