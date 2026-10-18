@@ -314,6 +314,8 @@ export function mapRSSFeedConfig(raw: BackendRSSFeedConfig): RSSFeedConfig {
     counterNext: raw.counter_next,
     exhaustedItemsCount: raw.exhausted_items_count ?? 0,
     promptHint: raw.prompt_hint ?? '',
+    editorialGoal: raw.editorial_goal === 'teaser' || raw.editorial_goal === 'summary' ? raw.editorial_goal : 'auto',
+    desiredLength: raw.desired_length === 'short' || raw.desired_length === 'detailed' ? raw.desired_length : 'auto',
     targetAccountIds: raw.target_account_ids ?? [],
     tonality: raw.tonality ?? '',
     initialSyncMode: raw.initial_sync_mode === 'publish_latest' ? 'publish_latest' : 'baseline',

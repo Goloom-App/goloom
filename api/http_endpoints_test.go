@@ -228,16 +228,31 @@ func TestRSSFeedEndpoints(t *testing.T) {
 	if feed.ArticleEnrichmentEnabled {
 		t.Fatal("article enrichment must default off")
 	}
+	if feed.EditorialGoal != "auto" || feed.DesiredLength != "auto" {
+		t.Fatalf("RSS defaults: goal=%q length=%q", feed.EditorialGoal, feed.DesiredLength)
+	}
 
 	rec = f.do(t, http.MethodGet, base, nil)
 	requireStatus(t, rec, http.StatusOK)
 
-	rec = f.do(t, http.MethodPatch, base+"/"+feed.ID, map[string]any{"name": "Blog 2", "article_enrichment_enabled": true})
+	rec = f.do(t, http.MethodPatch, base+"/"+feed.ID, map[string]any{"name": "Blog 2", "article_enrichment_enabled": true, "editorial_goal": "summary", "desired_length": "detailed"})
 	requireStatus(t, rec, http.StatusOK)
 	updated := decodeJSON[domain.RSSFeedConfig](t, rec)
-	if updated.Name != "Blog 2" || !updated.ArticleEnrichmentEnabled {
+	if updated.Name != "Blog 2" || !updated.ArticleEnrichmentEnabled || updated.EditorialGoal != "summary" || updated.DesiredLength != "detailed" {
 		t.Fatalf("updated feed: %+v", updated)
 	}
+	rec = f.do(t, http.MethodGet, base, nil)
+	requireStatus(t, rec, http.StatusOK)
+	listed := decodeJSON[struct {
+		Items []domain.RSSFeedConfig `json:"items"`
+	}](t, rec)
+	if len(listed.Items) != 1 || listed.Items[0].EditorialGoal != "summary" || listed.Items[0].DesiredLength != "detailed" {
+		t.Fatalf("listed feed: %+v", listed.Items)
+	}
+	for _, bad := range []map[string]any{{"editorial_goal": "invent"}, {"desired_length": "unlimited"}} {
+		requireStatus(t, f.do(t, http.MethodPatch, base+"/"+feed.ID, bad), http.StatusBadRequest)
+	}
+	requireStatus(t, f.do(t, http.MethodPost, base, map[string]any{"name": "bad", "feed_url": "https://example.org/feed", "editorial_goal": "invent"}), http.StatusBadRequest)
 
 	requireStatus(t, f.do(t, http.MethodDelete, base+"/"+feed.ID, nil), http.StatusNoContent)
 }

@@ -23,6 +23,7 @@ Core scheduler in `scheduler.go`, specialized job types in separate files.
 - RSS daily capacity is enforced atomically by `ClaimRSSItemAttempt` before AI dispatch or direct insertion; each candidate reaching the limit logs INFO with `sourceKey`, never its raw item key. Poll-local counts must not decide capacity.
 - RSS retry/release/exhaustion and fallback logs must hash item keys with `sourceKey` (or omit them); keys and item links can contain credentials. API callback/cancellation logs omit item keys and retain job/feed/post IDs.
 - RSS import: `rss_import.go` — RSS feed import jobs
+- RSS AI submissions snapshot normalized `rss_editorial_goal` and `rss_desired_length` as top-level generation params. `teaser` also uses the generator's `output_format=teaser`; retries keep the same settings from the job payload.
 - Opted-in AI RSS items with fewer than 280 readable feed characters fetch their linked article before the source transaction. Preflight dedupe and daily-cap reads avoid unnecessary I/O; atomic claim still decides capacity. `pagefetch` enforces public URLs, redirects, 2 MiB body and eight-second total timeout. Failure logs a hashed item key and sends feed text plus `article_fetch_failed` metadata to the AI callback.
 - External post import: `external_post_import.go` — external post monitoring
 - Template materialize: `template_materialize.go` — template → post conversion

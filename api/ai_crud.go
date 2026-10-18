@@ -225,6 +225,12 @@ func (a *API) handleCreateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
+	if !validRSSEditorialOptions(input.EditorialGoal, input.DesiredLength) {
+		a.writeError(w, r, "invalid_rss_editorial_options", http.StatusBadRequest)
+		return
+	}
+	input.EditorialGoal = domain.NormalizeRSSEditorialGoal(input.EditorialGoal)
+	input.DesiredLength = domain.NormalizeRSSDesiredLength(input.DesiredLength)
 	input.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode))
 	input.OutputMode = domain.NormalizeAutomationOutputMode(string(input.OutputMode))
 	if strings.TrimSpace(input.ContentTemplate) == "" {
@@ -266,6 +272,8 @@ type rssFeedPatchRequest struct {
 	AiEnhanceEnabled         *bool      `json:"ai_enhance_enabled"`
 	ArticleEnrichmentEnabled *bool      `json:"article_enrichment_enabled"`
 	PromptHint               *string    `json:"prompt_hint"`
+	EditorialGoal            *string    `json:"editorial_goal"`
+	DesiredLength            *string    `json:"desired_length"`
 	TargetAccountIDs         *[]string  `json:"target_account_ids"`
 	Tonality                 *string    `json:"tonality"`
 	LastFetchedAt            *time.Time `json:"last_fetched_at"`
@@ -278,6 +286,11 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	var patch rssFeedPatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
+		return
+	}
+	if (patch.EditorialGoal != nil && !validRSSEditorialOptions(*patch.EditorialGoal, "")) ||
+		(patch.DesiredLength != nil && !validRSSEditorialOptions("", *patch.DesiredLength)) {
+		a.writeError(w, r, "invalid_rss_editorial_options", http.StatusBadRequest)
 		return
 	}
 
@@ -321,6 +334,12 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 	if patch.PromptHint != nil {
 		merged.PromptHint = *patch.PromptHint
 	}
+	if patch.EditorialGoal != nil {
+		merged.EditorialGoal = domain.NormalizeRSSEditorialGoal(*patch.EditorialGoal)
+	}
+	if patch.DesiredLength != nil {
+		merged.DesiredLength = domain.NormalizeRSSDesiredLength(*patch.DesiredLength)
+	}
 	if patch.TargetAccountIDs != nil {
 		merged.TargetAccountIDs = domain.NormalizeMediaIDs(*patch.TargetAccountIDs)
 	}
@@ -344,6 +363,12 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		a.recordAudit(r, teamID, "rss_feed.update", "rss_feed", &feedID, "Updated RSS feed")
 	}
 	auth.WriteJSON(w, http.StatusOK, feed)
+}
+
+func validRSSEditorialOptions(goal, length string) bool {
+	validGoal := goal == "" || goal == "auto" || goal == "teaser" || goal == "summary"
+	validLength := length == "" || length == "auto" || length == "short" || length == "detailed"
+	return validGoal && validLength
 }
 
 func (a *API) handleDeleteRSSFeed(w http.ResponseWriter, r *http.Request) {

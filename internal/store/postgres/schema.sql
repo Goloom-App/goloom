@@ -359,6 +359,8 @@ create table if not exists rss_feed_configs (
     is_active boolean not null default true,
     article_enrichment_enabled boolean not null default false,
     prompt_hint text not null default '',
+    editorial_goal text not null default 'auto',
+    desired_length text not null default 'auto',
     target_account_ids text not null default '[]',
     tonality text not null default '',
     initial_sync_mode text not null default 'baseline',
@@ -571,6 +573,8 @@ where status = 'posted'
   and nullif(trim(publish_metadata::json->>'uri'), '') is not null;
 
 alter table rss_feed_configs add column if not exists prompt_hint text not null default '';
+alter table rss_feed_configs add column if not exists editorial_goal text not null default 'auto';
+alter table rss_feed_configs add column if not exists desired_length text not null default 'auto';
 alter table rss_feed_configs add column if not exists target_account_ids text not null default '[]';
 alter table rss_feed_configs add column if not exists tonality text not null default '';
 alter table rss_feed_configs add column if not exists initial_sync_mode text not null default 'baseline';

@@ -415,11 +415,31 @@ type RSSFeedConfig struct {
 	MaxPostsPerDay           int                  `json:"max_posts_per_day"`
 	CounterNext              int                  `json:"counter_next"`
 	PromptHint               string               `json:"prompt_hint"`
+	EditorialGoal            string               `json:"editorial_goal"`
+	DesiredLength            string               `json:"desired_length"`
 	TargetAccountIDs         []string             `json:"target_account_ids"`
 	Tonality                 string               `json:"tonality"`
 	InitialSyncMode          RSSInitialSyncMode   `json:"initial_sync_mode"`
 	LastFetchedAt            *time.Time           `json:"last_fetched_at,omitempty"`
 	CreatedAt                time.Time            `json:"created_at"`
+}
+
+func NormalizeRSSEditorialGoal(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "teaser", "summary":
+		return strings.TrimSpace(strings.ToLower(value))
+	default:
+		return "auto"
+	}
+}
+
+func NormalizeRSSDesiredLength(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "short", "detailed":
+		return strings.TrimSpace(strings.ToLower(value))
+	default:
+		return "auto"
+	}
 }
 
 func (f RSSFeedConfig) NormalizedContentTemplate() string {

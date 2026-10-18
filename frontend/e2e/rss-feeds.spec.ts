@@ -106,6 +106,8 @@ test('RSS AI preview shows per-account output without importing or creating post
   await page.getByTestId('automation-tab-rss').click()
   await page.getByRole('button', { name: /edit feed/i }).click()
   await page.getByTestId('rss-ai-prompt').fill('Changed preview prompt.')
+  await page.getByTestId('rss-editorial-goal').selectOption('summary')
+  await page.getByTestId('rss-desired-length').selectOption('detailed')
   await page.getByTestId('rss-content-template').fill('Draft preview: {title}')
   await page.getByTestId('rss-preview-load').click()
   await page.getByTestId('rss-ai-preview').getByRole('button', { name: /generate preview|vorschau generieren/i }).click()
@@ -119,6 +121,8 @@ test('RSS AI preview shows per-account output without importing or creating post
     item_key: 'article-1',
     config: {
       prompt_hint: 'Changed preview prompt.',
+      editorial_goal: 'summary',
+      desired_length: 'detailed',
       content_template: 'Draft preview: {title}',
       target_account_ids: [accountID],
     },
@@ -126,4 +130,42 @@ test('RSS AI preview shows per-account output without importing or creating post
   expect(previewStarts).toBe(1)
   expect(previewJobReads).toBe(2)
   expect(sideEffectRequests).toEqual([])
+})
+
+test('saves and reloads RSS editorial settings', async ({ page, baseURL }) => {
+  const teamID = await getFirstTeamId(baseURL!, e2eBootstrapToken())
+  let goal = 'auto'
+  let length = 'auto'
+  await page.route('**/v1/teams', async route => {
+    const response = await route.fetch()
+    const data = await response.json() as { items: Record<string, unknown>[] }
+    await route.fulfill({ response, json: { ...data, items: data.items.map(item => ({ ...item, is_ai_enabled: true })) } })
+  })
+  await page.route(`**/v1/teams/${teamID}/rss-feeds`, async route => {
+    if (route.request().method() !== 'GET') return route.continue()
+    await route.fulfill({ json: { items: [{
+      id: 'editorial-feed', team_id: teamID, name: 'Editorial feed', feed_url: 'https://example.org/rss',
+      is_active: true, ai_enhance_enabled: true, content_template: '{title} {link}',
+      prompt_hint: 'Focus on release', target_account_ids: ['account-1'],
+      editorial_goal: goal, desired_length: length, created_at: '2026-01-01T00:00:00Z', last_fetched_at: null,
+    }] } })
+  })
+  await page.route(`**/v1/teams/${teamID}/rss-feeds/editorial-feed`, async route => {
+    const body = route.request().postDataJSON() as Record<string, unknown>
+    goal = String(body.editorial_goal)
+    length = String(body.desired_length)
+    await route.fulfill({ json: { id: 'editorial-feed', team_id: teamID, ...body, created_at: '2026-01-01T00:00:00Z', last_fetched_at: null } })
+  })
+  await signIn(page)
+  await page.getByRole('button', { name: /^Automation$/i }).click()
+  await page.getByTestId('automation-tab-rss').click()
+  await page.getByRole('button', { name: /edit feed/i }).click()
+  await page.getByTestId('rss-editorial-goal').selectOption('summary')
+  await page.getByTestId('rss-desired-length').selectOption('detailed')
+  await page.getByRole('button', { name: /^save$/i }).click()
+  await expect.poll(() => goal).toBe('summary')
+  await expect.poll(() => length).toBe('detailed')
+  await page.getByRole('button', { name: /edit feed/i }).click()
+  await expect(page.getByTestId('rss-editorial-goal')).toHaveValue('summary')
+  await expect(page.getByTestId('rss-desired-length')).toHaveValue('detailed')
 })
