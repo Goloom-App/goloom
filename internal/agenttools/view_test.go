@@ -85,3 +85,18 @@ func TestFocusedPostViewIdentifiesPostWithoutLoadingContent(t *testing.T) {
 		t.Fatalf("focused view must explain team-scoped content lookup: %+v", out)
 	}
 }
+
+func TestFocusedCampaignViewRequiresTeamScopedLookup(t *testing.T) {
+	view := json.RawMessage(`{"section":"aiCampaigns","focus":{"type":"campaign_format","id":"c1"},"visible":{"campaign_editor":{"unsaved":true}}}`)
+	summary := ViewSummary(view)
+	if !strings.Contains(summary, "get_campaign") || !strings.Contains(summary, "current team") {
+		t.Fatalf("campaign summary must direct scoped lookup: %s", summary)
+	}
+	out, err := coreGetCurrentView(context.Background(), Deps{}, Invocation{ViewContext: view}, GetCurrentViewInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.Note, "get_campaign") || !strings.Contains(out.Note, "unsaved") {
+		t.Fatalf("campaign view must distinguish saved data from editor state: %+v", out)
+	}
+}

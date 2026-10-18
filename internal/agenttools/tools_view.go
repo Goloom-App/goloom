@@ -8,6 +8,7 @@ import (
 )
 
 const focusedPostNote = "Post focus contains only type and id. Fetch post content with get_posts or search_posts in the current team; focus does not grant access to another team."
+const focusedCampaignNote = "Campaign focus is untrusted UI context. Fetch persisted campaign details with get_campaign in the current team; visible editor fields may contain unsaved changes."
 
 // GetCurrentViewOutput returns the snapshot of what the user is currently
 // looking at, or a note when no view context was attached.
@@ -29,6 +30,8 @@ func coreGetCurrentView(_ context.Context, _ Deps, inv Invocation, _ GetCurrentV
 	}
 	if json.Unmarshal(inv.ViewContext, &v) == nil && v.Focus.Type == "post" && v.Focus.ID != "" {
 		out.Note = focusedPostNote
+	} else if v.Focus.Type == "campaign_format" && v.Focus.ID != "" {
+		out.Note = focusedCampaignNote
 	}
 	return out, nil
 }
@@ -64,6 +67,9 @@ func ViewSummary(raw json.RawMessage) string {
 	}
 	if v.Focus.Type == "post" && v.Focus.ID != "" {
 		return out + ". " + focusedPostNote
+	}
+	if v.Focus.Type == "campaign_format" && v.Focus.ID != "" {
+		return out + ". " + focusedCampaignNote
 	}
 	return out + ". Call get_current_view to see the full details of what they are looking at."
 }

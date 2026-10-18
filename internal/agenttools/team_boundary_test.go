@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"git.f4mily.net/goloom/internal/domain"
 )
 
 func TestChatPostMutationsStayWithinActiveTeam(t *testing.T) {
@@ -142,4 +144,33 @@ func TestFocusedForeignPostDoesNotGrantTeamAccess(t *testing.T) {
 	if err != nil || unchanged.Content != "private body" {
 		t.Fatalf("foreign post changed: %+v, %v", unchanged, err)
 	}
+}
+
+func TestFocusedForeignCampaignDoesNotGrantTeamAccess(t *testing.T) {
+	f := newFixture(t)
+	foreign := f.foreignAccount(t)
+	inv := f.inv(t, `["read","write"]`)
+	campaign, err := coreCreateCampaign(bg(), f.deps, inv, CreateCampaignInput{
+		TeamID: foreign.TeamID, Name: "private campaign",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, _ := json.Marshal(map[string]any{"section": "aiCampaigns", "focus": map[string]string{"type": "campaign_format", "id": campaign.CampaignID}})
+	bind := ChatBinding{TeamID: f.team.ID, Principal: inv.Principal, ViewContext: view}
+	for _, tool := range ChatTools(f.deps, bind) {
+		if tool.Name != "get_campaign" {
+			continue
+		}
+		args, _ := json.Marshal(map[string]string{"campaign_id": campaign.CampaignID, "team_id": foreign.TeamID})
+		summary, payload, err := tool.Execute(bg(), args)
+		if !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("foreign campaign must be missing in active team: %v", err)
+		}
+		if strings.Contains(summary+string(payload), "private campaign") {
+			t.Fatalf("foreign campaign leaked: %s %s", summary, payload)
+		}
+		return
+	}
+	t.Fatal("get_campaign missing from chat tools")
 }

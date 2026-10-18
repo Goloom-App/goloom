@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { getViewContext, setViewFocus, setViewVisible } from '../../components/ai/viewContextBridge'
 import * as Dialog from '@radix-ui/react-dialog'
 import { X, Plus, Trash2, Edit2 } from 'lucide-react'
 
@@ -38,6 +39,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
   const updateFormat = useUpdateCampaignFormat()
   const deleteFormat = useDeleteCampaignFormat()
 
+  const baselineRef = useRef('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   
@@ -51,6 +53,47 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isDialogOpen || !team.isAiEnabled) return
+    const fullValues = {
+      name, weekday: weekday === 'null' ? null : Number(weekday),
+      required_hashtags: hashtags, is_active: isActive,
+      ...(advancedMode ? { structure_json: structureJson } : { structure: recordFromStructure(structureFields) }),
+    }
+    const values = {
+      ...fullValues,
+      name: name.slice(0, 200),
+      required_hashtags: hashtags.slice(0, 30).map(tag => tag.slice(0, 100)),
+      ...(advancedMode
+        ? { structure_json: structureJson.slice(0, 4000), structure_json_length: structureJson.length }
+        : { structure: recordFromStructure({
+          topic: structureFields.topic.slice(0, 1000),
+          tone: structureFields.tone.slice(0, 500),
+          instructions: structureFields.instructions.slice(0, 2000),
+          sections: structureFields.sections.slice(0, 20).map(section => section.slice(0, 200)),
+        }) }),
+    }
+    const serialized = JSON.stringify(fullValues)
+    const truncated = name.length > 200 || hashtags.length > 30 || hashtags.some(tag => tag.length > 100)
+      || (advancedMode ? structureJson.length > 4000 : structureFields.topic.length > 1000
+        || structureFields.tone.length > 500 || structureFields.instructions.length > 2000
+        || structureFields.sections.length > 20 || structureFields.sections.some(section => section.length > 200))
+    if (!baselineRef.current) baselineRef.current = serialized
+    const visible = { campaign_editor: {
+      ...values, truncated, mode: editingId ? 'edit' : 'create',
+      dirty: !editingId || serialized !== baselineRef.current,
+    } }
+    setViewFocus(editingId ? { type: 'campaign_format', id: editingId } : { type: 'campaign_format' })
+    setViewVisible(visible)
+    return () => {
+      // Clear only this editor's snapshot; navigation may already own the bridge.
+      if (getViewContext()?.visible === visible) {
+        setViewFocus(undefined)
+        setViewVisible(undefined)
+      }
+    }
+  }, [isDialogOpen, team.id, team.isAiEnabled, editingId, name, weekday, hashtags, isActive, advancedMode, structureJson, structureFields])
 
   if (!team.isAiEnabled) {
     return (
@@ -74,10 +117,12 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
 
   const handleOpenCreate = () => {
     resetForm()
+    baselineRef.current = ''
     setIsDialogOpen(true)
   }
 
   const handleOpenEdit = (format: CampaignFormat) => {
+    baselineRef.current = ''
     setEditingId(format.id)
     setName(format.name)
     setWeekday(format.weekday === null ? 'null' : format.weekday.toString())
@@ -258,10 +303,9 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
         )}
       </div>
 
-      <Dialog.Root open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog.Root modal={false} open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="dialog-overlay" />
-          <Dialog.Content className="dialog-content" style={{ maxWidth: '600px' }} data-testid="campaign-dialog">
+          <Dialog.Content onInteractOutside={(event) => event.preventDefault()} className="dialog-content" style={{ maxWidth: '600px', zIndex: 59 }} data-testid="campaign-dialog">
             <div className="drawer-header">
               <Dialog.Title className="drawer-title">
                 {editingId ? 'Edit Campaign Format' : 'Create Campaign Format'}

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 
 import { createApiClient } from '../../api'
 import type { BackendPostTemplate } from '../../api'
+import { getViewContext, setViewFocus, setViewVisible } from '../../components/ai/viewContextBridge'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
 import { Segmented, ToggleSwitch } from '../../components/ui'
 import { useAIJobStream } from '../../hooks/useSSE'
@@ -90,6 +91,7 @@ export function RecurringPostsView({
   const awaitingAiRegenerateRef = useRef(false)
   const [items, setItems] = useState<BackendPostTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const editorBaselineRef = useRef('')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
@@ -116,6 +118,37 @@ export function RecurringPostsView({
   const [outputMode, setOutputMode] = useState<AutomationOutputMode>('scheduled')
   const [promptHint, setPromptHint] = useState('')
   const [titleHint, setTitleHint] = useState('')
+
+  useEffect(() => {
+    if (!editorOpen) return
+    const serialized = JSON.stringify({
+      title, content, counterStart, recState, targetIds, announcementEnabled,
+      announcementTitle, announcementContent, announcementDaysBefore, announcementCounterStart,
+      announcementDifferentTargets, announcementTargetIds, materializeHorizonDays,
+      aiEnhanceEnabled, aiEnhanceAnnouncement, outputMode, promptHint, titleHint,
+    })
+    if (!editorBaselineRef.current) editorBaselineRef.current = serialized
+    const visible = { automation: {
+      kind: 'recurring_template', is_new: !editingId,
+      has_unsaved_changes: !editingId || serialized !== editorBaselineRef.current,
+      title: title.slice(0, 500), content: content.slice(0, 4000),
+      recurrence_json: recurrenceStateToJSON(recState), output_mode: outputMode,
+      target_account_ids: targetIds.slice(0, 50), ai_enhance_enabled: aiEnhanceEnabled,
+      prompt_hint: promptHint.slice(0, 1000), announcement_enabled: announcementEnabled,
+      ...(announcementEnabled ? { announcement_content: announcementContent.slice(0, 2000) } : {}),
+    } }
+    setViewFocus(editingId ? { type: 'recurring_template', id: editingId } : { type: 'recurring_template' })
+    setViewVisible(visible)
+    return () => {
+      if (getViewContext()?.visible === visible) {
+        setViewFocus(undefined)
+        setViewVisible(undefined)
+      }
+    }
+  }, [editorOpen, editingId, title, content, counterStart, recState, targetIds,
+    announcementEnabled, announcementTitle, announcementContent, announcementDaysBefore,
+    announcementCounterStart, announcementDifferentTargets, announcementTargetIds,
+    materializeHorizonDays, aiEnhanceEnabled, aiEnhanceAnnouncement, outputMode, promptHint, titleHint])
 
   const outputModeLabel: Record<AutomationOutputMode, string> = {
     draft: t('rss.outputModeDraft', { defaultValue: 'Draft (review)' }),
@@ -228,11 +261,13 @@ export function RecurringPostsView({
   }
 
   function openEditor() {
+    editorBaselineRef.current = ''
     resetEditorFields()
     setEditorOpen(true)
   }
 
   function openEditorForEdit(item: BackendPostTemplate) {
+    editorBaselineRef.current = ''
     setEditingId(item.id)
     setTitle(item.title)
     setContent(item.content)
@@ -645,10 +680,15 @@ export function RecurringPostsView({
       </div>
 
       {editorOpen ? (
-        <Dialog.Root open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
+        <Dialog.Root modal={false} open={editorOpen} onOpenChange={(open) => !open && closeEditor()}>
           <Dialog.Portal>
             <Dialog.Overlay className="dialog-overlay" />
-            <Dialog.Content className="dialog-content dialog-content--wide" data-testid="recurring-template-dialog">
+            <Dialog.Content
+              className="dialog-content dialog-content--wide"
+              data-testid="recurring-template-dialog"
+              style={{ zIndex: 59 }}
+              onInteractOutside={(event) => event.preventDefault()}
+            >
               <div className="drawer-header">
                 <Dialog.Title className="drawer-title">
                   {editingId ? t('recurring.editTitle') : t('recurring.editorTitle')}

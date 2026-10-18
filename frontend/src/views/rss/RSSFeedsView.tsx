@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { X, Plus, Trash2, Rss, Clock, Pencil, MoreVertical, Target } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 
+import { getViewContext, setViewFocus, setViewVisible } from '../../components/ai/viewContextBridge'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
 import { Segmented, ToggleSwitch } from '../../components/ui'
 import { useCreateRSSFeed, useDeleteRSSFeed, useRSSFeeds, useUpdateRSSFeed } from '../../hooks/useAI'
@@ -82,19 +83,44 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
   const updateFeed = useUpdateRSSFeed()
   const deleteFeed = useDeleteRSSFeed()
 
+  const editorBaselineRef = useRef('')
   const [isFeedDialogOpen, setIsFeedDialogOpen] = useState(false)
   const [editingFeedId, setEditingFeedId] = useState<string | null>(null)
   const [feedForm, setFeedForm] = useState<FeedFormState>(emptyFeedForm)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!isFeedDialogOpen) return
+    const serialized = JSON.stringify(feedForm)
+    if (!editorBaselineRef.current) editorBaselineRef.current = serialized
+    const visible = { automation: {
+      kind: 'rss_feed', is_new: !editingFeedId,
+      has_unsaved_changes: !editingFeedId || serialized !== editorBaselineRef.current,
+      title: feedForm.name.slice(0, 500), content: feedForm.contentTemplate.slice(0, 4000),
+      title_template: feedForm.titleTemplate.slice(0, 500),
+      output_mode: feedForm.outputMode, target_account_ids: feedForm.targetAccountIds.slice(0, 50),
+      ai_enhance_enabled: feedForm.aiEnhanceEnabled, prompt_hint: feedForm.promptHint.slice(0, 1000),
+    } }
+    setViewFocus(editingFeedId ? { type: 'rss_feed', id: editingFeedId } : { type: 'rss_feed' })
+    setViewVisible(visible)
+    return () => {
+      if (getViewContext()?.visible === visible) {
+        setViewFocus(undefined)
+        setViewVisible(undefined)
+      }
+    }
+  }, [isFeedDialogOpen, editingFeedId, feedForm])
+
   const openAddFeedDialog = () => {
+    editorBaselineRef.current = ''
     setEditingFeedId(null)
     setFeedForm(emptyFeedForm())
     setIsFeedDialogOpen(true)
   }
 
   const openEditFeedDialog = (feed: RSSFeedConfig) => {
+    editorBaselineRef.current = ''
     setEditingFeedId(feed.id)
     setFeedForm(feedToForm(feed))
     setIsFeedDialogOpen(true)
@@ -204,6 +230,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
         </div>
         {canEdit ? (
           <Dialog.Root
+            modal={false}
             open={isFeedDialogOpen}
             onOpenChange={(open) => {
               setIsFeedDialogOpen(open)
@@ -221,7 +248,11 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="dialog-overlay" />
-              <Dialog.Content className="dialog-content" style={{ maxWidth: '36rem' }}>
+              <Dialog.Content
+                className="dialog-content"
+                style={{ maxWidth: '36rem', zIndex: 59 }}
+                onInteractOutside={(event) => event.preventDefault()}
+              >
                 <div className="drawer-header">
                   <Dialog.Title className="drawer-title">{feedDialogTitle}</Dialog.Title>
                   <Dialog.Close asChild>
