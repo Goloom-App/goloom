@@ -12,7 +12,8 @@ const BLUESKY_USERNAME = 'bsky-user'
 
 type ComposerAIResult = {
   content: string
-  accountContentOverride: Record<string, string>
+  /** null marks an explicitly proposed override removal. */
+  accountContentOverride: Record<string, string | null>
 }
 
 const TEAM_ID = 'mock-ai-team'
@@ -282,7 +283,7 @@ test.describe('composer AI assist', () => {
     await expect(defaultBody).toHaveValue('Draft of the first team.')
   })
 
-  test('keeps user-written per-account overrides and fills the remaining accounts', async ({ page }) => {
+  test('default selection keeps user-written overrides and fills the remaining accounts', async ({ page }) => {
     test.setTimeout(120_000)
     const teamId = TEAM_ID
     await mockTeams(page)
@@ -314,6 +315,11 @@ test.describe('composer AI assist', () => {
 
     job.complete()
     await startOptimize(page)
+    // Nothing changes until the proposal is applied.
+    await expect(page.getByTestId('composer-ai-proposal')).toBeVisible({ timeout: 20_000 })
+    await expect(defaultBody).toHaveValue('Original shared body.')
+    await page.getByTestId('composer-ai-proposal-apply').click()
+    await expect(page.getByTestId('composer-ai-proposal')).toHaveCount(0)
     await expect(defaultBody).toHaveValue('AI refined draft body.')
 
     // The account the user edited keeps their text …
@@ -322,6 +328,229 @@ test.describe('composer AI assist', () => {
     // … while the account without a user override receives the AI variant.
     await page.getByRole('tab', { name: new RegExp(BLUESKY_USERNAME) }).click()
     await expect(overrideBody).toHaveValue('AI bluesky variant')
+  })
+
+  test.describe('proposal review', () => {
+    const SHARED = 'Original shared body.'
+    const MASTO_OVERRIDE = 'User-written mastodon override.'
+
+    /** New post targeting both accounts, a user override on mastodon, optimize finished. */
+    async function openProposal(page: Page, result: ComposerAIResult) {
+      await mockTeams(page)
+      await mockTeamAccounts(page, TEAM_ID)
+      const job = await mockComposerAI(page, TEAM_ID, result)
+      await signIn(page)
+      await page.goto(`/?team=${TEAM_ID}`)
+      await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+      await page.getByRole('button', { name: 'New Post' }).click()
+
+      const defaultBody = page.getByPlaceholder(DEFAULT_PLACEHOLDER)
+      const overrideBody = page.getByPlaceholder(OVERRIDE_PLACEHOLDER)
+      await page.getByTestId('composer-destination-toggle').filter({ hasText: MASTODON_USERNAME }).click()
+      await defaultBody.fill(SHARED)
+      await page.getByRole('tab', { name: new RegExp(MASTODON_USERNAME) }).click()
+      await overrideBody.fill(MASTO_OVERRIDE)
+      await page.getByRole('tab', { name: 'Default', exact: true }).click()
+
+      job.complete()
+      await startOptimize(page)
+      const proposal = page.getByTestId('composer-ai-proposal')
+      await expect(proposal).toBeVisible({ timeout: 20_000 })
+      return { defaultBody, overrideBody, proposal }
+    }
+
+    async function expectOverride(page: Page, username: string, value: string) {
+      await page.getByRole('tab', { name: new RegExp(username) }).click()
+      await expect(page.getByPlaceholder(OVERRIDE_PLACEHOLDER)).toHaveValue(value)
+      await page.getByRole('tab', { name: 'Default', exact: true }).click()
+    }
+
+    test('shows original and proposed text side by side before changing the draft', async ({ page }) => {
+      test.setTimeout(120_000)
+      const { defaultBody, proposal } = await openProposal(page, {
+        content: 'AI refined shared body.',
+        accountContentOverride: { [MASTODON_ACCOUNT_ID]: 'AI mastodon variant' },
+      })
+      const shared = proposal.getByTestId('composer-ai-proposal-shared-diff')
+      await expect(shared).toContainText(SHARED)
+      await expect(shared).toContainText('AI refined shared body.')
+      const masto = proposal.getByTestId(`composer-ai-proposal-item-${MASTODON_ACCOUNT_ID}`)
+      await expect(masto).toContainText(MASTO_OVERRIDE)
+      await expect(masto).toContainText('AI mastodon variant')
+      // Bluesky got no variant: shown as unchanged, not as a removal.
+      await expect(proposal.getByTestId('composer-ai-proposal-unchanged')).toContainText(BLUESKY_USERNAME)
+      await expect(defaultBody).toHaveValue(SHARED)
+    })
+
+    test('partial acceptance applies only the selected account change', async ({ page }) => {
+      test.setTimeout(120_000)
+      const { defaultBody, proposal } = await openProposal(page, {
+        content: 'AI refined shared body.',
+        accountContentOverride: {
+          [MASTODON_ACCOUNT_ID]: 'AI mastodon variant',
+          [BLUESKY_ACCOUNT_ID]: 'AI bluesky variant',
+        },
+      })
+      await proposal.getByTestId('composer-ai-proposal-shared').uncheck()
+      await proposal.getByTestId(`composer-ai-proposal-account-${MASTODON_ACCOUNT_ID}`).check()
+      await proposal.getByTestId(`composer-ai-proposal-account-${BLUESKY_ACCOUNT_ID}`).uncheck()
+      await proposal.getByTestId('composer-ai-proposal-apply').click()
+
+      await expect(proposal).toHaveCount(0)
+      await expect(defaultBody).toHaveValue(SHARED)
+      await expectOverride(page, MASTODON_USERNAME, 'AI mastodon variant')
+      await expectOverride(page, BLUESKY_USERNAME, SHARED)
+    })
+
+    test('full acceptance applies the shared text and every account change', async ({ page }) => {
+      test.setTimeout(120_000)
+      const { defaultBody, proposal } = await openProposal(page, {
+        content: 'AI refined shared body.',
+        accountContentOverride: {
+          [MASTODON_ACCOUNT_ID]: 'AI mastodon variant',
+          [BLUESKY_ACCOUNT_ID]: 'AI bluesky variant',
+        },
+      })
+      await proposal.getByTestId('composer-ai-proposal-apply-all').click()
+
+      await expect(proposal).toHaveCount(0)
+      await expect(defaultBody).toHaveValue('AI refined shared body.')
+      await expectOverride(page, MASTODON_USERNAME, 'AI mastodon variant')
+      await expectOverride(page, BLUESKY_USERNAME, 'AI bluesky variant')
+    })
+
+    test('an explicit override removal is labelled and makes the account inherit the shared text', async ({ page }) => {
+      test.setTimeout(120_000)
+      const { defaultBody, proposal } = await openProposal(page, {
+        content: 'AI refined shared body.',
+        accountContentOverride: { [MASTODON_ACCOUNT_ID]: null },
+      })
+      const masto = proposal.getByTestId(`composer-ai-proposal-item-${MASTODON_ACCOUNT_ID}`)
+      await expect(masto.getByTestId('composer-ai-proposal-removal')).toBeVisible()
+      await proposal.getByTestId('composer-ai-proposal-apply-all').click()
+
+      await expect(defaultBody).toHaveValue('AI refined shared body.')
+      await expectOverride(page, MASTODON_USERNAME, 'AI refined shared body.')
+    })
+
+    test('discarding the proposal leaves the draft intact', async ({ page }) => {
+      test.setTimeout(120_000)
+      const { defaultBody, proposal } = await openProposal(page, {
+        content: 'AI refined shared body.',
+        accountContentOverride: { [BLUESKY_ACCOUNT_ID]: 'AI bluesky variant' },
+      })
+      await proposal.getByTestId('composer-ai-proposal-discard').click()
+
+      await expect(proposal).toHaveCount(0)
+      await expect(defaultBody).toHaveValue(SHARED)
+      await expectOverride(page, MASTODON_USERNAME, MASTO_OVERRIDE)
+      await expectOverride(page, BLUESKY_USERNAME, SHARED)
+    })
+
+    test('editing the draft while the proposal is open drops the stale proposal', async ({ page }) => {
+      test.setTimeout(120_000)
+      const { defaultBody, proposal } = await openProposal(page, {
+        content: 'AI refined shared body.',
+        accountContentOverride: {},
+      })
+      await defaultBody.fill('Edited after the proposal arrived.')
+
+      await expect(proposal).toHaveCount(0)
+      await expect(page.getByTestId('composer-ai-notice')).toBeVisible()
+      await expect(defaultBody).toHaveValue('Edited after the proposal arrived.')
+    })
+
+    test('explains an invalid limit combination and blocks applying it', async ({ page }) => {
+      test.setTimeout(120_000)
+      const longShared = `${'Long shared text that no longer fits Bluesky. '.repeat(8)}End.`
+      const { defaultBody, proposal } = await openProposal(page, {
+        content: longShared,
+        accountContentOverride: { [BLUESKY_ACCOUNT_ID]: 'Short bluesky variant.' },
+      })
+      await proposal.getByTestId(`composer-ai-proposal-account-${BLUESKY_ACCOUNT_ID}`).uncheck()
+
+      const limitError = proposal.getByTestId('composer-ai-proposal-limit-error')
+      await expect(limitError).toBeVisible()
+      await expect(limitError).toContainText(BLUESKY_USERNAME)
+      await expect(proposal.getByTestId('composer-ai-proposal-apply')).toBeDisabled()
+
+      await proposal.getByTestId(`composer-ai-proposal-account-${BLUESKY_ACCOUNT_ID}`).check()
+      await expect(limitError).toHaveCount(0)
+      await proposal.getByTestId('composer-ai-proposal-apply').click()
+      await expect(defaultBody).toHaveValue(longShared)
+      await expectOverride(page, BLUESKY_USERNAME, 'Short bluesky variant.')
+    })
+
+    test('reports a proposal without changes', async ({ page }) => {
+      test.setTimeout(120_000)
+      const { defaultBody, proposal } = await openProposal(page, { content: SHARED, accountContentOverride: {} })
+      await expect(proposal.getByTestId('composer-ai-proposal-empty')).toBeVisible()
+      await expect(proposal.getByTestId('composer-ai-proposal-apply')).toHaveCount(0)
+      await proposal.getByTestId('composer-ai-proposal-discard').click()
+      await expect(defaultBody).toHaveValue(SHARED)
+    })
+  })
+
+  test.describe('optimize errors', () => {
+    async function openNewPost(page: Page) {
+      await mockTeams(page)
+      await mockTeamAccounts(page, TEAM_ID)
+      await signIn(page)
+      await page.goto(`/?team=${TEAM_ID}`)
+      await page.getByRole('button', { name: 'Calendar', exact: true }).click()
+      await page.getByRole('button', { name: 'New Post' }).click()
+      const defaultBody = page.getByPlaceholder(DEFAULT_PLACEHOLDER)
+      await defaultBody.fill('Draft to optimize.')
+      return defaultBody
+    }
+
+    async function mockJob(page: Page, job: Record<string, unknown>) {
+      await page.route(`**/v1/teams/${TEAM_ID}/ai-trigger`, (route) =>
+        route.fulfill({ status: 202, json: { job_id: 'job-err', status: 'pending' } }),
+      )
+      await page.route(`**/v1/teams/${TEAM_ID}/ai-jobs/job-err`, (route) =>
+        route.fulfill({
+          json: { id: 'job-err', team_id: TEAM_ID, type: 'voice_engine', payload: {}, ...job },
+        }),
+      )
+    }
+
+    test('shows a failed generation and keeps the draft', async ({ page }) => {
+      test.setTimeout(120_000)
+      const defaultBody = await openNewPost(page)
+      await mockJob(page, { status: 'failed', error_message: 'provider exploded' })
+      await startOptimize(page)
+      await expect(page.getByTestId('composer-ai-error')).toContainText('provider exploded', { timeout: 20_000 })
+      await expect(page.getByTestId('composer-ai-proposal')).toHaveCount(0)
+      await expect(defaultBody).toHaveValue('Draft to optimize.')
+    })
+
+    test('shows an empty proposal as an error', async ({ page }) => {
+      test.setTimeout(120_000)
+      const defaultBody = await openNewPost(page)
+      await mockJob(page, { status: 'completed', result: { content: '  ' } })
+      await startOptimize(page)
+      await expect(page.getByTestId('composer-ai-error')).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByTestId('composer-ai-proposal')).toHaveCount(0)
+      await expect(defaultBody).toHaveValue('Draft to optimize.')
+    })
+
+    test('cancelling a running optimization stops it without a proposal', async ({ page }) => {
+      test.setTimeout(120_000)
+      const defaultBody = await openNewPost(page)
+      let cancelled = false
+      await page.route(`**/v1/teams/${TEAM_ID}/ai-jobs/job-err/cancel`, (route) => {
+        cancelled = true
+        return route.fulfill({ json: { id: 'job-err', team_id: TEAM_ID, status: 'failed' } })
+      })
+      await mockJob(page, { status: 'pending' })
+      await startOptimize(page)
+      await page.getByTestId('composer-ai-cancel').click()
+      await expect.poll(() => cancelled).toBe(true)
+      await expect(page.getByTestId('composer-ai-optimize')).toBeEnabled()
+      await expect(page.getByTestId('composer-ai-proposal')).toHaveCount(0)
+      await expect(defaultBody).toHaveValue('Draft to optimize.')
+    })
   })
 
   test.describe('async editor loads', () => {
@@ -383,8 +612,9 @@ test.describe('composer AI assist', () => {
       await page.waitForTimeout(500)
       job.complete()
 
-      await expect(page.getByTestId('composer-ai-optimize')).toBeEnabled({ timeout: 20_000 })
+      await expect(page.getByTestId('composer-ai-proposal')).toBeVisible({ timeout: 20_000 })
       await expect(page.getByTestId('composer-title')).toHaveText('Create post')
+      await page.getByTestId('composer-ai-proposal-apply').click()
       await expect(defaultBody).toHaveValue('AI refined draft body.')
     })
 
