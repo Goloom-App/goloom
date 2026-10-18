@@ -41,6 +41,7 @@ test('Composer optimization requests text without publishing', async ({ page, ba
   if (await destination.getAttribute('aria-pressed') !== 'true') await destination.click()
   await page.getByTestId('composer-ai-optimize').click()
   await page.getByTestId('composer-ai-optimize').click()
+  await page.getByTestId('composer-ai-proposal-apply').click()
   await expect(content).toHaveValue('Optimized editor text')
   expect(postCreateRequests).toEqual([])
   expect(params).toMatchObject({

@@ -4858,6 +4858,48 @@ select {
   border: 0;
 }
 
+/* Composer AI proposal review */
+.composer-ai-proposal {
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.composer-ai-proposal__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.composer-ai-proposal__compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-2);
+}
+
+.composer-ai-proposal__text {
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.composer-ai-proposal__text p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer-ai-proposal__text--proposed {
+  background: var(--accent-soft);
+}
+
+.composer-ai-proposal__counts {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 0.8rem;
+}
+
 /* Composer overrides */
 .composer-override-media {
   display: flex;

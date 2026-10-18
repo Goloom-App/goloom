@@ -63,25 +63,6 @@ export function isAnyTargetAccountOverCharLimit(
   return false
 }
 
-/**
- * Merge AI-refined overrides into the draft's existing overrides. Text the user
- * already wrote for an account wins; the AI variant only fills accounts that
- * have no user override yet.
- */
-export function mergeAccountContentOverride(
-  existing: Record<string, string>,
-  incoming: Record<string, string>,
-): Record<string, string> {
-  const merged: Record<string, string> = { ...existing }
-  for (const [accountId, content] of Object.entries(incoming)) {
-    if ((existing[accountId] ?? '').trim() !== '') {
-      continue
-    }
-    merged[accountId] = content
-  }
-  return merged
-}
-
 /** Drop empty / whitespace-only overrides before API calls (backend normalizes similarly). */
 export function accountContentOverrideForSave(draft: EditorDraftState): Record<string, string> {
   const out: Record<string, string> = {}
