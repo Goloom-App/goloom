@@ -127,6 +127,7 @@ test('polls new activity, shows safe automation details and filters historical a
   const card = await openAudit(page, team)
   await expect(card.getByText('Background 1')).toBeVisible()
   await expect(card.getByText('Automation', { exact: true }).first()).toBeVisible()
+  await card.getByRole('button', { name: 'Show details', exact: true }).click()
   await expect(card.getByText('post: post-123')).toBeVisible()
   await expect(card.getByText('job_id: job-123')).toBeVisible()
   await expect(card.getByText('removed_count: 2')).toBeVisible()
@@ -159,7 +160,62 @@ test('supported action labels render in English and German', async ({ page }) =>
   await page.getByRole('tab', { name: 'Audit-Log', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Auditlog', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Wissensquelle erstellt', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Details anzeigen', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Details ausblenden', exact: true })).toHaveAttribute('aria-expanded', 'true')
   expect(await page.locator('#audit-actions option').evaluateAll((options) => options.filter((option) => option.textContent === option.getAttribute('value')).map((option) => option.textContent))).toEqual([])
+})
+
+test('details collapse per entry, support keyboard and wrap long values on desktop and mobile', async ({ page }) => {
+  const team = await createAITeam(baseURL, e2eBootstrapToken())
+  const longValue = '01234567-89ab-cdef-0123-456789abcdef'.repeat(12)
+  await page.route(`**/v1/teams/${team}/audit-log*`, (route) => route.fulfill({ json: {
+    entries: [
+      { ...event(team, 'Updated recurring template', 'recurring.update'), metadata: { changed_fields: 'ai_enhance_enabled,announcement_enabled,content', request_id: longValue, api_key: 'never-show-secret' } },
+      { ...event(team, '', 'ai_job.complete'), target_id: longValue },
+    ], total: 2,
+  } }))
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  const card = await openAudit(page, team)
+  const rows = card.locator('tbody tr')
+  const first = rows.nth(0)
+  const second = rows.nth(1)
+  await expect(first.getByText('Updated recurring template', { exact: true })).toBeVisible()
+  await expect(first.getByRole('button', { name: 'Show details', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await expect(second.getByRole('button', { name: 'Show details', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await expect(card.getByText(`request_id: ${longValue}`, { exact: true })).toHaveCount(0)
+  // A missing summary still has a short, single-line target teaser.
+  await expect(second.locator('.audit-details__summary')).toBeVisible()
+  for (const label of ['Recurring template updated', 'AI generation completed']) {
+    const cell = card.getByRole('cell', { name: label, exact: true })
+    expect(await cell.evaluate((el) => {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      return range.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)
+    })).toBeLessThanOrEqual(2.1)
+  }
+  await first.getByRole('button', { name: 'Show details', exact: true }).click()
+  await expect(first.getByRole('button', { name: 'Hide details', exact: true })).toHaveAttribute('aria-expanded', 'true')
+  await expect(first.getByText('changed_fields: ai_enhance_enabled, announcement_enabled, content', { exact: true })).toBeVisible()
+  await expect(first.getByText(`request_id: ${longValue}`, { exact: true })).toBeVisible()
+  await expect(second.getByRole('button', { name: 'Show details', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await expect(card.getByText('never-show-secret')).toHaveCount(0)
+  const toggle = second.getByRole('button', { name: 'Show details', exact: true })
+  await toggle.focus()
+  await page.keyboard.press('Enter')
+  await expect(second.getByRole('button', { name: 'Hide details', exact: true })).toHaveAttribute('aria-expanded', 'true')
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 })
+    expect(await card.locator('table').evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    const value = first.getByText(`request_id: ${longValue}`, { exact: true })
+    expect(await value.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+  }
+  await second.getByRole('button', { name: 'Hide details', exact: true }).focus()
+  await page.keyboard.press('Space')
+  await expect(second.getByRole('button', { name: 'Show details', exact: true })).toHaveAttribute('aria-expanded', 'false')
+  await expect(first.getByText(`request_id: ${longValue}`, { exact: true })).toBeVisible()
+  await first.getByRole('button', { name: 'Hide details', exact: true }).click()
+  await expect(first.getByText(`request_id: ${longValue}`, { exact: true })).toHaveCount(0)
 })
 
 test('OIDC actors retain human member attribution', async ({ page }) => {

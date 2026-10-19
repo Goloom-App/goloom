@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { History } from 'lucide-react'
+import { ChevronDown, ChevronUp, History } from 'lucide-react'
 
 import { SectionCard } from '../../components/ui'
 import type { BackendAuditEvent, createApiClient } from '../../api'
@@ -36,6 +36,48 @@ const DETAIL_KEYS = new Set([
 
 function actionLabel(t: TFunction, action: string): string {
   return t(`audit.actions.${action.replace(/\./g, '_')}`, action)
+}
+
+function AuditDetails({ entry }: { entry: BackendAuditEvent }) {
+  const { t } = useTranslation()
+  const [expanded, setExpanded] = useState(false)
+  const detailsId = useId()
+  const metadata = Object.entries(entry.metadata ?? {}).filter(([key]) => DETAIL_KEYS.has(key))
+  const target = entry.target_type ? `${entry.target_type}${entry.target_id ? `: ${entry.target_id}` : ''}` : ''
+  const preview = entry.summary || target || (metadata[0] ? `${metadata[0][0]}: ${String(metadata[0][1])}` : '—')
+  const hasDetails = Boolean(target || metadata.length)
+
+  return (
+    <div className="audit-details">
+      <div className="audit-details__summary">{preview}</div>
+      {hasDetails && (
+        <>
+          <button
+            type="button"
+            className="btn btn--sm audit-details__toggle"
+            aria-expanded={expanded}
+            aria-controls={detailsId}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? <ChevronUp size={14} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
+            {t(expanded ? 'audit.hideDetails' : 'audit.showDetails')}
+          </button>
+          <div id={detailsId} hidden={!expanded}>
+            {expanded && (
+              <>
+                {target && <div className="hint">{target}</div>}
+                {metadata.map(([key, value]) => (
+                  <div key={key} className="hint">
+                    {key}: {key === 'changed_fields' ? String(value).split(',').map((field) => field.trim()).join(', ') : String(value)}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 export function TeamAuditLogSection({
@@ -127,7 +169,13 @@ export function TeamAuditLogSection({
         <p className="hint">{t(offset > 0 ? 'audit.emptyPage' : 'audit.empty')}</p>
       ) : (
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table audit-table">
+            <colgroup>
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '26%' }} />
+              <col style={{ width: '36%' }} />
+            </colgroup>
             <thead>
               <tr>
                 <th>{t('audit.colTime')}</th>
@@ -139,7 +187,7 @@ export function TeamAuditLogSection({
             <tbody>
               {entries.map((e) => (
                 <tr key={e.id}>
-                  <td className="text-nowrap text-sm">{new Date(e.created_at).toLocaleString()}</td>
+                  <td className="text-sm">{new Date(e.created_at).toLocaleString()}</td>
                   <td>
                     <div className="audit-actor">
                       <strong>{e.actor_name || e.actor_email || t(e.actor_kind === 'system' ? 'audit.automation' : 'audit.unknownActor')}</strong>
@@ -153,13 +201,9 @@ export function TeamAuditLogSection({
                       {e.actor_name && e.actor_email && <span className="hint text-sm">{e.actor_email}</span>}
                     </div>
                   </td>
-                  <td className="text-nowrap">{actionLabel(t, e.action)}</td>
+                  <td>{actionLabel(t, e.action)}</td>
                   <td className="text-sm">
-                    <div>{e.summary}</div>
-                    {e.target_type && <div className="hint">{e.target_type}{e.target_id ? `: ${e.target_id}` : ''}</div>}
-                    {Object.entries(e.metadata ?? {}).filter(([key]) => DETAIL_KEYS.has(key)).map(([key, value]) => (
-                      <div key={key} className="hint">{key}: {String(value)}</div>
-                    ))}
+                    <AuditDetails entry={e} />
                   </td>
                 </tr>
               ))}
