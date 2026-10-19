@@ -220,6 +220,19 @@ func (m *Manager) SubmitJob(ctx context.Context, input domain.AIJob) (domain.AIJ
 		return domain.AIJob{}, fmt.Errorf("Manager.SubmitJob: get ai context: %w", err)
 	}
 
+	var envelope struct {
+		Params json.RawMessage `json:"params"`
+	}
+	if len(input.Payload) > 0 {
+		if err := json.Unmarshal(input.Payload, &envelope); err != nil {
+			return domain.AIJob{}, err
+		}
+	}
+	aiContext, err = aicontext.Select(aiContext, envelope.Params)
+	if err != nil {
+		return domain.AIJob{}, err
+	}
+
 	var job domain.AIJob
 	err = m.store.WithAuditTransaction(ctx, func(ctx context.Context) error {
 		var err error

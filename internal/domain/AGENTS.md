@@ -17,6 +17,7 @@ Models in `models.go`, patch utilities in `patch_field.go`, template vars in `te
 - `ErrRSSDailyLimit` identifies a rejected RSS capacity claim; schedulers skip the item and log only its hashed key.
 - `RSSFeedConfig.ExhaustedItemsCount` exposes exhausted unlinked RSS attempts in feed JSON; active jobs and fresh reservations are excluded.
 - `RSSFeedConfig.ArticleEnrichmentEnabled` is an opt-in boolean, default false, persisted in both stores and exposed as `article_enrichment_enabled`.
+- `RSSFeedConfig.KnowledgeSourceIDs` and `CampaignFormat.KnowledgeSourceIDs`: nil inherits team knowledge; non-nil empty disables additional knowledge; nonempty selects exact IDs. JSON always preserves null versus []. Deleted IDs remain stored for visible repair, never automatic substitution.
 - `RSSFeedConfig.EditorialGoal` and `DesiredLength` are RSS AI-only controls. Both normalize omitted/unknown stored values to `auto`; API writes reject unsupported values.
 - `ScheduledPost.AIFallbackReason=article_fetch_failed` is a source warning after article retrieval failed while AI used feed content; it is not a template fallback.
 - Domain types: `models.go` — User, Team, Post, Account, AIJob, etc.

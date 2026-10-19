@@ -89,6 +89,9 @@ func (a *API) handleCreateCampaignFormat(w http.ResponseWriter, r *http.Request)
 		a.writeError(w, r, "invalid_campaign_format", http.StatusBadRequest)
 		return
 	}
+	if !a.validateKnowledgeSelection(w, r, input.KnowledgeSourceIDs) {
+		return
+	}
 	format, err := a.store.CreateCampaignFormat(r.Context(), teamID, input)
 	if err != nil {
 		a.writeStoreError(w, r, err, "")
@@ -119,11 +122,15 @@ func (a *API) handleGetCampaignFormat(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleUpdateCampaignFormat(w http.ResponseWriter, r *http.Request) {
 	teamID := r.PathValue("teamID")
 	formatID := r.PathValue("formatID")
-	var input domain.CampaignFormat
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	var request struct {
+		domain.CampaignFormat
+		Selection domain.PatchField[[]string] `json:"knowledge_source_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		a.writeError(w, r, "invalid_json_body", http.StatusBadRequest)
 		return
 	}
+	input := request.CampaignFormat
 	if err := validateCampaignFormat(input); err != nil {
 		a.writeError(w, r, "invalid_campaign_format", http.StatusBadRequest)
 		return
@@ -132,6 +139,13 @@ func (a *API) handleUpdateCampaignFormat(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		a.writeStoreError(w, r, err, "campaign_format_not_found")
 		return
+	}
+	input.KnowledgeSourceIDs = before.KnowledgeSourceIDs
+	if request.Selection.Set {
+		if !a.validateKnowledgeSelection(w, r, request.Selection.Value) {
+			return
+		}
+		input.KnowledgeSourceIDs = request.Selection.Value
 	}
 	format, err := a.store.UpdateCampaignFormat(r.Context(), teamID, formatID, input)
 	if err != nil {
@@ -229,6 +243,9 @@ func (a *API) handleCreateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, r, "invalid_rss_editorial_options", http.StatusBadRequest)
 		return
 	}
+	if !a.validateKnowledgeSelection(w, r, input.KnowledgeSourceIDs) {
+		return
+	}
 	input.EditorialGoal = domain.NormalizeRSSEditorialGoal(input.EditorialGoal)
 	input.DesiredLength = domain.NormalizeRSSDesiredLength(input.DesiredLength)
 	input.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(string(input.InitialSyncMode))
@@ -261,23 +278,24 @@ func (a *API) handleListRSSFeeds(w http.ResponseWriter, r *http.Request) {
 }
 
 type rssFeedPatchRequest struct {
-	FeedURL                  *string    `json:"feed_url"`
-	Name                     *string    `json:"name"`
-	IsActive                 *bool      `json:"is_active"`
-	ContentTemplate          *string    `json:"content_template"`
-	TitleTemplate            *string    `json:"title_template"`
-	TitleHint                *string    `json:"title_hint"`
-	OutputMode               *string    `json:"output_mode"`
-	MaxPostsPerDay           *int       `json:"max_posts_per_day"`
-	AiEnhanceEnabled         *bool      `json:"ai_enhance_enabled"`
-	ArticleEnrichmentEnabled *bool      `json:"article_enrichment_enabled"`
-	PromptHint               *string    `json:"prompt_hint"`
-	EditorialGoal            *string    `json:"editorial_goal"`
-	DesiredLength            *string    `json:"desired_length"`
-	TargetAccountIDs         *[]string  `json:"target_account_ids"`
-	Tonality                 *string    `json:"tonality"`
-	LastFetchedAt            *time.Time `json:"last_fetched_at"`
-	InitialSyncMode          *string    `json:"initial_sync_mode"`
+	KnowledgeSourceIDs       domain.PatchField[[]string] `json:"knowledge_source_ids"`
+	FeedURL                  *string                     `json:"feed_url"`
+	Name                     *string                     `json:"name"`
+	IsActive                 *bool                       `json:"is_active"`
+	ContentTemplate          *string                     `json:"content_template"`
+	TitleTemplate            *string                     `json:"title_template"`
+	TitleHint                *string                     `json:"title_hint"`
+	OutputMode               *string                     `json:"output_mode"`
+	MaxPostsPerDay           *int                        `json:"max_posts_per_day"`
+	AiEnhanceEnabled         *bool                       `json:"ai_enhance_enabled"`
+	ArticleEnrichmentEnabled *bool                       `json:"article_enrichment_enabled"`
+	PromptHint               *string                     `json:"prompt_hint"`
+	EditorialGoal            *string                     `json:"editorial_goal"`
+	DesiredLength            *string                     `json:"desired_length"`
+	TargetAccountIDs         *[]string                   `json:"target_account_ids"`
+	Tonality                 *string                     `json:"tonality"`
+	LastFetchedAt            *time.Time                  `json:"last_fetched_at"`
+	InitialSyncMode          *string                     `json:"initial_sync_mode"`
 }
 
 func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
@@ -354,6 +372,12 @@ func (a *API) handleUpdateRSSFeed(w http.ResponseWriter, r *http.Request) {
 		merged.InitialSyncMode = domain.NormalizeRSSInitialSyncMode(*patch.InitialSyncMode)
 	}
 
+	if patch.KnowledgeSourceIDs.Set {
+		if !a.validateKnowledgeSelection(w, r, patch.KnowledgeSourceIDs.Value) {
+			return
+		}
+		merged.KnowledgeSourceIDs = patch.KnowledgeSourceIDs.Value
+	}
 	feed, err := a.store.UpdateRSSFeedConfig(r.Context(), teamID, feedID, merged)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -79,14 +79,15 @@ type rssAIPreviewRequest struct {
 }
 
 type rssPreviewConfig struct {
-	ContentTemplate          *string   `json:"content_template,omitempty"`
-	TitleTemplate            *string   `json:"title_template,omitempty"`
-	PromptHint               *string   `json:"prompt_hint,omitempty"`
-	EditorialGoal            *string   `json:"editorial_goal,omitempty"`
-	DesiredLength            *string   `json:"desired_length,omitempty"`
-	TitleHint                *string   `json:"title_hint,omitempty"`
-	TargetAccountIDs         *[]string `json:"target_account_ids,omitempty"`
-	ArticleEnrichmentEnabled *bool     `json:"article_enrichment_enabled,omitempty"`
+	KnowledgeSourceIDs       domain.PatchField[[]string] `json:"knowledge_source_ids"`
+	ContentTemplate          *string                     `json:"content_template,omitempty"`
+	TitleTemplate            *string                     `json:"title_template,omitempty"`
+	PromptHint               *string                     `json:"prompt_hint,omitempty"`
+	EditorialGoal            *string                     `json:"editorial_goal,omitempty"`
+	DesiredLength            *string                     `json:"desired_length,omitempty"`
+	TitleHint                *string                     `json:"title_hint,omitempty"`
+	TargetAccountIDs         *[]string                   `json:"target_account_ids,omitempty"`
+	ArticleEnrichmentEnabled *bool                       `json:"article_enrichment_enabled,omitempty"`
 }
 
 func (a *API) handleRSSAIPreview(w http.ResponseWriter, r *http.Request) {
@@ -107,6 +108,9 @@ func (a *API) handleRSSAIPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	feed = applyRSSPreviewConfig(feed, input.Config)
+	if !a.validateKnowledgeSelection(w, r, feed.KnowledgeSourceIDs) {
+		return
+	}
 	if len(feed.TargetAccountIDs) == 0 {
 		a.writeError(w, r, "invalid_target_account_ids", http.StatusBadRequest)
 		return
@@ -275,16 +279,17 @@ func (a *API) handleRecurringAIPreview(w http.ResponseWriter, r *http.Request) {
 func rssPreviewParams(feed domain.RSSFeedConfig, item rss.Item) map[string]any {
 	fields := rss.ItemFields{Title: item.Title, Link: item.Link, Summary: item.Content, FeedName: feed.Name, PublishedAt: item.PublishedAt, Counter: feed.CounterNext}
 	params := map[string]any{
-		"occasion":            strings.TrimSpace(feed.PromptHint),
-		"post_skeleton":       rss.ExpandContent(feed.NormalizedContentTemplate(), fields),
-		"rss_article_title":   item.Title,
-		"rss_article_content": htmltext.ExtractReadableText(item.Content),
-		"rss_article_link":    item.Link,
-		"title_hint":          strings.TrimSpace(feed.TitleHint),
-		"target_account_ids":  feed.TargetAccountIDs,
-		"schedule":            false,
-		"rss_editorial_goal":  domain.NormalizeRSSEditorialGoal(feed.EditorialGoal),
-		"rss_desired_length":  domain.NormalizeRSSDesiredLength(feed.DesiredLength),
+		"occasion":             strings.TrimSpace(feed.PromptHint),
+		"post_skeleton":        rss.ExpandContent(feed.NormalizedContentTemplate(), fields),
+		"rss_article_title":    item.Title,
+		"rss_article_content":  htmltext.ExtractReadableText(item.Content),
+		"rss_article_link":     item.Link,
+		"title_hint":           strings.TrimSpace(feed.TitleHint),
+		"target_account_ids":   feed.TargetAccountIDs,
+		"schedule":             false,
+		"knowledge_source_ids": feed.KnowledgeSourceIDs,
+		"rss_editorial_goal":   domain.NormalizeRSSEditorialGoal(feed.EditorialGoal),
+		"rss_desired_length":   domain.NormalizeRSSDesiredLength(feed.DesiredLength),
 	}
 	if domain.NormalizeRSSEditorialGoal(feed.EditorialGoal) == "teaser" {
 		params["output_format"] = "teaser"
@@ -304,6 +309,9 @@ func applyRSSPreviewConfig(feed domain.RSSFeedConfig, config *rssPreviewConfig) 
 	}
 	if config.PromptHint != nil {
 		feed.PromptHint = strings.TrimSpace(*config.PromptHint)
+	}
+	if config.KnowledgeSourceIDs.Set {
+		feed.KnowledgeSourceIDs = config.KnowledgeSourceIDs.Value
 	}
 	if config.EditorialGoal != nil {
 		feed.EditorialGoal = domain.NormalizeRSSEditorialGoal(*config.EditorialGoal)
@@ -446,6 +454,10 @@ func (a *API) submitAutomationPreview(r *http.Request, authorID, teamID string, 
 	if err != nil {
 		return domain.AIJob{}, err
 	}
+	aiCtx, err = aicontext.Select(aiCtx, rawParams)
+	if err != nil {
+		return domain.AIJob{}, err
+	}
 	if _, _, err := ai.PrepareVoicePrompt(aiCtx, rawParams); err != nil {
 		return domain.AIJob{}, errors.New("invalid_ai_prompt_params")
 	}
@@ -462,6 +474,8 @@ func (a *API) submitAutomationPreview(r *http.Request, authorID, teamID string, 
 
 func (a *API) writeAIJobSubmitError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, aicontext.ErrKnowledgeSourceUnavailable):
+		a.writeError(w, r, "knowledge_source_unavailable", http.StatusBadRequest)
 	case errors.Is(err, aijobs.ErrAIServiceNotConfigured):
 		a.writeError(w, r, "ai_service_not_configured", http.StatusUnprocessableEntity)
 	case err.Error() == "invalid_ai_prompt_params":

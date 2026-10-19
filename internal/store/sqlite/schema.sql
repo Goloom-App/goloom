@@ -68,6 +68,7 @@ create table if not exists team_profiles (
 );
 
 create table if not exists campaign_formats (
+    knowledge_source_ids text not null default 'null',
     id text primary key,
     team_id text not null references teams(id) on delete cascade,
     name text not null,
@@ -127,6 +128,7 @@ create table if not exists ai_service_configs (
 );
 
 create table if not exists rss_feed_configs (
+    knowledge_source_ids text not null default 'null',
     id text primary key,
     team_id text not null references teams(id) on delete cascade,
     feed_url text not null,
