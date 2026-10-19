@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"git.f4mily.net/goloom/internal/aicontext"
 	"git.f4mily.net/goloom/internal/aijobs"
 	"git.f4mily.net/goloom/internal/auth"
 	"git.f4mily.net/goloom/internal/domain"
@@ -83,6 +84,10 @@ func (a *API) handleAITrigger(w http.ResponseWriter, r *http.Request) {
 		Payload:      payload,
 	})
 	if err != nil {
+		if errors.Is(err, aicontext.ErrKnowledgeSourceUnavailable) {
+			a.writeError(w, r, "knowledge_source_unavailable", http.StatusBadRequest)
+			return
+		}
 		if errors.Is(err, aijobs.ErrAIServiceNotConfigured) {
 			a.writeError(w, r, "ai_service_not_configured", http.StatusUnprocessableEntity)
 			return

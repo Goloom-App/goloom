@@ -64,6 +64,7 @@ test('RSS AI preview shows per-account output without importing or creating post
     content_template: '{title}: {summary}', title_template: '{title}', output_mode: 'draft',
     target_account_ids: [accountID], created_at: '2026-01-01T00:00:00Z', last_fetched_at: null,
   }] } }))
+  await page.route(`**/v1/teams/${teamID}/knowledge-sources`, route => route.fulfill({ json: { items: [{ id: 'preview-source', name: 'Preview brand facts' }] } }))
   await page.route(`**/v1/teams/${teamID}/rss-feeds/preview-feed/preview-items`, route => route.fulfill({ json: { items: [{
     item_key: 'article-1', title: 'New release', content: 'Release notes say faster uploads.',
     link: 'https://example.org/release', published_at: '2026-10-17T10:00:00Z',
@@ -105,6 +106,8 @@ test('RSS AI preview shows per-account output without importing or creating post
   await page.getByRole('button', { name: /^Automation$/i }).click()
   await page.getByTestId('automation-tab-rss').click()
   await page.getByRole('button', { name: /edit feed/i }).click()
+  await page.getByTestId('knowledge-mode').selectOption('specific')
+  await page.getByLabel('Preview brand facts', { exact: true }).check()
   await page.getByTestId('rss-ai-prompt').fill('Changed preview prompt.')
   await page.getByTestId('rss-editorial-goal').selectOption('summary')
   await page.getByTestId('rss-desired-length').selectOption('detailed')
@@ -120,6 +123,7 @@ test('RSS AI preview shows per-account output without importing or creating post
   expect(previewRequest).toMatchObject({
     item_key: 'article-1',
     config: {
+      knowledge_source_ids: ['preview-source'],
       prompt_hint: 'Changed preview prompt.',
       editorial_goal: 'summary',
       desired_length: 'detailed',
@@ -136,6 +140,8 @@ test('saves and reloads RSS editorial settings', async ({ page, baseURL }) => {
   const teamID = await getFirstTeamId(baseURL!, e2eBootstrapToken())
   let goal = 'auto'
   let length = 'auto'
+  let knowledgeSourceIds: string[] | null = null
+  await page.route(`**/v1/teams/${teamID}/knowledge-sources`, route => route.fulfill({ json: { items: [{ id: 'saved-source', name: 'Saved brand facts' }] } }))
   await page.route('**/v1/teams', async route => {
     const response = await route.fetch()
     const data = await response.json() as { items: Record<string, unknown>[] }
@@ -147,11 +153,13 @@ test('saves and reloads RSS editorial settings', async ({ page, baseURL }) => {
       id: 'editorial-feed', team_id: teamID, name: 'Editorial feed', feed_url: 'https://example.org/rss',
       is_active: true, ai_enhance_enabled: true, content_template: '{title} {link}',
       prompt_hint: 'Focus on release', target_account_ids: ['account-1'],
+      knowledge_source_ids: knowledgeSourceIds,
       editorial_goal: goal, desired_length: length, created_at: '2026-01-01T00:00:00Z', last_fetched_at: null,
     }] } })
   })
   await page.route(`**/v1/teams/${teamID}/rss-feeds/editorial-feed`, async route => {
     const body = route.request().postDataJSON() as Record<string, unknown>
+    knowledgeSourceIds = body.knowledge_source_ids as string[] | null
     goal = String(body.editorial_goal)
     length = String(body.desired_length)
     await route.fulfill({ json: { id: 'editorial-feed', team_id: teamID, ...body, created_at: '2026-01-01T00:00:00Z', last_fetched_at: null } })
@@ -162,10 +170,14 @@ test('saves and reloads RSS editorial settings', async ({ page, baseURL }) => {
   await page.getByRole('button', { name: /edit feed/i }).click()
   await page.getByTestId('rss-editorial-goal').selectOption('summary')
   await page.getByTestId('rss-desired-length').selectOption('detailed')
+  await page.getByTestId('knowledge-mode').selectOption('specific')
+  await page.getByLabel('Saved brand facts', { exact: true }).check()
   await page.getByRole('button', { name: /^save$/i }).click()
+  await expect.poll(() => knowledgeSourceIds).toEqual(['saved-source'])
   await expect.poll(() => goal).toBe('summary')
   await expect.poll(() => length).toBe('detailed')
   await page.getByRole('button', { name: /edit feed/i }).click()
   await expect(page.getByTestId('rss-editorial-goal')).toHaveValue('summary')
   await expect(page.getByTestId('rss-desired-length')).toHaveValue('detailed')
+  await expect(page.getByLabel('Saved brand facts', { exact: true })).toBeChecked()
 })

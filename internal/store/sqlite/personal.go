@@ -57,6 +57,8 @@ func applySQLiteLegacyMigrations(ctx context.Context, db *sql.DB) error {
 		`alter table scheduled_posts add column acknowledged_at text`,
 		`alter table scheduled_post_targets add column remote_post_id text`,
 		`alter table rss_feed_configs add column prompt_hint text not null default ''`,
+		`alter table rss_feed_configs add column knowledge_source_ids text not null default 'null'`,
+		`alter table campaign_formats add column knowledge_source_ids text not null default 'null'`,
 		`alter table rss_feed_configs add column editorial_goal text not null default 'auto'`,
 		`alter table rss_feed_configs add column desired_length text not null default 'auto'`,
 		`alter table rss_feed_configs add column target_account_ids text not null default '[]'`,

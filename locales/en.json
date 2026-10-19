@@ -12,6 +12,17 @@
       "success": "Style example saved",
       "loadFailed": "Could not load account-specific text. Close and try again."
     },
+    "knowledgeSelection": {
+      "label": "Team knowledge",
+      "inherit": "Inherit team knowledge",
+      "specific": "Select specific sources",
+      "none": "No additional knowledge",
+      "boundary": "Knowledge guides brand context only. Current-item facts must come from its source.",
+      "missing": "Selected sources are unavailable. AI generation is blocked until you remove or replace them; unrelated knowledge is never substituted.",
+      "unavailable": "{{id}} (unavailable)",
+      "loadFailed": "Could not load team knowledge sources.",
+      "loading": "Loading knowledge sources…"
+    },
     "language": {
       "label": "Language",
       "hint": "Applies to the web interface and API error messages when supported."
@@ -1261,6 +1272,7 @@
     }
   },
   "api": {
+    "knowledge_source_unavailable": "Selected knowledge sources are unavailable. Remove or replace them before generating.",
     "invalid_json_body": "invalid json body",
     "push_subscription_endpoint_invalid": "push subscription endpoint must be a valid http(s) url",
     "push_subscription_keys_required": "push subscription keys (p256dh, auth) are required",

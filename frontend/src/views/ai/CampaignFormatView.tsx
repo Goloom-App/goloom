@@ -10,6 +10,7 @@ import {
   useDeleteCampaignFormat,
 } from '../../hooks/useAI'
 import type { TeamRecord, CampaignFormat } from '../../types'
+import { KnowledgeSourcePicker } from '../../components/ai/KnowledgeSourcePicker'
 import { Segmented, TagInput, ToggleSwitch } from '../../components/ui'
 import {
   defaultCampaignStructure,
@@ -48,6 +49,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
   const [structureFields, setStructureFields] = useState<CampaignStructureFields>(defaultCampaignStructure())
   const [advancedMode, setAdvancedMode] = useState(false)
   const [structureJson, setStructureJson] = useState('{}')
+  const [knowledgeSourceIds, setKnowledgeSourceIds] = useState<string[] | null>(null)
   const [hashtags, setHashtags] = useState<string[]>([])
   const [isActive, setIsActive] = useState(true)
 
@@ -58,6 +60,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     if (!isDialogOpen || !team.isAiEnabled) return
     const fullValues = {
       name, weekday: weekday === 'null' ? null : Number(weekday),
+      knowledge_source_ids: knowledgeSourceIds,
       required_hashtags: hashtags, is_active: isActive,
       ...(advancedMode ? { structure_json: structureJson } : { structure: recordFromStructure(structureFields) }),
     }
@@ -93,7 +96,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
         setViewVisible(undefined)
       }
     }
-  }, [isDialogOpen, team.id, team.isAiEnabled, editingId, name, weekday, hashtags, isActive, advancedMode, structureJson, structureFields])
+  }, [isDialogOpen, team.id, team.isAiEnabled, editingId, name, weekday, hashtags, knowledgeSourceIds, isActive, advancedMode, structureJson, structureFields])
 
   if (!team.isAiEnabled) {
     return (
@@ -110,6 +113,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     setStructureFields(defaultCampaignStructure())
     setStructureJson('{}')
     setAdvancedMode(false)
+    setKnowledgeSourceIds(null)
     setHashtags([])
     setIsActive(true)
     setError(null)
@@ -130,6 +134,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
     setStructureFields(parsed.fields)
     setAdvancedMode(parsed.hasAdvancedKeys)
     setStructureJson(JSON.stringify(format.structure, null, 2))
+    setKnowledgeSourceIds(format.knowledgeSourceIds)
     setHashtags(format.requiredHashtags || [])
     setIsActive(format.isActive)
     setError(null)
@@ -165,6 +170,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
       name: name.trim(),
       weekday: weekday === 'null' ? null : parseInt(weekday, 10),
       structure: parsedStructure,
+      knowledge_source_ids: knowledgeSourceIds,
       required_hashtags: hashtags,
       is_active: isActive,
     }
@@ -213,6 +219,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
           name: format.name,
           weekday: format.weekday,
           structure: format.structure,
+          knowledge_source_ids: format.knowledgeSourceIds,
           required_hashtags: format.requiredHashtags,
           is_active: newActiveState,
         },
@@ -417,6 +424,7 @@ export function CampaignFormatView({ team }: CampaignFormatViewProps) {
                 )}
               </div>
 
+              <KnowledgeSourcePicker teamId={team.id} value={knowledgeSourceIds} onChange={setKnowledgeSourceIds} />
               <ToggleSwitch
                 checked={isActive}
                 onChange={setIsActive}

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 
 import { getViewContext, setViewFocus, setViewVisible } from '../../components/ai/viewContextBridge'
 import { DestinationPicker } from '../../components/ai/DestinationPicker'
+import { KnowledgeSourcePicker } from '../../components/ai/KnowledgeSourcePicker'
 import { AutomationAIPreview } from '../../components/ai/AutomationAIPreview'
 import { Segmented, ToggleSwitch } from '../../components/ui'
 import { getApiClient, useCreateRSSFeed, useDeleteRSSFeed, useRSSFeeds, useUpdateRSSFeed } from '../../hooks/useAI'
@@ -20,6 +21,7 @@ interface RSSFeedsViewProps {
 }
 
 type FeedFormState = {
+  knowledgeSourceIds: string[] | null
   name: string
   feedUrl: string
   isActive: boolean
@@ -41,6 +43,7 @@ const defaultTemplate = '{title}\n\n{link}'
 const defaultTitleTemplate = '{title}'
 
 const emptyFeedForm = (): FeedFormState => ({
+  knowledgeSourceIds: null,
   name: '',
   feedUrl: '',
   isActive: true,
@@ -60,6 +63,7 @@ const emptyFeedForm = (): FeedFormState => ({
 
 function feedToForm(feed: RSSFeedConfig): FeedFormState {
   return {
+    knowledgeSourceIds: feed.knowledgeSourceIds,
     name: feed.name,
     feedUrl: feed.feedUrl,
     isActive: feed.isActive,
@@ -178,6 +182,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
     setError(null)
     setStatusMessage(null)
     const payload = {
+      knowledge_source_ids: feedForm.knowledgeSourceIds,
       name: feedForm.name.trim(),
       feed_url: feedForm.feedUrl.trim(),
       is_active: feedForm.isActive,
@@ -424,6 +429,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                   ) : (
                     <p className="hint">{t('rss.aiRequiresTeam')}</p>
                   )}
+                  {feedForm.aiEnhanceEnabled && team.isAiEnabled ? <KnowledgeSourcePicker teamId={team.id} value={feedForm.knowledgeSourceIds} onChange={ids => setFeedForm(prev => ({ ...prev, knowledgeSourceIds: ids }))} /> : null}
                   {editingFeedId && feedForm.aiEnhanceEnabled && team.isAiEnabled ? (
                     <div className="stack stack--sm" data-testid="rss-ai-preview-controls">
                       <button type="button" className="btn btn--secondary btn--xs" onClick={() => void openFeedPreview(editingFeedId)} data-testid="rss-preview-load">
@@ -450,6 +456,7 @@ export function RSSFeedsView({ team, accounts, canEdit }: RSSFeedsViewProps) {
                               testId="rss-ai-preview"
                               storageKey={`rss-${editingFeedId}`}
                               requestPreview={() => getApiClient().previewRSSFeedAI(team.id, editingFeedId, previewItemKey, {
+                                knowledge_source_ids: feedForm.knowledgeSourceIds,
                                 content_template: feedForm.contentTemplate,
                                 title_template: feedForm.titleTemplate,
                                 prompt_hint: feedForm.promptHint,

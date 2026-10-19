@@ -12,6 +12,17 @@
       "success": "Stilbeispiel gespeichert",
       "loadFailed": "Kontospezifischer Text konnte nicht geladen werden. Schließen und erneut versuchen."
     },
+    "knowledgeSelection": {
+      "label": "Teamwissen",
+      "inherit": "Teamwissen übernehmen",
+      "specific": "Bestimmte Quellen auswählen",
+      "none": "Kein zusätzliches Wissen",
+      "boundary": "Wissen dient nur dem Markenkontext. Fakten zum aktuellen Inhalt müssen aus dessen Quelle stammen.",
+      "missing": "Ausgewählte Quellen sind nicht verfügbar. KI-Generierung ist bis zum Entfernen oder Ersetzen blockiert; anderes Wissen wird nicht ersatzweise verwendet.",
+      "unavailable": "{{id}} (nicht verfügbar)",
+      "loadFailed": "Wissensquellen des Teams konnten nicht geladen werden.",
+      "loading": "Wissensquellen werden geladen…"
+    },
     "language": {
       "label": "Sprache",
       "hint": "Gilt für die Weboberfläche und API-Fehlermeldungen, sofern unterstützt."
@@ -1261,6 +1272,7 @@
     }
   },
   "api": {
+    "knowledge_source_unavailable": "Ausgewählte Wissensquellen sind nicht verfügbar. Vor der Generierung entfernen oder ersetzen.",
     "invalid_json_body": "ungültiger JSON-Body",
     "push_subscription_endpoint_invalid": "Push-Abonnement-Endpunkt muss eine gültige http(s)-URL sein",
     "push_subscription_keys_required": "Push-Abonnement-Schlüssel (p256dh, auth) sind erforderlich",

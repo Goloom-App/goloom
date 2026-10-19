@@ -277,6 +277,7 @@ create table if not exists team_profiles (
 );
 
 create table if not exists campaign_formats (
+    knowledge_source_ids text not null default 'null',
     id uuid primary key default gen_random_uuid(),
     team_id uuid not null references teams(id) on delete cascade,
     name text not null,
@@ -352,6 +353,7 @@ where a.team_id = b.team_id
 create unique index if not exists ai_service_configs_team_id_key on ai_service_configs(team_id);
 
 create table if not exists rss_feed_configs (
+    knowledge_source_ids text not null default 'null',
     id uuid primary key default gen_random_uuid(),
     team_id uuid not null references teams(id) on delete cascade,
     feed_url text not null,
@@ -573,6 +575,8 @@ where status = 'posted'
   and nullif(trim(publish_metadata::json->>'uri'), '') is not null;
 
 alter table rss_feed_configs add column if not exists prompt_hint text not null default '';
+alter table campaign_formats add column if not exists knowledge_source_ids text not null default 'null';
+alter table rss_feed_configs add column if not exists knowledge_source_ids text not null default 'null';
 alter table rss_feed_configs add column if not exists editorial_goal text not null default 'auto';
 alter table rss_feed_configs add column if not exists desired_length text not null default 'auto';
 alter table rss_feed_configs add column if not exists target_account_ids text not null default '[]';
