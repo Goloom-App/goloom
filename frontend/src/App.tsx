@@ -2213,7 +2213,6 @@ function App() {
 
         {section === 'teams' && selectedTeam && (
           <TeamSettingsView
-            key={selectedTeam.id}
             api={api}
             selectedTeam={selectedTeam}
             myRoleInSelectedTeam={myRoleInSelectedTeam}

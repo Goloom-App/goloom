@@ -490,6 +490,12 @@
       "restartButton": "Tour erneut anzeigen"
     },
     "teams": {
+      "tabGeneral": "Allgemein",
+      "tabMembers": "Mitglieder",
+      "tabAI": "AI",
+      "tabIntegrations": "Integrationen",
+      "tabAudit": "Audit-Log",
+      "tabsAria": "Team-Einstellungen Tabs",
       "yourTeams": "Ihre Teams",
       "cardsHint": "Jede Karte zeigt Mitglieder, verbundene Konten und Beitragsaktivität für diesen Arbeitsbereich.",
       "plannedPosts": "Geplante Beiträge",

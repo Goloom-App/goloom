@@ -16,6 +16,7 @@ test('new team can enable AI and save its first provider configuration', async (
   await expect(page.locator('.sidebar-team-selector')).toContainText(teamName)
 
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'AI', exact: true }).click()
   const aiToggle = page.getByTestId('team-ai-toggle').locator('input')
   await expect(aiToggle).not.toBeChecked()
   await page.getByTestId('team-ai-toggle').click()
@@ -30,6 +31,7 @@ test('new team can enable AI and save its first provider configuration', async (
   await expect(page.getByText('AI is not enabled for this team')).toHaveCount(0)
   await page.reload()
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'AI', exact: true }).click()
   await expect(aiToggle).toBeChecked()
   await expect(page.getByLabel('API key')).toHaveAttribute('placeholder', 'Key stored — leave empty to keep it')
 })

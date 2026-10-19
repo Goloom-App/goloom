@@ -26,6 +26,7 @@ async function openAudit(page: Page, team: string) {
   await signIn(page)
   await page.goto(`/?team=${team}`)
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'Audit log', exact: true }).click()
   return page.locator('section.brand-card').filter({ has: page.getByRole('heading', { name: 'Audit log', exact: true }) })
 }
 
@@ -95,7 +96,7 @@ test('team switch resets filter and page and ignores delayed previous-team respo
   expect(secondQueries.at(-1)?.searchParams.has('action')).toBe(false)
 })
 
-test('successful mutation immediately refreshes activity', async ({ page }) => {
+test('returning to audit after a settings mutation loads fresh activity', async ({ page }) => {
   const defaultTeam = await getFirstTeamId(baseURL, e2eBootstrapToken())
   const team = await createAITeam(baseURL, e2eBootstrapToken())
   let calls = 0
@@ -103,8 +104,10 @@ test('successful mutation immediately refreshes activity', async ({ page }) => {
   const card = await openAudit(page, team)
   await expect(card.getByText('Revision 1')).toBeVisible()
   const before = calls
+  await page.getByRole('tab', { name: 'General', exact: true }).click()
   await page.getByLabel('Team name', { exact: true }).fill(`E2E AI Updated ${Date.now()}`)
   await page.locator('section.brand-card').filter({ has: page.getByLabel('Team name', { exact: true }) }).getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await page.getByRole('tab', { name: 'Audit log', exact: true }).click()
   await expect.poll(() => calls).toBeGreaterThan(before)
   await expect(card.getByText(`Revision ${calls}`)).toBeVisible()
   // Shared specs sign into the first team; a renamed fixture must not displace it.
@@ -153,6 +156,7 @@ test('supported action labels render in English and German', async ({ page }) =>
     localStorage.setItem('goloom-ui-settings', JSON.stringify(settings))
   })
   await page.reload()
+  await page.getByRole('tab', { name: 'Audit-Log', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Auditlog', exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Wissensquelle erstellt', exact: true })).toBeVisible()
   expect(await page.locator('#audit-actions option').evaluateAll((options) => options.filter((option) => option.textContent === option.getAttribute('value')).map((option) => option.textContent))).toEqual([])

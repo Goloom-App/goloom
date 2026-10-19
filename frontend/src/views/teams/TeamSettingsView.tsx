@@ -1,348 +1,58 @@
-import { useState, type Dispatch, type SetStateAction } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Activity, Bot, Palette, Settings, Users } from 'lucide-react'
 
-import { SectionCard, ToggleSwitch } from '../../components/ui'
-import type { createApiClient } from '../../api'
-import type { TeamRecord, TeamRole, UserRecord } from '../../types'
-import { TeamAuditLogSection } from './TeamAuditLogSection'
-import { TeamInvitationsSection } from './TeamInvitationsSection'
+import type { TeamSettingsViewProps } from './teamSettingsTypes'
+import { TeamGeneralTab } from './TeamGeneralTab'
+import { TeamMembersTab } from './TeamMembersTab'
+import { TeamAITab } from './TeamAITab'
+import { TeamIntegrationsTab } from './TeamIntegrationsTab'
+import { TeamAuditTab } from './TeamAuditTab'
 
-interface TeamSettingsViewProps {
-  api: ReturnType<typeof createApiClient> | null
-  selectedTeam: TeamRecord
-  myRoleInSelectedTeam: TeamRole | null
-  principalUser: UserRecord | null
-  directoryUsers: UserRecord[]
-  syncing: boolean
-  teamSettingsName: string
-  setTeamSettingsName: (value: string) => void
-  teamSettingsDescription: string
-  setTeamSettingsDescription: (value: string) => void
-  teamAiEnabled: boolean
-  setTeamAiEnabled: (value: boolean) => void
-  teamAiProvider: string
-  setTeamAiProvider: (value: string) => void
-  teamAiModel: string
-  setTeamAiModel: (value: string) => void
-  teamAiApiKey: string
-  setTeamAiApiKey: (value: string) => void
-  teamAiBaseUrl: string
-  setTeamAiBaseUrl: (value: string) => void
-  teamAiKeySet: boolean
-  teamBrandColor: string
-  setTeamBrandColor: (value: string) => void
-  externalPostMonitorEnabled: boolean
-  onToggleExternalPostMonitor: (enabled: boolean) => void
-  onOpenImportOldPosts: () => void
-  memberRoleEdits: Record<string, TeamRole>
-  setMemberRoleEdits: Dispatch<SetStateAction<Record<string, TeamRole>>>
-  addMemberUserId: string
-  setAddMemberUserId: (value: string) => void
-  onUpdateTeam: () => void
-  onSaveAiServiceConfig: () => void
-  onSaveBrandColor: (color: string) => void
-  onAddTeamMember: (onSuccess: () => void) => void
-  onRemoveTeamMember: (userId: string) => void
-  onChangeTeamMemberRole: (userId: string) => void
-}
-
-const DEFAULT_PICKER_COLOR = '#8b5cf6'
-
-function MemberIdentity({ user, userId }: { user?: UserRecord; userId: string }) {
-  const [failedPicture, setFailedPicture] = useState<string | null>(null)
-  const label = user?.name || user?.email || userId
-  const initials = label.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
-  return (
-    <div className="member-identity">
-      <span className="avatar avatar--sm" aria-hidden="true">
-        {user?.pictureUrl && failedPicture !== user.pictureUrl ? (
-          <img className="avatar__img" src={user.pictureUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailedPicture(user.pictureUrl!)} />
-        ) : <span className="avatar__placeholder">{initials}</span>}
-      </span>
-      <span className="member-identity__text">
-        <strong>{label}</strong>
-        {user?.email && <span className="eyebrow">{user.email}</span>}
-      </span>
-    </div>
-  )
-}
+type TeamTab = 'general' | 'members' | 'ai' | 'integrations' | 'audit'
 
 export function TeamSettingsView(props: TeamSettingsViewProps) {
   const { t } = useTranslation()
-  const {
-    selectedTeam,
-    myRoleInSelectedTeam,
-    principalUser,
-    directoryUsers,
-    syncing,
-    memberRoleEdits,
-    setMemberRoleEdits,
-    addMemberUserId,
-    setAddMemberUserId,
-  } = props
-
-  const isOwner = myRoleInSelectedTeam === 'owner'
-  const [addMemberOpen, setAddMemberOpen] = useState(false)
-  const availableUsers = directoryUsers.filter((user) => !selectedTeam.members.some((member) => member.userId === user.id))
-
-  function toggleAddMember() {
-    setAddMemberUserId('')
-    setAddMemberOpen((open) => !open)
+  const isOwner = props.myRoleInSelectedTeam === 'owner'
+  const [requestedTab, setRequestedTab] = useState<TeamTab>('general')
+  const tabs: { id: TeamTab; label: string }[] = isOwner ? [
+    { id: 'general', label: t('teams.tabGeneral') },
+    { id: 'members', label: t('teams.tabMembers') },
+    { id: 'ai', label: t('teams.tabAI') },
+    { id: 'integrations', label: t('teams.tabIntegrations') },
+    { id: 'audit', label: t('teams.tabAudit') },
+  ] : [{ id: 'members', label: t('teams.tabMembers') }]
+  // Resolve permissions synchronously so a team switch never renders owner-only content.
+  const activeTab = tabs.some((tab) => tab.id === requestedTab) ? requestedTab : tabs[0].id
+  if (activeTab !== requestedTab) {
+    setRequestedTab(activeTab)
   }
-
-  const aiConfigFields = (
-    <div className="stack stack--sm mt-1">
-      <h4 className="subsection-title">{t('teams.aiProviderTitle')}</h4>
-      <p className="hint">{t('teams.aiProviderHint')}</p>
-      <label className="field">
-        <span>{t('teams.aiProviderLabel')}</span>
-        <select value={props.teamAiProvider} onChange={(event) => props.setTeamAiProvider(event.target.value)}>
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
-        </select>
-      </label>
-      <label className="field">
-        <span>{t('teams.aiModelLabel')}</span>
-        <input
-          value={props.teamAiModel}
-          onChange={(event) => props.setTeamAiModel(event.target.value)}
-          placeholder={props.teamAiProvider === 'anthropic' ? 'claude-sonnet-5-5' : 'gpt-5'}
-        />
-      </label>
-      <label className="field">
-        <span>{t('teams.aiApiKeyLabel')}</span>
-        <input
-          type="password"
-          value={props.teamAiApiKey}
-          onChange={(event) => props.setTeamAiApiKey(event.target.value)}
-          placeholder={props.teamAiKeySet ? t('teams.aiApiKeyStored') : 'sk-…'}
-          autoComplete="off"
-        />
-      </label>
-      <label className="field">
-        <span>{t('teams.aiBaseUrlLabel')}</span>
-        <input
-          value={props.teamAiBaseUrl}
-          onChange={(event) => props.setTeamAiBaseUrl(event.target.value)}
-          placeholder={t('teams.aiBaseUrlPlaceholder')}
-        />
-      </label>
-    </div>
-  )
-
-  const externalPostMonitorCard = (
-    <SectionCard
-      icon={<Activity size={18} />}
-      title={t('teams.externalPostMonitorTitle')}
-      subtitle={t('teams.externalPostMonitorHint')}
-    >
-      <ToggleSwitch
-        checked={props.externalPostMonitorEnabled}
-        onChange={(next) => props.onToggleExternalPostMonitor(next)}
-        title={t('teams.externalPostMonitorLabel')}
-        testId="team-external-monitor-toggle"
-      />
-      {props.externalPostMonitorEnabled && (
-        <div>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={props.onOpenImportOldPosts}>
-            {t('teams.importOldPostsButton', 'Import old posts')}
-          </button>
-        </div>
-      )}
-    </SectionCard>
-  )
-
-  const savedColor = selectedTeam.brandColor ?? ''
-  const brandingCard = (
-    <SectionCard icon={<Palette size={18} />} title={t('teams.brandingTitle')} subtitle={t('teams.brandingHint')}>
-      <div className="brand-color-row">
-        <input
-          type="color"
-          value={props.teamBrandColor || DEFAULT_PICKER_COLOR}
-          onChange={(event) => props.setTeamBrandColor(event.target.value)}
-          aria-label={t('teams.brandColorLabel')}
-          data-testid="team-brand-color-input"
-        />
-        <span className="brand-color-value">{props.teamBrandColor || '—'}</span>
-        <button
-          type="button"
-          className="btn btn--primary btn--sm"
-          onClick={() => props.onSaveBrandColor(props.teamBrandColor)}
-          disabled={syncing || !props.teamBrandColor || props.teamBrandColor === savedColor}
-          data-testid="team-brand-color-save"
-        >
-          {t('teams.saveChanges')}
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={() => {
-            props.setTeamBrandColor('')
-            props.onSaveBrandColor('')
-          }}
-          disabled={syncing || !savedColor}
-        >
-          {t('teams.brandColorReset')}
-        </button>
-      </div>
-    </SectionCard>
-  )
 
   return (
     <div className="brand-wizard stack stack--lg">
-      {isOwner ? (
-        <>
-          <SectionCard icon={<Settings size={18} />} title={t('common.general')}>
-            <label className="field">
-              <span>{t('teams.teamName')}</span>
-              <input value={props.teamSettingsName} onChange={(event) => props.setTeamSettingsName(event.target.value)} />
-            </label>
-            <label className="field">
-              <span>{t('common.description')}</span>
-              <textarea
-                rows={3}
-                value={props.teamSettingsDescription}
-                onChange={(event) => props.setTeamSettingsDescription(event.target.value)}
-                placeholder={t('teams.descriptionPlaceholder')}
-              />
-            </label>
-            <div>
-              <button
-                type="button"
-                className="btn btn--primary"
-                onClick={props.onUpdateTeam}
-                disabled={syncing || !props.teamSettingsName.trim()}
-              >
-                {t('teams.saveChanges')}
-              </button>
-            </div>
-          </SectionCard>
-
-          {brandingCard}
-
-          {externalPostMonitorCard}
-
-          <SectionCard icon={<Bot size={18} />} title={t('teams.aiAgentTitle')} subtitle={t('teams.aiAgentHint')}>
-            <ToggleSwitch
-              checked={props.teamAiEnabled}
-              onChange={props.setTeamAiEnabled}
-              title={t('teams.aiFeaturesEnabled')}
-              testId="team-ai-toggle"
-            />
-
-            {props.teamAiEnabled && (
-              <>
-                {aiConfigFields}
-                <div className="mt-1">
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    onClick={props.onSaveAiServiceConfig}
-                    disabled={syncing || (!props.teamAiApiKey.trim() && !props.teamAiKeySet)}
-                  >
-                    {t('teams.saveAiConfig')}
-                  </button>
-                </div>
-              </>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            icon={<Users size={18} />}
-            title={t('common.members')}
-            headerExtra={
-              <button
-                type="button"
-                className="btn btn--secondary btn--sm"
-                onClick={toggleAddMember}
-                disabled={syncing}
-                aria-expanded={addMemberOpen}
-              >
-                {t('teams.addMember')}
-              </button>
-            }
+      <nav className="view-toggle view-toggle--scrollable" role="tablist" aria-label={t('teams.tabsAria')}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            id={`team-tab-${tab.id}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls="team-tab-panel"
+            data-tour={`team-tab-${tab.id}`}
+            className={`view-toggle__btn ${activeTab === tab.id ? 'view-toggle__btn--active' : ''}`}
+            onClick={() => setRequestedTab(tab.id)}
           >
-            <div className="stack stack--sm">
-              {addMemberOpen && (
-                <div className="glass-panel glass-panel--compact" data-testid="team-add-member-panel">
-                  {availableUsers.length === 0 && <p className="hint">{t('teams.noUsersToAdd')}</p>}
-                  <div className="inline-cluster flex-wrap">
-                    <select
-                      className="grow"
-                      aria-label={t('teams.selectUser')}
-                      value={addMemberUserId}
-                      onChange={(event) => setAddMemberUserId(event.target.value)}
-                      disabled={syncing || availableUsers.length === 0}
-                    >
-                      <option value="">{t('teams.selectUser')}</option>
-                      {availableUsers.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={() => props.onAddTeamMember(() => setAddMemberOpen(false))}
-                      disabled={syncing || !availableUsers.some((user) => user.id === addMemberUserId)}
-                    >
-                      {t('teams.addToTeam')}
-                    </button>
-                  </div>
-                </div>
-              )}
-              {selectedTeam.members.map((m) => (
-                <div key={m.userId} className="glass-panel glass-panel--compact flex-row--between team-member-row">
-                  <MemberIdentity user={directoryUsers.find((u) => u.id === m.userId)} userId={m.userId} />
-                  <div className="inline-cluster">
-                    <select
-                      className="select--sm"
-                      value={memberRoleEdits[m.userId] ?? m.role}
-                      onChange={(event) =>
-                        setMemberRoleEdits((current) => ({ ...current, [m.userId]: event.target.value as TeamRole }))
-                      }
-                    >
-                      <option value="owner">{t('roles.owner')}</option>
-                      <option value="editor">{t('roles.editor')}</option>
-                      <option value="viewer">{t('roles.viewer')}</option>
-                    </select>
-                    <button
-                      className="btn btn--ghost btn--xs"
-                      onClick={() => props.onChangeTeamMemberRole(m.userId)}
-                      disabled={syncing || (memberRoleEdits[m.userId] ?? m.role) === m.role}
-                    >
-                      {t('common.apply')}
-                    </button>
-                    {m.userId !== principalUser?.id && (
-                      <button className="btn btn--xs btn--danger-ghost" onClick={() => props.onRemoveTeamMember(m.userId)}>
-                        {t('common.remove')}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </SectionCard>
-
-          <TeamInvitationsSection api={props.api} teamId={selectedTeam.id} />
-
-          <TeamAuditLogSection key={selectedTeam.id} api={props.api} teamId={selectedTeam.id} />
-        </>
-      ) : (
-        <SectionCard icon={<Users size={18} />} title={t('common.members')}>
-          <p className="hint">{t('teams.memberViewHint')}</p>
-          <div className="stack stack--sm">
-            {selectedTeam.members.map((m) => (
-              <div key={m.userId} className="member-list-item">
-                <MemberIdentity user={directoryUsers.find((u) => u.id === m.userId)} userId={m.userId} />
-                <span className="eyebrow">{m.role}</span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+      <div id="team-tab-panel" role="tabpanel" aria-labelledby={`team-tab-${activeTab}`} className="stack stack--lg">
+        {activeTab === 'general' && <TeamGeneralTab {...props} />}
+        {activeTab === 'members' && <TeamMembersTab key={props.selectedTeam.id} {...props} />}
+        {activeTab === 'ai' && <TeamAITab {...props} />}
+        {activeTab === 'integrations' && <TeamIntegrationsTab {...props} />}
+        {activeTab === 'audit' && <TeamAuditTab key={props.selectedTeam.id} api={props.api} teamId={props.selectedTeam.id} />}
+      </div>
     </div>
   )
 }

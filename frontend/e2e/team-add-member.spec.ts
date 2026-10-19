@@ -39,6 +39,7 @@ test('owner adds an existing user from the Members header', async ({ page }) => 
 
   await signIn(page)
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'Members', exact: true }).click()
   const members = page.locator('section.brand-card').filter({ has: page.getByRole('heading', { name: 'Members', exact: true }) })
   const addButton = members.getByRole('button', { name: 'Add Member' })
   await expect(addButton).toBeVisible()
@@ -63,6 +64,7 @@ test('owner sees an empty state when the directory has no available users', asyn
   })
   await signIn(page)
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'Members', exact: true }).click()
 
   const members = page.locator('section.brand-card').filter({ has: page.getByRole('heading', { name: 'Members', exact: true }) })
   await members.getByRole('button', { name: 'Add Member' }).click()
@@ -93,6 +95,7 @@ test('failed addition keeps selection open and restores controls', async ({ page
 
   await signIn(page)
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'Members', exact: true }).click()
   const members = page.locator('section.brand-card').filter({ has: page.getByRole('heading', { name: 'Members', exact: true }) })
   await members.getByRole('button', { name: 'Add Member' }).click()
   const select = members.getByRole('combobox', { name: 'Select user…' })
