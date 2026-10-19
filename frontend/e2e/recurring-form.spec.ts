@@ -119,6 +119,9 @@ test.describe('recurring posts form', () => {
   })
 
   test('AI preview shows occurrence output without creating posts or importing', async ({ page, baseURL }) => {
+    // Keep Monday first and Tuesday second, regardless of the CI run date.
+    // Removing Tuesday below must invalidate the selected occurrence.
+    await page.clock.setFixedTime(new Date('2026-10-18T12:00:00Z'))
     const accountId = await ensureE2EAccount(baseURL!, e2eBootstrapToken(), teamId)
     const previewRequests: Record<string, unknown>[] = []
     const sideEffectRequests: string[] = []
