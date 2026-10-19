@@ -1,5 +1,17 @@
 {
   "ui": {
+    "styleExample": {
+      "action": "Save as style example",
+      "description": "Reuse this final text in future AI prompts. This does not save, approve, schedule or publish the post.",
+      "source": "Text source",
+      "shared": "Shared text",
+      "text": "Example text",
+      "platform": "Platform",
+      "note": "Note (optional)",
+      "save": "Save example",
+      "success": "Style example saved",
+      "loadFailed": "Could not load account-specific text. Close and try again."
+    },
     "language": {
       "label": "Language",
       "hint": "Applies to the web interface and API error messages when supported."

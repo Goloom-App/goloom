@@ -20,6 +20,7 @@ import {
 } from './composerUtils'
 import type { EditorDraftState } from './types'
 import { ComposerAIAssist } from './ComposerAIAssist'
+import { SaveStyleExample } from '../ai/SaveStyleExample'
 import { HashtagSuggestions } from './HashtagSuggestions'
 import { clearComposerChatContext, syncComposerChatContext } from '../ai/composerChatBridge'
 
@@ -50,6 +51,7 @@ export function PostComposer({
   authHeader,
   schedulingPreferences,
   isAiEnabled = false,
+  canSaveStyleExample = false,
   standalone,
   previewColumnExternal,
   scheduleError = false,
@@ -76,6 +78,7 @@ export function PostComposer({
   authHeader?: string
   schedulingPreferences?: TeamSchedulingPreferences | null
   isAiEnabled?: boolean
+  canSaveStyleExample?: boolean
   standalone?: boolean
   previewColumnExternal?: boolean
   /** True when the last save attempt was rejected because the scheduled time is in the past. */
@@ -481,6 +484,17 @@ export function PostComposer({
                   }))
                 }
               }}
+            />
+          ) : null}
+
+          {teamId && isAiEnabled && canSaveStyleExample ? (
+            <SaveStyleExample
+              key={teamId}
+              teamId={teamId}
+              content={draft.content}
+              accounts={selectedAccounts}
+              overrides={draft.accountContentOverride}
+              initialSource={activeTab === 'default' ? '' : activeTab}
             />
           ) : null}
 
