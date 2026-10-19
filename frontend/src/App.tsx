@@ -2057,6 +2057,7 @@ function App() {
             }
             schedulingPreferences={selectedTeam?.schedulingPreferences}
             isAiEnabled={selectedTeam?.isAiEnabled ?? false}
+            canSaveStyleExample={canEditScheduledPosts}
             draftGenerationRef={composerDraftGenerationRef}
             onDiscardedResult={() => setComposerAiNotice(t('composer.aiOptimizeDiscarded'))}
             standalone

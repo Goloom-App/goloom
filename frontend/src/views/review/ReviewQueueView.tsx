@@ -3,6 +3,7 @@ import { format, parseISO } from 'date-fns'
 import { useTranslation } from 'react-i18next'
 import { Clock, Eye, Inbox, Pencil, Send, Trash2 } from 'lucide-react'
 
+import { SaveStyleExample } from '../../components/ai/SaveStyleExample'
 import { AIFallbackBadge } from '../../components/post/AIFallbackBadge'
 import { DestinationStack } from '../../components/post/DestinationAvatar'
 import { SectionCard } from '../../components/ui'
@@ -133,6 +134,15 @@ export function ReviewQueueView({
 
                 {canEdit ? (
                   <div className="review-card__actions">
+                    {team.isAiEnabled ? (
+                      <SaveStyleExample
+                        key={`${team.id}:${item.id}`}
+                        teamId={team.id}
+                        postId={item.id}
+                        content={item.content}
+                        accounts={accounts.filter(account => item.targetAccountIds.includes(account.id))}
+                      />
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn--secondary btn--sm"

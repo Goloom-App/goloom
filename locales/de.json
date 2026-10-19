@@ -1,5 +1,17 @@
 {
   "ui": {
+    "styleExample": {
+      "action": "Als Stilbeispiel speichern",
+      "description": "Diesen finalen Text in zukünftigen KI-Prompts wiederverwenden. Der Beitrag wird dabei nicht gespeichert, freigegeben, geplant oder veröffentlicht.",
+      "source": "Textquelle",
+      "shared": "Gemeinsamer Text",
+      "text": "Beispieltext",
+      "platform": "Plattform",
+      "note": "Notiz (optional)",
+      "save": "Beispiel speichern",
+      "success": "Stilbeispiel gespeichert",
+      "loadFailed": "Kontospezifischer Text konnte nicht geladen werden. Schließen und erneut versuchen."
+    },
     "knowledgeSelection": {
       "label": "Teamwissen",
       "inherit": "Teamwissen übernehmen",
