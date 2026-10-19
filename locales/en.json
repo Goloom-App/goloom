@@ -490,6 +490,12 @@
       "restartButton": "Show tour again"
     },
     "teams": {
+      "tabGeneral": "General",
+      "tabMembers": "Members",
+      "tabAI": "AI",
+      "tabIntegrations": "Integrations",
+      "tabAudit": "Audit log",
+      "tabsAria": "Team settings tabs",
       "yourTeams": "Your teams",
       "cardsHint": "Each card shows members, connected accounts, and post activity for that workspace.",
       "plannedPosts": "Planned posts",

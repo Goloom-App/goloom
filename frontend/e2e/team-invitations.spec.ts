@@ -20,6 +20,7 @@ test('generate, share, and revoke an email-bound invite link', async ({ page }) 
 
   // Team settings explain the email-bound link and its limits.
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'Members', exact: true }).click()
   await expect(page.getByText('Invites', { exact: true })).toBeVisible()
   await expect(page.getByText(/bound to the entered email address/i)).toBeVisible()
   await expect(page.getByText(/seven days/i)).toBeVisible()

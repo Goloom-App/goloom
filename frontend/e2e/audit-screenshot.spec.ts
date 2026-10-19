@@ -38,6 +38,7 @@ test('audit log section renders team activity', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeVisible({ timeout: 15_000 })
 
   await page.getByRole('button', { name: 'Team', exact: true }).click()
+  await page.getByRole('tab', { name: 'Audit log', exact: true }).click()
 
   const auditHeading = page.getByRole('heading', { name: 'Audit log' })
   await expect(auditHeading).toBeVisible({ timeout: 20_000 })

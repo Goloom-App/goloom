@@ -19,6 +19,7 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
       await signIn(page)
       if (viewport.name === 'mobile') await page.getByRole('button', { name: 'More', exact: true }).click()
       await page.getByRole('button', { name: 'Team', exact: true }).click()
+      await page.getByRole('tab', { name: 'Members', exact: true }).click()
       const member = page.locator('.team-member-row').first()
       await expect(member).toBeVisible()
       await expect(member.locator('.member-identity__text')).toContainText('@')
