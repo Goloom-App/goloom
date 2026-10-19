@@ -1980,6 +1980,69 @@ select {
   gap: 3px;
 }
 
+/* Fixed columns prevent long metadata from widening the audit table. */
+.audit-table {
+  table-layout: fixed;
+}
+
+.audit-table th,
+.audit-table td {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.audit-table .badge {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.audit-details__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audit-details__toggle {
+  margin-block: var(--space-1);
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 700px) {
+  .audit-table colgroup {
+    display: none;
+  }
+
+  .audit-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .audit-table,
+  .audit-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .audit-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .audit-table td {
+    min-width: 0;
+    border-bottom: none;
+  }
+
+  .audit-table td:nth-child(n + 3) {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ==========================================================================
    Skeleton Loading
    ========================================================================== */

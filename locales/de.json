@@ -786,6 +786,8 @@
       "colActor": "Akteur",
       "colAction": "Aktion",
       "colDetails": "Details",
+      "showDetails": "Details anzeigen",
+      "hideDetails": "Details ausblenden",
       "member": "Mitglied",
       "viaApiKey": "API-Key: {{name}}",
       "unknownActor": "Unbekannt",
