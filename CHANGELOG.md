@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.2](https://github.com/Goloom-App/goloom/compare/v0.3.1...v0.3.2) (2026-10-19)
+
+
+### Features
+
+* **ai:** save edited posts as style examples ([#205](https://github.com/Goloom-App/goloom/issues/205)) ([32f06bb](https://github.com/Goloom-App/goloom/commit/32f06bbeaf95ac3bec52faf1ffa17693981c4710))
+* **ai:** select automation knowledge sources ([#202](https://github.com/Goloom-App/goloom/issues/202)) ([2d5ee0f](https://github.com/Goloom-App/goloom/commit/2d5ee0f330ab3f5b7876910fbd69fc80dca814a5))
+* **audit:** widen actions and collapse wrapping details ([#209](https://github.com/Goloom-App/goloom/issues/209)) ([297cf8c](https://github.com/Goloom-App/goloom/commit/297cf8cfdd063eabede61d38a6e4857756ff32cd))
+* **teams:** split settings into role-aware tabs ([#208](https://github.com/Goloom-App/goloom/issues/208)) ([aedea94](https://github.com/Goloom-App/goloom/commit/aedea942b8872d22016ae3b725e2545a7d0ffee8))
+
 ## [0.3.1](https://github.com/Goloom-App/goloom/compare/v0.3.0...v0.3.1) (2026-10-18)
 
 
