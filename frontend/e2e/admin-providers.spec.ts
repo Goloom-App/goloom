@@ -11,7 +11,7 @@ test('admin providers tab adapts to the selected provider', async ({ page }) => 
 
   await page.getByTestId('user-menu-trigger').click()
   await page.getByRole('menuitem', { name: 'Admin' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: 'Administration' })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Admin' })).toBeVisible({ timeout: 15_000 })
 
   await page.getByRole('tab', { name: 'Providers' }).click()
   await expect(page.getByRole('heading', { name: 'Provider onboarding' })).toBeVisible()

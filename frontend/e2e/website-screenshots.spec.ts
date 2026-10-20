@@ -74,7 +74,7 @@ test.describe('website screenshots', () => {
 
     // Analytics with engagement history and follower trend
     await page.getByRole('button', { name: 'Analytics', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1, name: 'Team Performance' })).toBeVisible({
+    await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible({
       timeout: 15_000,
     })
     await shoot(page, 'analytics')

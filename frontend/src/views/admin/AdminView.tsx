@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageTabs } from '../../components/ui/PageTabs'
 import type { Dispatch, SetStateAction } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -82,32 +83,17 @@ export function AdminView({
 
   return (
     <div className="admin-view">
-      <header className="admin-view__header page-header" style={{ marginBottom: 0 }}>
-        <div>
-          <p className="eyebrow">{t('section.admin')}</p>
-          <h1 className="admin-view__title">{t('admin.pageTitle')}</h1>
-          <p className="hint admin-view__subtitle">{t('admin.pageSubtitle')}</p>
-        </div>
-        <div className="page-header__actions">
-          <nav className="view-toggle view-toggle--scrollable" role="tablist" aria-label={t('admin.tabsAria')}>
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                data-tour={`admin-tab-${tab.id}`}
-                className={`view-toggle__btn ${activeTab === tab.id ? 'view-toggle__btn--active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
+      <PageTabs
+        label={t('admin.tabsAria')}
+        value={activeTab}
+        options={tabs}
+        onChange={setActiveTab}
+        idPrefix="admin-tab"
+        panelId="admin-tab-panel"
+        tourPrefix="admin-tab"
+      />
 
-      <div className="admin-view__body" role="tabpanel">
+      <div className="admin-view__body" id="admin-tab-panel" role="tabpanel" tabIndex={0} aria-labelledby={`admin-tab-${activeTab}`}>
         {activeTab === 'status' ? (
           <AdminStatusTab
             adminMetrics={adminMetrics}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PageTabs } from '../../components/ui/PageTabs'
 import { useTranslation } from 'react-i18next'
 
 import type { TeamSettingsViewProps } from './teamSettingsTypes'
@@ -29,24 +30,16 @@ export function TeamSettingsView(props: TeamSettingsViewProps) {
 
   return (
     <div className="brand-wizard stack stack--lg">
-      <nav className="view-toggle view-toggle--scrollable" role="tablist" aria-label={t('teams.tabsAria')}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            id={`team-tab-${tab.id}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            aria-controls="team-tab-panel"
-            data-tour={`team-tab-${tab.id}`}
-            className={`view-toggle__btn ${activeTab === tab.id ? 'view-toggle__btn--active' : ''}`}
-            onClick={() => setRequestedTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
-      <div id="team-tab-panel" role="tabpanel" aria-labelledby={`team-tab-${activeTab}`} className="stack stack--lg">
+      <PageTabs
+        label={t('teams.tabsAria')}
+        value={activeTab}
+        options={tabs}
+        onChange={setRequestedTab}
+        idPrefix="team-tab"
+        panelId="team-tab-panel"
+        tourPrefix="team-tab"
+      />
+      <div id="team-tab-panel" role="tabpanel" tabIndex={0} aria-labelledby={`team-tab-${activeTab}`} className="stack stack--lg">
         {activeTab === 'general' && <TeamGeneralTab {...props} />}
         {activeTab === 'members' && <TeamMembersTab key={props.selectedTeam.id} {...props} />}
         {activeTab === 'ai' && <TeamAITab {...props} />}
