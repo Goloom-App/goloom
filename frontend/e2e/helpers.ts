@@ -38,7 +38,9 @@ export async function signIn(page: Page) {
 export async function openContentCalendar(page: Page) {
   await page.getByRole('button', { name: 'Calendar', exact: true }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Content calendar' })).toBeVisible()
-  await page.getByRole('button', { name: 'List', exact: true }).click()
+  const listTab = page.getByRole('tab', { name: 'List', exact: true })
+  await listTab.click()
+  await expect(listTab).toHaveAttribute('aria-selected', 'true')
 }
 
 export async function openSeededPostPreview(page: Page) {

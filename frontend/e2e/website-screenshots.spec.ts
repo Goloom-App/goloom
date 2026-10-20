@@ -49,7 +49,7 @@ test.describe('website screenshots', () => {
     // Content calendar (grid view, filled with the demo month)
     await page.getByRole('button', { name: 'Calendar', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Content calendar' })).toBeVisible()
-    await page.getByRole('button', { name: 'Grid', exact: true }).click()
+    await page.getByRole('tab', { name: 'Grid', exact: true }).click()
     await expect(page.locator('.content-calendar__grid')).toBeVisible()
     await expect(page.locator('.content-calendar__grid')).toContainText('Open roastery')
     await shoot(page, 'content-calendar')
