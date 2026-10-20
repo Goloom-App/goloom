@@ -5,6 +5,7 @@ import { translateApiError } from '../../i18n/translateApiError'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { DestinationAvatar } from '../../components/post/DestinationAvatar'
 import { Icon } from '../../icons'
+import { PageTabs } from '../../components/ui/PageTabs'
 import type {
   BackendAccountGrowthPoint,
   BackendEngagementHeatmapBucket,
@@ -534,51 +535,27 @@ export function AnalyticsView({
 
   return (
     <div className="analytics-view" style={viewGapStyle}>
-      <div className="page-header" style={{ marginBottom: 0 }}>
-        <div>
-          <p className="eyebrow">{t('eyebrow.analytics')}</p>
-          <h1>{t('analytics.teamPerformance')}</h1>
-        </div>
-        <div className="page-header__actions">
-          <div className="view-toggle view-toggle--scrollable">
-            <button
-              type="button"
-              className={`view-toggle__btn ${activeTab === 'overview' ? 'view-toggle__btn--active' : ''}`}
-              onClick={() => setActiveTab('overview')}
-            >
-              {t('analytics.tabOverview')}
-            </button>
-            <button
-              type="button"
-              className={`view-toggle__btn ${activeTab === 'accounts' ? 'view-toggle__btn--active' : ''}`}
-              onClick={() => setActiveTab('accounts')}
-            >
-              {t('analytics.tabAccounts')}
-            </button>
-            <button
-              type="button"
-              className={`view-toggle__btn ${activeTab === 'posts' ? 'view-toggle__btn--active' : ''}`}
-              onClick={() => setActiveTab('posts')}
-            >
-              {t('analytics.tabPosts')}
-            </button>
-            {fetchHashtags ? (
-              <button
-                type="button"
-                className={`view-toggle__btn ${activeTab === 'hashtags' ? 'view-toggle__btn--active' : ''}`}
-                onClick={() => setActiveTab('hashtags')}
-              >
-                {t('analytics.tabHashtags')}
-              </button>
-            ) : null}
-          </div>
-          <button type="button" className="button button--secondary" onClick={() => void load()} disabled={loading}>
+      <PageTabs
+        label={t('section.analytics')}
+        idPrefix="analytics-tab"
+        panelId="analytics-tab-panel"
+        value={activeTab}
+        onChange={setActiveTab}
+        options={[
+          { id: 'overview', label: t('analytics.tabOverview') },
+          { id: 'accounts', label: t('analytics.tabAccounts') },
+          { id: 'posts', label: t('analytics.tabPosts') },
+          ...(fetchHashtags ? [{ id: 'hashtags' as const, label: t('analytics.tabHashtags') }] : []),
+        ]}
+        actions={
+          <button type="button" className="button button--secondary" onClick={() => void load()} disabled={loading} aria-label={t('common.refresh')}>
             <Icon name="refresh" className="inline-icon" />
             <span className="hidden-mobile">{t('common.refresh')}</span>
           </button>
-        </div>
-      </div>
+        }
+      />
 
+      <div id="analytics-tab-panel" role="tabpanel" tabIndex={0} aria-labelledby={`analytics-tab-${activeTab}`} style={viewGapStyle}>
       {error ? <p className="status-banner__error">{error}</p> : null}
       {loading && !summary ? <p className="hint">{t('common.loadingAnalytics')}</p> : null}
 
@@ -911,6 +888,7 @@ export function AnalyticsView({
           )}
         </section>
       )}
+      </div>
     </div>
   )
 }

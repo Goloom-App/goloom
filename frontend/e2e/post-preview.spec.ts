@@ -15,7 +15,7 @@ test.describe('post preview', () => {
     await page.getByRole('button', { name: 'Calendar', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Content calendar' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'List', exact: true }).click()
+    await page.getByRole('tab', { name: 'List', exact: true }).click()
     const seededCard = page.getByRole('article').filter({ hasText: E2E_SEEDED_POST_TITLE })
     await expect(seededCard).toBeVisible({ timeout: 15_000 })
     await seededCard.click()
@@ -37,7 +37,7 @@ test.describe('post preview', () => {
     await page.getByRole('button', { name: 'Calendar', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Content calendar' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'List', exact: true }).click()
+    await page.getByRole('tab', { name: 'List', exact: true }).click()
     const seededCardMobile = page.getByRole('article').filter({ hasText: E2E_SEEDED_POST_TITLE })
     await expect(seededCardMobile).toBeVisible({ timeout: 15_000 })
     await seededCardMobile.click()

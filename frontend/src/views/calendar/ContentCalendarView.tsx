@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import type { AccountRecord, PostRecord } from '../../types'
 import { PostCard } from '../../components/post/PostCard'
+import { PageTabs } from '../../components/ui/PageTabs'
 import { calendarCellsForMonth } from './calendarUtils'
 
 export function ContentCalendarView({
@@ -106,6 +107,18 @@ export function ContentCalendarView({
       onTouchEnd={isMobile ? onTouchEnd : undefined}
       onTouchCancel={isMobile ? onTouchCancel : undefined}
     >
+      <PageTabs
+        label={t('section.calendar')}
+        idPrefix="calendar-tab"
+        panelId="calendar-panel"
+        value={viewMode}
+        onChange={setViewMode}
+        options={[
+          { id: 'grid', label: t('calendar.content.grid') },
+          { id: 'list', label: t('calendar.content.list') },
+        ]}
+      />
+      <div id="calendar-panel" role="tabpanel" tabIndex={0} aria-labelledby={`calendar-tab-${viewMode}`} className="stack stack--lg">
       <div className="content-calendar__toolbar glass-panel">
         <div className="content-calendar__toolbar-left">
           <button
@@ -125,16 +138,6 @@ export function ContentCalendarView({
           >
             &gt;
           </button>
-        </div>
-        <div className="content-calendar__toolbar-right">
-          <div className="content-calendar__view-toggle">
-            <button type="button" className={`button button--secondary ${viewMode === 'grid' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('grid')}>
-              {t('calendar.content.grid')}
-            </button>
-            <button type="button" className={`button button--secondary ${viewMode === 'list' ? 'content-calendar__view-toggle-btn--active' : ''}`} onClick={() => setViewMode('list')}>
-              {t('calendar.content.list')}
-            </button>
-          </div>
         </div>
       </div>
       {viewMode === 'grid' ? (
@@ -240,6 +243,7 @@ export function ContentCalendarView({
       {plannedPostsForContentCalendar.length === 0 ? (
         <p className="hint mt-1">{t('calendar.content.noScheduledWorkspace')}</p>
       ) : null}
+      </div>
     </div>
   )
 }

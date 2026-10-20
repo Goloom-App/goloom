@@ -49,7 +49,7 @@ test.describe('website screenshots', () => {
     // Content calendar (grid view, filled with the demo month)
     await page.getByRole('button', { name: 'Calendar', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Content calendar' })).toBeVisible()
-    await page.getByRole('button', { name: 'Grid', exact: true }).click()
+    await page.getByRole('tab', { name: 'Grid', exact: true }).click()
     await expect(page.locator('.content-calendar__grid')).toBeVisible()
     await expect(page.locator('.content-calendar__grid')).toContainText('Open roastery')
     await shoot(page, 'content-calendar')
@@ -74,7 +74,7 @@ test.describe('website screenshots', () => {
 
     // Analytics with engagement history and follower trend
     await page.getByRole('button', { name: 'Analytics', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1, name: 'Team Performance' })).toBeVisible({
+    await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible({
       timeout: 15_000,
     })
     await shoot(page, 'analytics')

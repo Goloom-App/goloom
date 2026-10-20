@@ -3348,13 +3348,6 @@ select {
   gap: var(--space-2);
 }
 
-.content-calendar__toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-left: auto;
-}
-
 .content-calendar__month-title {
   font-size: 1.15rem;
   font-weight: 700;
@@ -3367,20 +3360,6 @@ select {
   min-height: 36px;
   display: grid;
   place-items: center;
-}
-
-.content-calendar__view-toggle {
-  display: flex;
-  gap: var(--space-1);
-  background: var(--surface-muted);
-  padding: 3px;
-  border-radius: var(--radius-md);
-}
-
-.content-calendar__view-toggle-btn--active {
-  background: var(--surface-raised);
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
 }
 
 .content-calendar__grid {
@@ -4794,6 +4773,42 @@ select {
 /* ==========================================================================
    View Toggle
    ========================================================================== */
+.page-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  width: 100%;
+}
+
+.page-tabs__list {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  flex: 0 1 auto;
+  scrollbar-width: thin;
+}
+
+.page-tabs__list .view-toggle__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.page-tabs__list .view-toggle__btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.page-tabs__actions {
+  display: flex;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 .view-toggle {
   display: flex;
   gap: var(--space-1);
@@ -5181,22 +5196,6 @@ select {
   flex-direction: column;
   gap: var(--space-6);
   animation: view-enter 300ms var(--ease-out);
-}
-
-.admin-view__header {
-  align-items: flex-end;
-  gap: var(--space-4);
-}
-
-.admin-view__title {
-  margin: var(--space-1) 0 0;
-  font-size: 1.75rem;
-  letter-spacing: -0.02em;
-}
-
-.admin-view__subtitle {
-  margin: var(--space-2) 0 0;
-  max-width: 42rem;
 }
 
 .admin-view__body {
@@ -5693,10 +5692,6 @@ button.admin-instance-health {
 }
 
 @media (max-width: 720px) {
-  .admin-view__header {
-    align-items: stretch;
-  }
-
   .admin-stat-grid {
     grid-template-columns: 1fr;
   }
@@ -6503,11 +6498,6 @@ button.admin-instance-health {
   background: var(--surface);
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
-}
-
-.brand-profile-tabs {
-  display: flex;
-  justify-content: flex-start;
 }
 
 .brand-examples-list {

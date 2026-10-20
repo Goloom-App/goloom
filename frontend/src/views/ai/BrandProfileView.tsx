@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PageTabs } from '../../components/ui/PageTabs'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   Bot,
@@ -369,6 +370,19 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
 
   return (
     <div className="brand-wizard" data-testid="brand-profile-view">
+      <PageTabs<ProfileTab>
+        label="AI Profile"
+        value={activeTab}
+        options={[
+          { id: 'profile', label: 'Profil' },
+          { id: 'examples', label: 'Beispieltexte' },
+        ]}
+        onChange={setActiveTab}
+        testIdPrefix="brand-profile-tab"
+        idPrefix="brand-profile-tab"
+        panelId="brand-profile-panel"
+      />
+
       {(error || statusMessage) && (
         <div className="status-banner-panel" style={{ padding: '0.75rem 1rem' }}>
           {statusMessage && (
@@ -384,17 +398,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
         </div>
       )}
 
-      <div className="brand-profile-tabs">
-        <Segmented<ProfileTab>
-          value={activeTab}
-          options={[
-            { id: 'profile', label: 'Profil' },
-            { id: 'examples', label: 'Beispieltexte' },
-          ]}
-          onChange={setActiveTab}
-          testIdPrefix="brand-profile-tab"
-        />
-      </div>
+      <div id="brand-profile-panel" role="tabpanel" tabIndex={0} aria-labelledby={`brand-profile-tab-${activeTab}`} className="stack stack--lg">
 
       {activeTab === 'profile' && (
         <>
@@ -892,6 +896,7 @@ export function BrandProfileView({ team }: BrandProfileViewProps) {
           </button>
         }
       />
+      </div>
     </div>
   )
 }
