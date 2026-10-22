@@ -37,7 +37,7 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
   through release-please (`:latest` moves only on releases).
 - **Test-driven development is mandatory.** Write or extend a test alongside (ideally before) every behavior change; new logic without a test is unfinished work. Bug fixes start with a test that reproduces the bug.
 - Silent fallbacks must be observable: when code degrades gracefully (e.g. AI falls back to template content), the failure must surface in logs *and* to the user.
-- Store changes need both backends: implement and test in `internal/store/sqlite` and `internal/store/postgres` (`make test-postgres` — schema must apply on a fresh database, so new columns belong in `create table`, with `alter table … if not exists` only as migration for existing databases).
+- Store changes need both backends: implement and test in `internal/store/sqlite` and `internal/store/postgres` (`make test-postgres` — schema must apply on a fresh database, so new columns belong in `create table`, with `alter table … add column` only as migration for existing databases — Postgres `if not exists`, SQLite via `applySQLiteLegacyMigrations`).
 
 ## Verification
 
