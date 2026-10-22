@@ -416,3 +416,4 @@ Output: Logical commits (Conventional Commits)
 - `go.mod` / `go.sum` — Go module definition
 - `redocly.yaml` — Redocly API docs config
 - `renovate.json` — Dependency update automation
+- `.coderabbit.yaml` — CodeRabbit AI review config for GitHub PRs (extra reviewer, CI stays merge gate; reads AGENTS.md as guidelines)

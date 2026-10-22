@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit AI review for GitHub PRs. CI stays the merge gate; this is an
+# extra reviewer. AGENTS.md files are picked up as coding guidelines by default.
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+    # Dependency bumps and release-please PRs are covered by CI.
+    ignore_usernames:
+      - renovate[bot]
+      - github-actions[bot]
+  path_filters:
+    - "!internal/webui/dist/**"
+    - "!**/pnpm-lock.yaml"
+    - "!go.sum"
+    - "!CHANGELOG.md"
+    - "!website/src/assets/screenshots/**"
+  path_instructions:
+    - path: "internal/store/**"
+      instructions: >-
+        Every store change must be implemented and tested in both
+        internal/store/sqlite and internal/store/postgres. New columns belong
+        in `create table`; `alter table ... if not exists` only as migration
+        for existing databases.
+    - path: "**/*.go"
+      instructions: >-
+        Behavior changes need a test in the same PR (TDD is mandatory).
+        Graceful fallbacks must be observable in logs and to the user.
+        Post creation must go through postservice.Service.Prepare, never
+        bypass it from REST or MCP handlers.
+    - path: "internal/auth/**"
+      instructions: >-
+        Security-critical: check authorization per team, scope checks,
+        token handling and timing-safe comparisons.
+    - path: "locales/*.json"
+      instructions: "de.json and en.json must stay key-identical."
+    - path: "frontend/src/**"
+      instructions: >-
+        UI changes need a Playwright spec under frontend/e2e. Theming uses
+        the --brand-primary CSS variable, no hard-coded brand colors.
+  tools:
+    golangci-lint:
+      enabled: true
+    eslint:
+      enabled: true
+    actionlint:
+      enabled: true
+    hadolint:
+      enabled: true
+    gitleaks:
+      enabled: true
+chat:
+  auto_reply: true
