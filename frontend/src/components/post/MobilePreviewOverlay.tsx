@@ -137,6 +137,7 @@ export function MobilePreviewOverlay({
             />
             {post.status === 'posted' ? (
               <PostThread
+                key={`${post.id}:${account.id}`}
                 teamId={post.teamId}
                 postId={post.id}
                 account={account}
