@@ -7304,3 +7304,19 @@ button.admin-instance-health {
     animation: none;
   }
 }
+
+/* Post replies / thread view */
+.post-thread { display: flex; flex-direction: column; gap: var(--space-2); margin-top: calc(-1 * var(--space-2)); }
+.post-thread__bar { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.post-thread__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.post-thread__list--nested { margin-left: var(--space-4); padding-left: var(--space-3); border-left: 1px solid var(--border-soft); }
+.post-thread__item { min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.post-thread__reply { display: flex; gap: var(--space-3); padding: var(--space-3); background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--radius-md, 8px); min-width: 0; }
+.post-thread__avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-hover); color: var(--text-soft); font-size: 0.75rem; font-weight: 600; }
+.post-thread__avatar img { width: 100%; height: 100%; object-fit: cover; }
+.post-thread__main { min-width: 0; flex: 1; }
+.post-thread__meta { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; font-size: 0.8125rem; color: var(--text-soft); }
+.post-thread__name { color: var(--text); font-weight: 600; }
+.post-thread__handle { overflow-wrap: anywhere; }
+.post-thread__content { margin: var(--space-1, 4px) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.post-thread__error { color: var(--danger); }
