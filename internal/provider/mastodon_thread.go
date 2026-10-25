@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/netguard"
 )
 
 const (
@@ -31,6 +32,46 @@ var (
 
 	errThreadBodyTooLarge = fmt.Errorf("thread context response exceeds %d bytes", maxThreadBodyBytes)
 )
+
+const maxThreadRedirects = 3
+
+// threadRedirectCheck allows at most maxThreadRedirects hops, and only to the host the request started at.
+func threadRedirectCheck(req *http.Request, via []*http.Request) error {
+	if len(via) > maxThreadRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxThreadRedirects)
+	}
+	if req.URL.Host != via[0].URL.Host {
+		return fmt.Errorf("redirect to a different host (%s) refused", req.URL.Host)
+	}
+	return nil
+}
+
+var (
+	threadGuardedClient = newThreadGuardedClient()
+	threadLANClient     = &http.Client{Timeout: defaultHTTPClient.Timeout, CheckRedirect: threadRedirectCheck}
+)
+
+func newThreadGuardedClient() *http.Client {
+	c := netguard.NewPolicy(nil).HTTPClient(defaultHTTPClient.Timeout)
+	guard := c.CheckRedirect
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if err := threadRedirectCheck(req, via); err != nil {
+			return err
+		}
+		return guard(req, via)
+	}
+	return c
+}
+
+// threadHTTPClient picks the client for thread fetches. By default connections and redirects go through
+// netguard (dial-time public-address check, DNS rebinding safe). With the AllowPrivateLAN outbound policy
+// (self-hosted LAN instances) a plain client is used, still limited to same-host redirects.
+func threadHTTPClient(ctx context.Context) *http.Client {
+	if outboundPolicyFromContext(ctx).AllowPrivateLAN {
+		return threadLANClient
+	}
+	return threadGuardedClient
+}
 
 // htmlToPlainText converts status HTML to text, keeping line breaks (<br> -> \n, paragraph break -> blank line).
 func htmlToPlainText(raw string) string {
@@ -229,7 +270,7 @@ func fetchMastodonCompatibleThread(ctx context.Context, instanceBaseURL, accessT
 		path = "/api/v1/statuses"
 	}
 
-	resp, err := doJSONRequestWithPolicy(ctx, threadRetryPolicy, http.MethodGet, base+path+"/"+url.PathEscape(id)+"/context", accessToken, nil)
+	resp, err := doJSONRequestWithClient(ctx, threadHTTPClient(ctx), threadRetryPolicy, http.MethodGet, base+path+"/"+url.PathEscape(id)+"/context", accessToken, nil)
 	if err != nil {
 		return ThreadResult{}, err
 	}

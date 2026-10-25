@@ -1949,7 +1949,7 @@ function App() {
                   </div>
                 ) : (
                 sharedAccountLabels(selectedPost, accounts).map((account) => (
-                  <Fragment key={account.id}>
+                  <Fragment key={`${selectedPost.id}:${account.id}`}>
                     <SocialPreview
                       account={account}
                       content={

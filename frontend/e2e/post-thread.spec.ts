@@ -7,6 +7,7 @@ const ACCOUNT_ID = 'thread-acct'
 
 async function openPostedPreview(page: Page, baseURL: string, opts: {
   provider?: string
+  secondPostCalls?: string[]
   thread: (route: import('@playwright/test').Route) => Promise<void> | void
 }) {
   const teamId = await getFirstTeamId(baseURL, e2eBootstrapToken())
@@ -15,12 +16,22 @@ async function openPostedPreview(page: Page, baseURL: string, opts: {
     instance_url: 'https://social.example', username: 'me@social.example', remote_account_id: 'me',
     created_at: '2026-01-01T00:00:00Z',
   }] } }))
-  await page.route(`**/v1/teams/${teamId}/posts`, (route) => route.fulfill({ json: { items: [{
-    id: POST_ID, team_id: teamId, author_user_id: 'u1', title: 'Thread post', content: 'Hello world',
+  const mkPost = (id: string, title: string, n: number) => ({
+    id, team_id: teamId, author_user_id: 'u1', title, content: `${title} body`,
     scheduled_at: '2026-01-02T09:00:00Z', status: 'posted', attempt_count: 1,
     created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T09:00:00Z',
-    target_accounts: [ACCOUNT_ID], published_links: { [ACCOUNT_ID]: 'https://social.example/@me/1' },
-  }] } }))
+    target_accounts: [ACCOUNT_ID], published_links: { [ACCOUNT_ID]: `https://social.example/@me/${n}` },
+  })
+  const posts = [{ ...mkPost(POST_ID, 'Thread post', 1), content: 'Hello world' }]
+  if (opts.secondPostCalls) posts.push(mkPost('thread-post-b', 'Other post', 2))
+  await page.route(`**/v1/teams/${teamId}/posts`, (route) => route.fulfill({ json: { items: posts } }))
+  if (opts.secondPostCalls) {
+    const bCalls = opts.secondPostCalls
+    await page.route(`**/v1/teams/${teamId}/posts/thread-post-b/targets/${ACCOUNT_ID}/thread`, (route) => {
+      bCalls.push(route.request().url())
+      return route.fulfill({ json: { post_id: 'thread-post-b', account_id: ACCOUNT_ID, provider: 'mastodon', fetched_at: '2026-01-02T12:30:00Z', replies: [] } })
+    })
+  }
   const threadCalls: string[] = []
   await page.route(`**/v1/teams/${teamId}/posts/${POST_ID}/targets/${ACCOUNT_ID}/thread`, async (route) => {
     threadCalls.push(route.request().url())
@@ -162,4 +173,21 @@ test('content warnings collapse replies until revealed', async ({ page, baseURL 
   // plain reply unaffected
   await expect(items.nth(2)).toContainText('Plain body')
   await expect(items.nth(2).getByTestId('thread-cw')).toHaveCount(0)
+})
+
+test('switching posts resets the thread toggle and does not fetch', async ({ page, baseURL }) => {
+  const bCalls: string[] = []
+  const calls = await openPostedPreview(page, baseURL!, {
+    secondPostCalls: bCalls,
+    thread: (route) => route.fulfill({ json: { post_id: POST_ID, account_id: ACCOUNT_ID, provider: 'mastodon', fetched_at: '2026-01-02T12:30:00Z', replies: replies.slice(0, 1) } }),
+  })
+  await page.getByRole('button', { name: 'Show replies' }).click()
+  await expect(page.getByTestId('thread-reply')).toHaveCount(1)
+  expect(calls).toHaveLength(1)
+
+  await page.getByRole('article').filter({ hasText: 'Other post' }).click()
+  await expect(page.getByTestId('live-preview-title')).toHaveText('Other post')
+  await expect(page.getByRole('button', { name: 'Show replies' })).toHaveAttribute('aria-expanded', 'false')
+  await page.waitForTimeout(500)
+  expect(bCalls).toHaveLength(0)
 })
