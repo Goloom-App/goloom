@@ -549,6 +549,60 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/PostMetric"
+  /v1/teams/{teamID}/posts/{postID}/targets/{accountID}/thread:
+    get:
+      tags: [Posts]
+      summary: Replies below a published post target (read-only, fetched live; Mastodon and Friendica)
+      parameters:
+        - $ref: "#/components/parameters/teamID"
+        - $ref: "#/components/parameters/postID"
+        - name: accountID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Replies in provider order (max 200, direct-visibility replies omitted)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  post_id: { type: string }
+                  account_id: { type: string }
+                  provider: { type: string }
+                  published_url: { type: string }
+                  fetched_at: { type: string, format: date-time }
+                  replies:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        remote_id: { type: string }
+                        parent_id: { type: string }
+                        url: { type: string }
+                        content: { type: string, description: Plain text }
+                        published_at: { type: string, format: date-time }
+                        author:
+                          type: object
+                          properties:
+                            handle: { type: string }
+                            display_name: { type: string }
+                            avatar_url: { type: string }
+                            profile_url: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Target not published (X-Error-Code post_not_published)
+        "422":
+          description: Provider cannot list replies (X-Error-Code thread_unsupported)
+        "502":
+          description: Provider fetch failed (X-Error-Code thread_fetch_failed)
   /v1/teams/{teamID}/profile:
     get:
       tags: [Teams]

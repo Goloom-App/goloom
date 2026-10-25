@@ -642,3 +642,34 @@ func TestSQLite_UpdateMediaItemFilename(t *testing.T) {
 		t.Fatal("rename across teams must fail")
 	}
 }
+
+func TestSQLite_GetPublishedTarget(t *testing.T) {
+	ctx := context.Background()
+	s := newTestStore(t)
+	u, _ := s.UpsertOIDCUser(ctx, "gpt", "gpt@x", "GPT")
+	team, _ := s.CreateTeam(ctx, u.ID, domain.CreateTeamInput{Name: "gpt-" + uuid.NewString()})
+	acc, _ := s.CreateAccount(ctx, team.ID, domain.ConnectedAccount{
+		Provider: "friendica", AuthType: domain.AccountAuthTypeOAuthToken,
+		InstanceURL: "https://x", Username: "x", AccessToken: "t",
+	})
+	post, err := s.CreateScheduledPost(ctx, team.ID, domain.AuthenticatedPrincipal{User: u}, domain.CreatePostInput{
+		Content: "c", ScheduledAt: time.Now().UTC(), TargetAccounts: []string{acc.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetPublishedTarget(ctx, post.ID, acc.ID)
+	if err != nil || got.PublishedURL != "" || got.RemotePostID != "" {
+		t.Fatalf("unpublished target: %#v %v", got, err)
+	}
+	if err := s.MarkPostTargetResult(ctx, post.ID, acc.ID, domain.PostStatusPosted, "https://x/display/abc", "", map[string]string{"uri": "u"}, "42"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetPublishedTarget(ctx, post.ID, acc.ID)
+	if err != nil || got.PublishedURL != "https://x/display/abc" || got.RemotePostID != "42" || got.PublishMetadata["uri"] != "u" {
+		t.Fatalf("published target: %#v %v", got, err)
+	}
+	if _, err := s.GetPublishedTarget(ctx, post.ID, uuid.NewString()); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("missing target err = %v", err)
+	}
+}

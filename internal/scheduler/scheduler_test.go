@@ -636,6 +636,10 @@ func (m *mockStore) DecryptProviderInstanceClientSecret(instance domain.Provider
 	return "", nil
 }
 
+func (m *mockStore) GetPublishedTarget(context.Context, string, string) (domain.PublishedTarget, error) {
+	return domain.PublishedTarget{}, nil
+}
+
 func (m *mockStore) LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error) {
 	return map[string]map[string]string{}, nil
 }

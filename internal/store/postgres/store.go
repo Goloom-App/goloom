@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/postdedup"
 	"git.f4mily.net/goloom/internal/security"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -1422,6 +1423,18 @@ func (s *Store) UpdateSocialAccountTokens(ctx context.Context, accountID string,
 		accessCipher, accessExpiresAt, accountID,
 	)
 	return err
+}
+
+func (s *Store) GetPublishedTarget(ctx context.Context, postID, accountID string) (domain.PublishedTarget, error) {
+	var url, remote, metaRaw string
+	err := s.pool.QueryRow(ctx, `
+		select coalesce(published_url, ''), coalesce(remote_post_id, ''), coalesce(publish_metadata::text, '{}')
+		from scheduled_post_targets
+		where post_id = $1 and account_id = $2`, postID, accountID).Scan(&url, &remote, &metaRaw)
+	if err != nil {
+		return domain.PublishedTarget{}, err
+	}
+	return domain.PublishedTarget{PublishedURL: url, RemotePostID: remote, PublishMetadata: postdedup.ParsePublishMetadata(metaRaw)}, nil
 }
 
 func (s *Store) LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error) {

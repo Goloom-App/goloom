@@ -18,6 +18,7 @@ Provider interface in `provider.go`, registry pattern. Individual implementation
 - Shared utilities: `utils.go`, `instance_host.go`, `remote_post_id.go`
 - Metrics: `metrics_url.go`, provider-specific metrics files
 - Author feeds: `author_post_ids.go`, provider-specific feed files
+- Threads: optional `ThreadFetcher` (`provider.go`, type-asserted like `AuthorFeedFetcher`); Mastodon + Friendica share `fetchMastodonCompatibleThread` in `mastodon_thread.go` (`/statuses/{id}/context` descendants, direct-visibility dropped, max 200, body capped 4 MiB, plain-text via `htmlToPlainText`). `ThreadTarget.RemoteID` (stored `remote_post_id`, via `store.GetPublishedTarget`) is preferred; the numeric id is parsed from `PublishedURL` only as fallback (Friendica `/display/<guid>` has none). Bluesky not implemented (use `ThreadTarget.Metadata` AT-URI)
 - Outbound policy: `outbound_policy.go`
 
 ## Work Guidance

@@ -57,6 +57,35 @@ type AuthorFeedFetcher interface {
 	ListAuthorPosts(ctx context.Context, account domain.SocialAccount, auth PublishAuth, since time.Time, limit int) ([]AuthorPost, error)
 }
 
+// PostAuthor identifies who wrote a reply.
+type PostAuthor struct {
+	Handle      string
+	DisplayName string
+	AvatarURL   string
+	ProfileURL  string
+}
+
+// ThreadReply is a normalized reply below a published post.
+type ThreadReply struct {
+	AuthorPost
+	Author PostAuthor
+	// ParentID is the remote id of the status this reply answers.
+	ParentID string
+}
+
+// ThreadTarget identifies the published post whose replies are requested.
+// RemoteID is the stored provider id (preferred); Metadata carries publish metadata (e.g. a Bluesky AT-URI).
+type ThreadTarget struct {
+	PublishedURL string
+	RemoteID     string
+	Metadata     map[string]string
+}
+
+// ThreadFetcher is implemented by providers that can list replies below a published post.
+type ThreadFetcher interface {
+	GetThread(ctx context.Context, account domain.SocialAccount, auth PublishAuth, target ThreadTarget) ([]ThreadReply, error)
+}
+
 // EngagementMetric is one normalized metric from a provider before persistence.
 type EngagementMetric struct {
 	Name  string
