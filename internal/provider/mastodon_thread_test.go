@@ -2,14 +2,20 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
 )
+
+func threadCtx() context.Context {
+	return WithOutboundInstancePolicy(context.Background(), OutboundPolicy{AllowPrivateLAN: true})
+}
 
 func TestHTMLToPlainText(t *testing.T) {
 	cases := map[string]string{
@@ -55,9 +61,13 @@ func TestMastodonGetThread(t *testing.T) {
 		fmt.Fprint(w, threadContextJSON)
 	})
 	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
-	got, err := p.GetThread(context.Background(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"}, ThreadTarget{PublishedURL: "https://m.example/@me/10"})
+	res, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"}, ThreadTarget{PublishedURL: "https://m.example/@me/10"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	got := res.Replies
+	if res.Truncated {
+		t.Error("truncated unexpectedly")
 	}
 	if len(got) != 2 {
 		t.Fatalf("want 2 replies (direct dropped), got %d: %#v", len(got), got)
@@ -90,20 +100,20 @@ func TestFriendicaGetThread_UsesRemoteIDForGUIDURL(t *testing.T) {
 	if !ok {
 		t.Fatal("friendica provider does not implement ThreadFetcher")
 	}
-	got, err := tf.GetThread(context.Background(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"},
+	res, err := tf.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"},
 		ThreadTarget{PublishedURL: "https://f.example/display/abcdef0123456789abcdef0123456789", RemoteID: "42"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("got %d", len(got))
+	if len(res.Replies) != 2 {
+		t.Fatalf("got %d", len(res.Replies))
 	}
 }
 
 func TestFriendicaGetThread_GUIDURLWithoutRemoteIDFails(t *testing.T) {
 	srv := newThreadServer(t, "tok", func(w http.ResponseWriter, r *http.Request) { t.Error("must not call remote") })
 	tf := NewFriendicaProvider().(ThreadFetcher)
-	_, err := tf.GetThread(context.Background(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"},
+	_, err := tf.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"},
 		ThreadTarget{PublishedURL: "https://f.example/display/abc"})
 	if err == nil {
 		t.Fatal("want error")
@@ -118,7 +128,7 @@ func TestMastodonGetThread_RemoteIDWinsOverURL(t *testing.T) {
 		fmt.Fprint(w, `{"descendants":[]}`)
 	})
 	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
-	if _, err := p.GetThread(context.Background(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"},
+	if _, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "tok"},
 		ThreadTarget{PublishedURL: "https://m/@a/10", RemoteID: "77"}); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +137,7 @@ func TestMastodonGetThread_RemoteIDWinsOverURL(t *testing.T) {
 func TestMastodonGetThread_Errors(t *testing.T) {
 	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
 	acc := func(u string) domain.SocialAccount { return domain.SocialAccount{InstanceURL: u} }
-	ctx := context.Background()
+	ctx := threadCtx()
 
 	if _, err := p.GetThread(ctx, acc("https://x.example"), PublishAuth{AccessToken: "t"}, ThreadTarget{PublishedURL: ""}); err == nil {
 		t.Error("empty url: want error")
@@ -157,12 +167,12 @@ func TestMastodonGetThread_CapsReplies(t *testing.T) {
 	sb.WriteString(`]}`)
 	srv := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, sb.String()) })
 	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
-	got, err := p.GetThread(context.Background(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, ThreadTarget{PublishedURL: "https://x/@a/1"})
+	res, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, ThreadTarget{PublishedURL: "https://x/@a/1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != maxThreadReplies {
-		t.Fatalf("len = %d, want %d", len(got), maxThreadReplies)
+	if len(res.Replies) != maxThreadReplies || !res.Truncated {
+		t.Fatalf("len = %d truncated = %v, want %d true", len(res.Replies), res.Truncated, maxThreadReplies)
 	}
 }
 
@@ -170,13 +180,134 @@ func TestMastodonGetThread_BodyBounded(t *testing.T) {
 	srv := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"descendants":[{"id":"2","content":"`))
 		chunk := []byte(strings.Repeat("a", 1<<20))
-		for i := 0; i < 6; i++ {
+		for i := 0; i < 9; i++ {
 			w.Write(chunk)
 		}
 		w.Write([]byte(`"}]}`))
 	})
 	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
-	if _, err := p.GetThread(context.Background(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, ThreadTarget{PublishedURL: "https://x/@a/1"}); err == nil {
-		t.Fatal("oversized body must fail")
+	_, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, ThreadTarget{PublishedURL: "https://x/@a/1"})
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized body: want clear 'exceeds' error, got %v", err)
+	}
+}
+
+func statusJSON(id int, extra string) string {
+	return fmt.Sprintf(`{"id":"%d","in_reply_to_id":"1","content":"x","created_at":"2026-01-02T03:04:05Z","account":{"acct":"a"}%s}`, id, extra)
+}
+
+func threadOf(t *testing.T, body string, target ThreadTarget) (ThreadResult, error) {
+	t.Helper()
+	srv := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) })
+	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
+	return p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, target)
+}
+
+var anyTarget = ThreadTarget{PublishedURL: "https://x/@a/1"}
+
+func TestMastodonGetThread_VisibilityAllowlist(t *testing.T) {
+	var parts []string
+	for i, vis := range []string{"public", "unlisted", "private", "direct", "", "limited", "local", "PRIVATE"} {
+		parts = append(parts, statusJSON(i+2, fmt.Sprintf(`,"visibility":%q`, vis)))
+	}
+	res, err := threadOf(t, `{"descendants":[`+strings.Join(parts, ",")+`]}`, anyTarget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, r := range res.Replies {
+		ids = append(ids, r.RemoteID)
+	}
+	// public(2) unlisted(3) private(4) PRIVATE(9) kept; direct, empty, limited, local dropped.
+	if got := strings.Join(ids, ","); got != "2,3,4,9" {
+		t.Fatalf("kept ids = %s", got)
+	}
+}
+
+func TestMastodonGetThread_ContentWarningAndSensitive(t *testing.T) {
+	res, err := threadOf(t, `{"descendants":[`+statusJSON(2, `,"visibility":"public","spoiler_text":"  spoilers  ","sensitive":true`)+`]}`, anyTarget)
+	if err != nil || len(res.Replies) != 1 {
+		t.Fatalf("%v %#v", err, res)
+	}
+	if r := res.Replies[0]; r.ContentWarning != "spoilers" || !r.Sensitive {
+		t.Fatalf("reply: %#v", r)
+	}
+}
+
+func TestMastodonGetThread_DropsNonHTTPURLs(t *testing.T) {
+	st := `{"id":"2","content":"x","visibility":"public","url":"javascript:alert(1)","uri":"data:text/html,x","created_at":"2026-01-02T03:04:05Z",
+	  "account":{"acct":"a","avatar_static":"data:image/png;base64,AAA","avatar":"javascript:x","url":"ftp://evil/x"}}`
+	res, err := threadOf(t, `{"descendants":[`+st+`]}`, anyTarget)
+	if err != nil || len(res.Replies) != 1 {
+		t.Fatalf("%v %#v", err, res)
+	}
+	r := res.Replies[0]
+	if r.URL != "" || r.Author.AvatarURL != "" || r.Author.ProfileURL != "" {
+		t.Fatalf("unsafe urls survived: %#v", r)
+	}
+}
+
+func TestMastodonGetThread_ExactlyCapNotTruncated(t *testing.T) {
+	var parts []string
+	for i := 0; i < maxThreadReplies; i++ {
+		parts = append(parts, statusJSON(i+2, `,"visibility":"public"`))
+	}
+	res, err := threadOf(t, `{"descendants":[`+strings.Join(parts, ",")+`]}`, anyTarget)
+	if err != nil || len(res.Replies) != maxThreadReplies || res.Truncated {
+		t.Fatalf("len=%d truncated=%v err=%v", len(res.Replies), res.Truncated, err)
+	}
+}
+
+func TestMastodonGetThread_StopsReadingAtCap(t *testing.T) {
+	var parts []string
+	for i := 0; i <= maxThreadReplies; i++ {
+		parts = append(parts, statusJSON(i+2, `,"visibility":"public"`))
+	}
+	// Anything after the (cap+1)th element is never parsed.
+	res, err := threadOf(t, `{"descendants":[`+strings.Join(parts, ",")+`,{{{ not json`, anyTarget)
+	if err != nil || len(res.Replies) != maxThreadReplies || !res.Truncated {
+		t.Fatalf("len=%d truncated=%v err=%v", len(res.Replies), res.Truncated, err)
+	}
+}
+
+func TestMastodonGetThread_TruncatedBodyClearError(t *testing.T) {
+	_, err := threadOf(t, `{"descendants":[`+statusJSON(2, `,"visibility":"public"`)+`,{"id":"3"`, anyTarget)
+	if err == nil || !strings.Contains(err.Error(), "truncated") {
+		t.Fatalf("want 'truncated' error, got %v", err)
+	}
+}
+
+func TestMastodonGetThread_UnresolvableTarget(t *testing.T) {
+	p := NewFriendicaProvider().(ThreadFetcher)
+	_, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: "https://f.example"}, PublishAuth{AccessToken: "t"},
+		ThreadTarget{PublishedURL: "https://f.example/display/abc"})
+	if !errors.Is(err, ErrThreadTargetUnresolvable) {
+		t.Fatalf("want ErrThreadTargetUnresolvable, got %v", err)
+	}
+}
+
+func TestMastodonGetThread_OutboundPolicyEnforced(t *testing.T) {
+	called := false
+	srv := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) { called = true })
+	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
+	// loopback instance without AllowPrivateLAN must be refused before any request
+	_, err := p.GetThread(context.Background(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, anyTarget)
+	if err == nil || called {
+		t.Fatalf("loopback instance must be blocked (err=%v called=%v)", err, called)
+	}
+}
+
+func TestMastodonGetThread_NoRetryOn429(t *testing.T) {
+	calls := 0
+	srv := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Retry-After", "5")
+		http.Error(w, "slow down", http.StatusTooManyRequests)
+	})
+	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
+	start := time.Now()
+	_, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, anyTarget)
+	if err == nil || calls != 1 || time.Since(start) > 2*time.Second {
+		t.Fatalf("err=%v calls=%d elapsed=%v", err, calls, time.Since(start))
 	}
 }

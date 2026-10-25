@@ -107,3 +107,59 @@ test('no toggle for providers without thread support', async ({ page, baseURL })
   await expect(page.getByTestId('live-preview-title')).toHaveText('Thread post')
   await expect(page.getByRole('button', { name: 'Show replies' })).toHaveCount(0)
 })
+
+test('truncated thread shows hint with link to the original post', async ({ page, baseURL }) => {
+  await openPostedPreview(page, baseURL!, {
+    thread: (route) => route.fulfill({ json: { post_id: POST_ID, account_id: ACCOUNT_ID, provider: 'mastodon',
+      published_url: 'https://social.example/@me/1', fetched_at: '2026-01-02T12:30:00Z', truncated: true, replies: replies.slice(0, 1) } }),
+  })
+  await page.getByRole('button', { name: 'Show replies' }).click()
+  const hint = page.getByTestId('thread-truncated')
+  await expect(hint).toContainText('Only the first 200 replies are shown.')
+  await expect(hint.getByRole('link')).toHaveAttribute('href', 'https://social.example/@me/1')
+})
+
+test('not truncated shows no hint', async ({ page, baseURL }) => {
+  await openPostedPreview(page, baseURL!, {
+    thread: (route) => route.fulfill({ json: { post_id: POST_ID, account_id: ACCOUNT_ID, provider: 'mastodon',
+      fetched_at: '2026-01-02T12:30:00Z', truncated: false, replies: replies.slice(0, 1) } }),
+  })
+  await page.getByRole('button', { name: 'Show replies' }).click()
+  await expect(page.getByTestId('thread-reply')).toHaveCount(1)
+  await expect(page.getByTestId('thread-truncated')).toHaveCount(0)
+})
+
+test('content warnings collapse replies until revealed', async ({ page, baseURL }) => {
+  const author = { handle: 'dan@social.example', display_name: 'Dan' }
+  await openPostedPreview(page, baseURL!, {
+    thread: (route) => route.fulfill({ json: { post_id: POST_ID, account_id: ACCOUNT_ID, provider: 'mastodon', fetched_at: '2026-01-02T12:30:00Z',
+      replies: [
+        { remote_id: 'c1', parent_id: 'root', url: '', content: 'Hidden spoiler text', content_warning: 'Movie spoilers', sensitive: true, published_at: '2026-01-02T10:00:00Z', author },
+        { remote_id: 'c2', parent_id: 'root', url: '', content: 'Sensitive body', sensitive: true, published_at: '2026-01-02T10:05:00Z', author },
+        { remote_id: 'c3', parent_id: 'root', url: '', content: 'Plain body', published_at: '2026-01-02T10:10:00Z', author },
+      ] } }),
+  })
+  await page.getByRole('button', { name: 'Show replies' }).click()
+  const items = page.getByTestId('thread-reply')
+  await expect(items).toHaveCount(3)
+
+  const first = items.nth(0)
+  await expect(first.getByTestId('thread-cw')).toHaveText('Movie spoilers')
+  await expect(first).not.toContainText('Hidden spoiler text')
+  const toggle = first.getByRole('button', { name: 'Show', exact: true })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await toggle.click()
+  await expect(first).toContainText('Hidden spoiler text')
+  const hide = first.getByRole('button', { name: 'Hide', exact: true })
+  await expect(hide).toHaveAttribute('aria-expanded', 'true')
+  await hide.click()
+  await expect(first).not.toContainText('Hidden spoiler text')
+
+  // sensitive without CW text uses the generic label
+  const second = items.nth(1)
+  await expect(second.getByTestId('thread-cw')).toHaveText('Sensitive content')
+  await expect(second).not.toContainText('Sensitive body')
+  // plain reply unaffected
+  await expect(items.nth(2)).toContainText('Plain body')
+  await expect(items.nth(2).getByTestId('thread-cw')).toHaveCount(0)
+})

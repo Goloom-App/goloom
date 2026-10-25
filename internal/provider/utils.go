@@ -150,7 +150,11 @@ func marshalJSONBody(payload any) (*bytes.Reader, error) {
 }
 
 func doJSONRequest(ctx context.Context, method, endpoint, bearerToken string, body *bytes.Reader) (*http.Response, error) {
-	return doRequestWithRetry(ctx, DefaultRetryPolicy, func(ctx context.Context) (*http.Response, error) {
+	return doJSONRequestWithPolicy(ctx, DefaultRetryPolicy, method, endpoint, bearerToken, body)
+}
+
+func doJSONRequestWithPolicy(ctx context.Context, policy RetryPolicy, method, endpoint, bearerToken string, body *bytes.Reader) (*http.Response, error) {
+	return doRequestWithRetry(ctx, policy, func(ctx context.Context) (*http.Response, error) {
 		var reader *bytes.Reader
 		if body == nil {
 			reader = bytes.NewReader(nil)

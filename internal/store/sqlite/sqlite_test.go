@@ -669,7 +669,7 @@ func TestSQLite_GetPublishedTarget(t *testing.T) {
 	if err != nil || got.PublishedURL != "https://x/display/abc" || got.RemotePostID != "42" || got.PublishMetadata["uri"] != "u" {
 		t.Fatalf("published target: %#v %v", got, err)
 	}
-	if _, err := s.GetPublishedTarget(ctx, post.ID, uuid.NewString()); !errors.Is(err, sql.ErrNoRows) {
+	if _, err := s.GetPublishedTarget(ctx, post.ID, uuid.NewString()); !errors.Is(err, domain.ErrNotFound) || !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("missing target err = %v", err)
 	}
 }

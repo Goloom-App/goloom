@@ -43,6 +43,7 @@ type API struct {
 	release         releaseStatusProvider
 	aiService       *ai.Service
 	rssPreviewFetch func(context.Context, string) ([]rss.Item, error)
+	threads         *threadCache
 }
 
 // releaseStatusProvider supplies the cached update-check state for GET /v1/version.
@@ -109,6 +110,7 @@ func New(logger *slog.Logger, store store.Store, authService *auth.Service, prov
 		jobManager:  jobManager,
 		hub:         hub,
 		aiService:   ai.NewService(cfg.AIAllowedPrivateHosts...),
+		threads:     newThreadCache(),
 		push: push.New(store, push.Config{
 			Subject:    cfg.VAPIDSubject,
 			PublicKey:  cfg.VAPIDPublicKey,

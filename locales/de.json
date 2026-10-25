@@ -1134,7 +1134,12 @@
       "retry": "Erneut versuchen",
       "refresh": "Antworten aktualisieren",
       "openReply": "Antwort öffnen",
-      "avatarAlt": "Avatar von {{name}}"
+      "avatarAlt": "Avatar von {{name}}",
+      "truncated": "Nur die ersten 200 Antworten werden angezeigt.",
+      "truncatedLink": "Alle im Netzwerk ansehen",
+      "showContent": "Anzeigen",
+      "hideContent": "Ausblenden",
+      "sensitive": "Sensibler Inhalt"
     },
     "settings": {
       "browserSession": "Browser-Sitzung",
@@ -1307,6 +1312,7 @@
     "provider_required": "Provider ist erforderlich",
     "provider_instance_id_mismatch": "provider_instance_id passt nicht zum Provider",
     "post_not_published": "Beitrag wurde für dieses Konto nicht veröffentlicht",
+    "thread_target_unresolvable": "die Beitrags-ID für dieses Ziel konnte nicht ermittelt werden",
     "thread_unsupported": "dieser Anbieter unterstützt das Lesen von Antworten nicht",
     "thread_fetch_failed": "Antworten konnten nicht vom Anbieter geladen werden",
     "not_found": "nicht gefunden",

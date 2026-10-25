@@ -47,6 +47,9 @@ function Avatar({ name, url }: { name: string; url?: string }) {
 function ReplyItem({ node, depth, locale }: { node: ReplyNode; depth: number; locale: typeof de }) {
   const { t } = useTranslation()
   const { reply } = node
+  const warning = reply.content_warning?.trim() || (reply.sensitive ? t('postThread.sensitive') : '')
+  const [revealed, setRevealed] = useState(false)
+  const contentId = useId()
   const when = parseISO(reply.published_at)
   const name = reply.author.display_name || reply.author.handle
   return (
@@ -68,7 +71,23 @@ function ReplyItem({ node, depth, locale }: { node: ReplyNode; depth: number; lo
               </a>
             ) : null}
           </div>
-          <p className="post-thread__content">{reply.content}</p>
+          {warning ? (
+            <div className="post-thread__cw">
+              <span className="post-thread__cw-text" data-testid="thread-cw">{warning}</span>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                aria-expanded={revealed}
+                aria-controls={contentId}
+                onClick={() => setRevealed((v) => !v)}
+              >
+                {revealed ? t('postThread.hideContent') : t('postThread.showContent')}
+              </button>
+            </div>
+          ) : null}
+          {warning && !revealed ? null : (
+            <p id={contentId} className="post-thread__content">{reply.content}</p>
+          )}
         </div>
       </div>
       {node.children.length > 0 ? (
@@ -149,11 +168,21 @@ export function PostThread({
           ) : tree.length === 0 ? (
             <p className="hint" data-testid="thread-empty">{t('postThread.empty')}</p>
           ) : (
-            <ul className="post-thread__list">
-              {tree.map((node) => (
-                <ReplyItem key={node.reply.remote_id} node={node} depth={0} locale={locale} />
-              ))}
-            </ul>
+            <>
+              <ul className="post-thread__list">
+                {tree.map((node) => (
+                  <ReplyItem key={node.reply.remote_id} node={node} depth={0} locale={locale} />
+                ))}
+              </ul>
+              {query.data?.truncated ? (
+                <p className="hint" data-testid="thread-truncated">
+                  {t('postThread.truncated')}{' '}
+                  {query.data.published_url || publishedUrl ? (
+                    <a href={query.data.published_url || publishedUrl} target="_blank" rel="noopener noreferrer">{t('postThread.truncatedLink')}</a>
+                  ) : null}
+                </p>
+              ) : null}
+            </>
           )
         ) : null}
       </div>

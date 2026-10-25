@@ -563,7 +563,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Replies in provider order (max 200, direct-visibility replies omitted)
+          description: Replies in provider order (max 200). Only public, unlisted and private (followers-only) replies are returned; direct, limited, local and unknown visibilities are dropped. Cached server-side for 30 seconds.
           content:
             application/json:
               schema:
@@ -574,6 +574,7 @@ paths:
                   provider: { type: string }
                   published_url: { type: string }
                   fetched_at: { type: string, format: date-time }
+                  truncated: { type: boolean, description: True when more than 200 replies exist and only the first 200 are returned }
                   replies:
                     type: array
                     items:
@@ -584,6 +585,8 @@ paths:
                         url: { type: string }
                         content: { type: string, description: Plain text }
                         published_at: { type: string, format: date-time }
+                        content_warning: { type: string, description: Spoiler text; omitted when none }
+                        sensitive: { type: boolean }
                         author:
                           type: object
                           properties:
@@ -598,11 +601,13 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: Target not published (X-Error-Code post_not_published)
+          description: Target not published (X-Error-Code post_not_published) or its remote post id cannot be determined (X-Error-Code thread_target_unresolvable)
         "422":
           description: Provider cannot list replies (X-Error-Code thread_unsupported)
         "502":
-          description: Provider fetch failed (X-Error-Code thread_fetch_failed)
+          description: Provider fetch failed, including provider rate limiting (X-Error-Code thread_fetch_failed)
+        "500":
+          description: Internal error (X-Error-Code internal_error)
   /v1/teams/{teamID}/profile:
     get:
       tags: [Teams]

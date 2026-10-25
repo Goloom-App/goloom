@@ -217,7 +217,7 @@ type Store interface {
 	DecryptAccessToken(account domain.SocialAccount) (string, error)
 	DecryptRefreshToken(account domain.SocialAccount) (string, error)
 	DecryptProviderInstanceClientSecret(instance domain.ProviderInstance) (string, error)
-	// GetPublishedTarget returns publication data of one target; sql.ErrNoRows when the post/account pair has no target.
+	// GetPublishedTarget returns publication data of one target; a missing post/account pair wraps domain.ErrNotFound (and sql.ErrNoRows).
 	GetPublishedTarget(ctx context.Context, postID, accountID string) (domain.PublishedTarget, error)
 	LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error)
 	ListPostedTargetsForMetricSync(ctx context.Context, notBefore time.Time, utcDay string, limit int) ([]domain.PostedTargetForMetricSync, error)

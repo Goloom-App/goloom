@@ -1431,6 +1431,9 @@ func (s *Store) GetPublishedTarget(ctx context.Context, postID, accountID string
 		select coalesce(published_url, ''), coalesce(remote_post_id, ''), coalesce(publish_metadata::text, '{}')
 		from scheduled_post_targets
 		where post_id = $1 and account_id = $2`, postID, accountID).Scan(&url, &remote, &metaRaw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.PublishedTarget{}, fmt.Errorf("published target: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
+	}
 	if err != nil {
 		return domain.PublishedTarget{}, err
 	}

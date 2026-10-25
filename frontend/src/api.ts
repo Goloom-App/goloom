@@ -169,6 +169,8 @@ export interface BackendThreadReply {
   url: string
   content: string
   published_at: string
+  content_warning?: string
+  sensitive?: boolean
   author: { handle: string; display_name?: string; avatar_url?: string; profile_url?: string }
 }
 
@@ -178,6 +180,7 @@ export interface BackendPostThread {
   provider: string
   published_url?: string
   fetched_at: string
+  truncated?: boolean
   replies: BackendThreadReply[]
 }
 

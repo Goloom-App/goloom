@@ -3,14 +3,25 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"git.f4mily.net/goloom/api"
+	"git.f4mily.net/goloom/internal/auth"
+	"git.f4mily.net/goloom/internal/config"
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/i18n"
+	"git.f4mily.net/goloom/internal/provider"
+	"git.f4mily.net/goloom/internal/security"
+	"git.f4mily.net/goloom/internal/store"
 	sqlitestore "git.f4mily.net/goloom/internal/store/sqlite"
 	"github.com/google/uuid"
 )
@@ -64,6 +75,33 @@ func seedThreadPost(t *testing.T, s *sqlitestore.Store, providerName, instanceUR
 	return threadSeed{plain, team.ID, post.ID, acc.ID}
 }
 
+func threadTestHandler(t *testing.T, st store.Store) http.Handler {
+	t.Helper()
+	authSvc, err := auth.New(context.Background(), config.Config{}, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := provider.NewRegistry(
+		provider.NewBlueskyProvider(),
+		provider.NewFriendicaProvider(),
+		provider.NewMastodonProvider(provider.MastodonRegistrationConfig{}),
+	)
+	catalog, err := i18n.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{AllowPrivateProviderInstanceURLs: true}
+	h := api.New(slog.New(slog.NewTextHandler(io.Discard, nil)), st, authSvc, reg, cfg, nil, catalog, nil, nil)
+	return h.Handler(security.NewLimiter(10_000, 10_000), nil)
+}
+
+// failingTargetStore makes GetPublishedTarget fail with a non-not-found error.
+type failingTargetStore struct{ store.Store }
+
+func (failingTargetStore) GetPublishedTarget(context.Context, string, string) (domain.PublishedTarget, error) {
+	return domain.PublishedTarget{}, errors.New("db down")
+}
+
 func getThread(t *testing.T, h http.Handler, token, teamID, postID, accountID string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, "/v1/teams/"+teamID+"/posts/"+postID+"/targets/"+accountID+"/thread", nil)
@@ -76,25 +114,32 @@ func getThread(t *testing.T, h http.Handler, token, teamID, postID, accountID st
 }
 
 func TestAPI_PostThread(t *testing.T) {
-	var calls int
+	var hits40, hits99 int32
 	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
 		if r.Header.Get("Authorization") != "Bearer secret-token" {
 			t.Errorf("remote auth header: %q", r.Header.Get("Authorization"))
 		}
 		switch r.URL.Path {
 		case "/api/v1/statuses/10/context":
 			fmt.Fprint(w, `{"descendants":[{"id":"11","in_reply_to_id":"10","url":"https://m/@a/11","content":"<p>hi</p>","created_at":"2026-01-02T03:04:05Z","visibility":"public","account":{"acct":"a","display_name":"A","avatar":"https://m/a.png","url":"https://m/@a"}}]}`)
+		case "/api/v1/statuses/30/context":
+			fmt.Fprint(w, `{"descendants":[`+strings.Repeat(`{"id":"1","content":"x","created_at":"2026-01-02T03:04:05Z","visibility":"public","account":{"acct":"a"}},`, 199)+`{"id":"2","content":"x","created_at":"2026-01-02T03:04:05Z","visibility":"public","spoiler_text":"cw","sensitive":true,"account":{"acct":"a"}},{"id":"3","content":"x","visibility":"public","account":{"acct":"a"}}]}`)
+		case "/api/v1/statuses/40/context":
+			atomic.AddInt32(&hits40, 1)
+			fmt.Fprint(w, `{"descendants":[]}`)
 		case "/api/v1/statuses/20/context":
 			fmt.Fprint(w, `{"descendants":[]}`)
 		default:
+			if r.URL.Path == "/api/v1/statuses/99/context" {
+				atomic.AddInt32(&hits99, 1)
+			}
 			http.Error(w, "upstream says no, token secret-token", http.StatusInternalServerError)
 		}
 	}))
 	defer remote.Close()
 
 	s := newMemorySQLite(t)
-	h := analyticsTestHandler(t, s)
+	h := threadTestHandler(t, s)
 
 	t.Run("200 with replies", func(t *testing.T) {
 		sd := seedThreadPost(t, s, "mastodon", remote.URL, "https://m/@x/10")
@@ -212,6 +257,71 @@ func TestAPI_PostThread(t *testing.T) {
 		rec := getThread(t, h, sd.token, sd.teamID, sd.postID, sd.accountID)
 		if rec.Code != http.StatusUnprocessableEntity || rec.Header().Get("X-Error-Code") != "thread_unsupported" {
 			t.Fatalf("status %d code %q", rec.Code, rec.Header().Get("X-Error-Code"))
+		}
+	})
+
+	t.Run("200 truncated flag and content warning", func(t *testing.T) {
+		sd := seedThreadPost(t, s, "mastodon", remote.URL, "https://m/@x/30")
+		rec := getThread(t, h, sd.token, sd.teamID, sd.postID, sd.accountID)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d %s", rec.Code, rec.Body.String())
+		}
+		var body struct {
+			Truncated bool `json:"truncated"`
+			Replies   []struct {
+				ContentWarning string `json:"content_warning"`
+				Sensitive      bool   `json:"sensitive"`
+			} `json:"replies"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if !body.Truncated || len(body.Replies) != 200 || body.Replies[199].ContentWarning != "cw" || !body.Replies[199].Sensitive {
+			t.Fatalf("truncated=%v len=%d", body.Truncated, len(body.Replies))
+		}
+	})
+
+	t.Run("409 unresolvable target", func(t *testing.T) {
+		sd := seedThreadPost(t, s, "friendica", remote.URL, "")
+		if err := s.MarkPostTargetResult(context.Background(), sd.postID, sd.accountID, domain.PostStatusPosted, "https://f/display/abc", "", nil, ""); err != nil {
+			t.Fatal(err)
+		}
+		rec := getThread(t, h, sd.token, sd.teamID, sd.postID, sd.accountID)
+		if rec.Code != http.StatusConflict || rec.Header().Get("X-Error-Code") != "thread_target_unresolvable" {
+			t.Fatalf("status %d code %q", rec.Code, rec.Header().Get("X-Error-Code"))
+		}
+	})
+
+	t.Run("500 on store error", func(t *testing.T) {
+		sd := seedThreadPost(t, s, "mastodon", remote.URL, "https://m/@x/10")
+		hf := threadTestHandler(t, failingTargetStore{s})
+		rec := getThread(t, hf, sd.token, sd.teamID, sd.postID, sd.accountID)
+		if rec.Code != http.StatusInternalServerError || rec.Header().Get("X-Error-Code") != "internal_error" {
+			t.Fatalf("status %d code %q", rec.Code, rec.Header().Get("X-Error-Code"))
+		}
+	})
+
+	t.Run("cache: repeated requests hit upstream once", func(t *testing.T) {
+		sd := seedThreadPost(t, s, "mastodon", remote.URL, "https://m/@x/40")
+		for i := 0; i < 3; i++ {
+			if rec := getThread(t, h, sd.token, sd.teamID, sd.postID, sd.accountID); rec.Code != http.StatusOK {
+				t.Fatalf("status %d", rec.Code)
+			}
+		}
+		if got := atomic.LoadInt32(&hits40); got != 1 {
+			t.Fatalf("upstream calls = %d, want 1", got)
+		}
+	})
+
+	t.Run("errors are not cached", func(t *testing.T) {
+		sd := seedThreadPost(t, s, "mastodon", remote.URL, "https://m/@x/99")
+		for i := 0; i < 2; i++ {
+			if rec := getThread(t, h, sd.token, sd.teamID, sd.postID, sd.accountID); rec.Code != http.StatusBadGateway {
+				t.Fatalf("status %d", rec.Code)
+			}
+		}
+		if got := atomic.LoadInt32(&hits99); got != 2 {
+			t.Fatalf("upstream calls = %d, want 2", got)
 		}
 	})
 
