@@ -7,7 +7,7 @@ Self-hosted social media scheduling and automation server (Go backend, embedded 
 ## Local Contracts
 
 - Single Go module; server entry `cmd/server`, bootstrap `internal/app/app.go`
-- Go module requires Go 1.26.9 or newer
+- Go module requires Go 1.26.10 or newer
 - Frontend build output is embedded from `internal/webui/dist` (tracked: `index.html`, `manifest.json`, `sw.js` — tracked so a plain `go build` without a fresh frontend build still embeds the service worker)
 - Locales: `locales/de.json` + `locales/en.json` must stay key-identical
 - User API-token creation/revocation (`api/user_api_tokens.go`) uses `auth.PrincipalCanManageAPIToken`: callers with scopes or a team binding, regardless of `Kind`, may manage only tokens within their effective scopes and with the exact same team binding; callers without restrictions (including browser sessions) retain unrestricted token management. Revocation requires a successful owned-token metadata lookup before authorization; lookup failures are logged and return `internal_error` (500). Authority violations return `api_token_exceeds_authority` (403).
