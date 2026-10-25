@@ -163,6 +163,27 @@ export interface BackendPost {
   media_exclude_by_account?: Record<string, string[]>
 }
 
+export interface BackendThreadReply {
+  remote_id: string
+  parent_id?: string
+  url: string
+  content: string
+  published_at: string
+  content_warning?: string
+  sensitive?: boolean
+  author: { handle: string; display_name?: string; avatar_url?: string; profile_url?: string }
+}
+
+export interface BackendPostThread {
+  post_id: string
+  account_id: string
+  provider: string
+  published_url?: string
+  fetched_at: string
+  truncated?: boolean
+  replies: BackendThreadReply[]
+}
+
 export interface BackendPostEngagementSummary {
   post_id: string
   title: string
@@ -1162,6 +1183,13 @@ export function createApiClient(options: ApiClientOptions) {
       return request<{ items: BackendPostMetric[]; published_links?: Record<string, string> }>(options, `/v1/teams/${teamID}/posts/${postID}/analytics`, {
         headers: buildHeaders(options.token, false),
       })
+    },
+    getPostThread(teamID: string, postID: string, accountID: string) {
+      return request<BackendPostThread>(
+        options,
+        `/v1/teams/${teamID}/posts/${postID}/targets/${encodeURIComponent(accountID)}/thread`,
+        { headers: buildHeaders(options.token, false) },
+      )
     },
     listPostVersions(teamID: string, postID: string) {
       return request<{ items: BackendPostVersion[] }>(options, `/v1/teams/${teamID}/posts/${postID}/versions`, {

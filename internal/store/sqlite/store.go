@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"git.f4mily.net/goloom/internal/domain"
+	"git.f4mily.net/goloom/internal/postdedup"
 	"git.f4mily.net/goloom/internal/security"
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
@@ -1209,6 +1210,21 @@ func (s *Store) DecryptProviderInstanceClientSecret(instance domain.ProviderInst
 		return "", nil
 	}
 	return s.encrypter.Decrypt(instance.ClientSecretCiphertext)
+}
+
+func (s *Store) GetPublishedTarget(ctx context.Context, postID, accountID string) (domain.PublishedTarget, error) {
+	var url, remote, metaRaw string
+	err := s.db.QueryRowContext(ctx, `
+		select coalesce(published_url, ''), coalesce(remote_post_id, ''), coalesce(publish_metadata, '{}')
+		from scheduled_post_targets
+		where post_id = ? and account_id = ?`, postID, accountID).Scan(&url, &remote, &metaRaw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.PublishedTarget{}, fmt.Errorf("published target: %w: %w", domain.ErrNotFound, sql.ErrNoRows)
+	}
+	if err != nil {
+		return domain.PublishedTarget{}, err
+	}
+	return domain.PublishedTarget{PublishedURL: url, RemotePostID: remote, PublishMetadata: postdedup.ParsePublishMetadata(metaRaw)}, nil
 }
 
 func (s *Store) LoadPublishedLinksByPostIDs(ctx context.Context, postIDs []string) (map[string]map[string]string, error) {
