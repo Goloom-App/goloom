@@ -26,7 +26,7 @@ RUN mkdir -p /src/internal/webui && \
     pnpm --dir frontend build
 
 # Use an official Go image with the security fixes required by go.mod.
-FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine3.24 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine3.24 AS builder
 
 WORKDIR /src
 
