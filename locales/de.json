@@ -1123,6 +1123,19 @@
       "noPostSelected": "Kein Beitrag ausgewählt",
       "edit": "Bearbeiten"
     },
+    "postThread": {
+      "show": "Antworten anzeigen",
+      "hide": "Antworten ausblenden",
+      "region": "Antworten",
+      "loading": "Antworten werden geladen…",
+      "empty": "Noch keine Antworten.",
+      "error": "Antworten konnten nicht vom Netzwerk geladen werden.",
+      "unsupported": "Antworten werden für dieses Netzwerk nicht unterstützt.",
+      "retry": "Erneut versuchen",
+      "refresh": "Antworten aktualisieren",
+      "openReply": "Antwort öffnen",
+      "avatarAlt": "Avatar von {{name}}"
+    },
     "settings": {
       "browserSession": "Browser-Sitzung",
       "browserSessionDevHint": "Entwickler-Werkzeug (Dev-Modus, nur Admins): das Frontend auf ein anderes API-Backend zeigen lassen und mit einem rohen Token anmelden. Produktiv ist das Backend fest auf den Host gesetzt, der die App ausliefert.",

@@ -1123,6 +1123,19 @@
       "noPostSelected": "No post selected",
       "edit": "Edit"
     },
+    "postThread": {
+      "show": "Show replies",
+      "hide": "Hide replies",
+      "region": "Replies",
+      "loading": "Loading replies…",
+      "empty": "No replies yet.",
+      "error": "Replies could not be loaded from the network.",
+      "unsupported": "Replies are not supported for this network.",
+      "retry": "Retry",
+      "refresh": "Refresh replies",
+      "openReply": "Open reply",
+      "avatarAlt": "Avatar of {{name}}"
+    },
     "settings": {
       "browserSession": "Browser session",
       "browserSessionDevHint": "Developer tool (dev mode, admins only): point this browser at a different API backend and authenticate with a raw token. In production the backend is fixed to the host that serves the app.",
