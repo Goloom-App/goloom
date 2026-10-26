@@ -345,11 +345,17 @@ func TestMastodonGetThread_SameHostRedirectAllowedButCapped(t *testing.T) {
 		t.Fatalf("single same-host redirect: %v", err)
 	}
 
+	var loopHits int32
 	loop := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&loopHits, 1)
 		http.Redirect(w, r, r.URL.Path+"?n="+fmt.Sprint(time.Now().UnixNano()), http.StatusFound)
 	})
 	if _, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: loop.URL}, PublishAuth{AccessToken: "t"}, anyTarget); err == nil {
 		t.Fatal("redirect loop must be capped")
+	}
+	// initial request + 3 redirects; Go's default limit would allow 10
+	if got := atomic.LoadInt32(&loopHits); got != 4 {
+		t.Fatalf("redirect loop hits = %d, want 4", got)
 	}
 }
 
