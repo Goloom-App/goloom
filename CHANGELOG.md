@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.3](https://github.com/Goloom-App/goloom/compare/v0.3.2...v0.3.3) (2026-10-26)
+
+
+### Features
+
+* show replies of published Mastodon/Friendica posts ([#220](https://github.com/Goloom-App/goloom/issues/220)) ([93c265e](https://github.com/Goloom-App/goloom/commit/93c265ebc44b8b2f0e653852419d89dd43627692))
+
+
+### Bug Fixes
+
+* **deps:** require Go 1.26.10 for crypto/x509 fix ([#218](https://github.com/Goloom-App/goloom/issues/218)) ([301416a](https://github.com/Goloom-App/goloom/commit/301416a02258ba38b404f6fefe58013835ce7a7f))
+* **deps:** update module golang.org/x/sync to v0.24.0 ([#221](https://github.com/Goloom-App/goloom/issues/221)) ([752bdc7](https://github.com/Goloom-App/goloom/commit/752bdc7beafc129f778071f72575b28b51966344))
+* **deps:** update module modernc.org/sqlite to v1.61.0 ([#216](https://github.com/Goloom-App/goloom/issues/216)) ([20459ac](https://github.com/Goloom-App/goloom/commit/20459ac18e57f470e212ddd31f6acf8797d81782))
+* **frontend:** reset post thread toggle when switching posts ([64262c3](https://github.com/Goloom-App/goloom/commit/64262c35a5a238a1a16e40a94203e3c5a29c24a1))
+* **provider:** guard thread fetch redirects and dial ([64262c3](https://github.com/Goloom-App/goloom/commit/64262c35a5a238a1a16e40a94203e3c5a29c24a1))
+
 ## [0.3.2](https://github.com/Goloom-App/goloom/compare/v0.3.1...v0.3.2) (2026-10-19)
 
 
