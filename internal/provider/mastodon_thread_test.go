@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -309,5 +310,68 @@ func TestMastodonGetThread_NoRetryOn429(t *testing.T) {
 	_, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, anyTarget)
 	if err == nil || calls != 1 || time.Since(start) > 2*time.Second {
 		t.Fatalf("err=%v calls=%d elapsed=%v", err, calls, time.Since(start))
+	}
+}
+
+func TestMastodonGetThread_RefusesCrossHostRedirect(t *testing.T) {
+	var targetHits int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&targetHits, 1)
+		fmt.Fprint(w, `{"descendants":[]}`)
+	}))
+	t.Cleanup(target.Close)
+	srv := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	})
+	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
+	_, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, anyTarget)
+	if err == nil || atomic.LoadInt32(&targetHits) != 0 {
+		t.Fatalf("cross-host redirect must be refused (err=%v hits=%d)", err, targetHits)
+	}
+}
+
+func TestMastodonGetThread_SameHostRedirectAllowedButCapped(t *testing.T) {
+	hops := 0
+	srv := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) {
+		hops++
+		if r.URL.Query().Get("ok") == "1" {
+			fmt.Fprint(w, `{"descendants":[]}`)
+			return
+		}
+		http.Redirect(w, r, r.URL.Path+"?ok=1", http.StatusFound)
+	})
+	p := NewMastodonProvider(MastodonRegistrationConfig{}).(ThreadFetcher)
+	if _, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: srv.URL}, PublishAuth{AccessToken: "t"}, anyTarget); err != nil {
+		t.Fatalf("single same-host redirect: %v", err)
+	}
+
+	var loopHits int32
+	loop := newThreadServer(t, "t", func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&loopHits, 1)
+		http.Redirect(w, r, r.URL.Path+"?n="+fmt.Sprint(time.Now().UnixNano()), http.StatusFound)
+	})
+	if _, err := p.GetThread(threadCtx(), domain.SocialAccount{InstanceURL: loop.URL}, PublishAuth{AccessToken: "t"}, anyTarget); err == nil {
+		t.Fatal("redirect loop must be capped")
+	}
+	// initial request + 3 redirects; Go's default limit would allow 10
+	if got := atomic.LoadInt32(&loopHits); got != 4 {
+		t.Fatalf("redirect loop hits = %d, want 4", got)
+	}
+}
+
+func TestThreadHTTPClient_GuardedModeBlocksLoopbackDial(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true }))
+	t.Cleanup(srv.Close)
+	c := threadHTTPClient(context.Background()) // no AllowPrivateLAN -> netguard client
+	resp, err := c.Get(srv.URL)
+	if err == nil {
+		resp.Body.Close()
+	}
+	if err == nil || called {
+		t.Fatalf("guarded client must refuse loopback dial (err=%v called=%v)", err, called)
+	}
+	if !strings.Contains(err.Error(), "netguard") {
+		t.Fatalf("expected netguard refusal, got %v", err)
 	}
 }
