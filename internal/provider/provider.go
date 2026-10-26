@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sort"
 	"strings"
@@ -55,6 +56,47 @@ type AuthorPost struct {
 // AuthorFeedFetcher is implemented by providers that can list an account's own posts.
 type AuthorFeedFetcher interface {
 	ListAuthorPosts(ctx context.Context, account domain.SocialAccount, auth PublishAuth, since time.Time, limit int) ([]AuthorPost, error)
+}
+
+// PostAuthor identifies who wrote a reply.
+type PostAuthor struct {
+	Handle      string
+	DisplayName string
+	AvatarURL   string
+	ProfileURL  string
+}
+
+// ThreadReply is a normalized reply below a published post.
+type ThreadReply struct {
+	AuthorPost
+	Author PostAuthor
+	// ParentID is the remote id of the status this reply answers.
+	ParentID string
+	// ContentWarning is the author's spoiler text; empty when none.
+	ContentWarning string
+	Sensitive      bool
+}
+
+// ThreadResult is the normalized reply list; Truncated is true when more replies existed than were returned.
+type ThreadResult struct {
+	Replies   []ThreadReply
+	Truncated bool
+}
+
+// ErrThreadTargetUnresolvable means neither a stored remote id nor a parseable URL identifies the status.
+var ErrThreadTargetUnresolvable = errors.New("thread target id cannot be resolved")
+
+// ThreadTarget identifies the published post whose replies are requested.
+// RemoteID is the stored provider id (preferred); Metadata carries publish metadata (e.g. a Bluesky AT-URI).
+type ThreadTarget struct {
+	PublishedURL string
+	RemoteID     string
+	Metadata     map[string]string
+}
+
+// ThreadFetcher is implemented by providers that can list replies below a published post.
+type ThreadFetcher interface {
+	GetThread(ctx context.Context, account domain.SocialAccount, auth PublishAuth, target ThreadTarget) (ThreadResult, error)
 }
 
 // EngagementMetric is one normalized metric from a provider before persistence.

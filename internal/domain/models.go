@@ -983,6 +983,13 @@ type ScheduledPostTarget struct {
 	PublishedURL string     `json:"published_url,omitempty"`
 }
 
+// PublishedTarget is the publication result of one post/account target.
+type PublishedTarget struct {
+	PublishedURL    string
+	RemotePostID    string
+	PublishMetadata map[string]string
+}
+
 // PostMetric stores aggregated engagement for one post, account, and metric name.
 type PostMetric struct {
 	PostID    string    `json:"post_id"`

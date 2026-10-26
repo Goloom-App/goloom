@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { addHours, parseISO, set, startOfDay, startOfMonth } from 'date-fns'
 import { useQueryClient } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import { buildMediaExcludePayload, defaultEditorDraft, postTitleForSave, toInput
 import { accountContentOverrideForSave, isAccountOverCharLimit } from './components/Composer/composerUtils'
 import type { EditorDraftState } from './components/Composer/types'
 import { SocialPreview } from './components/post/SocialPreview'
+import { PostThread } from './components/post/PostThread'
 import { MobilePreviewOverlay } from './components/post/MobilePreviewOverlay'
 import { AppShell } from './components/Shell/AppShell'
 import { CreateTeamModal } from './components/Shell/CreateTeamModal'
@@ -1948,8 +1949,8 @@ function App() {
                   </div>
                 ) : (
                 sharedAccountLabels(selectedPost, accounts).map((account) => (
+                  <Fragment key={`${selectedPost.id}:${account.id}`}>
                     <SocialPreview
-                      key={account.id}
                       account={account}
                       content={
                         postVersions.find((v) => v.postId === selectedPost.id && v.accountId === account.id)?.content ||
@@ -1966,6 +1967,16 @@ function App() {
                         : null
                     }
                   />
+                    {selectedPost.status === 'posted' ? (
+                      <PostThread
+                        teamId={selectedPost.teamId}
+                        postId={selectedPost.id}
+                        account={account}
+                        publishedUrl={selectedPost.publishedLinks?.[account.id]}
+                        api={api}
+                      />
+                    ) : null}
+                  </Fragment>
                 ))
                 )
               ) : (
@@ -2073,6 +2084,7 @@ function App() {
               post={previewPost}
               accounts={accounts}
               postVersions={postVersions}
+              api={api}
               previewPostMetrics={previewPostMetrics}
               theme={resolvedTheme}
               onClose={() => setMobilePreviewPostId(null)}

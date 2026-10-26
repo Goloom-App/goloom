@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { Fragment, useState, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 
 import { Icon } from '../../icons'
 import { SocialPreview } from './SocialPreview'
+import { PostThread } from './PostThread'
 import { engagementForAccount } from '../../postMetrics'
 import { sharedAccountLabels } from '../../schedule'
 import type { BackendPostMetric } from '../../api'
@@ -13,6 +14,7 @@ interface MobilePreviewOverlayProps {
   post: PostRecord
   accounts: AccountRecord[]
   postVersions: PostVersionRecord[]
+  api: ComponentProps<typeof PostThread>['api']
   previewPostMetrics: BackendPostMetric[]
   theme: 'light' | 'dark'
   onClose: () => void
@@ -26,6 +28,7 @@ export function MobilePreviewOverlay({
   post,
   accounts,
   postVersions,
+  api,
   previewPostMetrics,
   theme,
   onClose,
@@ -123,8 +126,8 @@ export function MobilePreviewOverlay({
         </header>
         <div className="mobile-preview-scrollable">
           {sharedAccountLabels(post, accounts).map((account) => (
+            <Fragment key={account.id}>
             <SocialPreview
-              key={account.id}
               account={account}
               content={postVersions.find((v) => v.postId === post.id && v.accountId === account.id)?.content || post.content}
               scheduledAt={post.scheduledAt}
@@ -132,6 +135,17 @@ export function MobilePreviewOverlay({
               publishedPostUrl={post.status === 'posted' ? post.publishedLinks?.[account.id] : undefined}
               engagement={post.status === 'posted' ? engagementForAccount(previewPostMetrics, account.id) : null}
             />
+            {post.status === 'posted' ? (
+              <PostThread
+                key={`${post.id}:${account.id}`}
+                teamId={post.teamId}
+                postId={post.id}
+                account={account}
+                publishedUrl={post.publishedLinks?.[account.id]}
+                api={api}
+              />
+            ) : null}
+            </Fragment>
           ))}
         </div>
       </div>

@@ -297,8 +297,13 @@ func TestGetAnalyticsTimeslotsCore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("berlin: %v", err)
 	}
-	if len(berlin.Timeslots) != 1 || berlin.Timeslots[0].Hour != 12 {
-		t.Fatalf("berlin slot = %#v, want hour 12", berlin.Timeslots)
+	// Expected hour follows the Berlin offset on that Monday (CET +1 / CEST +2).
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := mon.In(loc).Hour(); len(berlin.Timeslots) != 1 || berlin.Timeslots[0].Hour != want {
+		t.Fatalf("berlin slot = %#v, want hour %d", berlin.Timeslots, want)
 	}
 	if _, err := coreGetAnalyticsTimeslots(bg(), f.deps, inv, GetAnalyticsTimeslotsInput{TeamID: f.team.ID, Timezone: "Mars/Olympus"}); err == nil {
 		t.Fatal("invalid timezone must error")
