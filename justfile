@@ -72,8 +72,8 @@ security:
     go run golang.org/x/vuln/cmd/govulncheck@latest ./...
     go run github.com/securego/gosec/v2/cmd/gosec@latest -severity high ./...
 
-# local mirror of the CI gate: build, vet, tests, frontend lint + build
-check: lint test
+# local mirror of the CI gate: build, vet, tests, frontend lint + build, docs lint
+check: lint test docs-lint
     go build ./...
     pnpm --dir frontend build
 

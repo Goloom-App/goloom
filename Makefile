@@ -62,8 +62,9 @@ frontend-e2e:
 	pnpm --dir frontend exec playwright install chromium
 	pnpm --dir frontend test:e2e
 
+# Pinned so CI and local runs lint with the exact same Redocly release.
 docs-api-lint:
-	pnpm --package=@redocly/cli dlx redocly lint docs/api/openapi.yaml
+	pnpm --package=@redocly/cli@2.77.0 dlx redocly lint docs/api/openapi.yaml
 
 # Vendor the Redoc standalone bundle into the website's public dir at build time
 # so the /api/ page renders the reference fully same-origin (no runtime CDN).

@@ -22,7 +22,9 @@ concurrency:
 jobs:
   # Detect which parts of the repo changed so downstream jobs can be skipped.
   # Implemented with plain git (no third-party action) — a docs-only change
-  # leaves every output 'false', so only this tiny job and the secret scan run.
+  # leaves every test output 'false', so only this tiny job and the secret scan
+  # run; changes to the OpenAPI spec, Redocly config, Makefile or this workflow
+  # also run docs-lint.
   changes:
     runs-on: ubuntu-latest
     name: "Detect changed paths"
@@ -30,6 +32,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -45,7 +48,7 @@ jobs:
           set -euo pipefail
 
           full_run() {
-            for k in backend frontend e2e; do
+            for k in backend frontend e2e docs; do
               echo "$k=true" >> "$GITHUB_OUTPUT"
               echo "$k=true"
             done
@@ -77,8 +80,9 @@ jobs:
           backend=$(match "\.go$|^go\.(mod|sum)$|^db/|^locales/|$ci")
           frontend=$(match "^frontend/|$ci")
           e2e=$(match "\.go$|^go\.(mod|sum)$|^db/|^locales/|^frontend/|$ci")
+          docs=$(match "^docs/api/|^redocly\.yaml$|^Makefile$|$ci")
 
-          for k in backend frontend e2e; do
+          for k in backend frontend e2e docs; do
             eval "v=\$$k"
             echo "$k=$v" >> "$GITHUB_OUTPUT"
             echo "$k=$v"
@@ -162,6 +166,29 @@ jobs:
           pnpm --dir frontend install --frozen-lockfile
           pnpm --dir frontend lint
           pnpm --dir frontend build
+
+  # Guards docs/api/openapi.yaml against drift, using the Redocly version the
+  # Makefile pins. Path-gated so Go/frontend-only changes skip it.
+  docs-lint:
+    runs-on: ubuntu-latest
+    name: "Lint OpenAPI spec (Redocly)"
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12.15.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Lint OpenAPI spec
+        run: make docs-api-lint
 
   test-e2e:
     runs-on: ubuntu-latest
