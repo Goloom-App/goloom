@@ -12,7 +12,8 @@ jobs:
   # Detect which parts of the repo changed so downstream jobs can be skipped.
   # Implemented with plain git (no third-party action) to stay portable on the
   # Forgejo act_runner. A docs-only change (e.g. README) leaves every test/build
-  # output 'false', so only this tiny job and the secret scan run.
+  # output 'false', so only this tiny job and the secret scan run; changes to the
+  # OpenAPI spec, Redocly config, Makefile or this workflow also run docs-lint.
   changes:
     runs-on: docker
     name: "Detect changed paths"
@@ -22,6 +23,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      docs: ${{ steps.filter.outputs.docs }}
       image: ${{ steps.filter.outputs.image }}
     steps:
       - name: Install git and Node (for actions)
@@ -42,7 +44,7 @@ jobs:
           set -euo pipefail
 
           full_run() {
-            for k in backend frontend e2e image; do
+            for k in backend frontend e2e docs image; do
               echo "$k=true" >> "$GITHUB_OUTPUT"
               echo "$k=true"
             done
@@ -81,9 +83,10 @@ jobs:
           backend=$(match "\.go$|^go\.(mod|sum)$|$ci")
           frontend=$(match "^frontend/|$ci")
           e2e=$(match "\.go$|^go\.(mod|sum)$|^frontend/|$ci")
+          docs=$(match "^docs/api/|^redocly\.yaml$|^Makefile$|$ci")
           image=$(match "\.go$|^go\.(mod|sum)$|^frontend/|^locales/|^Dockerfile$|^\.dockerignore$|$ci")
 
-          for k in backend frontend e2e image; do
+          for k in backend frontend e2e docs image; do
             eval "v=\$$k"
             echo "$k=$v" >> "$GITHUB_OUTPUT"
             echo "$k=$v"
@@ -176,6 +179,46 @@ jobs:
           pnpm --dir frontend install --frozen-lockfile
           pnpm --dir frontend lint
           pnpm --dir frontend build
+
+  # Guards docs/api/openapi.yaml against drift, using the Redocly version the
+  # Makefile pins. Path-gated so Go/frontend-only changes skip it.
+  docs-lint:
+    runs-on: docker
+    name: "Lint OpenAPI spec (Redocly)"
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    container:
+      image: ghcr.io/psarossy/node:lts
+    steps:
+      - name: Install git and make
+        run: |
+          if command -v apk >/dev/null 2>&1; then
+            apk add --no-cache git make tar zstd
+          elif command -v apt-get >/dev/null 2>&1; then
+            apt-get update
+            apt-get install -y --no-install-recommends git make tar zstd ca-certificates
+            rm -rf /var/lib/apt/lists/*
+          fi
+
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        run: |
+          set -euo pipefail
+          corepack enable
+          PNPM_VERSION="$(node -p "require('./frontend/package.json').packageManager.split('@')[1]")"
+          if ! corepack prepare "pnpm@${PNPM_VERSION}" --activate; then
+            echo "corepack prepare failed; installing pnpm ${PNPM_VERSION} from GitHub release"
+            mkdir -p "${HOME}/.local/bin"
+            curl -fsSL "https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/pnpm-linux-x64" \
+              -o "${HOME}/.local/bin/pnpm"
+            chmod +x "${HOME}/.local/bin/pnpm"
+            echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          fi
+          pnpm --version
+
+      - name: Lint OpenAPI spec
+        run: make docs-api-lint
 
   test-e2e:
     runs-on: docker
